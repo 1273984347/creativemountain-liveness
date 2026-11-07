@@ -135,9 +135,9 @@ export default {
         name: '量子纠缠',
         effects: [{
           op: 'conditional',
-          pred: { kind: 'resource_at_least', amount: 3 },
-          then: { op: 'sequence', effects: [{ op: 'gain_resource', amount: 3 }, { op: 'draw_cards', count: 1 }] },
-          else: { op: 'sequence', effects: [{ op: 'gain_resource', amount: 1 }, { op: 'draw_cards', count: 1 }] },
+          pred: { kind: 'dice_is_at_least', amount: 4, faces: 6 },
+          then: { op: 'sequence', effects: [{ op: 'damage', amount: 1, target: 0 }, { op: 'gain_resource', amount: 2 }] },
+          else: { op: 'sequence', effects: [{ op: 'gain_resource', amount: 1 }] },
         }],
       },
     },
@@ -209,7 +209,7 @@ export default {
   domainWords: [
     '终端', '指令', '算力', '机体', '日志', '权限', '数据', '备份',
     '奇点', '协议', '系统', '算法', '网络', '服务器', '加密', '故障',
-    '扫描', '程序', '面板', '监控', '黑',
+    '扫描', '程序', '面板', '监控', '黑掉',
   ],
 
   /** 棋盘 28 格地名（kind / gate 结构沿用基准）。 */

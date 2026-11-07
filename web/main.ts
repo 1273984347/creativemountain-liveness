@@ -27,7 +27,43 @@ interface Ui {
   seat: number;
 }
 
-const SAVE_KEY = 'creativemountain.save.v1';
+const SAVE_KEY = 'creativemountain.save.v2';
+
+/**
+ * 存档信封：**必须带主题标识**。
+ *
+ * ⚠️ B8 修正：此前存档只存 State，不含主题身份 —— 读一份科幻主题的档后，
+ *   下拉框仍显示默认的「仙侠·2026」，而牌池装的是科幻卡；
+ *   此后任何一次主题切换都会把新主题装进这个半局。
+ *   （B8 之前牌库恒为测试牌，读档不涉及主题身份，故此坑此前不显形。）
+ */
+interface SaveEnvelope {
+  readonly v: 2;
+  readonly themeId: string;
+  readonly state: string;
+}
+
+/** 打包存档信封。 */
+function packSave(themeId: string, state: State): string {
+  const envelope: SaveEnvelope = { v: 2, themeId, state: stateToJson(state) };
+  return JSON.stringify(envelope);
+}
+
+/** 拆存档信封（兼容旧的裸 State 格式）。 */
+function unpackSave(raw: string): { themeId: string | null; state: State } {
+  let themeId: string | null = null;
+  let payload = raw;
+  try {
+    const parsed = JSON.parse(raw) as Partial<SaveEnvelope>;
+    if (parsed !== null && typeof parsed === 'object' && typeof parsed.state === 'string') {
+      themeId = typeof parsed.themeId === 'string' ? parsed.themeId : null;
+      payload = parsed.state;
+    }
+  } catch {
+    // 旧格式（裸 State JSON）⇒ 按原样交给 stateFromJson
+  }
+  return { themeId, state: stateFromJson(payload) };
+}
 
 const initialTheme = themeById(THEMES[0]?.id ?? 'xianxia2026').theme;
 
@@ -54,7 +90,7 @@ function newGame(): void {
 
 function saveGame(): void {
   try {
-    localStorage.setItem(SAVE_KEY, stateToJson(ui.state));
+    localStorage.setItem(SAVE_KEY, packSave(ui.themeId, ui.state));
     render();
   } catch (e) {
     alert('存档失败：' + (e instanceof Error ? e.message : String(e)));
@@ -68,7 +104,11 @@ function loadGame(): void {
     return;
   }
   try {
-    ui.state = stateFromJson(raw);
+    const { themeId, state } = unpackSave(raw);
+    if (themeId !== null) {
+      ui.themeId = themeId;
+    }
+    ui.state = state;
     ui.playerCount = ui.state.players.length as Ui['playerCount'];
     render();
   } catch (e) {
@@ -77,7 +117,7 @@ function loadGame(): void {
 }
 
 function exportSave(): void {
-  const blob = new Blob([stateToJson(ui.state)], { type: 'application/json' });
+  const blob = new Blob([packSave(ui.themeId, ui.state)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = '创界山-活人认证-存档.json';
@@ -95,7 +135,11 @@ function importSave(): void {
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        ui.state = stateFromJson(String(reader.result));
+        const { themeId, state } = unpackSave(String(reader.result));
+        if (themeId !== null) {
+          ui.themeId = themeId;
+        }
+        ui.state = state;
         ui.playerCount = ui.state.players.length as Ui['playerCount'];
         render();
       } catch (e) {

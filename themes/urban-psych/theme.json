@@ -126,7 +126,7 @@
       "name": "改造者",
       "passive": {
         "op": "equip_card",
-        "cardId": "c_talisman"
+        "cardId": "c_up_d01"
       },
       "goal": {
         "kind": "equip_count",
@@ -263,7 +263,7 @@
       "suit": "neon",
       "rank": 12,
       "rankLabel": "雨",
-      "text": "移动到前方第 8 格。",
+      "text": "移动到第 8 格。",
       "effects": [
         {
           "op": "move_to_tile",
@@ -998,7 +998,7 @@
       "suit": "street",
       "rank": 4,
       "rankLabel": "影",
-      "text": "若其精神值 ≥ 5，则获得 2 枚异能点，抽 1 张异能牌；否则获得 1 枚异能点，抽 2 张异能牌。",
+      "text": "若其精神值 ≥ 5，则恢复 2 点精神值，获得 1 点护盾；否则对一名对手造成 1 点伤害，获得 2 枚异能点。",
       "effects": [
         {
           "op": "conditional",
@@ -1010,12 +1010,12 @@
             "op": "sequence",
             "effects": [
               {
-                "op": "gain_resource",
+                "op": "heal",
                 "amount": 2
               },
               {
-                "op": "draw_cards",
-                "count": 1
+                "op": "shield",
+                "amount": 1
               }
             ]
           },
@@ -1023,12 +1023,13 @@
             "op": "sequence",
             "effects": [
               {
-                "op": "gain_resource",
-                "amount": 1
+                "op": "damage",
+                "amount": 1,
+                "target": 0
               },
               {
-                "op": "draw_cards",
-                "count": 2
+                "op": "gain_resource",
+                "amount": 2
               }
             ]
           }
@@ -1037,14 +1038,14 @@
     },
     {
       "id": "c_up_u02",
-      "name": "群体暗示",
+      "name": "意志壁垒",
       "type": "utility",
       "cost": 2,
       "color": "black",
       "suit": "rooftop",
       "rank": 3,
       "rankLabel": "霓",
-      "text": "若在手异能牌中有功能牌，则获得 2 枚异能点，抽 1 张异能牌；否则获得 3 枚异能点。",
+      "text": "若在手异能牌中有功能牌，则获得 2 枚异能点，获得 1 点护盾；否则抽 1 张异能牌。",
       "effects": [
         {
           "op": "conditional",
@@ -1060,14 +1061,19 @@
                 "amount": 2
               },
               {
-                "op": "draw_cards",
-                "count": 1
+                "op": "shield",
+                "amount": 1
               }
             ]
           },
           "else": {
-            "op": "gain_resource",
-            "amount": 3
+            "op": "sequence",
+            "effects": [
+              {
+                "op": "draw_cards",
+                "count": 1
+              }
+            ]
           }
         }
       ]
@@ -1572,7 +1578,7 @@
   "certificationCards": [
     {
       "id": "cc_up_01",
-      "prompt": "说出你此刻站的那层楼是几层，凭什么知道。"
+      "prompt": "说出你此刻所在的楼层是几层，凭什么知道。"
     },
     {
       "id": "cc_up_02",
@@ -1580,11 +1586,11 @@
     },
     {
       "id": "cc_up_03",
-      "prompt": "说出 3 回合前你在哪条街待过。"
+      "prompt": "说出 3 回合前你在哪条街道待过。"
     },
     {
       "id": "cc_up_04",
-      "prompt": "描述你上楼的路上，第一个让你意识到自己已经不是原来的自己的瞬间。"
+      "prompt": "描述你走过的那条街道上，第一个让你意识到自己已经不是原来的自己的瞬间。"
     },
     {
       "id": "cc_up_05",
@@ -1810,7 +1816,7 @@
   "domainWords": [
     "异能",
     "天台",
-    "街",
+    "街道",
     "地铁",
     "霓虹",
     "精神",
@@ -1818,13 +1824,13 @@
     "监控",
     "手机",
     "出租车",
-    "雨",
-    "楼",
+    "雨夜",
+    "楼层",
     "觉醒",
     "城市",
-    "梦",
+    "梦境",
     "信号",
-    "警",
+    "警灯",
     "便利店",
     "楼顶",
     "窗户",

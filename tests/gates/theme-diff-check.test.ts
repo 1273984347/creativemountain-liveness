@@ -33,8 +33,8 @@ test('正样本：三套新主题相对基准的 §10.1 两张清单零错误', 
   }
 });
 
-test('正样本：三套新主题两两差异化零错误', () => {
-  assert.deepEqual(checkThemesMutuallyDistinct([scifi, hybrid, urban]), []);
+test('正样本：三套新主题两两差异化零错误（含标志卡互异性）', () => {
+  assert.deepEqual(checkThemesMutuallyDistinct([scifi, hybrid, urban], base).errors, []);
 });
 
 test('正样本：通用卡牌池复用数达下限（证明是复用而非独立卡池）', () => {
@@ -178,7 +178,7 @@ test('负样本：两套主题的认证题逐字相同 → 判红', () => {
   const b = clone(hybrid);
   b.certificationCards[0].prompt = a.certificationCards[0].prompt;
   assert.ok(
-    checkThemesMutuallyDistinct([a, b]).some((e) => e.includes('认证题逐字相同')),
+    checkThemesMutuallyDistinct([a, b], base).errors.some((e) => e.includes('认证题逐字相同')),
     '跨主题认证题重复必须判红',
   );
 });
@@ -188,8 +188,50 @@ test('负样本：两套主题的阵营名相同 → 判红', () => {
   const b = clone(urban);
   b.factions[0].name = a.factions[0].name;
   assert.ok(
-    checkThemesMutuallyDistinct([a, b]).some((e) => e.includes('阵营名重名')),
+    checkThemesMutuallyDistinct([a, b], base).errors.some((e) => e.includes('阵营名重名')),
     '跨主题阵营重名必须判红',
+  );
+});
+
+test('负样本：跨主题标志卡效果相同（换皮）→ 判红', () => {
+  const a = clone(scifi);
+  const b = clone(hybrid);
+  // 把 A 主题的标志卡效果原样抄给 B 主题的标志卡
+  const flagA = a.cards.find((c: { id: string }) => /_u0[12]$/.test(c.id));
+  const flagB = b.cards.find((c: { id: string }) => /_u0[12]$/.test(c.id));
+  assert.ok(flagA !== undefined && flagB !== undefined);
+  flagB.effects = clone(flagA.effects);
+  assert.ok(
+    checkThemesMutuallyDistinct([a, b], base).errors.some((e) => e.includes('标志卡效果相同')),
+    '两套主题共用同一张标志卡效果必须判红',
+  );
+});
+
+test('负样本：domainWords 用单字平凡词 → 判红（判据不能被平凡词绕过）', () => {
+  const bad = clone(scifi);
+  bad.domainWords = ['的'];
+  assert.ok(
+    checkThemeDiff(base, bad).errors.some((e) => e.includes('domainWords')),
+    '单字平凡词必须判红',
+  );
+});
+
+test('负样本：glossary 四核心术语主题内部同词 → 判红', () => {
+  const bad = clone(scifi);
+  bad.glossary.HP = '同一个词';
+  bad.glossary.deck = '同一个词';
+  assert.ok(
+    checkThemeDiff(base, bad).errors.some((e) => e.includes('同词')),
+    'glossary 内部同词必须判红',
+  );
+});
+
+test('负样本：仅一张认证题未命中专属名词 → 判红（要求全部命中）', () => {
+  const bad = clone(scifi);
+  bad.certificationCards[0].prompt = '说一件完全与本主题无关的事。';
+  assert.ok(
+    checkThemeDiff(base, bad).errors.some((e) => e.includes('未命中本主题专属名词')),
+    '单张认证题未主题化必须判红',
   );
 });
 
@@ -197,7 +239,7 @@ test('正样本（恢复必绿）：所有负样本制造完后，原始四套�
   for (const theme of [scifi, hybrid, urban]) {
     assert.deepEqual(checkThemeDiff(base, theme).errors, []);
   }
-  assert.deepEqual(checkThemesMutuallyDistinct([scifi, hybrid, urban]), []);
+  assert.deepEqual(checkThemesMutuallyDistinct([scifi, hybrid, urban], base).errors, []);
 });
 
 test('工具自检：deepEqual 与键序无关', () => {

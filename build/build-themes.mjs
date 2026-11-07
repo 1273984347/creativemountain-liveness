@@ -58,6 +58,36 @@ export function buildTheme(base, data) {
     };
   });
 
+  // ---- 效果里的卡牌 id 重映射 ----
+  //
+  // 基准的身份被动（如匠师的 equip_card { cardId: 'c_talisman' }）引用的是**基准卡牌 id**。
+  // 新主题的卡牌 id 已按主题改名（c_<abbr>_<类型><序号>）⇒ 若不重映射，
+  // 引用会指向不存在的牌 ⇒ **匠师的造物装备机制在新主题里整个失效**。
+  // （实测：靠第 ⑤ 道门的「卡牌引用完整性」检查抓到的。）
+  const remapEffect = (eff) => {
+    if (eff === null || typeof eff !== 'object') {
+      return eff;
+    }
+    if (Array.isArray(eff)) {
+      return eff.map(remapEffect);
+    }
+    const out = {};
+    for (const [k, v] of Object.entries(eff)) {
+      if (k === 'cardId' && typeof v === 'string' && idMap.has(v)) {
+        out[k] = idMap.get(v);
+      } else if (k === 'cardIds' && Array.isArray(v)) {
+        out[k] = v.map((id) => (typeof id === 'string' && idMap.has(id) ? idMap.get(id) : id));
+      } else if (k === 'effects' && Array.isArray(v)) {
+        out[k] = v.map(remapEffect);
+      } else if (k === 'then' || k === 'else' || k === 'effect') {
+        out[k] = remapEffect(v);
+      } else {
+        out[k] = v;
+      }
+    }
+    return out;
+  };
+
   // ---- 阵营：id / 名称 / 文本差异化；效果与数值沿用基准 ----
   const factions = base.factions.map((b, i) => {
     const d = data.factions[i];
@@ -69,8 +99,8 @@ export function buildTheme(base, data) {
       name: d.name,
       hpBase: b.hpBase,
       resourceBase: b.resourceBase,
-      ability: b.ability,
-      wheel: b.wheel,
+      ability: remapEffect(b.ability),
+      wheel: remapEffect(b.wheel),
       deckTags: [...b.deckTags],
       abilityText: d.abilityText,
       wheelText: d.wheelText,
@@ -87,7 +117,7 @@ export function buildTheme(base, data) {
     return {
       id: b.id,
       name: d.name,
-      passive: b.passive,
+      passive: remapEffect(b.passive),
       goal: { ...b.goal },
       passiveText: d.passiveText,
       ...(d.flavor === undefined ? {} : { flavor: d.flavor }),

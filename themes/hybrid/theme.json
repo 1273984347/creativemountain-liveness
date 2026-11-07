@@ -126,7 +126,7 @@
       "name": "器师",
       "passive": {
         "op": "equip_card",
-        "cardId": "c_talisman"
+        "cardId": "c_hy_d01"
       },
       "goal": {
         "kind": "equip_count",
@@ -263,7 +263,7 @@
       "suit": "array",
       "rank": 12,
       "rankLabel": "阵",
-      "text": "移动到前方第 8 格。",
+      "text": "移动到第 8 格。",
       "effects": [
         {
           "op": "move_to_tile",
@@ -998,7 +998,7 @@
       "suit": "sword",
       "rank": 4,
       "rankLabel": "符",
-      "text": "若灵能 ≥ 2，则获得 2 枚灵能，抽 1 张道箓；否则抽 2 张道箓。",
+      "text": "若灵能 ≥ 2，则抽 2 张道箓，获得 1 枚灵能；否则抽 1 张道箓，获得 2 枚灵能。",
       "effects": [
         {
           "op": "conditional",
@@ -1010,18 +1010,27 @@
             "op": "sequence",
             "effects": [
               {
-                "op": "gain_resource",
-                "amount": 2
+                "op": "draw_cards",
+                "count": 2
               },
               {
-                "op": "draw_cards",
-                "count": 1
+                "op": "gain_resource",
+                "amount": 1
               }
             ]
           },
           "else": {
-            "op": "draw_cards",
-            "count": 2
+            "op": "sequence",
+            "effects": [
+              {
+                "op": "draw_cards",
+                "count": 1
+              },
+              {
+                "op": "gain_resource",
+                "amount": 2
+              }
+            ]
           }
         }
       ]
@@ -1035,7 +1044,7 @@
       "suit": "talisman",
       "rank": 3,
       "rankLabel": "咒",
-      "text": "若手中有功能道箓，则抽 2 张道箓，获得 2 枚灵能；否则获得 1 枚灵能。",
+      "text": "若手中有功能道箓，则抽 2 张道箓，获得 2 枚灵能；否则获得 2 枚灵能。",
       "effects": [
         {
           "op": "conditional",
@@ -1059,8 +1068,13 @@
             ]
           },
           "else": {
-            "op": "gain_resource",
-            "amount": 1
+            "op": "sequence",
+            "effects": [
+              {
+                "op": "gain_resource",
+                "amount": 2
+              }
+            ]
           }
         }
       ]
@@ -1565,7 +1579,7 @@
   "certificationCards": [
     {
       "id": "cc_hy_01",
-      "prompt": "说出你左袖里那张符的最后一笔写的是什么。"
+      "prompt": "说出你左袖里那张道箓的最后一笔写的是什么。"
     },
     {
       "id": "cc_hy_02",
@@ -1573,7 +1587,7 @@
     },
     {
       "id": "cc_hy_03",
-      "prompt": "复述 3 回合前有人念过的一句咒，你还记得几个字？"
+      "prompt": "复述 3 回合前有人念过的一句咒语，你还记得几个字？"
     },
     {
       "id": "cc_hy_04",
@@ -1585,7 +1599,7 @@
     },
     {
       "id": "cc_hy_06",
-      "prompt": "你手里那张符里，哪一道是你此刻最不敢点的？"
+      "prompt": "你手里那张道箓里，哪一道是你此刻最不敢点的？"
     },
     {
       "id": "cc_hy_07",
@@ -1601,7 +1615,7 @@
     },
     {
       "id": "cc_hy_10",
-      "prompt": "说出这局里你最想用符镇住的一个对手，并解释为什么。"
+      "prompt": "说出这局里你最想用道箓镇住的一个对手，并解释为什么。"
     },
     {
       "id": "cc_hy_11",
@@ -1625,7 +1639,7 @@
     },
     {
       "id": "cc_hy_16",
-      "prompt": "说出本局你亲眼看到、别人偷偷做过的一次偷换灵符的事。"
+      "prompt": "说出本局你亲眼看到、别人偷偷做过的一次偷换道箓的事。"
     }
   ],
   "trials": [
@@ -1801,28 +1815,29 @@
     }
   ],
   "domainWords": [
-    "符",
+    "道箓",
     "灵能",
-    "阵",
-    "道",
+    "阵法",
+    "道门",
     "灵气",
     "芯片",
     "代码",
     "修士",
     "雷劫",
-    "丹",
+    "炼丹",
     "山门",
     "法术",
     "经文",
     "灵台",
-    "妖",
-    "神",
+    "妖怪",
+    "神明",
     "飞剑",
     "香火",
-    "咒",
+    "咒语",
     "斗法",
     "掌灯",
-    "袖",
-    "法器"
+    "袖口",
+    "法器",
+    "道顶"
   ]
 }

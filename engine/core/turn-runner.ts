@@ -180,6 +180,59 @@ function applyInstruction(state: State, seat: number, face: number): State {
   }
 }
 /**
+ * 回合第 1 步：翻开一张天机牌，**对全场生效**（规格 §3.1）。
+ *
+ * ⚠️ B8 修正：此前 `decks.heaven` 只被写入、**从无消费点**——
+ *   天机牌从未被翻开 ⇒ §6.2 的「全局阶段值」(`phaseValue`) 永远是 'day'
+ *   ⇒ `phase_is` 判据在真实对局里**不可达**（连同依赖昼夜分岔的标志卡）。
+ *
+ * 「对全场生效」的实现：把天机牌的效果**对每个存活玩家各执行一次**
+ *   —— `draw_cards` / `gain_resource` 等默认作用于使用者，逐人执行即全场各得一份。
+ *
+ * 牌堆用尽后**循环回收**（用过的天机牌放在 `decks.exhausted`，空了再收回牌堆）：
+ *   一局 15–20 回合而天机牌只有 8 张，不回收则后半场没有天机机制。
+ */
+export function openHeaven(state: State): State {
+  let heaven = state.decks.heaven;
+  let exhausted = state.decks.exhausted;
+  if (heaven.length === 0) {
+    const back = exhausted.filter((c) => c.id.startsWith('h_'));
+    if (back.length === 0) {
+      return state;
+    }
+    heaven = back;
+    exhausted = exhausted.filter((c) => !c.id.startsWith('h_'));
+  }
+  const card = heaven[0];
+  if (card === undefined) {
+    return state;
+  }
+  let next: State = {
+    ...state,
+    decks: { ...state.decks, heaven: heaven.slice(1), exhausted: [...exhausted, card] },
+    log: [
+      ...state.log,
+      {
+        round: state.round,
+        turnIndex: state.turnIndex,
+        actor: -1,
+        kind: 'heaven',
+        message: '天机牌翻开：' + card.name + '——' + card.text,
+      },
+    ],
+  };
+  for (const p of next.players) {
+    if (!p.alive) {
+      continue;
+    }
+    for (const eff of card.effects) {
+      next = applyEffect({ state: next, actor: p.seat, sourceCard: card }, eff).state;
+    }
+  }
+  return next;
+}
+
+/**
  * 完成一个手番的收尾：结算（3）→ 裁牌（4）→ 经济（5）→ 牌库循环（6）。
  *
  * **山议（7）与认证（8）不在这里触发**——它们仅在 round 末执行（§3.1）。
@@ -188,6 +241,8 @@ export function finishTurn(state: State, seat: number): State {
   let next = resolveTile(state, seat);
   next = discardDownToLimit(next, seat);
   next = gainResource(next, seat, 1);
+  // 昼夜是**回合内**状态：回合末复位（否则 set_phase 一次就整局都是夜）
+  next = { ...next, phaseValue: 'day' };
   return next;
 }
 
@@ -224,8 +279,21 @@ export function advanceTurn(state: State, mode: RuleMode): State {
     const adv = advanceCertificationRound(next);
     if (adv.ok) { next = adv.state; }
   }
+  // ---- 回合末裁牌（规格 §3.1 步骤 4）----
+  // 天机牌对**全场**生效 ⇒ 非当前行动者也会收到牌；
+  // 手番末只裁当前玩家 ⇒ 别人会累积超限（实测：手牌 15 > 上限 6）。
+  // 故回合末再对所有存活玩家裁一次。
+  for (const p of next.players) {
+    if (p.alive) {
+      next = discardDownToLimit(next, p.seat);
+    }
+  }
   // ---- 跨 round ----
   next = advanceRound(next);
+  // **下一回合**的第 1 步：天机（翻开一张天机牌，对全场生效）
+  // ⚠️ 必须放在回合末之后 —— 天机若在 finishTurn 之前翻，
+  //   其昼夜设定会被同一回合末的昼夜复位立刻清掉（phase_is 仍是死代码）。
+  next = openHeaven(next);
   // ---- 终局判定（§5.7 / §5.8）----
   next = resolveVictory(next);
   return next;

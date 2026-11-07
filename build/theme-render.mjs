@@ -101,7 +101,9 @@ export function renderEffect(effect, terms) {
     case 'move_backward':
       return `使一名对手后退 ${n} 格`;
     case 'move_to_tile':
-      return `移动到前方第 ${effect.tileIndex} 格`;
+      // ⚠️ 引擎实现是**绝对格号**（position = tile.index），不是「前方第 N 格」
+      //   —— 写成相对格号会让玩家按错的位置数格子（实测差 2 格）。
+      return `移动到第 ${effect.tileIndex} 格`;
     case 'move_relative_to':
       return `相对一名对手移动 ${n} 格`;
     case 'swap_position':

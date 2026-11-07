@@ -37,6 +37,12 @@ export const MAX_FLAG_CARDS = 2;
 /** 认证题卡最少主题化张数（规格 §10.1：至少 8 张）。 */
 export const MIN_CERT_CARDS = 8;
 
+/** 专属名词表最少词数（防「1 个平凡词蒙混过关」）。 */
+export const MIN_DOMAIN_WORDS = 6;
+
+/** 专属名词表的最短词长（单字词如「的」不具备区分度）。 */
+export const MIN_DOMAIN_WORD_LEN = 2;
+
 /** 深度比较前的规范化：对象键排序 ⇒ 与 JSON 键书写顺序无关。 */
 export function canonical(value) {
   if (Array.isArray(value)) {
@@ -55,6 +61,58 @@ export function canonical(value) {
 /** 深度相等（与键序无关）。 */
 export function deepEqual(a, b) {
   return JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
+}
+
+/**
+ * 取一套主题相对基准**全新效果**的卡（标志性卡牌）。
+ *
+ * 判据：既不是与基准对位复用、又不在基准任何卡里出现过的同效果卡。
+ */
+export function flagCardsOf(base, theme) {
+  const baseCards = base.cards ?? [];
+  const flags = [];
+  for (let i = 0; i < (theme.cards ?? []).length; i++) {
+    const card = theme.cards[i];
+    const slot = baseCards[i];
+    if (card === undefined || slot === undefined) {
+      continue;
+    }
+    if (deepEqual(card.effects, slot.effects)) {
+      continue;
+    }
+    if (!baseCards.some((b) => deepEqual(card.effects, b.effects))) {
+      flags.push(card);
+    }
+  }
+  return flags;
+}
+
+/**
+ * 把效果里的**卡牌引用**归一化为占位符。
+ *
+ * 用途：跨主题比较「机制是否复用」时使用。
+ * 身份的被动（如匠师的 equip_card { cardId: 'c_talisman' }）在新主题里
+ * 指向**改名后的**同一张牌 ⇒ 字面比较会误判「特权被独立设计」。
+ * 归一化后比较的才是**机制**。
+ */
+export function normalizeRefs(value) {
+  if (Array.isArray(value)) {
+    return value.map(normalizeRefs);
+  }
+  if (value !== null && typeof value === 'object') {
+    const out = {};
+    for (const k of Object.keys(value).sort()) {
+      if (k === 'cardId') {
+        out[k] = '<CARD>';
+      } else if (k === 'cardIds') {
+        out[k] = (value[k] ?? []).map(() => '<CARD>');
+      } else {
+        out[k] = normalizeRefs(value[k]);
+      }
+    }
+    return out;
+  }
+  return value;
 }
 
 /** 检查一套新主题相对基准的 §10.1 两张清单。 */
@@ -78,12 +136,25 @@ export function checkThemeDiff(base, theme) {
   }
 
   // ---------- 必须差异化 ② glossary 四核心术语 ----------
+  const glossaryValues = [];
   for (const key of ['HP', 'deck', 'hand', 'resource']) {
     const v = theme.glossary?.[key];
     if (typeof v !== 'string' || v.length === 0) {
       errors.push(`${tag} ② glossary 缺少核心术语：${key}`);
     } else if (v === base.glossary?.[key]) {
       errors.push(`${tag} ② glossary.${key} 与基准相同：${v}`);
+    } else {
+      glossaryValues.push([key, v]);
+    }
+  }
+  // 主题内部互异：HP / deck / hand / resource 若指向同一个词，玩家仍会串戏
+  for (let i = 0; i < glossaryValues.length; i++) {
+    for (let j = i + 1; j < glossaryValues.length; j++) {
+      const a = glossaryValues[i];
+      const b = glossaryValues[j];
+      if (a !== undefined && b !== undefined && a[1] === b[1]) {
+        errors.push(`${tag} ② glossary.${a[0]} 与 glossary.${b[0]} 同词（${a[1]}）——四个核心术语必须互异`);
+      }
     }
   }
 
@@ -102,14 +173,29 @@ export function checkThemeDiff(base, theme) {
   if (!Array.isArray(words) || words.length === 0) {
     errors.push(`${tag} ③ 未声明 domainWords，无法机械核对「换场景」`);
   } else {
-    const themed = certs.filter((c) => words.some((w) => typeof w === 'string' && w.length > 0 && c.prompt.includes(w)));
-    if (themed.length < MIN_CERT_CARDS) {
+    // 专属名词表本身的强度：数量下限 + 词长下限 + 互异
+    // （否则 ['的'] 这类平凡词就能让所有认证题「命中」，判据形同虚设）
+    const short = words.filter((w) => typeof w !== 'string' || w.trim().length < MIN_DOMAIN_WORD_LEN);
+    if (short.length > 0) {
       errors.push(
-        `${tag} ③ 仅 ${themed.length} 张认证题命中本主题专属名词（需 ≥ ${MIN_CERT_CARDS}）——`
+        `${tag} ③ domainWords 含过短或非字符串的词（需 ≥ ${MIN_DOMAIN_WORD_LEN} 字）：`
+        + `${short.map((w) => JSON.stringify(w)).join('、')}`,
+      );
+    }
+    if (words.length < MIN_DOMAIN_WORDS) {
+      errors.push(`${tag} ③ domainWords 仅 ${words.length} 个（需 ≥ ${MIN_DOMAIN_WORDS} 个）`);
+    }
+    if (new Set(words).size !== words.length) {
+      errors.push(`${tag} ③ domainWords 存在重复词`);
+    }
+    const themed = certs.filter((c) => words.some((w) => typeof w === 'string' && w.length > 0 && c.prompt.includes(w)));
+    if (themed.length < certs.length) {
+      errors.push(
+        `${tag} ③ 有 ${certs.length - themed.length} 张认证题未命中本主题专属名词——`
         + `说明认证题仍是通用题，只换了措辞`,
       );
     }
-    notes.push(`③ 主题化认证题 ${themed.length}/${certs.length} 张`);
+    notes.push(`③ 主题化认证题 ${themed.length}/${certs.length} 张（专属名词表 ${words.length} 个）`);
   }
 
   // ---------- 必须差异化 ④ + 允许复用 a) 通用卡牌池 ----------
@@ -138,6 +224,10 @@ export function checkThemeDiff(base, theme) {
     } else {
       flags.push(card);
     }
+  }
+  const flagKeys = flags.map((f) => JSON.stringify(canonical(f.effects)));
+  if (new Set(flagKeys).size !== flagKeys.length) {
+    errors.push(`${tag} 主题内部的标志卡效果重复——两张标志卡不是两种不同机制`);
   }
   if (reused < MIN_REUSED_CARDS) {
     errors.push(`${tag} a) 通用卡牌池仅 ${reused} 张与基准同效果（应 ≥ ${MIN_REUSED_CARDS}）——被过度设计了`);
@@ -180,7 +270,7 @@ export function checkThemeDiff(base, theme) {
     if (baseIdn === undefined) {
       break;
     }
-    if (!deepEqual(idn.passive, baseIdn.passive)) {
+    if (!deepEqual(normalizeRefs(idn.passive), normalizeRefs(baseIdn.passive))) {
       errors.push(`${tag} c) 身份 ${idn.id} 的特权与基准不同——身份槽位应复用`);
     }
     if (!deepEqual(idn.goal, baseIdn.goal)) {
@@ -195,9 +285,18 @@ export function checkThemeDiff(base, theme) {
   return { errors, notes };
 }
 
-/** 检查若干主题之间**两两**差异化（防止三套新主题其实是同一套换名字）。 */
-export function checkThemesMutuallyDistinct(themes) {
+/**
+ * 检查若干主题之间**两两**差异化（防止三套新主题其实是同一套换名字）。
+ *
+ * ⚠️ 这里必须比对**卡牌 effects**，不只比对元信息：
+ *   只比主题名/术语/认证题的话，一份「48 张卡 effects 逐字照抄另一套主题、
+ *   只改了名与术语」的主题包能全绿通过 —— 实测过，判据形同虚设。
+ *
+ * 返回形状与 `checkThemeDiff` 一致（{ errors, notes }），避免调用方写错。
+ */
+export function checkThemesMutuallyDistinct(themes, base = null) {
   const errors = [];
+  const notes = [];
   for (let i = 0; i < themes.length; i++) {
     for (let j = i + 1; j < themes.length; j++) {
       const a = themes[i];
@@ -218,9 +317,25 @@ export function checkThemesMutuallyDistinct(themes) {
       for (const c of b.certificationCards ?? []) {
         if (promptsA.has(c.prompt)) { errors.push(`${pair} 认证题逐字相同：${c.prompt}`); }
       }
+      // 卡牌 effects 层面：任意两套主题不得共用同一张标志卡效果
+      if (base !== null) {
+        const flagsA = flagCardsOf(base, a);
+        const flagsB = flagCardsOf(base, b);
+        for (const fa of flagsA) {
+          for (const fb of flagsB) {
+            if (deepEqual(fa.effects, fb.effects)) {
+              errors.push(
+                `${pair} 标志卡效果相同：${a.meta.id} 的「${fa.name}」与 ${b.meta.id} 的「${fb.name}」——`
+                + `两套主题的标志卡不能是同一张牌换皮`,
+              );
+            }
+          }
+        }
+        notes.push(`${a.meta.id} 标志卡 ${flagsA.length} 张 · ${b.meta.id} 标志卡 ${flagsB.length} 张（已互相比对）`);
+      }
     }
   }
-  return errors;
+  return { errors, notes };
 }
 
 /** 列出 themes/ 下的全部主题包路径。 */
@@ -286,15 +401,18 @@ if (isMain) {
   }
 
   if (loaded.length > 1) {
-    const mutual = checkThemesMutuallyDistinct(loaded);
-    if (mutual.length === 0) {
+    const mutual = checkThemesMutuallyDistinct(loaded, base);
+    if (mutual.errors.length === 0) {
       console.log(`\nPASS  ${loaded.length} 套主题两两差异化通过`);
+      for (const n of mutual.notes) {
+        console.log(`      ${n}`);
+      }
     } else {
       console.error(`\nFAIL  主题两两差异化未通过：`);
-      for (const e of mutual) {
+      for (const e of mutual.errors) {
         console.error(`      ${e}`);
       }
-      allErrors.push(...mutual);
+      allErrors.push(...mutual.errors);
     }
   }
 

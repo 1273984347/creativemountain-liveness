@@ -126,7 +126,7 @@
       "name": "工程师",
       "passive": {
         "op": "equip_card",
-        "cardId": "c_talisman"
+        "cardId": "c_sa_d01"
       },
       "goal": {
         "kind": "equip_count",
@@ -263,7 +263,7 @@
       "suit": "phase",
       "rank": 12,
       "rankLabel": "能",
-      "text": "移动到前方第 8 格。",
+      "text": "移动到第 8 格。",
       "effects": [
         {
           "op": "move_to_tile",
@@ -1035,24 +1035,26 @@
       "suit": "quantum",
       "rank": 3,
       "rankLabel": "轨",
-      "text": "若算力 ≥ 3，则获得 3 枚算力，抽 1 张指令；否则获得 1 枚算力，抽 1 张指令。",
+      "text": "若骰点 ≥ 4，则对一名对手造成 1 点伤害，获得 2 枚算力；否则获得 1 枚算力。",
       "effects": [
         {
           "op": "conditional",
           "pred": {
-            "kind": "resource_at_least",
-            "amount": 3
+            "kind": "dice_is_at_least",
+            "amount": 4,
+            "faces": 6
           },
           "then": {
             "op": "sequence",
             "effects": [
               {
-                "op": "gain_resource",
-                "amount": 3
+                "op": "damage",
+                "amount": 1,
+                "target": 0
               },
               {
-                "op": "draw_cards",
-                "count": 1
+                "op": "gain_resource",
+                "amount": 2
               }
             ]
           },
@@ -1062,10 +1064,6 @@
               {
                 "op": "gain_resource",
                 "amount": 1
-              },
-              {
-                "op": "draw_cards",
-                "count": 1
               }
             ]
           }
@@ -1828,6 +1826,6 @@
     "程序",
     "面板",
     "监控",
-    "黑"
+    "黑掉"
   ]
 }

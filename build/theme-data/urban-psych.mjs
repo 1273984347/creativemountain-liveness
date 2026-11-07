@@ -64,7 +64,7 @@ export default {
       '闭气潜行', '结界护罩', '心智壁垒', '抗体护盾',
     ],
     utility: [
-      '情绪抽离', '群体暗示', '记忆读取', '梦境潜入',
+      '情绪抽离', '意志壁垒', '记忆读取', '梦境潜入',
       '黑客入侵', '肾上腺素', '命运改写', '异能冲刺',
       '安神香', '急救包', '免检证', '应激护罩',
     ],
@@ -82,18 +82,18 @@ export default {
         effects: [{
           op: 'conditional',
           pred: { kind: 'hp_at_least', amount: 5 },
-          then: { op: 'sequence', effects: [{ op: 'gain_resource', amount: 2 }, { op: 'draw_cards', count: 1 }] },
-          else: { op: 'sequence', effects: [{ op: 'gain_resource', amount: 1 }, { op: 'draw_cards', count: 2 }] },
+          then: { op: 'sequence', effects: [{ op: 'heal', amount: 2 }, { op: 'shield', amount: 1 }] },
+          else: { op: 'sequence', effects: [{ op: 'damage', amount: 1, target: 0 }, { op: 'gain_resource', amount: 2 }] },
         }],
       },
       2: {
         id: 'c_up_u02',
-        name: '群体暗示',
+        name: '意志壁垒',
         effects: [{
           op: 'conditional',
           pred: { kind: 'card_type_is', type: 'utility' },
-          then: { op: 'sequence', effects: [{ op: 'gain_resource', amount: 2 }, { op: 'draw_cards', count: 1 }] },
-          else: { op: 'gain_resource', amount: 3 },
+          then: { op: 'sequence', effects: [{ op: 'gain_resource', amount: 2 }, { op: 'shield', amount: 1 }] },
+          else: { op: 'sequence', effects: [{ op: 'draw_cards', count: 1 }] },
         }],
       },
     },
@@ -134,10 +134,10 @@ export default {
 
   /** 认证题卡：全部落在城市器物与日常处境上——天台、地铁、霓虹、便利店。 */
   certCards: [
-    '说出你此刻站的那层楼是几层，凭什么知道。',
+    '说出你此刻所在的楼层是几层，凭什么知道。',
     '描述你此刻握在手里那部属于别人的手机。',
-    '说出 3 回合前你在哪条街待过。',
-    '描述你上楼的路上，第一个让你意识到自己已经不是原来的自己的瞬间。',
+    '说出 3 回合前你在哪条街道待过。',
+    '描述你走过的那条街道上，第一个让你意识到自己已经不是原来的自己的瞬间。',
     '若你现在可以多觉醒一项异能，你希望它解决你此刻的什么麻烦？',
     '你手里那张异能牌，哪一张是你此刻最不敢用的？',
     '说出你此刻的异能点数——不许看手机，不许问人。',
@@ -153,9 +153,9 @@ export default {
   ],
 
   domainWords: [
-    '异能', '天台', '街', '地铁', '霓虹', '精神', '人群', '监控',
-    '手机', '出租车', '雨', '楼', '觉醒', '城市', '梦', '信号',
-    '警', '便利店', '楼顶', '窗户', '打卡', '盯梢', '读心', '表情',
+    '异能', '天台', '街道', '地铁', '霓虹', '精神', '人群', '监控',
+    '手机', '出租车', '雨夜', '楼层', '觉醒', '城市', '梦境', '信号',
+    '警灯', '便利店', '楼顶', '窗户', '打卡', '盯梢', '读心', '表情',
   ],
 
   tiles: [

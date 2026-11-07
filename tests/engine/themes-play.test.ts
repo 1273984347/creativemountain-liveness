@@ -90,12 +90,13 @@ for (const id of THEME_IDS) {
     assert.equal(s.players.length, 3);
     assert.equal(s.board.length, theme.board.length);
     assert.equal(s.board.peakIndex, theme.board.peakIndex);
-    // 发牌后：牌库剩余 + 各家手牌 = 卡池总数（发牌把牌从牌库移到手牌）
+    // 牌库规模按**规模表**（人数相关）组装：主题卡池不足时复制通用牌补足
+    // （否则 8 人局需要 56 张而主题只有 48 张 ⇒ 最后一名玩家 0 张手牌）
     const inHand = s.players.reduce((n, p) => n + p.hand.length, 0);
     assert.equal(
       s.decks.deck.length + inHand,
-      theme.cards.length,
-      '牌库剩余 + 手牌应等于卡池总数',
+      s.scales.deckTotal,
+      '牌库剩余 + 手牌应等于规模表的 deckTotal',
     );
     assert.equal(s.decks.trial.length, (theme.trials ?? []).length);
     assert.equal(s.decks.creation.length, (theme.creationDeck ?? []).length);
@@ -103,9 +104,12 @@ for (const id of THEME_IDS) {
     assert.equal(s.players[0]?.identityId, theme.identities[0]?.id);
     assert.equal(s.players[0]?.factionId, theme.factions[0]?.id);
     assert.equal(s.players[0]?.hpMax, theme.factions[0]?.hpBase);
-    // 每人都发到起始手牌
+    // 每人都发到起始手牌（开局天机可能额外发 1 张，故用区间）
     for (const p of s.players) {
-      assert.equal(p.hand.length, theme.counts.handStart, `座${p.seat} 起始手牌数不符`);
+      assert.ok(
+        p.hand.length >= theme.counts.handStart && p.hand.length <= p.hpMax,
+        `座${p.seat} 起始手牌数 ${p.hand.length} 不在 [${theme.counts.handStart}, ${p.hpMax}] 内`,
+      );
     }
     assertLegal(s, `${id} 开局`);
   });
@@ -151,11 +155,99 @@ for (const id of NEW_THEME_IDS) {
   });
 }
 
+// ---------- 8 人局：牌库必须够发（盲审实测曾出现第 8 名 0 张手牌）----------
+
+test('8 人局：每人发满起始手牌，无人空手', () => {
+  const theme = loadTheme('xianxia2026');
+  const s = newGame(theme, 8, 7);
+  assert.equal(s.players.length, 8);
+  assert.equal(s.decks.deck.length + s.players.reduce((n, p) => n + p.hand.length, 0), s.scales.deckTotal);
+  for (const p of s.players) {
+    assert.ok(p.hand.length >= s.scales.handStart, `座${p.seat} 应至少发 ${s.scales.handStart} 张手牌`);
+    assert.ok(p.hand.length > 0, `座${p.seat} 不得空手`);
+  }
+  assertLegal(s, '8 人局开局');
+});
+
+// ---------- 换主题 = 换一局（不得跨主题继承半局状态）----------
+
+test('换主题会重置局面：位置 / 标记 / 负面状态 / 待认证锁定 / 昼夜都不继承', () => {
+  const theme = loadTheme('xianxia2026');
+  const dirty = newGame(theme, 3, 5);
+  const dirtied: State = {
+    ...dirty,
+    round: 7,
+    turnIndex: 2,
+    phaseValue: 'night',
+    players: dirty.players.map((p, i) => (i === 0
+      ? {
+          ...p,
+          position: 11,
+          flags: { x: 1 },
+          statuses: { poison: 2 },
+          pendingCert: true,
+          hp: 3,
+        }
+      : p)),
+  };
+  const fresh = installTheme(dirtied, loadTheme('scifi-ai'));
+  const p0 = fresh.players[0];
+  assert.ok(p0 !== undefined);
+  assert.equal(fresh.round, 1, '回合数应复位');
+  assert.equal(fresh.turnIndex, 0, '手番位置应复位');
+  assert.ok(
+    fresh.phaseValue === 'day' || fresh.phaseValue === 'night',
+    '昼夜应是新一局天机决定的值（由新局天机牌决定，而非继承旧局）',
+  );
+  assert.equal(p0.position, 0, '位置应复位');
+  assert.deepEqual(p0.flags, {}, '标记应清空');
+  assert.deepEqual(p0.statuses, {}, '负面状态应清空');
+  assert.equal(p0.pendingCert, false, '待认证锁定应解除');
+  assert.equal(fresh.outcome.finished, false, '结局应复位');
+});
+
+// ---------- 天机牌在真实对局里被翻开（phase_is 不是死代码）----------
+
+test('天机牌每回合翻开、对全场生效，昼夜状态在真实对局中可达', () => {
+  const theme = loadTheme('scifi-ai');
+  const s0 = newGame(theme, 3, 2026);
+  let s = s0;
+  const phases = new Set<string>();
+  const heavenLogs: string[] = [];
+  for (let r = 0; r < 10; r++) {
+    for (let t = 0; t < 8; t++) {
+      const seat = currentPlayer(s);
+      if (seat < 0) {
+        break;
+      }
+      s = performAction(s, seat, 'move');
+      s = advanceTurn(s, 'standard');
+      phases.add(s.phaseValue);
+      for (const l of s.log) {
+        if (l.kind === 'heaven') {
+          heavenLogs.push(l.message);
+        }
+      }
+      if (s.outcome.finished) {
+        break;
+      }
+    }
+  }
+  assert.ok(heavenLogs.length > 0, '应有天机牌被翻开');
+  assert.ok(
+    heavenLogs.some((m) => m.includes('静默夜') || m.includes('黎明进程')),
+    `天机牌日志应含昼夜牌，实际：${heavenLogs.slice(0, 3).join(' | ')}`,
+  );
+  assert.ok(phases.has('night'), '真实对局中应出现过夜间（phase_is 的夜间分支必须可达）');
+  assertLegal(s, '10 round');
+});
+
 test('标志卡「意识分叉」：昼夜两态产生不同结果（科幻主题的机制气质）', () => {
   const theme = loadTheme('scifi-ai');
   const flag = theme.cards.find((c) => c.id === 'c_sa_u01');
   assert.ok(flag !== undefined, '应存在意识分叉');
-  const day = newGame(theme, 3, 7);
+  // 开局会翻开天机牌 ⇒ 昼夜可能已被设定；此处显式构造两种状态
+  const day: State = { ...newGame(theme, 3, 7), phaseValue: 'day' };
   const night: State = { ...day, phaseValue: 'night' };
   const eff = at(flag.effects, 0);
   const dayResult = applyEffect({ state: day, actor: 0, sourceCard: flag }, eff).state;

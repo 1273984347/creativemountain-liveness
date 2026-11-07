@@ -138,6 +138,57 @@ test('has_card 的 filter.type 越界 → 判红', () => {
   assert.ok(r.errors.some((e) => e.includes('filter')), '非法 filter 取值必须判红');
 });
 
+// ---------- 效果参数取值域（B8 补：原先只校验参数**名**合法）----------
+
+test('效果 amount 为负 → 判红', () => {
+  const bad = structuredClone(theme);
+  bad.cards[0].effects = [{ op: 'damage', amount: -5, target: 0 }];
+  const r = validateTheme(bad, schema);
+  assert.ok(r.errors.some((e) => e.includes('amount')), '负数 amount 必须判红');
+});
+
+test('效果 amount 非整数 → 判红', () => {
+  const bad = structuredClone(theme);
+  bad.cards[0].effects = [{ op: 'gain_resource', amount: 'abc' }];
+  const r = validateTheme(bad, schema);
+  assert.ok(r.errors.some((e) => e.includes('amount')), '非整数 amount 必须判红');
+});
+
+test('immunity 的 status 不在负面状态白名单 → 判红', () => {
+  const bad = structuredClone(theme);
+  bad.cards[0].effects = [{ op: 'immunity', status: 'zombie', amount: 1 }];
+  const r = validateTheme(bad, schema);
+  assert.ok(r.errors.some((e) => e.includes('immunity')), '非法 status 必须判红');
+});
+
+test('move_to_tile 的 tileIndex 越界 → 判红', () => {
+  const bad = structuredClone(theme);
+  bad.cards[0].effects = [{ op: 'move_to_tile', tileIndex: 999 }];
+  const r = validateTheme(bad, schema);
+  assert.ok(r.errors.some((e) => e.includes('tileIndex')), '越界格号必须判红');
+});
+
+test('引用不存在的卡牌 → 判红', () => {
+  const bad = structuredClone(theme);
+  bad.cards[0].effects = [{ op: 'exhaust_card', cardId: 'c_not_exist' }];
+  const r = validateTheme(bad, schema);
+  assert.ok(r.errors.some((e) => e.includes('不存在的卡牌')), '悬空卡牌引用必须判红');
+});
+
+test('spirit_wheel 的 source 非法 → 判红', () => {
+  const bad = structuredClone(theme);
+  bad.cards[0].effects = [{ op: 'spirit_wheel', source: 'whatever' }];
+  const r = validateTheme(bad, schema);
+  assert.ok(r.errors.some((e) => e.includes('spirit_wheel')), '非法 source 必须判红');
+});
+
+test('target 座位越界 → 判红', () => {
+  const bad = structuredClone(theme);
+  bad.cards[0].effects = [{ op: 'damage', amount: 1, target: 99 }];
+  const r = validateTheme(bad, schema);
+  assert.ok(r.errors.some((e) => e.includes('target')), '越界座位必须判红');
+});
+
 test('合法谓词参数 → 不判红（B8 新增的白名单不得误伤）', () => {
   const ok = structuredClone(theme);
   ok.cards[0].effects = [{

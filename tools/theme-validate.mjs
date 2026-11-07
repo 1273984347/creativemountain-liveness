@@ -8,6 +8,10 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { deriveThemeSchema } from './theme-schema.mjs';
+import { SCALES } from '../engine/scales.ts';
+
+/** 可用座位数上限（规模表 3–8 人）。 */
+const MAX_SEATS = Math.max(...SCALES.map((s) => s.players));
 
 /** 校验结果。 */
 export function validateTheme(theme, schema) {
@@ -113,6 +117,15 @@ export function validateTheme(theme, schema) {
   }
 
   // ---------- 效果（ops 白名单 + 参数）----------
+  /** 主题内可引用的卡牌 id（含造物牌） */
+  const knownCardIds = new Set([
+    ...(theme.cards ?? []).map((c) => c.id),
+    ...(theme.creationDeck ?? []).map((c) => c.cardId),
+  ]);
+  const knownIdentityIds = new Set((theme.identities ?? []).map((i) => i.id));
+  const knownFactionIds = new Set((theme.factions ?? []).map((f) => f.id));
+  const boardLength = theme.board?.length ?? 0;
+
   /** 递归校验一个 effect 及其嵌套。 */
   function checkEffect(effect, path) {
     if (effect === null || typeof effect !== 'object') {
@@ -153,6 +166,99 @@ export function validateTheme(theme, schema) {
     if (op === 'count') {
       checkEffect(effect.effect, `${path}.effect`);
     }
+    checkEffectValues(effect, path);
+  }
+
+  /**
+   * 效果**参数取值域**校验。
+   *
+   * ⚠️ B8 补：原先只校验算子名与参数**名**合法 —— 参数取值越界（如 damage 的
+   *   amount 为负、immunity 的 status 写错、cardId 引用不存在的牌）会**静默失效**：
+   *   引擎要么失败要么打空，而校验器照样放行。实测注入 13 条非法取值，只有
+   *   谓词侧那一条被抓到 —— 效果侧完全是盲区。
+   */
+  function checkEffectValues(effect, path) {
+    const op = effect.op;
+    // ---- 数值参数：必须为正整数 ----
+    for (const key of ['amount', 'count']) {
+      const v = effect[key];
+      if (v === undefined) {
+        continue;
+      }
+      if (!Number.isInteger(v) || v <= 0) {
+        err(`${path}（${op}）：${key} 必须是正整数，实际 ${JSON.stringify(v)}`);
+      }
+    }
+    // ---- 骰子点数 ----
+    if (op === 'set_die_result') {
+      if (!Number.isInteger(effect.value) || effect.value < 1 || effect.value > 20) {
+        err(`${path}（set_die_result）：value 必须是 1–20 的整数，实际 ${JSON.stringify(effect.value)}`);
+      }
+    }
+    if (op === 'move_by_dice' || op === 'dice_is_at_least') {
+      if (effect.faces !== 6 && effect.faces !== 20) {
+        err(`${path}（${op}）：faces 只能是 6（移动骰）或 20（指令骰），实际 ${JSON.stringify(effect.faces)}`);
+      }
+    }
+    // ---- 目标座位 ----
+    if (effect.target !== undefined) {
+      if (!Number.isInteger(effect.target) || effect.target < 0 || effect.target >= MAX_SEATS) {
+        err(`${path}（${op}）：target 必须是 0–${MAX_SEATS - 1} 的座位号，实际 ${JSON.stringify(effect.target)}`);
+      }
+    }
+    // ---- 负面状态 ----
+    if (op === 'immunity') {
+      if (!schema.negativeStatuses.includes(effect.status)) {
+        err(`${path}（immunity）：status 不在白名单：${effect.status}（允许 ${schema.negativeStatuses.join('/')}）`);
+      }
+    }
+    // ---- 阵营轮来源 ----
+    if (op === 'spirit_wheel' && effect.source !== undefined) {
+      if (effect.source !== 'manual' && effect.source !== 'command') {
+        err(`${path}（spirit_wheel）：source 只能是 manual / command，实际 ${JSON.stringify(effect.source)}`);
+      }
+    }
+    // ---- 昼夜值 ----
+    if (op === 'set_phase') {
+      if (effect.value !== 'night' && effect.value !== 'day') {
+        err(`${path}（set_phase）：value 只能是 night / day，实际 ${JSON.stringify(effect.value)}`);
+      }
+    }
+    // ---- 棋盘格号 ----
+    for (const key of ['tileIndex']) {
+      const v = effect[key];
+      if (v === undefined) {
+        continue;
+      }
+      if (!Number.isInteger(v) || v < 1 || v > boardLength) {
+        err(`${path}（${op}）：${key} 必须是 1–${boardLength} 的格号，实际 ${JSON.stringify(v)}`);
+      }
+    }
+    // ---- 卡牌引用完整性 ----
+    if (typeof effect.cardId === 'string' && !knownCardIds.has(effect.cardId)) {
+      err(`${path}（${op}）：引用了不存在的卡牌 ${effect.cardId}`);
+    }
+    if (Array.isArray(effect.cardIds)) {
+      for (const id of effect.cardIds) {
+        if (typeof id !== 'string' || !knownCardIds.has(id)) {
+          err(`${path}（${op}）：引用了不存在的卡牌 ${JSON.stringify(id)}`);
+        }
+      }
+    }
+    // ---- 身份 / 阵营引用完整性 ----
+    if (typeof effect.identityId === 'string' && !knownIdentityIds.has(effect.identityId)) {
+      err(`${path}（${op}）：引用了不存在的身份 ${effect.identityId}`);
+    }
+    if (typeof effect.factionId === 'string' && !knownFactionIds.has(effect.factionId)) {
+      err(`${path}（${op}）：引用了不存在的阵营 ${effect.factionId}`);
+    }
+    // ---- 标记名 ----
+    for (const key of ['flag']) {
+      const v = effect[key];
+      if (v !== undefined && (typeof v !== 'string' || v.length === 0)) {
+        err(`${path}（${op}）：${key} 必须是非空字符串`);
+      }
+    }
   }
   /**
    * 递归校验一个谓词 —— **含参数取值白名单**。
@@ -171,7 +277,10 @@ export function validateTheme(theme, schema) {
     switch (pred.kind) {
       case 'phase_is': {
         const allowed = schema.predicateEnums?.phase_is ?? [];
-        if (allowed.length > 0 && !allowed.includes(pred.value)) {
+        if (allowed.length === 0) {
+          // 白名单派不出 ⇒ 判红（不能静默跳过：改一次类型声明就能让整条检查失效）
+          err(`${path}（phase_is）：无法从类型定义派生取值白名单——检查已失效，必须修`);
+        } else if (!allowed.includes(pred.value)) {
           err(`${path}（phase_is）：value 必须是 ${allowed.join(' / ')}，实际 ${JSON.stringify(pred.value)}`);
         }
         break;
