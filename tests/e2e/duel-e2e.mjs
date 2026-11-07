@@ -10,7 +10,11 @@ import { chromium } from 'playwright';
 import { resolve } from 'node:path';
 
 const ROOT = process.cwd();
-const file = resolve(ROOT, 'dist', '创界山-活人认证.html');
+// ⚠️ bundle 路径可被 **CM_E2E_BUNDLE** 覆盖 ⇒ 隔离副本里的负样本自证
+//   可以指向仓库已构建的 dist，而不必在副本里重建（避免依赖 node_modules）。
+const file = process.env.CM_E2E_BUNDLE !== undefined
+  ? resolve(process.env.CM_E2E_BUNDLE)
+  : resolve(ROOT, 'dist', '创界山-活人认证.html');
 const url = 'file:///' + file.split('/').map((s, i) => (i === 0 ? s : encodeURIComponent(s))).join('/');
 const THEMES = ['仙侠·2026', '科幻·AI 纪元', '融合·道械双修', '都市·异能纪'];
 const PLAYER_COUNTS = ['3', '4'];
