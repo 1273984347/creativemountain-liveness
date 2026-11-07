@@ -12,6 +12,7 @@ import type { NegativeStatus } from '../types/common.ts';
 import { getScales, type PlayerCount, type ScalesRow } from '../scales.ts';
 import { Rng } from './dice.ts';
 import type { Board } from './board.ts';
+import type { CertificationState, CouncilState, Outcome } from './flow.ts';
 import { dealInitialHands } from './hand.ts';
 
 /** 阶段。 */
@@ -158,6 +159,12 @@ export interface State {
   readonly extraSignaturesRequired: number;
   /** 日志 */
   readonly log: readonly LogEntry[];
+  /** 认证流程状态（§5） */
+  readonly certification: CertificationState;
+  /** 山议流程状态（§5.6） */
+  readonly council: CouncilState;
+  /** 对局结局（§5.7–§5.8） */
+  readonly outcome: Outcome;
 }
 
 /** 构造初始状态的参数。 */
@@ -243,6 +250,21 @@ export function createInitialState(opts: InitialStateOptions): State {
     keptDice: [],
     doubleNextVote: false,
     wheelUsed: 0,
+    certification: {
+      round: 1,
+      pending: [],
+      signed: [],
+      challenged: [],
+      abstained: [],
+      signatures: {},
+      judgments: {},
+      appealed: [],
+      appealVotes: {},
+      validityVotes: {},
+      validityDecided: false,
+    },
+    council: { heldCount: 0, lastRound: 0, votes: {}, resolved: true, vetoUsed: false },
+    outcome: { finished: false, winners: [], reason: 'no_winner' },
     extraSignaturesRequired: 0,
     log: [],
   };
