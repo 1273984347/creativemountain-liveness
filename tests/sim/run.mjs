@@ -698,6 +698,11 @@ if (args.check) {
   if (summary.noSeatFallbackRate >= 0.25) {
     problems.push('无人封顶兜底率 ' + (summary.noSeatFallbackRate * 100).toFixed(1) + '% ≥ 25%');
   }
+  // ⚠️ B13：**对峙可达性**（门禁第 10 道的负样本锚点）——
+  //   引擎若丢了对峙的消费点，对峙次数会恒为 0 ⇒ 这里必红。
+  if (summary.duelTotal <= 0) {
+    problems.push('对峙在真实对局中从未发生（对峙消费点可能已丢失）');
+  }
   if (problems.length > 0) {
     console.error('FAIL  ' + problems.join('；'));
     process.exit(1);

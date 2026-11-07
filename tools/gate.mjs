@@ -21,6 +21,10 @@ const GATES = [
   { name: '双轨一致性（parity-check）', cmd: process.execPath, args: [resolve('tools', 'parity-check.mjs')] },
   { name: '主题差异化核对（theme-diff-check，规格 §10.1）', cmd: process.execPath, args: [resolve('tools', 'theme-diff-check.mjs')] },
   { name: '规模与平衡冒烟（tests/sim/run.mjs --check）', cmd: process.execPath, args: [resolve('tests', 'sim', 'run.mjs'), '--games', '30', '--check'] },
+  // ⚠️ 第 10 道门：浏览器端到端（对峙）。**依赖门 4 已构建的 `dist/`** ⇒ 排在 esbuild 之后。
+  //   单独跑本门禁时需先 `npm run build`（否则找不到 dist/创界山-活人认证.html）。
+  //   负样本锚点：门 9 的「对峙在真实对局中发生过」断言（破坏引擎消费点 ⇒ 必红）。
+  { name: '对峙浏览器端到端（tests/e2e/duel-e2e.mjs）', cmd: process.execPath, args: [resolve('tests', 'e2e', 'duel-e2e.mjs')] },
 ];
 
 /** 声明的门数（与实跑门数必须一致，否则自断言失败）。 */
