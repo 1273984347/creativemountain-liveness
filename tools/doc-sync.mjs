@@ -10,8 +10,11 @@ import { resolve } from 'node:path';
 
 import {
   readSpec, unionMembers, checkFieldNames, checkScaleValues, checkOps,
-  checkPredicates, checkGoals, checkExemptSyntax, checkDuplicateRows,
+  checkPredicates, checkGoals, checkExemptSyntax, checkDuplicateRows, checkCoverageBoundaries,
+  checkStateContract,
 } from './doc-sync-lib.mjs';
+import { COVERAGE_BOUNDARIES } from './coverage-boundaries.mjs';
+import { STATE_FIELD_NAMES } from '../engine/core/state-fields.mjs';
 
 const THEME_SRC = readFileSync(resolve('engine/types/theme.ts'), 'utf8');
 const OP_NAMES = unionMembers(THEME_SRC, 'OpName');
@@ -29,6 +32,8 @@ const checks = [
   checkGoals(spec, GOAL_KINDS),
   checkExemptSyntax(spec),
   checkDuplicateRows(spec),
+  checkCoverageBoundaries(spec, COVERAGE_BOUNDARIES.map((b) => b.id)),
+  checkStateContract(spec, STATE_FIELD_NAMES),
 ];
 
 const failed = checks.filter((c) => !c.ok);

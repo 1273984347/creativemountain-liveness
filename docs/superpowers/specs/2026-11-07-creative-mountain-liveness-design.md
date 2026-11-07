@@ -434,19 +434,34 @@
 
 ```ts
 type State = {
-  seed: number;              // 可复现随机源
+  seed: number;              // 可复现随机源（初始种子）
+  rng: Rng;                  // 随机源（权威状态）
   phase: '天机' | '行动' | '山议' | '认证' | '终局';
-  round: number;          // 所有存活玩家各行动一次 = 1 个 round（§3.1）
-  turnIndex: number;       // 当前手番在 round 内的位置
-  activePlayer: number;
-  players: Player[];        // 体力/灵枢/手牌/装备/身份/阵营/位置/印记/待认证标记
-  board: Tile[];             // 地形与格位
-  decks: { deck: Card[]; discard: Card[]; creation: Card[];   // ← 造物牌堆（V1.4）
-           heaven: Card[]; trial: Card[]; cert: Card[] };
-  pending: PendingEffect[];  // 延迟结算栈
-  log: LogEntry[];
+  round: number;             // 所有存活玩家各行动一次 = 1 个 round（§3.1）
+  turnIndex: number;         // 当前手番在 round 内的位置
+  players: Player[];         // 体力/灵枢/手牌/装备/身份/阵营/位置/印记/待认证标记
+  board: Board;              // 地形与格位（格位 + 峰顶）
+  decks: Decks;              // 各类牌堆（主牌库/弃牌堆/造物牌堆/天机/试炼/认证题）
+  scales: ScalesRow;         // 当前局规模配置（§8）
+  // ---- 以下为 ops registry 落地所需的运行时字段（B2）----
+  phaseValue: 'night' | 'day';        // 全局阶段值（`set_phase`）
+  lastDice: number;                   // 上次掷骰结果（`last_dice_even` / `dice_is_at_least`）
+  extraRolls: number;                 // 本回合额外掷骰次数（`extra_roll`）
+  keptDice: number[];                 // 保留的骰子结果（`keep_die`）
+  doubleNextVote: boolean;            // 下一票翻倍标记（`double_next_vote`）
+  wheelUsed: number;                  // 阵营轮使用次数（每局限 1 次；`spirit_wheel` source=manual 消耗）
+  extraSignaturesRequired: number;    // 待认证者额外签印数（`extra_signatures_required`）
+  log: LogEntry[];                    // 日志
+  // ---- 以下为认证 / 山议 / 结局流程状态（B3）----
+  certification: CertificationState;  // 认证流程状态（§5）
+  council: CouncilState;              // 山议流程状态（§5.6）
+  outcome: Outcome;                   // 对局结局（§5.7–§5.8）
 };
 ```
+
+> **字段集由代码派生、规格反拍**：本节字段集与 `engine/core/state.ts` 的 `State` 接口**逐字段一致**，由 `tools/doc-sync.mjs` 的 **C9 检查**强制（字段名清单从 `engine/core/state.ts` **自动扫描派生**，非手抄——手抄清单本身会成为第二事实源）。
+>
+> C9 曾在 2026-11-07 抓到真实漂移：并行实现给 `State` 加了 `certification` / `council` / `outcome` 与 7 个 ops 运行时字段，而本节未同步 ⇒ 契约冻结一度形同虚设。**新增 State 字段必须先改本节，再改代码。**
 
 **B1 锁定的 State 契约（V1.4 位移语义所需，B2/B3 不得再改）**：
 
@@ -866,6 +881,7 @@ Chromium 生成的 PDF **字节级不可直接比对**——实测同一份 HTML
 | 算子/谓词/goal 清单与代码真值双向一致 | 主题包**内容质量**（只查结构与引用完整性） |
 | 装备效果系统 | **V1 不存在装备被动效果**（§4.1），故无对应门禁 |
 | — | **2 人局**不支持（§8），故无对应门禁 |
+| — | **多端联机对局**（§13.3 延后项），故无对应门禁 |
 
 **④ 数值溯源比对（精确，判红依据）——堵住「改了引擎数值、忘了改规则书」**：
 

@@ -311,6 +311,64 @@ export function checkDuplicateRows(spec) {
   };
 }
 
+// ---------- C8 覆盖边界登记（机器可读 ↔ 规格表逐条对应）----------
+//
+// A5 的落点：绿洲《发布检查表》的「门禁覆盖边界（如实登记）」。
+// 边界若只写在文档里 ⇒ 门禁不知道自己看不见什么 ⇒ 「绿灯掩盖盲区」。
+// 本检查强制：**规格 §9.3 覆盖边界表的条数 == 机器清单条数**。
+export function checkCoverageBoundaries(spec, boundaryIds) {
+  const idx = spec.indexOf('门禁覆盖边界');
+  if (idx < 0) {
+    return {
+      id: 'C8',
+      title: '规格含覆盖边界登记',
+      ok: false,
+      detail: '规格 §9.3 缺少「门禁覆盖边界」小节',
+    };
+  }
+  // 取该表的数据行（以 | 开头、且不是表头/分隔行）
+  const sec = spec.slice(idx, spec.indexOf('\n\n**', idx) === -1 ? idx + 2000 : spec.indexOf('\n\n**', idx));
+  const rows = sec
+    .split(/\r?\n/)
+    .filter((l) => l.trim().startsWith('|'))
+    .filter((l) => !l.trim().startsWith('|---') && !l.includes('| 覆盖 | 不覆盖 |'));
+  // 表中「不覆盖」列以 `—` 结尾表示无兜底；条数即数据行数
+  const specCount = rows.length;
+  const codeCount = boundaryIds.length;
+  const problems = [];
+  if (specCount !== codeCount) {
+    problems.push(`规格表 ${specCount} 条 vs 机器清单 ${codeCount} 条`);
+  }
+  return {
+    id: 'C8',
+    title: `覆盖边界登记：规格表与机器清单一致（${codeCount} 条）`,
+    ok: problems.length === 0,
+    detail: problems.join('; '),
+  };
+}
+
+// ---------- C9 State 契约 ↔ 规格 §6.2 双向一致 ----------
+//
+// 起因（实证）：并行会话做 B3 时给 `State` 加了 `certification` / `council` / `outcome`
+// 三个字段，而规格 §6.2 未同步 ⇒ 契约冻结形同虚设。
+// C1–C8 全都不检查 State 字段，属于覆盖盲区。
+export function checkStateContract(spec, stateFields) {
+  const idx = spec.indexOf('### 6.2 引擎状态');
+  if (idx < 0) {
+    return { id: 'C9', title: '规格含 §6.2 引擎状态定义', ok: false, detail: '规格缺少 §6.2' };
+  }
+  // 取 §6.2 到下一个 ### 之间的原文
+  const end = spec.indexOf('\n### ', idx + 10);
+  const sec = spec.slice(idx, end === -1 ? idx + 4000 : end);
+  const missing = stateFields.filter((f) => !sec.includes(f));
+  return {
+    id: 'C9',
+    title: `State 字段与规格 §6.2 一致（${stateFields.length} 个字段）`,
+    ok: missing.length === 0,
+    detail: missing.length === 0 ? '' : `规格 §6.2 未登记：${missing.join('、')}`,
+  };
+}
+
 // ---------- C6 豁免标记自检 ----------
 
 export function checkExemptSyntax(spec) {
