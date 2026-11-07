@@ -1,0 +1,18 @@
+{
+  "name": "creativemountain-liveness",
+  "version": "0.1.0",
+  "private": true,
+  "description": "《创界山·活人认证》2026 重制版 — 桌面多人策略游戏，实体+数字双轨",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --test \"tests/engine/**/*.test.ts\"",
+    "build": "npm run typecheck && node esbuild.config.mjs",
+    "build:only": "node esbuild.config.mjs"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "esbuild": "^0.24.0",
+    "@types/node": "^22.0.0"
+  }
+}
