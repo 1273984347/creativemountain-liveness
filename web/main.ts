@@ -14,6 +14,8 @@ import { el, button, section } from './ui/dom.ts';
 import { renderBoard } from './ui/board.ts';
 import { renderHand, renderPlayers } from './ui/hand.ts';
 import { cardNeedsTarget, resolveTargetPick, targetCandidates } from '../engine/core/targeting.ts';
+import { performAbility } from '../engine/core/abilities.ts';
+import { abilityAvailability } from '../engine/core/passives.ts';
 import { renderLog } from './ui/log.ts';
 import { renderCouncil } from './ui/council.ts';
 import { renderCertification } from './ui/cert.ts';
@@ -28,6 +30,10 @@ interface Ui {
   seat: number;
   /** 正在选目标的卡牌 id（null = 不在选目标模式） */
   pendingTargetCardId: string | null;
+  /** B12：发动身份被动时等待选目标（窃火者偷灵枢） */
+  pendingAbility: boolean;
+  /** 一次性提示（发动结果 / 失败原因） */
+  notice: string | null;
 }
 
 const SAVE_KEY = 'creativemountain.save.v2';
@@ -80,6 +86,8 @@ const ui: Ui = {
   mode: 'newbie',
   seat: 0,
   pendingTargetCardId: null,
+  pendingAbility: false,
+  notice: null,
 };
 
 function newGame(): void {
@@ -90,6 +98,8 @@ function newGame(): void {
   );
   ui.seat = 0;
   ui.pendingTargetCardId = null;
+  ui.pendingAbility = false;
+  ui.notice = null;
   render();
 }
 
@@ -236,6 +246,16 @@ function playCard(cardId: string, target?: number): void {
 
 /** 玩家点选了一个目标（座号）。点自己 = 取消。 */
 function onPickTarget(picked: number): void {
+  // B12：发动被动的选目标模式（窃火者偷灵枢）
+  if (ui.pendingAbility) {
+    if (picked === ui.seat) {
+      ui.pendingAbility = false;
+      render();
+      return;
+    }
+    useAbility(picked);
+    return;
+  }
   if (ui.pendingTargetCardId === null) {
     return;
   }
@@ -246,6 +266,26 @@ function onPickTarget(picked: number): void {
     return;
   }
   playCard(payload.cardId, payload.target);
+}
+
+/**
+ * B12：发动身份被动（规格 §4.1 主动型：匠师 / 观星者 / 窃火者 / 织梦者）。
+ *
+ * 发动**占用本回合的行动**（规格 §3.1 行动三选一）⇒ 成功后直接推进回合。
+ */
+function useAbility(target?: number): void {
+  const seat = ui.seat;
+  ui.pendingAbility = false;
+  const r = performAbility(ui.state, seat, target);
+  if (!r.ok) {
+    ui.notice = '被动发动失败：' + r.note;
+    render();
+    return;
+  }
+  ui.state = r.state;
+  ui.notice = r.note;
+  ui.state = advanceTurn(ui.state, ui.mode);
+  render();
 }
 
 /** 行动区（行棋 / 问天 / 行事）。 */
@@ -274,6 +314,24 @@ function renderActions(): HTMLElement {
     render();
   }));
   body.push(row);
+  // B12：发动身份被动按钮（仅在可发动时出现）
+  const ability = abilityAvailability(ui.state, seat);
+  if (ability.usable) {
+    const identity = theme.identities.find((i) => i.id === player.identityId);
+    row.append(button('发动被动（' + (identity?.passiveText ?? '身份能力') + '）', () => {
+      if (ability.needsTarget) {
+        ui.pendingAbility = true;
+        render();
+        return;
+      }
+      useAbility();
+    }));
+  } else if (ability.reason !== '') {
+    body.push(el('div', { class: 'muted', text: '被动不可用：' + ability.reason }));
+  }
+  if (ui.notice !== null) {
+    body.push(el('div', { class: 'warn', text: ui.notice }));
+  }
   body.push(el('div', { class: 'muted', text: '出牌：点击手牌中的卡牌（费用自动结算）。攻击类牌需要**再点一名对手**选定目标。' }));
   if (ui.pendingTargetCardId !== null) {
     body.push(el('div', { class: 'warn', text: '选择目标：点击下方一名对手（点自己或再次点该牌取消）。' }));
@@ -344,7 +402,7 @@ function render(): void {
   const panels: (Node | string)[] = [
     renderToolbar(),
     section('山道', renderBoard(s)),
-    renderPlayers(s, theme, (picked) => { onPickTarget(picked); }, ui.pendingTargetCardId !== null),
+    renderPlayers(s, theme, (picked) => { onPickTarget(picked); }, ui.pendingTargetCardId !== null || ui.pendingAbility),
   ];
   // 山议面板
   if (needsCouncilVote(s)) {

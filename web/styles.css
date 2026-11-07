@@ -39,6 +39,7 @@ body { margin:0; font-family: system-ui, 'Microsoft YaHei', sans-serif; backgrou
 .badge.st { color:#c09080; border-color:#6a4030; }
 .badge.win { color:#ffd9a0; border-color:var(--accent); }
 .badge.seat { color:#f0a0c0; border-color:#803050; }
+.badge.peek { color:#a0c0f0; border-color:#305080; }
 .hand { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
 .card { width:118px; min-height:84px; border-radius:6px; padding:6px 8px; cursor:pointer; border:1px solid var(--line); background:#2a2420; font-size:11px; display:flex; flex-direction:column; }
 .card.pending { outline:2px solid var(--accent); }

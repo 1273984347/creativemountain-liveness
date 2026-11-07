@@ -4,6 +4,7 @@
 
 import type { State } from './state.ts';
 import type { CertificationState } from './flow.ts';
+import { passiveOf } from './passives.ts';
 
 /** 空认证状态。 */
 export function emptyCertification(): CertificationState {
@@ -125,6 +126,24 @@ export function certifyChallenge(state: State, actor: number, target: number): C
     return fail(state, '灵枢不足，无法发起质疑（需 1 灵枢）');
   }
   const players = state.players.map((p) => (p.seat === actor ? { ...p, resource: p.resource - 1 } : p));
+  // ⚠️ B12：山主特权（规格 §4.1）——「认证时**首次**被质疑自动通过」⇒
+  //   该次质疑**视为签印**（不进判定流程），且标记只生效一次（消费即清除）。
+  //   成本对称：仍照常扣 1 灵枢（他确实发起了质疑）。
+  const targetPlayer = state.players[target];
+  if (targetPlayer?.flags.certifyFreePass === true) {
+    let n: State = { ...state, players };
+    n = addSignature(n, target, 1);
+    n = {
+      ...n,
+      players: n.players.map((p) => (p.seat === target
+        ? { ...p, flags: { ...p.flags, certifyFreePass: false } }
+        : p)),
+      certification: { ...n.certification, signed: [...n.certification.signed, actor] },
+    };
+    // ⚠️ B12：被动日志统一用 `[被动:<op>]` 前缀（自动型被动的可观测性）。
+    const logged: State = { ...n, log: [...n.log, { round: n.round, turnIndex: n.turnIndex, actor, kind: 'passive', message: '[被动:certify_free_pass] 山主特权：本次质疑自动视为签印' }] };
+    return succeed(logged, '山主特权：本次质疑自动视为签印');
+  }
   const next: State = { ...state, players, certification: { ...c, challenged: [...c.challenged, actor] } };
   return succeed(next, '质疑已发起（-1 灵枢）');
 }
@@ -391,7 +410,16 @@ export function enterPendingCertification(state: State, seat: number): CertifyRe
     return fail(state, `座位 ${seat} 已在待认证状态`);
   }
   const pending = [...c.pending, seat];
-  const players = state.players.map((p) => (p.seat === seat ? { ...p, pendingCert: true } : p));
+  // ⚠️ B12：山主特权（规格 §4.1）——「认证时**首次**被质疑自动通过」⇒
+  //   进入待认证时挂上免质疑标记，由 certifyChallenge 消费（**只生效一次**）。
+  const passive = passiveOf(state, seat);
+  const players = state.players.map((p) => {
+    if (p.seat !== seat) { return p; }
+    const base = { ...p, pendingCert: true };
+    return passive?.op === 'certify_free_pass'
+      ? { ...base, flags: { ...base.flags, certifyFreePass: true } }
+      : base;
+  });
   const next: State = { ...state, players, certification: { ...c, pending } };
   return succeed(next, pending.length >= 2 ? '双人互验：双方进入待认证' : '进入待认证状态');
 }

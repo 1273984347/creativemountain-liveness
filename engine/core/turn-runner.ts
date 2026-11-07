@@ -9,6 +9,7 @@ import { applyEffect } from '../ops/registry.ts';
 import { rollD20 } from './dice.ts';
 import { nextTurn, advanceRound, currentPlayer, isRoundEnd } from './round.ts';
 import { cardNeedsTarget } from './targeting.ts';
+import { passiveOf } from './passives.ts';
 import { drawCards, discardDownToLimit } from './hand.ts';
 import { gainResource } from './resource.ts';
 import { openCouncil, resolveCouncil, shouldHoldCouncil } from './council.ts';
@@ -40,6 +41,21 @@ function resolveTile(state: State, seat: number): State {
       // 翻开牌堆顶 1 张判色（§3.4）：红安全，黑扣体力并失去本回合剩余行动
       const top = state.decks.deck[0];
       if (top === undefined) { return state; }
+      // ⚠️ B12：织梦者「改写自己的险径判定为安全」（自动消费点，§4.1）——
+      //   标记在发动时挂上、这里消费（**无论牌色都消费**，否则标记会无限留存）。
+      const self = state.players[seat];
+      if (self?.flags.judgementModified === true) {
+        return {
+          ...state,
+          players: state.players.map((p) => (p.seat === seat
+            ? { ...p, flags: { ...p.flags, judgementModified: false } }
+            : p)),
+          log: [...state.log, {
+            round: state.round, turnIndex: state.turnIndex, actor: seat, kind: 'passive',
+            message: '[被动:modify_judgement] 织梦者改写了险径判定：安全通过',
+          }],
+        };
+      }
       if (top.color === 'red') { return state; }
       const players = state.players.map((p) =>
         p.seat === seat ? { ...p, hp: Math.max(0, p.hp - 1) } : p,
@@ -144,8 +160,28 @@ export function performAction(
     case 'move': {
       if (player.pendingCert) { return state; } // §5.1 待认证锁定
       const before = player.position;
+      // ⚠️ B12：开拓者「每回合首次移动 +1 格」（自动型被动，§4.1）——
+      //   通过 `turn.moveBonus` **叠加**实现：`move_by_dice` 内部
+      //   `raw = position + roll + moveBonus` ⇒ bonus 必须在**掷骰前**加上，
+      //   否则「恰好够到峰顶」会差一格（事后追加 move_forward 永远晚一步）。
+      const passive = passiveOf(state, seat);
+      const firstMoveBonus = passive?.op === 'move_forward' && player.turn.movedThisTurn !== true
+        ? passive.amount
+        : 0;
+      if (firstMoveBonus > 0) {
+        next = {
+          ...next,
+          players: next.players.map((p) => (p.seat === seat
+            ? { ...p, turn: { ...p.turn, moveBonus: p.turn.moveBonus + firstMoveBonus } }
+            : p)),
+        };
+      }
       // move_by_dice 内部已掷 6 面骰并前进（**必须走满，不得少走**）
       next = applyEffect({ state: next, actor: seat }, { op: 'move_by_dice', faces: 6 }).state;
+      if (firstMoveBonus > 0) {
+        // ⚠️ B12：被动日志统一用 `[被动:<op>]` 前缀 ⇒ 模拟器/测试可统计**自动型**被动的触发。
+        next = { ...next, log: [...next.log, { round: next.round, turnIndex: next.turnIndex, actor: seat, kind: 'passive', message: '[被动:move_forward] 开拓者：本回合首次移动 +' + String(firstMoveBonus) + ' 格' }] };
+      }
       const steps = next.lastDice;
       next = { ...next, log: [...next.log, { round: next.round, turnIndex: next.turnIndex, actor: seat, kind: 'move', message: `行棋：掷出 ${steps}，前进至第 ${next.players[seat]?.position ?? before} 格`, diceRoll: steps }] };
       break;
@@ -288,6 +324,12 @@ export function finishTurn(state: State, seat: number): State {
   let next = resolveTile(state, seat);
   next = discardDownToLimit(next, seat);
   next = gainResource(next, seat, 1);
+  // ⚠️ B12：守夜人「回合结束时获得 1 点护盾」（自动型被动，§4.1）
+  const passive = passiveOf(next, seat);
+  if (passive?.op === 'shield') {
+    next = applyEffect({ state: next, actor: seat }, { op: 'shield', amount: passive.amount, target: seat }).state;
+    next = { ...next, log: [...next.log, { round: next.round, turnIndex: next.turnIndex, actor: seat, kind: 'passive', message: '[被动:shield] 守夜人：回合结束获得 ' + String(passive.amount) + ' 点护盾' }] };
+  }
   // 昼夜是**回合内**状态：回合末复位（否则 set_phase 一次就整局都是夜）
   next = { ...next, phaseValue: 'day' };
   return next;

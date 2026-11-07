@@ -134,8 +134,7 @@
       "id": "artisan",
       "name": "匠师",
       "passive": {
-        "op": "equip_card",
-        "cardId": "c_talisman"
+        "op": "create_card", "cardId": "c_talisman"
       },
       "goal": {
         "kind": "equip_count",
@@ -144,7 +143,7 @@
       "flavor": "手中无剑，炉中有火。"
     },
     {
-      "passiveText": "每回合可看牌库顶 1 张。",
+      "passiveText": "每回合可看牌堆顶 1 张。",
       "id": "stargazer",
       "name": "观星者",
       "passive": {
@@ -204,8 +203,7 @@
       "id": "weaver",
       "name": "织梦者",
       "passive": {
-        "op": "set_die_result",
-        "value": 10
+        "op": "modify_judgement", "target": 0
       },
       "goal": {
         "kind": "reroll_count",
@@ -1129,8 +1127,7 @@
       "text": "将下次掷骰点数设为 10。",
       "effects": [
         {
-          "op": "set_die_result",
-          "value": 10
+          "op": "modify_judgement", "target": 0
         }
       ]
     },

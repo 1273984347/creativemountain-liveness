@@ -54,13 +54,21 @@ export function assignIdentitiesAndFactions(state: State, theme: ThemePack): Sta
     const hpMax = Math.max(hpBase, state.scales.handStart);
     // 常驻型被动授予（如仲裁者的 extra_vote ⇒ 投票权重 2）
     const granted = grantedFlags(identity?.passive);
+    // B12：把**被动规格**一并授予玩家（`flags.passive`）——
+    //   引擎按 op 分发触发点（自动型在对应流程里应用，主动型由玩家发动）。
+    //   不授予则被动**永不触发**（这正是 B12 修的「只写不读」死机制）。
+    const passiveFlags = identity?.passive !== undefined
+      ? { passive: identity.passive as unknown }
+      : {};
     return {
       ...p,
       identityId: identity?.id ?? p.identityId,
       factionId: faction?.id ?? p.factionId,
       ...(granted.extraVotes > 0
-        ? { flags: { ...p.flags, extraVotes: ((p.flags.extraVotes as number | undefined) ?? 0) + granted.extraVotes } }
-        : {}),
+        ? { flags: { ...p.flags, extraVotes: ((p.flags.extraVotes as number | undefined) ?? 0) + granted.extraVotes, ...passiveFlags } }
+        : (Object.keys(passiveFlags).length > 0
+          ? { flags: { ...p.flags, ...passiveFlags } }
+          : {})),
       hpMax,
       hp: hpMax,
       resource: faction?.resourceBase ?? p.resource,

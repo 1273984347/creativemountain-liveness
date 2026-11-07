@@ -22,6 +22,7 @@ import {
   performAction, advanceTurn, needsCouncilVote, needsCertificationAction,
 } from '../../engine/core/turn-runner.ts';
 import { currentPlayer } from '../../engine/core/round.ts';
+import { performAbility } from '../../engine/core/abilities.ts';
 import { castVote, resolveCouncil } from '../../engine/core/council.ts';
 import {
   certifySign, certifyChallenge, certifyAnswer, certifyAppeal, certifyAppealVote,
@@ -142,11 +143,40 @@ function certificationTurn(s) {
   return s;
 }
 
+/**
+ * AI 偶尔发动身份被动（B12）。
+ *
+ * ⚠️ **可达性要求**：若 AI 从不发动，被动在真实对局中**永远不会触发** ⇒
+ *   平衡读数与「机制真实存在」的断言都无从谈起（这是「只写不读」死机制的老教训）。
+ *
+ * 规则一致性：发动被动**占用本回合的行动**（规格 §3.1 行动三选一）⇒
+ *   发动成功后本回合不再行棋/问天/出牌。
+ */
+function maybeUseAbility(s, seat) {
+  const passive = s.players[seat]?.flags?.passive;
+  if (passive === undefined || passive === null) { return null; }
+  const op = String(passive.op);
+  // 发动概率：约 1/4 的行动机会
+  if (s.rng.next() >= 0.25) { return null; }
+  let target;
+  if (op === 'transfer_resource') {
+    // 窃火者：选一个灵枢最多的对手偷
+    const others = s.players.filter((p) => p.alive && p.seat !== seat && p.resource > 0);
+    if (others.length === 0) { return null; }
+    let best = others[0];
+    for (const p of others) { if (best !== undefined && p.resource > best.resource) { best = p; } }
+    target = best.seat;
+  }
+  const r = performAbility(s, seat, target);
+  return r.ok ? { state: r.state, op } : null;
+}
+
 /** 跑一局，返回该局的统计与异常。 */
 function playOne(theme, players, seed) {
   const base = createInitialState({ players, seed, deckSize: theme.counts.deckTotal });
   let s = installTheme(base, theme);
   const anomalies = [];
+  const abilityOps = [];
   const maxSteps = s.scales.globalRoundLimit * players * 8 + 200;
   let steps = 0;
   // 首个进入待认证（登顶）的玩家 —— 用于追踪「先手优势」的传导路径：
@@ -172,6 +202,16 @@ function playOne(theme, players, seed) {
       continue;
     }
     const roll = s.rng.next();
+    // B12：AI 偶尔发动身份被动（发动成功则**占用本回合行动**，不再行棋/问天/出牌）
+    if (roll < 0.16) {
+      const used = maybeUseAbility(s, seat);
+      if (used !== null) {
+        abilityOps.push(used.op);
+        s = used.state;
+        s = advanceTurn(s, 'standard');
+        continue;
+      }
+    }
     if (roll < 0.75) {
       s = performAction(s, seat, 'move');
     } else if (roll < 0.85) {
@@ -209,6 +249,12 @@ function playOne(theme, players, seed) {
     // B11 活人席计分制：本局发放的席位数（终局不再由「封顶」触发，而是按席位数排名）
     liveSeats: { ...s.liveSeats },
     seatTotal: Object.values(s.liveSeats).reduce((a, b) => a + b, 0),
+    abilityOps,
+    // B12：被动触发**统一从日志提取**（主动型 + 自动型同格式 `[被动:<op>]`）
+    passiveOps: s.log.map((l) => {
+      const m = /^\[被动:([a-z_]+)\]/.exec(l.message);
+      return m === null ? null : m[1];
+    }).filter((x) => x !== null),
     anomalies,
   };
 }
@@ -255,6 +301,9 @@ function summarize(cells) {
   let gamesWithoutSeat = 0;
   const seatDist = new Map();
   const champSeatDist = new Map();
+  // B12：被动触发统计（可达性证据）—— op → 触发次数 / 触发过的局数
+  const abilityOps = new Map();
+  const abilityGames = new Map();
   let roundSum = 0;
   let anomalies = 0;
   const anomalySamples = [];
@@ -273,6 +322,9 @@ function summarize(cells) {
     seatDist.set(st0, (seatDist.get(st0) ?? 0) + 1);
     const champSeats = c.winners.reduce((m, w) => Math.max(m, c.liveSeats?.[w] ?? 0), 0);
     champSeatDist.set(champSeats, (champSeatDist.get(champSeats) ?? 0) + 1);
+    const ops = c.passiveOps ?? [];
+    for (const op of ops) { abilityOps.set(op, (abilityOps.get(op) ?? 0) + 1); }
+    for (const op of new Set(ops)) { abilityGames.set(op, (abilityGames.get(op) ?? 0) + 1); }
     if (c.firstPendingSeat >= 0) {
       chain.withPeak += 1;
       chain.peakRoundSum += c.firstPendingRound;
@@ -305,7 +357,7 @@ function summarize(cells) {
     noSeatFallbackRate: total > 0 ? noSeatFallback / total : 0,
     avgRounds: total > 0 ? roundSum / total : 0,
     avgSeats: total > 0 ? seatTotalSum / total : 0,
-    gamesWithoutSeat, seatDist, champSeatDist,
+    gamesWithoutSeat, seatDist, champSeatDist, abilityOps, abilityGames,
     identityWin, factionWin, seatWin, posWin, certRounds, chain, soloSeatWin, soloPosWin, soloGames,
   };
 }
@@ -555,7 +607,31 @@ if (args.out !== null) {
     const n = summary.champSeatDist.get(k) ?? 0;
     lines.push('| ' + k + ' 席 | ' + n + ' | ' + ((n / summary.total) * 100).toFixed(1) + '% |');
   }
-  writeFileSync(resolve(ROOT, args.out), lines.join('\n') + '\n', 'utf8');
+  lines.push('## 身份被动触发统计（B12 可达性证据）');
+  lines.push('');
+  lines.push('> **口径**：每局日志中 `[被动:<op>]` 前缀的记录数（主动型与自动型同格式）。',
+    '> 织梦者计**发动 + 生效**两次（改判定在险径结算时消费）；其余被动一次发动记一次。');
+  lines.push('> **这是「机制真实存在」的证据** —— 此前 7 个被动的 op 只出现在主题包里、**引擎无消费点**，',
+    '> 永不触发（机制看着实现、实际是死代码）；B12 补齐触发点后，每个被动在真实对局中都会出现。');
+  lines.push('');
+  lines.push('| 被动 | op | 触发次数 | 触发过的局数 | 每百局触发次数 |');
+  lines.push('|---|---|---|---|---|');
+  const PASSIVE_LABELS = {
+    move_forward: '开拓者 · 首次移动 +1 格',
+    create_card: '匠师 · 免费造物',
+    peek_deck: '观星者 · 看牌堆顶',
+    shield: '守夜人 · 回合末护盾',
+    transfer_resource: '窃火者 · 偷灵枢',
+    modify_judgement: '织梦者 · 改险径判定',
+    certify_free_pass: '山主 · 免质疑',
+  };
+  for (const op of Object.keys(PASSIVE_LABELS)) {
+    const n = summary.abilityOps.get(op) ?? 0;
+    const g = summary.abilityGames.get(op) ?? 0;
+    lines.push('| ' + PASSIVE_LABELS[op] + ' | `' + op + '` | ' + n + ' | ' + g + ' | '
+      + ((n / summary.total) * 100).toFixed(1) + ' |');
+  }
+  lines.push('');  writeFileSync(resolve(ROOT, args.out), lines.join('\n') + '\n', 'utf8');
   console.log('报告 → ' + args.out);
 }
 

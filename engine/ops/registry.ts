@@ -175,7 +175,15 @@ export const OPS: OpHandlers = {
     if (p.count <= 0) { return fail(ctx.state, 'count 必须为正'); }
     const top = ctx.state.decks.deck.slice(0, p.count);
     if (top.length === 0) { return fail(ctx.state, '牌库为空'); }
-    const state = withLog(ctx.state, ctx, 'peek_deck', `查看牌库顶 ${top.length} 张`);
+    // ⚠️ B12：把窥视到的**牌面**记进使用者 flags ⇒ UI 能显示牌名/颜色
+    //   （原先只回牌 id，玩家看不到颜色 ⇒ 「提前知道险径结果」这条设计意图落不了地）。
+    const actor = ctx.state.players[ctx.actor];
+    let state = ctx.state;
+    if (actor !== undefined) {
+      const peeked = top.map((c) => ({ id: c.id, name: c.name, color: c.color, rank: c.rank }));
+      state = withPlayer(state, ctx.actor, { flags: { ...actor.flags, peeked } });
+    }
+    state = withLog(state, ctx, 'peek_deck', `查看牌库顶 ${top.length} 张`);
     return { ok: true, state, note: top.map((c) => c.id).join(',') };
   },
   add_to_deck: (ctx, p) => {

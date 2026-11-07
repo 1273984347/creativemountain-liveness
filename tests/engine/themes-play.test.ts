@@ -210,7 +210,10 @@ test('换主题会重置局面：位置 / 标记 / 负面状态 / 待认证锁�
     '昼夜应是新一局天机决定的值（由新局天机牌决定，而非继承旧局）',
   );
   assert.equal(p0.position, 0, '位置应复位');
-  assert.deepEqual(p0.flags, {}, '标记应清空');
+  // ⚠️ B12：`flags.passive` 是**新一局分配的身份被动规格**（随身份重新分配），
+  //   不是上一局的临时标记 ⇒ 断言时排除它，其余标记仍须清空。
+  const { passive: _passive, ...restFlags } = p0.flags;
+  assert.deepEqual(restFlags, {}, '标记应清空（身份被动规格随新一局重新分配）');
   assert.deepEqual(p0.statuses, {}, '负面状态应清空');
   assert.equal(p0.pendingCert, false, '待认证锁定应解除');
   assert.equal(fresh.outcome.finished, false, '结局应复位');

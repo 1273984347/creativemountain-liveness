@@ -25,6 +25,7 @@ function runSim(games: number, players: number): {
   seatRates: number[];
   identityRates: number[];
   posRates: number[];
+  passiveOps: Map<string, number>;
 } {
   const dir = mkdtempSync(resolve(tmpdir(), 'cm-sim-'));
   const out = resolve(dir, 'report.md');
@@ -45,7 +46,13 @@ function runSim(games: number, players: number): {
   const posSection = text.slice(text.indexOf('## 按行动顺序位次'), text.indexOf('## 先手优势的传导路径'));
   const posRates = [...posSection.matchAll(/^\| 第(\d+) 位 \| \d+ \| ([\d.]+)% \|/gm)]
     .map((m) => Number(m[2]));
-  return { seatRates, identityRates, posRates };
+  // 被动触发统计（B12 可达性证据）：`| 名称 | `op` | 次数 | 局数 | 每百局 |`
+  const passiveSection = text.slice(text.indexOf('## 身份被动触发统计'), text.indexOf('## 认证轮次分布'));
+  const passiveOps = new Map<string, number>();
+  for (const m of passiveSection.matchAll(/^\| [^|]+ \| `([a-z_]+)` \| (\d+) \|/gm)) {
+    passiveOps.set(m[1] ?? '', Number(m[2]));
+  }
+  return { seatRates, identityRates, posRates, passiveOps };
 }
 
 // 2000 局 × 4 套主题 = 8000 局（样本再少时噪声会盖过信号；位次胜率的验收口径见规格 §9.2）
@@ -57,8 +64,8 @@ const SIM = { games: 2000, players: 8 };
  * ⚠️ 没有缓存的话每条断言都要重跑 1600 局（4 倍代价），
  *   而且**并行跑同一份模拟**会让测试时长得离谱。
  */
-let cached: { seatRates: number[]; identityRates: number[]; posRates: number[] } | null = null;
-function sim(): { seatRates: number[]; identityRates: number[]; posRates: number[] } {
+let cached: { seatRates: number[]; identityRates: number[]; posRates: number[]; passiveOps: Map<string, number> } | null = null;
+function sim(): { seatRates: number[]; identityRates: number[]; posRates: number[]; passiveOps: Map<string, number> } {
   if (cached === null) {
     cached = runSim(SIM.games, SIM.players);
   }
@@ -93,6 +100,19 @@ test('平衡回归：行动顺序确实是随机的（位次胜率表存在且�
   assert.equal(posRates.length, SIM.players, '应解析出每个行动顺序位次的胜率');
 });
 
+test('平衡回归：7 个身份被动在**真实对局中均触发过**（B12 可达性）', () => {
+  // ⚠️ B12 之前，这 7 个被动的 op 只出现在主题包里、引擎无消费点 ⇒
+  //   机制看着实现、实际永不触发（「只写不读」死机制）。
+  //   本条断言它们在真实对局中**确实会触发** —— 只测「执行该算子后状态变了」不够，
+  //   那证明不了链路通。
+  const { passiveOps } = sim();
+  const expected = ['move_forward', 'create_card', 'peek_deck', 'shield', 'transfer_resource', 'modify_judgement', 'certify_free_pass'];
+  for (const op of expected) {
+    const n = passiveOps.get(op) ?? 0;
+    assert.ok(n > 0, `被动 ${op} 在真实对局中从未触发（死机制）`);
+  }
+});
+
 test('平衡回归：位次胜率极差 < 4pp（B11 席位制：先动不再决定胜负）', () => {
   const { posRates } = sim();
   const spread = Math.max(...posRates) - Math.min(...posRates);
@@ -103,8 +123,6 @@ test('平衡回归：位次胜率极差 < 4pp（B11 席位制：先动不再决�
 
 // ---------- 已知遗留项（V1.1）----------
 
-test.todo('V1.1：其余 7 个身份的被动触发点（当前仍无消费点）', () => {
-  // 除仲裁者的 extra_vote 外，其余 7 个身份的被动（每回合首次移动 +1 格 / 免费造物 /
-  // 看牌堆顶 / 挡封口 / 偷资源 / 改判定 / 首次质疑自动通过）在引擎里**没有消费点**。
-  // 需逐个设计触发点 + 触发时机 + 资源消耗，并同步规格 §4.1 与主题包文案。
+test.todo('V1.1：主题包全量差异化（各自独立的卡牌池 / 事件池 / 身份设计）', () => {
+  // B8 已达成最小可行差异化（标识 / 术语 / 认证题 / 1–2 张标志卡），全量差异化属 V1.1。
 });

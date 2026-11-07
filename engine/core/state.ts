@@ -31,6 +31,14 @@ export interface PlayerTurnState {
   readonly usedAsk: boolean;
   /** 本回合是否已发生过位移——「每回合首次移动 +1 格」类效果的判定基准（§4.1 开拓者） */
   readonly movedThisTurn: boolean;
+  /**
+   * 本回合是否已发动过身份被动——「每回合 1 次」类被动的次数闸门（§4.1 观星者 / 窃火者 / 织梦者）。
+   *
+   * ⚠️ **可选字段**（B12）：回合末清零 ⇒ 缺省即「未发动」；
+   *   做成必填会让所有手写 `turn` 字面量（引擎 / 测试）都要跟着改 ⇒ 徒增维护面。
+   *   读取一律用 `=== true` 判定。
+   */
+  readonly abilityUsedThisTurn?: boolean;
 }
 
 /** 清零用的空回合状态。 */
@@ -38,6 +46,7 @@ export const EMPTY_TURN: PlayerTurnState = {
   moveBonus: 0,
   usedAsk: false,
   movedThisTurn: false,
+  abilityUsedThisTurn: false,
 };
 
 /** 玩家运行时状态。 */

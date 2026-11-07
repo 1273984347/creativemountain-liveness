@@ -1,14 +1,29 @@
-// 身份的**常驻型被动**授予（规格 §4.1）。
+// 身份的**被动特权**（规格 §4.1 权威被动表，B12）。
 //
-// ⚠️ 为什么只覆盖 extra_vote：8 个身份的被动语义各不相同
-//   （「每回合首次移动 +1 格」「每场限 1 次免费造物」「每回合 1 次改判定」…），
-//   **无法用统一的回合末触发**实现（那样会让「改判定」自动生效、「偷资源」自动扣自己）。
-//   而 extra_vote 是**常驻型**（投票权重加成）⇒ 分配身份时一次性授予即可，
-//   语义与规格 §4.1「仲裁者：山议中可投 2 票」完全一致。
+// ⚠️ B12 修正：此前本文件**只覆盖 extra_vote**（常驻型），其余 7 个被动的 op
+//   **只写不读** —— 引擎里没有任何消费点，机制看着实现、实际永不触发
+//   （实测：主题包 4 套 × 8 身份的被动，只有仲裁者的 extra_vote 真正生效）。
+//   B12 为每个被动补齐触发点与消费点。
 //
-// 其余被动的逐个触发点属 V1.1（见 B10 执行记录的遗留清单）。
+// 设计要点：
+//   · **触发方式两类**：「自动」= 在对应流程里自动应用（开拓者 / 守夜人 / 山主）；
+//     「主动」= 玩家在行动阶段「行事」时发动（匠师 / 观星者 / 窃火者 / 织梦者）。
+//   · **次数闸门**：「每回合 1 次」用 `turn.abilityUsedThisTurn`（回合末清零）；
+//     「每场 1 次」用 `counters.abilityUses`（本局累计，不清零）。
+//   · 被动规格在**分配身份时**授予玩家（`flags.passive`），引擎按 **op** 分发
+//     ⇒ **主题化友好**：不同主题的同一身份用不同 op 也能正确工作。
 
 import type { Effect } from '../types/theme.ts';
+import type { State } from './state.ts';
+
+/** 被动规格（主题包 `identity.passive` 原样搬运）。 */
+export type PassiveSpec = Effect;
+
+/** 主动型被动的 op（其余为常驻型或自动型）。 */
+export const ACTIVE_ABILITY_OPS = ['create_card', 'peek_deck', 'transfer_resource', 'modify_judgement'] as const;
+
+/** 主动型被动的 op 集合。 */
+const ACTIVE_OPS = new Set<string>(ACTIVE_ABILITY_OPS);
 
 /** 被动里授予的常驻标记。 */
 export interface GrantedFlags {
@@ -20,6 +35,9 @@ export interface GrantedFlags {
  * 计算一个被动里**常驻型**效果的授予值。
  *
  * 递归下探 sequence / conditional / count —— 被动也可能是组合结构。
+ *
+ * ⚠️ 只有**常驻型**（投票权重加成）走这里；其余被动由 `performAbility`（主动型）
+ *   或各流程的自动触发点（自动型）消费 —— 见文件头「设计要点」。
  */
 export function grantedFlags(passive: Effect | undefined): GrantedFlags {
   let extraVotes = 0;
@@ -44,4 +62,45 @@ export function grantedFlags(passive: Effect | undefined): GrantedFlags {
   };
   if (passive !== undefined) { walk(passive); }
   return { extraVotes };
+}
+
+/** 读某玩家的被动规格（未授予 ⇒ undefined，如旧存档）。 */
+export function passiveOf(state: State, seat: number): PassiveSpec | undefined {
+  const raw = state.players[seat]?.flags.passive;
+  return raw === undefined ? undefined : (raw as PassiveSpec);
+}
+
+/** 主动能力是否可发动。 */
+export interface AbilityAvailability {
+  /** 是否可发动 */
+  readonly usable: boolean;
+  /** 不可用的原因（可发动时为空串） */
+  readonly reason: string;
+  /** 是否需要选择目标（窃火者偷资源） */
+  readonly needsTarget: boolean;
+}
+
+/**
+ * 主动能力的可用性判据。
+ *
+ * 「每场 1 次」用 `counters.abilityUses`（本局累计）；
+ * 「每回合 1 次」用 `turn.abilityUsedThisTurn`（回合末清零）。
+ */
+export function abilityAvailability(state: State, seat: number): AbilityAvailability {
+  const player = state.players[seat];
+  if (player === undefined) { return { usable: false, reason: '座位不存在', needsTarget: false }; }
+  if (!player.alive) { return { usable: false, reason: '已出局', needsTarget: false }; }
+  const passive = passiveOf(state, seat);
+  if (passive === undefined) { return { usable: false, reason: '本局没有身份被动（旧存档）', needsTarget: false }; }
+  if (!ACTIVE_OPS.has(passive.op)) { return { usable: false, reason: '该被动为自动/常驻型，无需发动', needsTarget: false }; }
+  // 「每场 1 次」：匠师（`freeCreates` 专用计数，不与其它被动的总次数混用）
+  if (passive.op === 'create_card') {
+    const used = player.counters.freeCreates ?? 0;
+    if (used >= 1) { return { usable: false, reason: '本场已用过一次免费造物', needsTarget: false }; }
+  }
+  // 「每回合 1 次」：观星者 / 窃火者 / 织梦者
+  if (player.turn.abilityUsedThisTurn) {
+    return { usable: false, reason: '本回合已发动过被动', needsTarget: false };
+  }
+  return { usable: true, reason: '', needsTarget: passive.op === 'transfer_resource' };
 }

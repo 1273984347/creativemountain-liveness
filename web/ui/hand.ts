@@ -54,6 +54,12 @@ export function renderPlayers(
     const seats = state.liveSeats[p.seat] ?? 0;
     row.append(el('span', { class: 'p-meta', text: (faction?.name ?? p.factionId) + ' · ' + theme.glossary.HP + ' ' + p.hp + '/' + p.hpMax + ' · ' + theme.meta.resourceName + ' ' + p.resource + ' · 位 ' + p.position + (seats > 0 ? ' · 活人席 ' + String(seats) : '') }));
     if (p.hasMark) { row.append(el('span', { class: 'badge mark', text: '印记' })); }
+    // B12：观星者窥视到的牌面（`peek_deck` 记在 flags.peeked）
+    const peeked = p.flags.peeked as { name: string; color: string }[] | undefined;
+    if (peeked !== undefined && Array.isArray(peeked) && peeked.length > 0) {
+      const label = peeked.map((c) => c.name + '（' + (c.color === 'red' ? '红' : '黑') + '）').join(' ');
+      row.append(el('span', { class: 'badge peek', text: '窥视 ' + label }));
+    }
     if (p.pendingCert) { row.append(el('span', { class: 'badge cert', text: '待认证' })); }
     if (p.equipment.length > 0) {
       row.append(el('span', { class: 'badge eq', text: '装备 ' + p.equipment.length }));

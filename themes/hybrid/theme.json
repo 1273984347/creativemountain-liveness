@@ -133,8 +133,7 @@
       "id": "artisan",
       "name": "器师",
       "passive": {
-        "op": "equip_card",
-        "cardId": "c_hy_d01"
+        "op": "create_card", "cardId": "c_hy_d01"
       },
       "goal": {
         "kind": "equip_count",
@@ -203,8 +202,7 @@
       "id": "weaver",
       "name": "织符者",
       "passive": {
-        "op": "set_die_result",
-        "value": 10
+        "op": "modify_judgement", "target": 0
       },
       "goal": {
         "kind": "reroll_count",
@@ -1185,8 +1183,7 @@
       "text": "将下次掷骰点数设为 10。",
       "effects": [
         {
-          "op": "set_die_result",
-          "value": 10
+          "op": "modify_judgement", "target": 0
         }
       ]
     },
