@@ -10,15 +10,8 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { runTsc, runNodeTest } from './harness.ts';
+import { runTscIn, runNodeTest } from './harness.ts';
 
-/**
- * 类型探针文件（在 tsconfig include 范围内，才能被类型门禁扫到）。
- *
- * ⚠️ **文件名不能以 `_` 开头** —— Node 的 test runner 会**忽略 `_` 前缀的文件**，
- * 用 `__negprobe` 命名会导致探针根本没被跑到，负样本假绿。
- */
-const TYPE_PROBE = resolve(process.cwd(), 'engine', 'negprobe.ts');
 /** 测试探针文件（同上，禁用 `_` 前缀）。 */
 const TEST_PROBE = resolve(process.cwd(), 'tests', 'engine', 'negprobe.test.ts');
 /** 只跑 engine 目录，避免自检用例递归触发自身。 */
@@ -35,21 +28,48 @@ function cleanup(...paths: readonly string[]): void {
 // ---------- 负样本 1：类型门禁（tsc --noEmit）----------
 
 test('负样本：类型门禁对类型错误判红，恢复后判绿', { concurrency: false }, () => {
-  cleanup(TYPE_PROBE);
+  // ⚠️ **自包含**：本负样本用**独立的临时目录 + 独立 tsconfig**，
+  // 绝不使用工程主 tsconfig、也不在工程目录里放探针文件。
+  // 理由：`{ concurrency: false }` 只保证**同文件内**串行，
+  // 其他测试文件仍会并发执行——若本负样本在工程目录里留探针，
+  // 并发跑的 tsc 会扫到它 ⇒ 「恢复后判绿」断言假红。
+  const isolated = resolve(process.cwd(), 'tests', 'gates', '__isolated_tsc');
+  const srcDir = resolve(isolated, 'src');
+  mkdirSync(srcDir, { recursive: true });
   try {
-    // 故意注入类型错误：number 位置放了 string
-    writeFileSync(TYPE_PROBE, "export const n: number = '这不是数字';\n", 'utf8');
+    // 独立 tsconfig：只扫自己的 src，不牵扯工程
+    writeFileSync(
+      resolve(isolated, 'tsconfig.json'),
+      JSON.stringify({
+        compilerOptions: {
+          target: 'ES2022',
+          module: 'ESNext',
+          moduleResolution: 'bundler',
+          strict: true,
+          noEmit: true,
+        },
+        include: ['src/**/*.ts'],
+      }),
+      'utf8',
+    );
+    const probe = resolve(srcDir, 'probe.ts');
+    const benign = resolve(srcDir, 'benign.ts');
 
-    const broken = runTsc();
+    // 故意注入类型错误：number 位置放了 string
+    writeFileSync(probe, "export const n: number = '这不是数字';\n", 'utf8');
+    const broken = runTscIn(resolve(isolated, 'tsconfig.json'));
     assert.notEqual(broken.code, 0, '注入类型错误后类型门禁必须判红');
     assert.match(broken.output, /TS\d+/, '报错信息应是 TypeScript 诊断码');
 
-    // 恢复
-    cleanup(TYPE_PROBE);
-    const restored = runTsc();
+    // 恢复：移除探针，但**保留一个合法源文件**——
+    // 否则 tsconfig 的 include 会匹配不到任何输入，tsc 报 TS18003
+    // 「No inputs were found」，退出码同样是 2 ⇒ 「恢复后判绿」假红。
+    rmSync(probe, { force: true });
+    writeFileSync(benign, "export const ok: number = 1;\n", 'utf8');
+    const restored = runTscIn(resolve(isolated, 'tsconfig.json'));
     assert.equal(restored.code, 0, '移除探针后类型门禁必须判绿');
   } finally {
-    cleanup(TYPE_PROBE);
+    rmSync(isolated, { recursive: true, force: true });
   }
 });
 

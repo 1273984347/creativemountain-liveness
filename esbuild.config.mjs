@@ -5,7 +5,7 @@
 // `npm run build` 的顺序是「先 tsc 通过 → 再 esbuild」，红色即中断。
 
 import { build } from 'esbuild';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -24,9 +24,13 @@ const result = await build({
   write: false,
   charset: 'utf8',
   legalComments: 'none',
+  loader: { '.json': 'json' },
 });
 
 const js = result.outputFiles[0].text;
+
+// 样式外置到 web/styles.css，构建时内联进单文件。
+const css = await readFile(resolve(root, 'web/styles.css'), 'utf8');
 
 const html = `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -35,18 +39,7 @@ const html = `<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>创界山·活人认证</title>
 <style>
-  :root { color-scheme: dark; }
-  body { margin:0; font-family: system-ui, 'Microsoft YaHei', sans-serif;
-         background:#14110f; color:#e8e0d4; padding:24px; }
-  h1 { font-size:20px; margin:0 0 16px; }
-  .board { display:flex; flex-wrap:wrap; gap:6px; max-width:900px; }
-  .tile { width:44px; height:44px; border-radius:6px; display:flex;
-          align-items:center; justify-content:center; font-size:11px;
-          background:#2a2420; border:1px solid #3d342d; position:relative; }
-  .tile.peak { background:#6b4a2a; border-color:#c08b3e; }
-  .marker { position:absolute; bottom:2px; font-size:10px; color:#ffd9a0; }
-  .meta { margin-top:16px; font-size:13px; color:#b6a894; line-height:1.8; }
-  code { background:#2a2420; padding:1px 5px; border-radius:3px; }
+${css}
 </style>
 </head>
 <body>

@@ -58,6 +58,15 @@ export function runTsc(): GateRun {
   return runNode([resolve('node_modules', 'typescript', 'bin', 'tsc'), '--noEmit']);
 }
 
+/**
+ * 类型门禁（指定 tsconfig）：用于**自包含**负样本——
+ * 用独立 tsconfig + 独立目录，避免在工程目录里放探针文件
+ * （并发跑的 tsc 会扫到它 ⇒ 负样本假红）。
+ */
+export function runTscIn(tsconfigPath: string): GateRun {
+  return runNode([resolve('node_modules', 'typescript', 'bin', 'tsc'), '--noEmit', '--project', tsconfigPath]);
+}
+
 /** 测试门禁：node --test <glob>（glob 交由 node 自己展开，不经 shell）。 */
 export function runNodeTest(glob: string): GateRun {
   return runNode(['--test', glob]);

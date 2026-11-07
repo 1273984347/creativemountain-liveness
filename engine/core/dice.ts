@@ -26,6 +26,17 @@ export class Rng {
     return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
   }
 
+  /**
+   * 从快照恢复随机源（存档 / 复现用）。
+   *
+   * 快照保存的是**内部状态**而非初始种子，因此恢复后能精确续上原来的随机序列。
+   */
+  static fromSnapshot(initialSeed: number, snapshot: number): Rng {
+    const rng = new Rng(initialSeed);
+    rng.s = snapshot >>> 0;
+    return rng;
+  }
+
   /** 当前状态快照（用于序列化 / 存档）。 */
   snapshot(): number {
     return this.s;
