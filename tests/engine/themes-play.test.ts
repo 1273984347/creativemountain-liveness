@@ -16,10 +16,10 @@ import { resolve } from 'node:path';
 import type { ThemePack } from '../../engine/types/theme.ts';
 import { createInitialState, type State } from '../../engine/core/state.ts';
 import { installTheme } from '../../engine/core/setup.ts';
-import { performAction, advanceTurn } from '../../engine/core/turn-runner.ts';
+import { performAction } from '../../engine/core/turn-runner.ts';
 import { currentPlayer } from '../../engine/core/round.ts';
 import { applyEffect } from '../../engine/ops/registry.ts';
-import { at } from './helpers.ts';
+import { at, advanceWithDuel } from './helpers.ts';
 
 const THEME_IDS = ['xianxia2026', 'scifi-ai', 'hybrid', 'urban-psych'] as const;
 const NEW_THEME_IDS = ['scifi-ai', 'hybrid', 'urban-psych'] as const;
@@ -48,7 +48,7 @@ function playRounds(start: State, rounds: number): State {
         return s;
       }
       s = performAction(s, seat, 'move');
-      s = advanceTurn(s, 'standard');
+      s = advanceWithDuel(s, 'standard');
       if (s.outcome.finished) {
         return s;
       }
@@ -234,7 +234,7 @@ test('天机牌每回合翻开、对全场生效，昼夜状态在真实对局�
         break;
       }
       s = performAction(s, seat, 'move');
-      s = advanceTurn(s, 'standard');
+      s = advanceWithDuel(s, 'standard');
       phases.add(s.phaseValue);
       for (const l of s.log) {
         if (l.kind === 'heaven') {

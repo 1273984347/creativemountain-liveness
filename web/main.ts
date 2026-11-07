@@ -16,6 +16,7 @@ import { renderHand, renderPlayers } from './ui/hand.ts';
 import { cardNeedsTarget, resolveTargetPick, targetCandidates } from '../engine/core/targeting.ts';
 import { performAbility } from '../engine/core/abilities.ts';
 import { abilityAvailability } from '../engine/core/passives.ts';
+import { submitDuelCard } from '../engine/core/duel.ts';
 import { renderLog } from './ui/log.ts';
 import { renderCouncil } from './ui/council.ts';
 import { renderCertification } from './ui/cert.ts';
@@ -300,6 +301,33 @@ function renderActions(): HTMLElement {
   }
   if (player.pendingCert) {
     body.push(el('span', { class: 'warn', text: '待认证锁定：你已在峰顶，不能主动移动（只能被质疑后退）。' }));
+    return section('行动', ...body);
+  }
+  // ⚠️ B13：对峙未结算 ⇒ **只显示对峙面板**（回合阻塞，行棋/问天/出牌都暂不可用）。
+  const duel = ui.state.duel;
+  if (duel !== null) {
+    const isA = duel.seatA === seat;
+    const myPick = isA ? duel.pickA : duel.pickB;
+    const oppSeat = isA ? duel.seatB : duel.seatA;
+    const oppPick = isA ? duel.pickB : duel.pickA;
+    body.push(el('div', { class: 'warn', text: '对峙：座' + duel.seatA + ' vs 座' + duel.seatB + ' —— 双方各自选 1 张牌，选完才同时揭晓。' }));
+    if (myPick === undefined) {
+      body.push(el('div', { class: 'muted', text: '轮到你（座' + seat + '）锁定亮牌：点击下方手牌中的一张。' }));
+    } else if (oppPick === undefined) {
+      body.push(el('div', { class: 'muted', text: '你已锁定亮牌，等待座' + oppSeat + ' 选牌（把「操作者」切过去）。' }));
+    } else {
+      body.push(el('div', { class: 'muted', text: '双方已锁定亮牌 → 揭晓。' }));
+    }
+    body.push(renderHand(ui.state, theme, seat, (cardId) => {
+      const r = submitDuelCard(ui.state, seat, cardId);
+      ui.state = r.state;
+      ui.notice = r.note;
+      if (ui.state.duel === null) {
+        // 对峙已揭晓 ⇒ 继续推进被阻塞的手番
+        ui.state = advanceTurn(ui.state, ui.mode);
+      }
+      render();
+    }, ui.pendingTargetCardId));
     return section('行动', ...body);
   }
   const row = el('div', { class: 'btn-row' });

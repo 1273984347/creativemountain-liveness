@@ -26,6 +26,7 @@ function runSim(games: number, players: number): {
   identityRates: number[];
   posRates: number[];
   passiveOps: Map<string, number>;
+  duelTotal: number;
 } {
   const dir = mkdtempSync(resolve(tmpdir(), 'cm-sim-'));
   const out = resolve(dir, 'report.md');
@@ -46,13 +47,16 @@ function runSim(games: number, players: number): {
   const posSection = text.slice(text.indexOf('## 按行动顺序位次'), text.indexOf('## 先手优势的传导路径'));
   const posRates = [...posSection.matchAll(/^\| 第(\d+) 位 \| \d+ \| ([\d.]+)% \|/gm)]
     .map((m) => Number(m[2]));
+  // 对峙次数（B13 可达性证据）：`| 对峙总次数 | N |`
+  const duelMatch = /\| 对峙总次数 \| (\d+) \|/.exec(text);
+  const duelTotal = duelMatch === null ? 0 : Number(duelMatch[1]);
   // 被动触发统计（B12 可达性证据）：`| 名称 | `op` | 次数 | 局数 | 每百局 |`
   const passiveSection = text.slice(text.indexOf('## 身份被动触发统计'), text.indexOf('## 认证轮次分布'));
   const passiveOps = new Map<string, number>();
   for (const m of passiveSection.matchAll(/^\| [^|]+ \| `([a-z_]+)` \| (\d+) \|/gm)) {
     passiveOps.set(m[1] ?? '', Number(m[2]));
   }
-  return { seatRates, identityRates, posRates, passiveOps };
+  return { seatRates, identityRates, posRates, passiveOps, duelTotal };
 }
 
 // 2000 局 × 4 套主题 = 8000 局（样本再少时噪声会盖过信号；位次胜率的验收口径见规格 §9.2）
@@ -64,8 +68,8 @@ const SIM = { games: 2000, players: 8 };
  * ⚠️ 没有缓存的话每条断言都要重跑 1600 局（4 倍代价），
  *   而且**并行跑同一份模拟**会让测试时长得离谱。
  */
-let cached: { seatRates: number[]; identityRates: number[]; posRates: number[]; passiveOps: Map<string, number> } | null = null;
-function sim(): { seatRates: number[]; identityRates: number[]; posRates: number[]; passiveOps: Map<string, number> } {
+let cached: { seatRates: number[]; identityRates: number[]; posRates: number[]; passiveOps: Map<string, number>; duelTotal: number } | null = null;
+function sim(): { seatRates: number[]; identityRates: number[]; posRates: number[]; passiveOps: Map<string, number>; duelTotal: number } {
   if (cached === null) {
     cached = runSim(SIM.games, SIM.players);
   }
@@ -111,6 +115,12 @@ test('平衡回归：7 个身份被动在**真实对局中均触发过**（B12 �
     const n = passiveOps.get(op) ?? 0;
     assert.ok(n > 0, `被动 ${op} 在真实对局中从未触发（死机制）`);
   }
+});
+
+test('平衡回归：对峙在真实对局中发生过（B13 可达性）', () => {
+  // ⚠️ B13 之前：引擎里只有一个无人调用的半成品 op `compare_cards` ⇒ 对峙**不可达**。
+  const { duelTotal } = sim();
+  assert.ok(duelTotal > 0, '对峙在真实对局中从未发生（死机制）');
 });
 
 test('平衡回归：位次胜率极差 < 4pp（B11 席位制：先动不再决定胜负）', () => {

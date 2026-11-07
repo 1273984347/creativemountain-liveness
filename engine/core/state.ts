@@ -12,7 +12,7 @@ import type { NegativeStatus } from '../types/common.ts';
 import { getScales, type PlayerCount, type ScalesRow } from '../scales.ts';
 import { Rng } from './dice.ts';
 import type { Board } from './board.ts';
-import type { CertificationState, CouncilState, Outcome } from './flow.ts';
+import type { CertificationState, CouncilState, DuelState, Outcome, PublicCard } from './flow.ts';
 import { dealInitialHands } from './hand.ts';
 
 /** 阶段。 */
@@ -32,6 +32,15 @@ export interface PlayerTurnState {
   /** 本回合是否已发生过位移——「每回合首次移动 +1 格」类效果的判定基准（§4.1 开拓者） */
   readonly movedThisTurn: boolean;
   /**
+   * 本手番**是否已结算**（B13）。
+   *
+   * ⚠️ 为什么需要：落点结算（地形 + 对峙）发生在手番收尾时，而对峙要**双方选牌后**才能结算；
+   *   若此时回合已推进，对峙的选牌就没有「当前手番」可挂靠。
+   *   ⇒ 结算完进入对峙时**暂停推进**并置此标记；对手选完牌后再次调用 advanceTurn，
+   *   看到此标记便**跳过重复结算**、直接推进（回合末一并清零）。
+   */
+  readonly finished?: boolean;
+  /**
    * 本回合是否已发动过身份被动——「每回合 1 次」类被动的次数闸门（§4.1 观星者 / 窃火者 / 织梦者）。
    *
    * ⚠️ **可选字段**（B12）：回合末清零 ⇒ 缺省即「未发动」；
@@ -47,6 +56,7 @@ export const EMPTY_TURN: PlayerTurnState = {
   usedAsk: false,
   movedThisTurn: false,
   abilityUsedThisTurn: false,
+  finished: false,
 };
 
 /** 玩家运行时状态。 */
@@ -175,6 +185,16 @@ export interface State {
   /** 待认证者额外需要的签印数（`extra_signatures_required`） */
   readonly extraSignaturesRequired: number;
   /**
+   * 待决对峙（规格 §3.3，B13）。
+   *
+   * 双方各自选牌、选完才同时揭晓 ⇒ 对峙未结算时**回合阻塞**（不能推进到下一手番）。
+   */
+  readonly duel: DuelState | null;
+  /**
+   * 本 round **公开**的亮牌（规格 §3.3）：比较后留在场上公开、不回手牌，round 末清空。
+   */
+  readonly publicCards: readonly PublicCard[];
+  /**
    * 活人席数：`key` = 座位号，`value` = 该玩家已获得的活人席数。
    *
    * ⚠️ B11 活人席计分制（规格 §5.7）：**认证通过不再直接终局** ——
@@ -296,6 +316,8 @@ export function createInitialState(opts: InitialStateOptions): State {
     outcome: { finished: false, winners: [], reason: 'no_winner' },
     extraSignaturesRequired: 0,
     liveSeats: {},
+    duel: null,
+    publicCards: [],
     log: [],
   };
   return dealInitialHands(base);

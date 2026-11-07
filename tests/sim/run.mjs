@@ -23,6 +23,7 @@ import {
 } from '../../engine/core/turn-runner.ts';
 import { currentPlayer } from '../../engine/core/round.ts';
 import { performAbility } from '../../engine/core/abilities.ts';
+import { autoResolveDuel } from '../../engine/core/duel.ts';
 import { castVote, resolveCouncil } from '../../engine/core/council.ts';
 import {
   certifySign, certifyChallenge, certifyAnswer, certifyAppeal, certifyAppealVote,
@@ -171,6 +172,41 @@ function maybeUseAbility(s, seat) {
   return r.ok ? { state: r.state, op } : null;
 }
 
+/**
+ * B13：AI 为对峙挑一张牌（**红优先、同色点数大优先**）。
+ */
+function pickDuelCard(s, seat) {
+  const p = s.players[seat];
+  if (p === undefined || p.hand.length === 0) { return null; }
+  let best = p.hand[0];
+  for (const c of p.hand) {
+    if (best === undefined) { best = c; continue; }
+    const bc = best.color === 'red' ? 1 : 0;
+    const cc = c.color === 'red' ? 1 : 0;
+    if (cc > bc || (cc === bc && c.rank > best.rank)) { best = c; }
+  }
+  return best === undefined ? null : best.id;
+}
+
+/**
+ * B13：若处于待决对峙 ⇒ AI 为**双方各选一张牌**（双方选完才同时揭晓，规格 §3.3）。
+ *
+ * ⚠️ 可达性要求：若 AI 从不选牌，对峙会**永远卡住**（回合阻塞）⇒ 机制不可达。
+ */
+function resolveDuelByAI(s) {
+  return autoResolveDuel(s);
+}
+
+/** 推进手番；若结算后进入对峙 ⇒ AI 选牌后继续推进（回合阻塞的闭环）。 */
+function advanceWithDuel(s, mode) {
+  let next = advanceTurn(s, mode);
+  if (next.duel !== null) {
+    next = resolveDuelByAI(next);
+    next = advanceTurn(next, mode);
+  }
+  return next;
+}
+
 /** 跑一局，返回该局的统计与异常。 */
 function playOne(theme, players, seed) {
   const base = createInitialState({ players, seed, deckSize: theme.counts.deckTotal });
@@ -198,7 +234,7 @@ function playOne(theme, players, seed) {
         const target = pickTarget(s, seat);
         s = performAction(s, seat, 'act', target === undefined ? { cardId: card.id } : { cardId: card.id, target });
       }
-      s = advanceTurn(s, 'standard');
+      s = advanceWithDuel(s, 'standard');
       continue;
     }
     const roll = s.rng.next();
@@ -225,7 +261,7 @@ function playOne(theme, players, seed) {
         s = performAction(s, seat, 'act', target === undefined ? { cardId: card.id } : { cardId: card.id, target });
       }
     }
-    s = advanceTurn(s, 'standard');
+    s = advanceWithDuel(s, 'standard');
     if (firstPendingSeat < 0 && s.certification.pending.length > 0) {
       firstPendingSeat = s.certification.pending[0] ?? -1;
       firstPendingRound = s.round;
@@ -251,6 +287,8 @@ function playOne(theme, players, seed) {
     seatTotal: Object.values(s.liveSeats).reduce((a, b) => a + b, 0),
     abilityOps,
     // B12：被动触发**统一从日志提取**（主动型 + 自动型同格式 `[被动:<op>]`）
+    // B13：对峙次数（kind='duel' 的日志条数）—— 对峙可达性证据
+    duelCount: s.log.filter((l) => l.kind === 'duel').length,
     passiveOps: s.log.map((l) => {
       const m = /^\[被动:([a-z_]+)\]/.exec(l.message);
       return m === null ? null : m[1];
@@ -287,6 +325,9 @@ function summarize(cells) {
   const soloSeatWin = new Map();
   const soloPosWin = new Map();
   let soloGames = 0;
+  // B13：对峙次数统计
+  let duelTotal = 0;
+  let duelGames = 0;
   const certRounds = new Map();
   let total = 0;
   // ⚠️ B11 席位制：结局语义随之改变 ——
@@ -336,6 +377,9 @@ function summarize(cells) {
       if (anomalySamples.length < 5) { anomalySamples.push(c.anomalies[0]); }
     }
     if (c.winners.length === 1) { soloGames += 1; }
+    const dc = c.duelCount ?? 0;
+    duelTotal += dc;
+    if (dc > 0) { duelGames += 1; }
     for (const w of c.winners) {
       const id = c.identities[w];
       const f = c.factions[w];
@@ -357,7 +401,7 @@ function summarize(cells) {
     noSeatFallbackRate: total > 0 ? noSeatFallback / total : 0,
     avgRounds: total > 0 ? roundSum / total : 0,
     avgSeats: total > 0 ? seatTotalSum / total : 0,
-    gamesWithoutSeat, seatDist, champSeatDist, abilityOps, abilityGames,
+    gamesWithoutSeat, seatDist, champSeatDist, abilityOps, abilityGames, duelTotal, duelGames,
     identityWin, factionWin, seatWin, posWin, certRounds, chain, soloSeatWin, soloPosWin, soloGames,
   };
 }
@@ -406,6 +450,7 @@ if (args.out !== null) {
   lines.push('| 无胜者局数 | ' + summary.noWinner + ' |');
   lines.push('| 平均回合数 | ' + summary.avgRounds.toFixed(1) + ' |');
   lines.push('| **每局平均席位数** | **' + summary.avgSeats.toFixed(2) + '** |');
+  lines.push('| **对峙次数** | **' + summary.duelTotal + '**（每百局 ' + ((summary.duelTotal / Math.max(1, summary.total)) * 100).toFixed(2) + '） |');
   lines.push('| 无席位局数 | ' + summary.gamesWithoutSeat + ' |');
   lines.push('| **异常条数** | **' + summary.anomalies + '**（门槛 0） |');
   lines.push('');
@@ -631,7 +676,19 @@ if (args.out !== null) {
     lines.push('| ' + PASSIVE_LABELS[op] + ' | `' + op + '` | ' + n + ' | ' + g + ' | '
       + ((n / summary.total) * 100).toFixed(1) + ' |');
   }
-  lines.push('');  writeFileSync(resolve(ROOT, args.out), lines.join('\n') + '\n', 'utf8');
+  lines.push('');  lines.push('## 对峙统计（B13 可达性证据）');
+  lines.push('');
+  lines.push('> **口径**：日志中 `kind=duel` 的记录数（规格 §3.3：同格相遇 → 亮牌对峙）。');
+  lines.push('> **此前对峙完全不可达** —— 引擎里只有一个无人调用的半成品 op `compare_cards`，',
+    '> 且语义与规格不符（它把对手的牌抢过来，而规格是败者抽 1 张牌）。B13 落地后对峙才真正发生。');
+  lines.push('');
+  lines.push('| 指标 | 数值 |');
+  lines.push('|---|---|');
+  lines.push('| 对峙总次数 | ' + summary.duelTotal + ' |');
+  lines.push('| 发生对峙的局数 | ' + summary.duelGames + ' / ' + summary.total + ' |');
+  lines.push('| 每百局对峙次数 | ' + ((summary.duelTotal / Math.max(1, summary.total)) * 100).toFixed(2) + ' |');
+  lines.push('');
+  writeFileSync(resolve(ROOT, args.out), lines.join('\n') + '\n', 'utf8');
   console.log('报告 → ' + args.out);
 }
 

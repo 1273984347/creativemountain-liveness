@@ -51,7 +51,10 @@ export function deserializeState(data: unknown): State {
     : rest.players.map((p) => p.seat);
   // 兼容旧档（B11 之前无 liveSeats）⇒ 补空表（席位制下等同于「一席未得」）
   const liveSeats = rest.liveSeats ?? {};
-  return { ...rest, turnOrder, liveSeats, rng: Rng.fromSnapshot(rngRaw.initialSeed, rngRaw.snapshot) };
+  // 兼容旧档（B13 之前无 duel / publicCards）⇒ 补默认值
+  const duel = rest.duel ?? null;
+  const publicCards = rest.publicCards ?? [];
+  return { ...rest, turnOrder, liveSeats, duel, publicCards, rng: Rng.fromSnapshot(rngRaw.initialSeed, rngRaw.snapshot) };
 }
 
 /** 序列化为 JSON 文本。 */

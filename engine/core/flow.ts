@@ -52,6 +52,40 @@ export interface CouncilState {
   readonly vetoUsed: boolean;
 }
 
+/**
+ * 待决对峙（规格 §3.3）。
+ *
+ * 双方**各自选牌、选完才同时揭晓**（B13 裁定）——选牌对对方不可见，
+ * 两人都锁定后一次性比较并结算。
+ */
+export interface DuelState {
+  /** 移动方座位（先到该格者） */
+  readonly seatA: number;
+  /** 对手座位 */
+  readonly seatB: number;
+  /** 移动方已锁定的亮牌 id（未锁定为 undefined） */
+  readonly pickA?: string;
+  /** 对手已锁定的亮牌 id（未锁定为 undefined） */
+  readonly pickB?: string;
+}
+
+/**
+ * 本 round **公开**的亮牌（规格 §3.3：「两张牌在比较后留在场上公开，
+ * 不回到任何人的手牌，直至本 round 结束」）。
+ */
+export interface PublicCard {
+  /** 亮牌者座位 */
+  readonly seat: number;
+  /** 牌 id */
+  readonly cardId: string;
+  /** 牌名 */
+  readonly name: string;
+  /** 颜色（red / black） */
+  readonly color: string;
+  /** 点数（rank 数值，§3.3 比较永远走数值） */
+  readonly rank: number;
+}
+
 /** 对局结局（§5.7 胜利判定 / §5.8 兜底排名）。 */
 export interface Outcome {
   /** 是否已结束 */

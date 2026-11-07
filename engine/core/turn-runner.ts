@@ -10,6 +10,7 @@ import { rollD20 } from './dice.ts';
 import { nextTurn, advanceRound, currentPlayer, isRoundEnd } from './round.ts';
 import { cardNeedsTarget } from './targeting.ts';
 import { passiveOf } from './passives.ts';
+import { startDuel } from './duel.ts';
 import { drawCards, discardDownToLimit } from './hand.ts';
 import { gainResource } from './resource.ts';
 import { openCouncil, resolveCouncil, shouldHoldCouncil } from './council.ts';
@@ -31,11 +32,14 @@ function resolveTile(state: State, seat: number): State {
   if (player === undefined) { return state; }
   const tile = state.board.tiles.find((t) => t.index === player.position);
   if (tile === undefined) { return state; }
+  // ⚠️ B13：地形结算与**对峙**检测必须**分离** —— 两者写在一起时，
+  //   `boon` / `hazard` / `peak` 分支直接 `return` ⇒ 落到这三类格子时对峙**永不触发**。
+  let next = state;
   switch (tile.kind) {
     case 'boon': {
-      let next = drawCards(state, seat, 2);
+      next = drawCards(state, seat, 2);
       next = gainResource(next, seat, 1);
-      return next;
+      break;
     }
     case 'hazard': {
       // 翻开牌堆顶 1 张判色（§3.4）：红安全，黑扣体力并失去本回合剩余行动
@@ -45,7 +49,7 @@ function resolveTile(state: State, seat: number): State {
       //   标记在发动时挂上、这里消费（**无论牌色都消费**，否则标记会无限留存）。
       const self = state.players[seat];
       if (self?.flags.judgementModified === true) {
-        return {
+        next = {
           ...state,
           players: state.players.map((p) => (p.seat === seat
             ? { ...p, flags: { ...p.flags, judgementModified: false } }
@@ -55,21 +59,42 @@ function resolveTile(state: State, seat: number): State {
             message: '[被动:modify_judgement] 织梦者改写了险径判定：安全通过',
           }],
         };
+        break;
       }
-      if (top.color === 'red') { return state; }
+      // ⚠️ B13 修正：**红牌同样要翻开并移除牌堆顶**。
+      //   原实现红牌直接 return、**不移除** ⇒ 牌堆顶永远不变、每次经过险径
+      //   都是同一张牌（黑牌分支却会移除 ⇒ 牌库行为前后不一致）。
+      //   规格 §3.4「翻开牌堆顶 1 张牌」——翻开即从牌库顶取出。
+      const deckAfterFlip = state.decks.deck.slice(1);
+      if (top.color === 'red') {
+        next = { ...state, decks: { ...state.decks, deck: deckAfterFlip } };
+        break;
+      }
       const players = state.players.map((p) =>
         p.seat === seat ? { ...p, hp: Math.max(0, p.hp - 1) } : p,
       );
-      return { ...state, players, decks: { ...state.decks, deck: state.decks.deck.slice(1) } };
+      next = { ...state, players, decks: { ...state.decks, deck: deckAfterFlip } };
+      break;
     }
     case 'peak': {
-      if (player.pendingCert) { return state; }
+      if (player.pendingCert) { break; }
       const r = enterPendingCertification(state, seat);
-      return r.ok ? r.state : state;
+      next = r.ok ? r.state : state;
+      break;
     }
     default:
-      return state;
+      break;
   }
+  // ⚠️ B13：落点与**其他存活玩家同格** ⇒ 进入对峙（规格 §3.3「移动为跳到位，只结算终点格的地形与对峙」）。
+  //   待认证锁定的玩家停在峰顶、**不参与**对峙（用 next 里的最新状态判断）。
+  const me = next.players[seat];
+  if (me !== undefined && !me.pendingCert) {
+    const rival = next.players.find((p) => p.alive && p.seat !== seat && p.position === me.position);
+    if (rival !== undefined) {
+      next = startDuel(next, seat, rival.seat);
+    }
+  }
+  return next;
 }
 /**
  * 开局：发牌已在 createInitialState 完成；此处只补开局天机与首回合准备。
@@ -342,9 +367,21 @@ export function finishTurn(state: State, seat: number): State {
  * 随后进入下一个 round。
  */
 export function advanceTurn(state: State, mode: RuleMode): State {
+  // ⚠️ B13：**对峙未结算 ⇒ 回合阻塞**（双方还没各自锁定亮牌，不能推进到下一手番）。
+  if (state.duel !== null) { return state; }
   const seat = currentPlayer(state);
   if (seat < 0) { return state; }
-  let next = finishTurn(state, seat);
+  const player = state.players[seat];
+  // ⚠️ B13：手番**已结算**（上一轮因进入对峙而暂停）⇒ 跳过重复结算，直接推进。
+  let next = player?.turn.finished === true ? state : finishTurn(state, seat);
+  if (player?.turn.finished !== true) {
+    next = {
+      ...next,
+      players: next.players.map((p) => (p.seat === seat ? { ...p, turn: { ...p.turn, finished: true } } : p)),
+    };
+    // 结算后进入对峙 ⇒ **暂停推进**（等双方锁定亮牌后再来一次 advanceTurn）
+    if (next.duel !== null) { return next; }
+  }
   next = nextTurn(next);
   if (!isRoundEnd(next)) {
     return next;
@@ -377,6 +414,8 @@ export function advanceTurn(state: State, mode: RuleMode): State {
       next = discardDownToLimit(next, p.seat);
     }
   }
+  // ---- 公开亮牌离场（规格 §3.3：两张牌留在场上公开，直至本 round 结束）----
+  next = { ...next, publicCards: [] };
   // ---- 跨 round ----
   next = advanceRound(next);
   // **下一回合**的第 1 步：天机（翻开一张天机牌，对全场生效）

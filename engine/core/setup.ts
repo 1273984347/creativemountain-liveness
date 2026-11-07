@@ -171,6 +171,9 @@ function resetForNewGame(state: State): State {
     extraSignaturesRequired: 0,
     // B11：换主题 = 换一局 ⇒ 活人席数一并清零
     liveSeats: {},
+    // B13：对峙状态与公开亮牌一并复位
+    duel: null,
+    publicCards: [],
     players,
     certification: {
       // 0 = 第 1 轮尚未开始（待认证者刚登顶）—— 见 B9 修正

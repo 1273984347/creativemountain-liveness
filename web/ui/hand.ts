@@ -54,6 +54,10 @@ export function renderPlayers(
     const seats = state.liveSeats[p.seat] ?? 0;
     row.append(el('span', { class: 'p-meta', text: (faction?.name ?? p.factionId) + ' · ' + theme.glossary.HP + ' ' + p.hp + '/' + p.hpMax + ' · ' + theme.meta.resourceName + ' ' + p.resource + ' · 位 ' + p.position + (seats > 0 ? ' · 活人席 ' + String(seats) : '') }));
     if (p.hasMark) { row.append(el('span', { class: 'badge mark', text: '印记' })); }
+    // B13：处于对峙的双方加标记
+    if (state.duel !== null && (state.duel.seatA === p.seat || state.duel.seatB === p.seat)) {
+      row.append(el('span', { class: 'badge duel', text: '对峙' }));
+    }
     // B12：观星者窥视到的牌面（`peek_deck` 记在 flags.peeked）
     const peeked = p.flags.peeked as { name: string; color: string }[] | undefined;
     if (peeked !== undefined && Array.isArray(peeked) && peeked.length > 0) {

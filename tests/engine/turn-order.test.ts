@@ -20,8 +20,8 @@ import { resolve } from 'node:path';
 import type { ThemePack } from '../../engine/types/theme.ts';
 import { createInitialState, type State } from '../../engine/core/state.ts';
 import { installTheme } from '../../engine/core/setup.ts';
+import { advanceWithDuel } from './helpers.ts';
 import { currentPlayer, nextTurn } from '../../engine/core/round.ts';
-import { advanceTurn } from '../../engine/core/turn-runner.ts';
 import { stateToJson, stateFromJson } from '../../engine/core/serialize.ts';
 
 const theme = JSON.parse(
@@ -86,7 +86,7 @@ test('turnOrder 整局沿用（回合推进不改变行动顺序）', () => {
   const order = [...s.turnOrder];
   let st = s;
   for (let i = 0; i < 12; i++) {
-    st = advanceTurn(st, 'standard');
+    st = advanceWithDuel(st, 'standard');
     assert.deepEqual([...st.turnOrder], order, '行动顺序应在整局内保持不变');
   }
 });
