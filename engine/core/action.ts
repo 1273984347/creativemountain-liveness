@@ -24,7 +24,8 @@ export type ActionType =
  *
  * `PLAY_CARD.target` 可选 = 真实入口 `performAction(s, seat, 'act', { cardId, target? })` 的形状
  * （设计 §3.2 / §5 的 key 文法含 `play:<cardId>` 与 `play:<cardId>-><seat>` 两式）：
- * 需选目标的牌（`cardNeedsTarget`）必须带 target，否则引擎不出牌（`turn-runner.ts:228`）。
+ * 需选目标的牌（`cardNeedsTarget`）必须带 target，否则引擎不出牌
+ * （判据在 `performAction` 的 `act` 分支：需要目标而未选目标 ⇒ 不出牌）。
  */
 export type Action =
   | { readonly type: 'MOVE'; readonly actor: number; readonly steps: number }

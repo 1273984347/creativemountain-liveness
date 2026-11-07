@@ -1,5 +1,5 @@
 // tests/engine/action-key.test.ts
-// 动作 ↔ key 的可逆编码守卫：往返等价、key 互异、非法 key 必抛错（绝不猜）。
+// 动作 ↔ key 的可逆编码守卫：往返等价、key 互异、非法 key 必抛错（只认规范形，绝不猜）。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { actionKey, actionFromKey, withActor } from '../../engine/core/action-key.ts';
@@ -52,10 +52,38 @@ test('play 两式互异 + key 自洽：需选目标的牌打不同座位不得�
 });
 
 test('未知 key 必须抛错，绝不猜', () => {
-  // 前 4 项是基线样本；后 4 项锚定同一缺陷类的其余出口——
-  // 缺 id 段（'ability'）/ 空 id（'play:'）/ 缺标志位 / 标志位拼错，都不允许被静默补全。
+  // 第 1 组（基线）：整段拼错/缺段。
+  // 第 2 组（§3.2 缺陷类）：缺 id 段（'ability'）/ 空 id（'play:'）/ 缺标志位 / 标志位拼错。
+  // 第 3 组（评审复核项，Ruling B）：**截断**与**多余尾段**——
+  //   `Number('') === 0` 会让 `vote:`、`cert:sign:`、`play:c_fang->`、`gate:x->` 编造出座位 0，
+  //   `play:->3` 编造出空 id，`move:junk`/`…:overturn:junk` 把尾段静默丢弃。
+  //   这些 key 在 Task 7 漂移守卫与 Task 15 探针里来自**模型输出**，
+  //   编造出一个合法动作就是正确性 bug（会绕过引擎的「未选目标 ⇒ 不出牌」守卫），不是风格问题。
   for (const bad of ['bogus:1', 'cert:whatever:0', 'vote:xx', 'play',
-    'ability', 'play:', 'cert:answer:0', 'cert:appealvote:0:yes']) {
+    'ability', 'play:', 'cert:answer:0', 'cert:appealvote:0:yes',
+    'vote:', 'cert:sign:', 'play:c_fang->', 'gate:x->', 'play:->3', 'move:junk',
+    'cert:appealvote:0:overturn:junk']) {
     assert.throws(() => actionFromKey(bad), /key|动作/, `未抛错：${bad}`);
+  }
+});
+
+test('规范形正例：0 号座位与各文法正形仍是合法 key（收紧不得误伤规范形）', () => {
+  // 反例收紧后必须有正例钉住边界：target 为 0 是合法座位，不是「缺段」。
+  const CANONICAL: Array<[string, Action]> = [
+    ['move', { type: 'MOVE', actor: -1, steps: 0 }],
+    ['ask', { type: 'ROLL_WHEEL', actor: -1 }],
+    ['pass', { type: 'PASS', actor: -1 }],
+    ['vote:0', { type: 'VOTE', actor: -1, target: 0 }],
+    ['play:c_windstep', { type: 'PLAY_CARD', actor: -1, cardId: 'c_windstep' }],
+    ['play:c_fang->0', { type: 'PLAY_CARD', actor: -1, cardId: 'c_fang', target: 0 }],
+    ['ability:transfer_resource->0', { type: 'ABILITY', actor: -1, abilityId: 'transfer_resource', target: 0 }],
+    ['gate:c_gate_trial->0', { type: 'COMPARE', actor: -1, cardId: 'c_gate_trial', target: 0 }],
+    ['cert:sign:0', { type: 'CERTIFY_SIGN', actor: -1, target: 0 }],
+    ['cert:appealvote:0:uphold', { type: 'CERTIFY_APPEAL_VOTE', actor: -1, target: 0, overturn: false }],
+    ['cert:answer:1:pass', { type: 'CERTIFY_ANSWER', actor: -1, target: 1, passed: true }],
+  ];
+  for (const [key, expected] of CANONICAL) {
+    assert.deepEqual(actionFromKey(key), expected, `规范形反解失败：${key}`);
+    assert.equal(actionKey(actionFromKey(key)), key, `规范形往返失败：${key}`);
   }
 });

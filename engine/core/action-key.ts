@@ -26,8 +26,27 @@ export function actionKey(a: Action): string {
   }
 }
 
-/** 反解（`actor` 留 `-1`，由 `withActor` 补齐）。key 不合法 ⇒ 抛错。 */
+/**
+ * 反解（`actor` 留 `-1`，由 `withActor` 补齐）。
+ *
+ * ⚠️ **只认规范形**：缺段、空段、非整数座位、多余尾段一律抛错，绝不猜。
+ *   key 的下游消费方（`web/legal-gate.ts` 漂移守卫、`tools/laya-probe/**` 探针）拿到的
+ *   是**模型输出**的字符串；宽松反解会把 `vote:` 编造成「投座位 0」、把 `play:->3` 编造成
+ *   「打出 id 为空的牌」，这类动作再进引擎就绕过了「需目标而未选目标 ⇒ 不出牌」的守卫
+ *   （见 `performAction` 的 `act` 分支），属于正确性问题而非风格问题。
+ */
 export function actionFromKey(key: string): Action {
+  const action = decodeKey(key);
+  // 单射校验：反解结果再编码必须与输入逐字符相等。
+  // 这一条把「多余尾段」（`move:junk`、`cert:appealvote:0:overturn:junk`）与
+  // 一切非规范写法（`vote:0x2`、`vote:1e2`）一并拒掉；
+  // 但 `play:->3` 这类「空 id」反解后再编码仍等于输入，故仍需下面的逐段空串校验。
+  const canonical = actionKey(action);
+  if (canonical !== key) { throw new Error(`key 非规范形：${key}`); }
+  return action;
+}
+
+function decodeKey(key: string): Action {
   const parts = key.split(':');
   const head = String(parts[0]);
   /** 必需的自由文本段（卡牌/能力 id）：缺失或空串都抛错——绝不把 undefined 拼成 'undefined' 蒙混过关。 */
@@ -36,9 +55,19 @@ export function actionFromKey(key: string): Action {
     return v;
   };
   const num = (v: string | undefined): number => {
+    // `Number('')` / `Number(' ')` 都是 0：空段必须先看出来，否则截断的 key 会编造出座位 0。
+    if (v === undefined || v.trim() === '') { throw new Error(`key 缺座位信息：${key}`); }
     const n = Number(v);
-    if (v === undefined || !Number.isInteger(n)) { throw new Error(`key 缺座位信息：${key}`); }
+    if (!Number.isInteger(n)) { throw new Error(`key 座位段非整数：${key}`); }
     return n;
+  };
+  /** `x-><seat>` 形式的两段：id 段与目标段都必需且非空。 */
+  const idTarget = (v: string | undefined): readonly [string, string | undefined] => {
+    const seg = need(v).split('->');
+    const id = seg[0];
+    const target = seg[1];
+    if (id === undefined || id === '') { throw new Error(`key 缺字段段：${key}`); }
+    return [id, target] as const;
   };
   /** 二元标志段：只接受 actionKey 写出的那两个字面量，缺段或拼错一律抛错，不做默认值猜测。 */
   const flag = (v: string | undefined, yes: string, no: string): boolean => {
@@ -52,21 +81,21 @@ export function actionFromKey(key: string): Action {
     case 'pass': return { type: 'PASS', actor: -1 };
     case 'vote': return { type: 'VOTE', actor: -1, target: num(parts[1]) };
     case 'play': {
-      const [id, t] = need(parts[1]).split('->');
+      const [id, t] = idTarget(parts[1]);
       return t === undefined
-        ? { type: 'PLAY_CARD', actor: -1, cardId: String(id) }
-        : { type: 'PLAY_CARD', actor: -1, cardId: String(id), target: num(t) };
+        ? { type: 'PLAY_CARD', actor: -1, cardId: id }
+        : { type: 'PLAY_CARD', actor: -1, cardId: id, target: num(t) };
     }
     case 'ability': {
-      const [id, t] = need(parts[1]).split('->');
+      const [id, t] = idTarget(parts[1]);
       return t === undefined
-        ? { type: 'ABILITY', actor: -1, abilityId: String(id) }
-        : { type: 'ABILITY', actor: -1, abilityId: String(id), target: num(t) };
+        ? { type: 'ABILITY', actor: -1, abilityId: id }
+        : { type: 'ABILITY', actor: -1, abilityId: id, target: num(t) };
     }
     case 'gate': {
-      const [id, t] = need(parts[1]).split('->');
+      const [id, t] = idTarget(parts[1]);
       if (t === undefined) { throw new Error(`key 缺目标：${key}`); }
-      return { type: 'COMPARE', actor: -1, cardId: String(id), target: num(t) };
+      return { type: 'COMPARE', actor: -1, cardId: id, target: num(t) };
     }
     case 'cert': {
       const kind = need(parts[1]);
