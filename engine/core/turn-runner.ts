@@ -221,11 +221,19 @@ export function openHeaven(state: State): State {
       },
     ],
   };
-  for (const p of next.players) {
-    if (!p.alive) {
-      continue;
+  // 「对全场生效」：逐人算子对每个存活玩家各执行一次；
+  // 全局算子（set_phase）只执行一次，否则日志里会重复 4 条同义记录。
+  const alive = next.players.filter((p) => p.alive);
+  const globalEffects = card.effects.filter((eff) => eff.op === 'set_phase');
+  const perPlayerEffects = card.effects.filter((eff) => eff.op !== 'set_phase');
+  const first = alive[0];
+  if (first !== undefined) {
+    for (const eff of globalEffects) {
+      next = applyEffect({ state: next, actor: first.seat, sourceCard: card }, eff).state;
     }
-    for (const eff of card.effects) {
+  }
+  for (const p of alive) {
+    for (const eff of perPlayerEffects) {
       next = applyEffect({ state: next, actor: p.seat, sourceCard: card }, eff).state;
     }
   }
