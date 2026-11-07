@@ -6,6 +6,7 @@
 //   2. **退出码直取** —— 不经 shell 管道（GateKeeper《管道会吞退出码》）。
 
 import { spawnSync } from 'node:child_process';
+import { existsSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const ROOT = process.cwd();
@@ -27,10 +28,56 @@ const GATES = [
   { name: '对峙浏览器端到端（tests/e2e/duel-e2e.mjs）', cmd: process.execPath, args: [resolve('tests', 'e2e', 'duel-e2e.mjs')] },
 ];
 
+/**
+ * 产物自举：门 6/7 依赖 `print/<theme>/ir.json`、`规则书.html`、`*.pdf` 等构建产物，
+ * 而 `print/*` 在 .gitignore 中（实体件属生成物，不入版本库）
+ * ⇒ **全新 clone / 干净副本里产物必然缺失**，门禁会直接红。
+ *
+ * 做法：**缺失才生成**（日常零开销），生成命令直接跑 `build/build-print-all.mjs`
+ * —— 本文件不手抄构建参数（避免第二事实源）；该脚本也是 `package.json` 的 `build:print`。
+ *
+ * ⚠️ **不经 shell**（门禁纪律 A4：门禁脚本不得使用 shell:true —— shell 会改变退出码语义）。
+ *   Windows 上 `npm.cmd` 无法用 `shell: false` 直接执行（EINVAL），
+ *   故这里调用的是**纯 node 脚本**，而不是 npm。
+ */
+function ensurePrintArtifacts() {
+  const themesDir = resolve(ROOT, 'themes');
+  const themeIds = readdirSync(themesDir, { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name)
+    .filter((id) => existsSync(resolve(themesDir, id, 'theme.json')))
+    .sort();
+  const missing = themeIds.filter((id) => !existsSync(resolve(ROOT, 'print', id, 'ir.json')));
+  if (missing.length === 0) { return; }
+
+  console.log('[自举] print 产物缺失（' + missing.join('、') + '）⇒ 执行 build/build-print-all.mjs');
+  // ⚠️ 不经 shell（门禁纪律 A4）：直接跑 node 脚本，退出码原样传出。
+  //   构建参数只写在 build/build-print-all.mjs 一处（package.json 的 build:print 指向它）。
+  const res = spawnSync(process.execPath, [resolve(ROOT, 'build', 'build-print-all.mjs')], {
+    encoding: 'utf8',
+    shell: false,
+    cwd: ROOT,
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  if (res.status !== 0) {
+    console.error('[自举] 产物生成失败：');
+    console.error((res.stdout ?? '') + '\n' + (res.stderr ?? ''));
+    process.exit(1);
+  }
+  const stillMissing = themeIds.filter((id) => !existsSync(resolve(ROOT, 'print', id, 'ir.json')));
+  if (stillMissing.length > 0) {
+    console.error('[自举] 产物生成后仍缺失：' + stillMissing.join('、'));
+    process.exit(1);
+  }
+  console.log('[自举] print 产物已就绪');
+}
+
 /** 声明的门数（与实跑门数必须一致，否则自断言失败）。 */
 const TOTAL_GATES = GATES.length;
 
 console.log('== 创界山·活人认证 一键门卫 ==');
+
+ensurePrintArtifacts();
 
 const failures = [];
 for (let i = 0; i < GATES.length; i++) {

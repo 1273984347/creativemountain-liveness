@@ -11,7 +11,14 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 // esbuild.config.mjs 位于项目根，here 即 root
-const root = here;
+//
+// ⚠️ `CM_BUILD_ROOT` 可覆盖 root（B13 负样本自证用）：隔离副本里用**本脚本**构建
+//    **副本的** bundle（读副本的 web/ + engine/ + themes/，输出到副本 dist/）——
+//    脚本仍在仓库里 ⇒ `import 'esbuild'` 正常解析，无需在副本里准备 node_modules。
+//    默认行为不变（不设该变量时 root 仍是脚本所在目录）。
+const root = process.env.CM_BUILD_ROOT !== undefined
+  ? resolve(process.env.CM_BUILD_ROOT)
+  : here;
 
 await mkdir(resolve(root, 'dist'), { recursive: true });
 

@@ -6,10 +6,16 @@
 //   靠随机行棋撞对峙既慢又不可靠（实测 11 轮未命中）；
 //   Playwright 能高速重试（换主题/人数 ⇒ 换 rng 轨迹）⇒ 命中率高且成本低。
 
-import { chromium } from 'playwright';
+import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 
-const ROOT = process.cwd();
+// ⚠️ `CM_REPO_ROOT` 指向**仓库根**（默认 cwd）：副本里跑本脚本时用它解析 playwright ——
+//   隔离副本没有 node_modules ⇒ 直接 `import 'playwright'` 会解析失败。
+const ROOT = process.env.CM_REPO_ROOT !== undefined
+  ? resolve(process.env.CM_REPO_ROOT)
+  : process.cwd();
+const require = createRequire(resolve(ROOT, 'package.json'));
+const { chromium } = require('playwright');
 // ⚠️ bundle 路径可被 **CM_E2E_BUNDLE** 覆盖 ⇒ 隔离副本里的负样本自证
 //   可以指向仓库已构建的 dist，而不必在副本里重建（避免依赖 node_modules）。
 const file = process.env.CM_E2E_BUNDLE !== undefined

@@ -4,10 +4,17 @@
 //   会让并行的 `node --test`（门 2）读到坏代码 ⇒ 门禁② 假红、无法区分真因。
 //   ⇒ 复制到临时目录改**副本**，共享工作树全程只读。
 //
-// 三个用例：
+// ⚠️ 为什么副本能**自建 bundle**：esbuild.config.mjs 支持 `CM_BUILD_ROOT` 覆盖根目录
+//   （脚本仍在仓库 ⇒ `import 'esbuild'` 正常解析，无需在副本里准备 node_modules），
+//   ⇒ 副本用**自己的 engine/ web/ themes/** 构建出副本 bundle ⇒ E2E 测的正是副本引擎。
+//   ⇒ **完全不依赖仓库的 dist**（即使仓库没有 dist，负样本 B 依然必红）。
+//
+// 五个用例：
 //   ① 负样本 A：引擎丢掉对峙消费点 ⇒ **门 9**（模拟器可达性断言）必红；
-//   ② 负样本 B：E2E 的断言被破坏 ⇒ **门 10** 必红；
-//   ③ 正样本：未破坏的副本 ⇒ 门 9 必须**绿**（证明上面的红不是「副本环境本身跑不起来」）。
+//   ② 负样本 B：引擎丢掉对峙消费点 ⇒ 副本自建 bundle ⇒ **门 10** 必红；
+//   ③ 负样本 C：E2E 的断言被破坏 ⇒ **门 10** 必红（证明断言机制本身有效）；
+//   ④ 正样本 A：未破坏的副本 ⇒ **门 9** 必须绿；
+//   ⑤ 正样本 B：未破坏的副本 ⇒ 自建 bundle ⇒ **门 10** 必须绿（证明副本 bundle 可用）。
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -37,11 +44,28 @@ function runSim(cwd: string): { status: number | null; out: string } {
   return { status: r.status, out: (r.stdout ?? '') + (r.stderr ?? '') };
 }
 
-/** 在副本里跑 E2E（门 10），bundle 指向仓库已构建的 dist。 */
+/**
+ * 在副本里**自建** bundle（用仓库的 esbuild.config.mjs + `CM_BUILD_ROOT` 指向副本）。
+ *
+ * ⚠️ 这样 E2E 测的是**副本的引擎**（含被注入的缺陷），且**完全不依赖仓库的 dist**。
+ */
+function buildCopy(cwd: string): { status: number | null; out: string } {
+  const r = spawnSync(process.execPath, [resolve(ROOT, 'esbuild.config.mjs')], {
+    cwd, encoding: 'utf8', shell: false, maxBuffer: 64 * 1024 * 1024,
+    env: { ...process.env, CM_BUILD_ROOT: cwd },
+  });
+  return { status: r.status, out: (r.stdout ?? '') + (r.stderr ?? '') };
+}
+
+/** 在副本里跑 E2E（门 10），bundle 指向**副本自建**的 dist。 */
 function runE2E(cwd: string): { status: number | null; out: string } {
   const r = spawnSync(process.execPath, [resolve(cwd, 'tests', 'e2e', 'duel-e2e.mjs')], {
     cwd, encoding: 'utf8', shell: false, maxBuffer: 64 * 1024 * 1024,
-    env: { ...process.env, CM_E2E_BUNDLE: resolve(ROOT, 'dist', '创界山-活人认证.html') },
+    env: {
+      ...process.env,
+      CM_E2E_BUNDLE: resolve(cwd, 'dist', '创界山-活人认证.html'),
+      CM_REPO_ROOT: ROOT, // 副本没有 node_modules ⇒ playwright 从仓库根解析
+    },
   });
   return { status: r.status, out: (r.stdout ?? '') + (r.stderr ?? '') };
 }
@@ -82,14 +106,29 @@ test('负样本 A（隔离副本）：引擎丢掉对峙消费点 ⇒ 门 9 必�
   }
 });
 
-test('负样本 B（隔离副本）：E2E 断言被破坏 ⇒ 门 10 必红', (t) => {
-  if (!existsSync(resolve(ROOT, 'dist', '创界山-活人认证.html'))) {
-    t.skip('dist 未构建（门 4 尚未运行）⇒ 跳过；门 9 的负样本 A 不受影响，仍是常驻保障');
-    return;
+test('负样本 B（无 dist 的干净副本）：引擎丢掉对峙消费点 ⇒ 自建 bundle ⇒ 门 10 必红', () => {
+  const dir = makeCopy();
+  try {
+    // 干净副本：**起始没有 dist** ⇒ 证明 E2E 不依赖仓库已构建的产物
+    assert.equal(existsSync(resolve(dir, 'dist')), false, '副本起始应无 dist');
+    breakEngine(dir);
+    const b = buildCopy(dir);
+    assert.equal(b.status, 0, '副本自建 bundle 应成功：' + b.out.slice(-400));
+    assert.equal(existsSync(resolve(dir, 'dist', '创界山-活人认证.html')), true, '副本应有自建 bundle');
+    const r = runE2E(dir);
+    assert.notEqual(r.status, 0, '引擎有缺陷时门 10 必须判红');
+    assert.match(r.out, /"ok": false/, '应报出「未触发对峙」');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('负样本 C（隔离副本）：E2E 断言被破坏 ⇒ 门 10 必红', () => {
   const dir = makeCopy();
   try {
     breakE2E(dir);
+    const b = buildCopy(dir);
+    assert.equal(b.status, 0, '副本自建 bundle 应成功：' + b.out.slice(-400));
     const r = runE2E(dir);
     assert.notEqual(r.status, 0, '断言被破坏后门 10 必须判红');
   } finally {
@@ -97,11 +136,23 @@ test('负样本 B（隔离副本）：E2E 断言被破坏 ⇒ 门 10 必红', (t
   }
 });
 
-test('正样本（隔离副本）：未破坏时门 9 必须绿（证明副本环境本身可用）', () => {
+test('正样本 A（隔离副本）：未破坏时门 9 必须绿（证明副本环境本身可用）', () => {
   const dir = makeCopy();
   try {
     const r = runSim(dir);
     assert.equal(r.status, 0, '未破坏时门 9 必须绿：' + r.out.slice(-400));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('正样本 B（隔离副本）：未破坏 ⇒ 自建 bundle ⇒ 门 10 必须绿（证明副本 bundle 可用）', () => {
+  const dir = makeCopy();
+  try {
+    const b = buildCopy(dir);
+    assert.equal(b.status, 0, '副本自建 bundle 应成功：' + b.out.slice(-400));
+    const r = runE2E(dir);
+    assert.equal(r.status, 0, '未破坏时门 10 必须绿：' + r.out.slice(-600));
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
