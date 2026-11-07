@@ -14,7 +14,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 
-import { boardSvg, cardRowSvg, cardSvg, certCardSvg, chipSvg, factionSvg, identitySvg } from './print-parts.ts';
+import { boardSvg, cardRowSvg, cardSvg, certCardSvg, chipSvg, factionSvg, heavenSvg, identitySvg, trialSvg } from './print-parts.ts';
 import { cardsTable, factionsTable, identitiesTable, instructionTable, scalesTable } from './print-rules.ts';
 import { esc } from './print-templates.ts';
 import type { IrDocument } from '../engine/types/ir.ts';
@@ -66,6 +66,14 @@ export function exportSvgs(ir: IrDocument): string[] {
   // 认证题卡
   ir.certCards.forEach((c, k) => {
     put('认证题卡-' + String(k + 1).padStart(2, '0') + '.svg', certCardSvg(c, k));
+  });
+  // 试炼牌
+  ir.trials.forEach((t, k) => {
+    put('试炼牌-' + String(k + 1).padStart(2, '0') + '-' + t.id + '.svg', trialSvg(t, k));
+  });
+  // 天机牌
+  ir.heavenCards.forEach((h, k) => {
+    put('天机牌-' + String(k + 1).padStart(2, '0') + '-' + h.id + '.svg', heavenSvg(h, k));
   });
   // 筹码
   put('筹码-灵枢.svg', chipSvg('灵枢', 'SP'));
@@ -198,6 +206,18 @@ export function partsHtml(ir: IrDocument): string {
   body.push('<h2 class="ch">认证题卡（' + ir.certCards.length + ' 张）</h2>');
   body.push('<div class="cards">');
   ir.certCards.forEach((c, k) => { body.push(certCardSvg(c, k)); });
+  body.push('</div></div>');
+  // 试炼牌
+  body.push('<div class="sheet">');
+  body.push('<h2 class="ch">关隘试炼牌（' + ir.trials.length + ' 张）</h2>');
+  body.push('<div class="cards">');
+  ir.trials.forEach((t, k) => { body.push(trialSvg(t, k)); });
+  body.push('</div></div>');
+  // 天机牌
+  body.push('<div class="sheet">');
+  body.push('<h2 class="ch">天机牌（' + ir.heavenCards.length + ' 张）</h2>');
+  body.push('<div class="cards">');
+  ir.heavenCards.forEach((h, k) => { body.push(heavenSvg(h, k)); });
   body.push('</div></div>');
   return '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><title>' + esc(ir.meta.name) + ' 实体件</title><style>' + PRINT_CSS + '</style></head><body>' + body.join('\n') + '</body></html>';
 }

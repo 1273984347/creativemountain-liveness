@@ -179,6 +179,39 @@ export function certCardSvg(item: { readonly id: string; readonly prompt: string
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}mm" height="${h}mm" viewBox="0 0 ${w} ${h}">${parts.join('')}</svg>`;
 }
 
+/** 天机牌 SVG（回合开始时翻开，对全场生效）。 */
+export function heavenSvg(item: { readonly id: string; readonly name: string; readonly text: string }, index: number): string {
+  const w = CARD_W;
+  const h = CARD_H;
+  const pad = CARD_PAD;
+  const parts: string[] = [];
+  parts.push(`<rect x="0" y="0" width="${w}" height="${h}" rx="${CARD_RADIUS}" fill="#e9e3f0" stroke="#5a4a6a" stroke-width="0.5"/>`);
+  parts.push(`<text x="${pad + 2}" y="${pad + 8}" font-size="3.4" fill="#5a4a6a">天机牌</text>`);
+  parts.push(`<text x="${w - pad - 2}" y="${pad + 8}" font-size="4.6" fill="#3a322a" text-anchor="end" font-weight="700">#${index + 1}</text>`);
+  parts.push(`<text x="${pad + 2}" y="${pad + 15}" font-size="4.4" fill="#1a1613" font-weight="700">${esc(item.name)}</text>`);
+  const lines = wrap(item.text, 15);
+  lines.forEach((l, i) => {
+    parts.push(`<text x="${pad + 2}" y="${pad + 23 + i * 4.8}" font-size="3.4" fill="#3a322a">${esc(l)}</text>`);
+  });
+  parts.push(`<text x="${pad + 2}" y="${h - pad - 5}" font-size="2.6" fill="#8a7c6a">回合开始时翻开，对全场生效</text>`);
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}mm" height="${h}mm" viewBox="0 0 ${w} ${h}">${parts.join('')}</svg>`;
+}
+/** 试炼牌 SVG（关隘试炼用，标准牌尺寸）。 */
+export function trialSvg(item: { readonly id: string; readonly text: string }, index: number): string {
+  const w = CARD_W;
+  const h = CARD_H;
+  const pad = CARD_PAD;
+  const parts: string[] = [];
+  parts.push(`<rect x="0" y="0" width="${w}" height="${h}" rx="${CARD_RADIUS}" fill="#f4efe4" stroke="#8a6420" stroke-width="0.5"/>`);
+  parts.push(`<text x="${pad + 2}" y="${pad + 8}" font-size="3.4" fill="#8a6420">关隘试炼</text>`);
+  parts.push(`<text x="${w - pad - 2}" y="${pad + 8}" font-size="4.6" fill="#3a322a" text-anchor="end" font-weight="700">#${index + 1}</text>`);
+  const lines = wrap(item.text, 15);
+  lines.forEach((l, i) => {
+    parts.push(`<text x="${pad + 2}" y="${pad + 20 + i * 4.8}" font-size="3.4" fill="#1a1613">${esc(l)}</text>`);
+  });
+  parts.push(`<text x="${pad + 2}" y="${h - pad - 5}" font-size="2.6" fill="#8a7c6a">失败则退 1 格并被封口</text>`);
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}mm" height="${h}mm" viewBox="0 0 ${w} ${h}">${parts.join('')}</svg>`;
+}
 /** 筹码 SVG（直径 25mm）。 */
 export function chipSvg(label: string, sub?: string): string {
   const d = CHIP_D;
