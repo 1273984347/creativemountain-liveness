@@ -165,7 +165,8 @@ export function renderEffect(effect, terms) {
       return `将${terms.resource}设为 ${n}`;
     // ---- 骰子 ----
     case 'extra_roll':
-      return `本回合额外获得 ${n} 次掷骰机会`;
+      // B10 裁定：机会在**下次行棋**时消费（行棋多掷一次移动骰，取最高点）
+      return `下次行棋时多掷 ${n} 次移动骰（取最高点）`;
     case 'reroll':
       return `重掷 ${n} 次骰子`;
     case 'keep_die':

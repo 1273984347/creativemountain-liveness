@@ -59,13 +59,25 @@ export function castVote(state: State, actor: number, target: number): CouncilRe
   const next: State = { ...state, council: { ...c, votes } };
   return succeed(next, `投票给座位 ${target}`);
 }
-/** 统计票数（含仲裁者双票）。 */
+/**
+ * 投票权重 = 1 + 该玩家的**额外投票数**。
+ *
+ * ⚠️ B10 修正：原实现硬编码 `identityId === 'arbiter' ? 2 : 1` ——
+ *   `extra_vote` 算子写入的 `flags.extraVotes` **从无消费点**（只写不读），
+ *   于是「仲裁者 2 票」靠 id 硬编码撑着，任何**其他**拿到 extra_vote 的玩家都无效。
+ *   现改为数据驱动：常驻型被动在分配身份时授予 `flags.extraVotes`（见 core/passives.ts）。
+ */
+export function voteWeight(state: State, voter: number): number {
+  const extra = (state.players[voter]?.flags.extraVotes as number | undefined) ?? 0;
+  return 1 + Math.max(0, extra);
+}
+
+/** 统计票数（含额外投票权重）。 */
 function tally(state: State): Map<number, number> {
   const counts = new Map<number, number>();
   for (const [voterStr, target] of Object.entries(state.council.votes)) {
     const voter = Number(voterStr);
-    const isArbiter = state.players[voter]?.identityId === 'arbiter';
-    const weight = isArbiter ? 2 : 1;
+    const weight = voteWeight(state, voter);
     counts.set(target, (counts.get(target) ?? 0) + weight);
   }
   return counts;

@@ -1156,7 +1156,7 @@
       "suit": "plasma",
       "rank": 12,
       "rankLabel": "磁",
-      "text": "本回合额外获得 1 次掷骰机会。",
+      "text": "下次行棋时多掷 1 次移动骰（取最高点）。",
       "effects": [
         {
           "op": "extra_roll",

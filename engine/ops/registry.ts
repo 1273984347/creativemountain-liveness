@@ -325,7 +325,13 @@ export const OPS: OpHandlers = {
     const pl = ctx.state.players[t.seat];
     if (pl === undefined) { return fail(ctx.state, '目标不存在'); }
     if (pl.pendingCert) { return fail(ctx.state, '待认证者不能主动移动（规格 §5.1 锁定）'); }
-    const roll = rollD6(ctx.state.rng);
+    // 额外掷骰机会：多掷一次移动骰，**取最高点**（B10 裁定）。
+    // ⚠️ 机会在**行棋时消费**（用完即清零），因此「本回合获得」的卡牌
+    //   实际在**下次行棋**时兑现 —— 卡面文案与规格 §3.1 已同步改为「下次行棋时」。
+    const extra = Math.max(0, ctx.state.extraRolls);
+    const rolls: number[] = [rollD6(ctx.state.rng)];
+    for (let i = 0; i < extra; i++) { rolls.push(rollD6(ctx.state.rng)); }
+    const roll = Math.max(...rolls);
     const peak = ctx.state.board.peakIndex;
     const raw = pl.position + roll + pl.turn.moveBonus;
     const next = Math.min(peak, raw);
@@ -334,7 +340,14 @@ export const OPS: OpHandlers = {
       turn: { ...pl.turn, movedThisTurn: true, moveBonus: 0 },
     });
     state = { ...state, lastDice: roll };
-    state = withLog(state, ctx, 'move_by_dice', `掷骰 ${roll}，前进 ${next - pl.position} 格`, roll);
+    if (extra > 0) {
+      // 机会用完即清零（不累积到下一回合）
+      state = { ...state, extraRolls: 0 };
+    }
+    const diceNote = extra > 0
+      ? `掷骰 ${rolls.join('/')}（取最高 ${roll}）`
+      : `掷骰 ${roll}`;
+    state = withLog(state, ctx, 'move_by_dice', `${diceNote}，前进 ${next - pl.position} 格`, roll);
     if (next === peak) {
       state = enterPeak(state, t.seat, ctx);
     }

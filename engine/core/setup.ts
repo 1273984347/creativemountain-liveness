@@ -9,6 +9,7 @@ import type { Board } from './board.ts';
 import type { State } from './state.ts';
 import { dealInitialHands } from './hand.ts';
 import { openHeaven } from './turn-runner.ts';
+import { grantedFlags } from './passives.ts';
 
 /**
  * 按主题分配身份与阵营。
@@ -24,10 +25,15 @@ export function assignIdentitiesAndFactions(state: State, theme: ThemePack): Sta
     //   故体力上限取两者较大值。
     const hpBase = faction?.hpBase ?? p.hpMax;
     const hpMax = Math.max(hpBase, state.scales.handStart);
+    // 常驻型被动授予（如仲裁者的 extra_vote ⇒ 投票权重 2）
+    const granted = grantedFlags(identity?.passive);
     return {
       ...p,
       identityId: identity?.id ?? p.identityId,
       factionId: faction?.id ?? p.factionId,
+      ...(granted.extraVotes > 0
+        ? { flags: { ...p.flags, extraVotes: ((p.flags.extraVotes as number | undefined) ?? 0) + granted.extraVotes } }
+        : {}),
       hpMax,
       hp: hpMax,
       resource: faction?.resourceBase ?? p.resource,
@@ -211,7 +217,10 @@ export function installTheme(state: State, theme: ThemePack): State {
     // 发牌前清空手牌：B1 骨架发的「测试牌」不能混进主题局
     players: state.players.map((p) => ({ ...p, hand: [] })),
   };
-  const withFactions = assignIdentitiesAndFactions(withPacks, theme);
+  // ⚠️ 顺序：先**重置局面**（清空 flags 等），再**分配身份**（授予常驻型被动）——
+  //   反过来会把刚授予的 flags 又清掉（实测：仲裁者的额外投票权因此丢失）。
+  const reset = resetForNewGame(withPacks);
+  const withFactions = assignIdentitiesAndFactions(reset, theme);
   // 开局即翻开第 1 回合的天机牌（规格 §3.1 回合第 1 步）
-  return openHeaven(dealInitialHands(resetForNewGame(withFactions)));
+  return openHeaven(dealInitialHands(withFactions));
 }
