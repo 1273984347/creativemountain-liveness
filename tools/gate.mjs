@@ -16,6 +16,7 @@ const GATES = [
   { name: '单元与门禁自检（node --test）', cmd: process.execPath, args: ['--test', 'tests/**/*.test.ts'] },
   { name: '文档口径（doc-sync）', cmd: process.execPath, args: [resolve('tools', 'doc-sync.mjs')] },
   { name: '单文件构建（esbuild）', cmd: process.execPath, args: [resolve('esbuild.config.mjs')] },
+  { name: '主题包校验（theme-validate）', cmd: process.execPath, args: [resolve('tools', 'theme-validate.mjs')] },
 ];
 
 /** 声明的门数（与实跑门数必须一致，否则自断言失败）。 */

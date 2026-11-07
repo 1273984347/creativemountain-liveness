@@ -1,0 +1,1741 @@
+{
+  "meta": {
+    "id": "xianxia2026",
+    "name": "仙侠·2026",
+    "tagline": "灵气复苏的末法时代，四方修士共登创界山——但山巅只认活人。",
+    "resourceName": "灵枢",
+    "deckName": "符箓"
+  },
+  "glossary": {
+    "HP": "灵力",
+    "deck": "符箓库",
+    "hand": "在手符箓",
+    "resource": "灵枢",
+    "peak": "封顶台",
+    "seal": "认证印"
+  },
+  "counts": {
+    "handStart": 5,
+    "deckTotal": 48,
+    "trialTotal": 12,
+    "certTotal": 16
+  },
+  "factions": [
+    {
+      "id": "xianmen",
+      "name": "仙门",
+      "hpBase": 7,
+      "resourceBase": 5,
+      "ability": {
+        "op": "conditional",
+        "pred": {
+          "kind": "flag_set",
+          "flag": "passed_gate"
+        },
+        "then": {
+          "op": "draw_cards",
+          "count": 2
+        }
+      },
+      "wheel": {
+        "op": "gain_resource",
+        "amount": 2
+      },
+      "deckTags": [
+        "motion"
+      ]
+    },
+    {
+      "id": "longyi",
+      "name": "龙裔",
+      "hpBase": 8,
+      "resourceBase": 4,
+      "ability": {
+        "op": "heal",
+        "amount": 1
+      },
+      "wheel": {
+        "op": "shield",
+        "amount": 2
+      },
+      "deckTags": [
+        "attack",
+        "motion"
+      ]
+    },
+    {
+      "id": "sanxian",
+      "name": "散仙",
+      "hpBase": 6,
+      "resourceBase": 6,
+      "ability": {
+        "op": "gain_resource",
+        "amount": 1
+      },
+      "wheel": {
+        "op": "draw_cards",
+        "count": 2
+      },
+      "deckTags": [
+        "utility"
+      ]
+    },
+    {
+      "id": "lingqiu",
+      "name": "灵丘",
+      "hpBase": 7,
+      "resourceBase": 5,
+      "ability": {
+        "op": "shield",
+        "amount": 1
+      },
+      "wheel": {
+        "op": "heal",
+        "amount": 2
+      },
+      "deckTags": [
+        "defense"
+      ]
+    }
+  ],
+  "identities": [
+    {
+      "id": "pioneer",
+      "name": "开拓者",
+      "passive": {
+        "op": "move_forward",
+        "amount": 1
+      },
+      "goal": {
+        "kind": "pass_gates",
+        "count": 3
+      },
+      "flavor": "路是走出来的，也是撞出来的。"
+    },
+    {
+      "id": "artisan",
+      "name": "匠师",
+      "passive": {
+        "op": "equip_card",
+        "cardId": "c_talisman"
+      },
+      "goal": {
+        "kind": "equip_count",
+        "count": 3
+      },
+      "flavor": "手中无剑，炉中有火。"
+    },
+    {
+      "id": "stargazer",
+      "name": "观星者",
+      "passive": {
+        "op": "peek_deck",
+        "count": 1
+      },
+      "goal": {
+        "kind": "draw_count",
+        "count": 12
+      },
+      "flavor": "我看得见牌库的顶，因为那是唯一确定的事。"
+    },
+    {
+      "id": "arbiter",
+      "name": "仲裁者",
+      "passive": {
+        "op": "extra_vote",
+        "amount": 1
+      },
+      "goal": {
+        "kind": "veto_success",
+        "count": 1
+      },
+      "flavor": "山议之上，我的话算两票。"
+    },
+    {
+      "id": "watchman",
+      "name": "守夜人",
+      "passive": {
+        "op": "shield",
+        "amount": 1
+      },
+      "goal": {
+        "kind": "survive_with_hp"
+      },
+      "flavor": "我不封顶，我只是站着。"
+    },
+    {
+      "id": "ember",
+      "name": "窃火者",
+      "passive": {
+        "op": "transfer_resource",
+        "amount": 1,
+        "target": 0
+      },
+      "goal": {
+        "kind": "steal_count",
+        "count": 5
+      },
+      "flavor": "你的灵枢，也是我的。"
+    },
+    {
+      "id": "weaver",
+      "name": "织梦者",
+      "passive": {
+        "op": "set_die_result",
+        "value": 10
+      },
+      "goal": {
+        "kind": "reroll_count",
+        "count": 3
+      },
+      "flavor": "结果未定？那就改到定为止。"
+    },
+    {
+      "id": "mountainlord",
+      "name": "山主",
+      "passive": {
+        "op": "certify_free_pass"
+      },
+      "goal": {
+        "kind": "successful_challenge",
+        "count": 1
+      },
+      "flavor": "我不怕被问，我怕没人敢问。"
+    }
+  ],
+  "cards": [
+    {
+      "id": "c_windstep",
+      "name": "御风",
+      "type": "motion",
+      "cost": 1,
+      "color": "red",
+      "suit": "wind",
+      "rank": 14,
+      "rankLabel": "天",
+      "text": "前进 3 格。",
+      "effects": [
+        {
+          "op": "move_forward",
+          "amount": 3
+        }
+      ]
+    },
+    {
+      "id": "c_shrinking",
+      "name": "缩地",
+      "type": "motion",
+      "cost": 1,
+      "color": "black",
+      "suit": "cloud",
+      "rank": 13,
+      "rankLabel": "地",
+      "text": "前进 2 格。",
+      "effects": [
+        {
+          "op": "move_forward",
+          "amount": 2
+        }
+      ]
+    },
+    {
+      "id": "c_cloudladder",
+      "name": "云梯",
+      "type": "motion",
+      "cost": 2,
+      "color": "red",
+      "suit": "thunder",
+      "rank": 12,
+      "rankLabel": "玄",
+      "text": "移动到前方第 8 格。",
+      "effects": [
+        {
+          "op": "move_to_tile",
+          "tileIndex": 8
+        }
+      ]
+    },
+    {
+      "id": "c_gale",
+      "name": "御风诀",
+      "type": "motion",
+      "cost": 2,
+      "color": "black",
+      "suit": "rain",
+      "rank": 11,
+      "rankLabel": "黄",
+      "text": "前进 4 格。",
+      "effects": [
+        {
+          "op": "move_forward",
+          "amount": 4
+        }
+      ]
+    },
+    {
+      "id": "c_borrowwind",
+      "name": "借风",
+      "type": "motion",
+      "cost": 1,
+      "color": "red",
+      "suit": "frost",
+      "rank": 10,
+      "rankLabel": "宇",
+      "text": "前进 3 格，抽 1 张牌。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "move_forward",
+              "amount": 3
+            },
+            {
+              "op": "draw_cards",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_lightbody",
+      "name": "轻身",
+      "type": "motion",
+      "cost": 1,
+      "color": "black",
+      "suit": "ember",
+      "rank": 9,
+      "rankLabel": "宙",
+      "text": "前进 2 格，弃 1 张牌。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "move_forward",
+              "amount": 2
+            },
+            {
+              "op": "discard_self",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_stepvoid",
+      "name": "步虚",
+      "type": "motion",
+      "cost": 1,
+      "color": "red",
+      "suit": "stone",
+      "rank": 8,
+      "rankLabel": "洪",
+      "text": "前进 1 格，抽 1 张牌。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "move_forward",
+              "amount": 1
+            },
+            {
+              "op": "draw_cards",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_ridesun",
+      "name": "乘云",
+      "type": "motion",
+      "cost": 3,
+      "color": "black",
+      "suit": "void",
+      "rank": 7,
+      "rankLabel": "荒",
+      "text": "前进 6 格。",
+      "effects": [
+        {
+          "op": "move_forward",
+          "amount": 6
+        }
+      ]
+    },
+    {
+      "id": "c_swapstep",
+      "name": "换位",
+      "type": "motion",
+      "cost": 2,
+      "color": "red",
+      "suit": "moon",
+      "rank": 6,
+      "rankLabel": "昊",
+      "text": "与一名对手交换位置。",
+      "effects": [
+        {
+          "op": "swap_position",
+                "target": 0
+        }
+      ]
+    },
+    {
+      "id": "c_retreat",
+      "name": "折返术",
+      "type": "motion",
+      "cost": 1,
+      "color": "black",
+      "suit": "sun",
+      "rank": 5,
+      "rankLabel": "苍",
+      "text": "使一名对手后退 1 格。",
+      "effects": [
+        {
+          "op": "move_backward",
+          "amount": 1,
+          "target": 0
+        }
+      ]
+    },
+    {
+      "id": "c_gather",
+      "name": "聚气",
+      "type": "motion",
+      "cost": 1,
+      "color": "red",
+      "suit": "moss",
+      "rank": 4,
+      "rankLabel": "灵",
+      "text": "前进 2 格，获得 1 枚灵枢。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "move_forward",
+              "amount": 2
+            },
+            {
+              "op": "gain_resource",
+              "amount": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_leapcloud",
+      "name": "御风·远",
+      "type": "motion",
+      "cost": 2,
+      "color": "black",
+      "suit": "bell",
+      "rank": 3,
+      "rankLabel": "虚",
+      "text": "掷 6 面骰，按点数前进。",
+      "effects": [
+        {
+          "op": "move_by_dice",
+          "faces": 6
+        }
+      ]
+    },
+    {
+      "id": "c_spiritblade",
+      "name": "灵刃",
+      "type": "attack",
+      "cost": 1,
+      "color": "red",
+      "suit": "wind",
+      "rank": 2,
+      "rankLabel": "天",
+      "text": "对一名对手造成 1 点伤害。",
+      "effects": [
+        {
+          "op": "damage",
+          "amount": 1,
+          "target": 0
+        }
+      ]
+    },
+    {
+      "id": "c_heavyblade",
+      "name": "灵刃·重",
+      "type": "attack",
+      "cost": 2,
+      "color": "black",
+      "suit": "cloud",
+      "rank": 14,
+      "rankLabel": "地",
+      "text": "对一名对手造成 2 点伤害。",
+      "effects": [
+        {
+          "op": "damage",
+          "amount": 2,
+          "target": 0
+        }
+      ]
+    },
+    {
+      "id": "c_myriadcry",
+      "name": "万灵齐鸣",
+      "type": "attack",
+      "cost": 2,
+      "color": "red",
+      "suit": "thunder",
+      "rank": 13,
+      "rankLabel": "玄",
+      "text": "对一名对手造成 1 点伤害，抽 1 张牌。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "damage",
+              "amount": 1,
+              "target": 0
+            },
+            {
+              "op": "draw_cards",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_break",
+      "name": "破",
+      "type": "attack",
+      "cost": 2,
+      "color": "black",
+      "suit": "rain",
+      "rank": 12,
+      "rankLabel": "黄",
+      "text": "对一名对手造成 2 点伤害，弃 1 张牌。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "damage",
+              "amount": 2,
+              "target": 0
+            },
+            {
+              "op": "discard_self",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_swordqi",
+      "name": "剑气",
+      "type": "attack",
+      "cost": 1,
+      "color": "red",
+      "suit": "frost",
+      "rank": 11,
+      "rankLabel": "宇",
+      "text": "对一名对手造成 1 点伤害，获得 1 点护盾。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "damage",
+              "amount": 1,
+              "target": 0
+            },
+            {
+              "op": "shield",
+              "amount": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_bonegnaw",
+      "name": "蚀骨",
+      "type": "attack",
+      "cost": 2,
+      "color": "black",
+      "suit": "ember",
+      "rank": 10,
+      "rankLabel": "宙",
+      "text": "对一名对手造成 1 点伤害并使其中毒 1 层。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "damage",
+              "amount": 1,
+              "target": 0
+            },
+            {
+              "op": "poison",
+              "amount": 1,
+              "target": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_sealsilence",
+      "name": "封口",
+      "type": "attack",
+      "cost": 1,
+      "color": "red",
+      "suit": "stone",
+      "rank": 9,
+      "rankLabel": "洪",
+      "text": "使一名对手封口 1 回合。",
+      "effects": [
+        {
+          "op": "silence",
+          "amount": 1,
+          "target": 0
+        }
+      ]
+    },
+    {
+      "id": "c_venom",
+      "name": "毒瘴",
+      "type": "attack",
+      "cost": 2,
+      "color": "black",
+      "suit": "void",
+      "rank": 8,
+      "rankLabel": "荒",
+      "text": "使一名对手中毒 2 层。",
+      "effects": [
+        {
+          "op": "poison",
+          "amount": 2,
+          "target": 0
+        }
+      ]
+    },
+    {
+      "id": "c_bindspirit",
+      "name": "缚灵",
+      "type": "attack",
+      "cost": 1,
+      "color": "red",
+      "suit": "moon",
+      "rank": 7,
+      "rankLabel": "昊",
+      "text": "使一名对手减速 1 层。",
+      "effects": [
+        {
+          "op": "slow",
+          "amount": 1,
+          "target": 0
+        }
+      ]
+    },
+    {
+      "id": "c_cutline",
+      "name": "断送",
+      "type": "attack",
+      "cost": 2,
+      "color": "black",
+      "suit": "sun",
+      "rank": 6,
+      "rankLabel": "苍",
+      "text": "使一名对手跳过 1 个回合。",
+      "effects": [
+        {
+          "op": "skip_turn",
+          "amount": 1,
+          "target": 0
+        }
+      ]
+    },
+    {
+      "id": "c_soulhunt",
+      "name": "追魂",
+      "type": "attack",
+      "cost": 2,
+      "color": "red",
+      "suit": "moss",
+      "rank": 5,
+      "rankLabel": "灵",
+      "text": "对一名对手造成伤害；若其体力不足 4 则追加伤害。",
+      "effects": [
+        {
+          "op": "conditional",
+          "pred": {
+            "kind": "hp_at_least",
+            "amount": 4
+          },
+          "then": {
+            "op": "damage",
+            "amount": 1,
+            "target": 0
+          },
+          "else": {
+            "op": "damage",
+            "amount": 2,
+            "target": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "c_vengeful",
+      "name": "血咒",
+      "type": "attack",
+      "cost": 3,
+      "color": "black",
+      "suit": "bell",
+      "rank": 4,
+      "rankLabel": "虚",
+      "text": "对一名对手造成 2 点伤害，你恢复 1 点体力。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "damage",
+              "amount": 2,
+              "target": 0
+            },
+            {
+              "op": "heal",
+              "amount": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_talisman",
+      "name": "护符",
+      "type": "defense",
+      "cost": 1,
+      "color": "red",
+      "suit": "wind",
+      "rank": 3,
+      "rankLabel": "天",
+      "text": "获得 2 点护盾。",
+      "effects": [
+        {
+          "op": "shield",
+          "amount": 2
+        }
+      ]
+    },
+    {
+      "id": "c_bigtalisman",
+      "name": "护符·大",
+      "type": "defense",
+      "cost": 2,
+      "color": "black",
+      "suit": "cloud",
+      "rank": 2,
+      "rankLabel": "地",
+      "text": "获得 3 点护盾。",
+      "effects": [
+        {
+          "op": "shield",
+          "amount": 3
+        }
+      ]
+    },
+    {
+      "id": "c_calmheart",
+      "name": "凝神",
+      "type": "defense",
+      "cost": 1,
+      "color": "red",
+      "suit": "thunder",
+      "rank": 14,
+      "rankLabel": "玄",
+      "text": "免疫封口 2 回合。",
+      "effects": [
+        {
+          "op": "immunity",
+          "status": "silence",
+          "amount": 2
+        }
+      ]
+    },
+    {
+      "id": "c_purify",
+      "name": "清心",
+      "type": "defense",
+      "cost": 1,
+      "color": "black",
+      "suit": "rain",
+      "rank": 13,
+      "rankLabel": "黄",
+      "text": "免疫中毒 2 回合。",
+      "effects": [
+        {
+          "op": "immunity",
+          "status": "poison",
+          "amount": 2
+        }
+      ]
+    },
+    {
+      "id": "c_stillness",
+      "name": "定身",
+      "type": "defense",
+      "cost": 1,
+      "color": "red",
+      "suit": "frost",
+      "rank": 12,
+      "rankLabel": "宇",
+      "text": "免疫减速 2 回合。",
+      "effects": [
+        {
+          "op": "immunity",
+          "status": "slow",
+          "amount": 2
+        }
+      ]
+    },
+    {
+      "id": "c_recover",
+      "name": "回春",
+      "type": "defense",
+      "cost": 1,
+      "color": "black",
+      "suit": "ember",
+      "rank": 11,
+      "rankLabel": "宙",
+      "text": "恢复 2 点体力。",
+      "effects": [
+        {
+          "op": "heal",
+          "amount": 2
+        }
+      ]
+    },
+    {
+      "id": "c_bigrecover",
+      "name": "回春·大",
+      "type": "defense",
+      "cost": 2,
+      "color": "red",
+      "suit": "stone",
+      "rank": 10,
+      "rankLabel": "洪",
+      "text": "恢复 3 点体力。",
+      "effects": [
+        {
+          "op": "heal",
+          "amount": 3
+        }
+      ]
+    },
+    {
+      "id": "c_stonewall",
+      "name": "坚壁",
+      "type": "defense",
+      "cost": 1,
+      "color": "black",
+      "suit": "void",
+      "rank": 9,
+      "rankLabel": "荒",
+      "text": "获得 1 点护盾，抽 1 张牌。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "shield",
+              "amount": 1
+            },
+            {
+              "op": "draw_cards",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_mirror",
+      "name": "明镜",
+      "type": "defense",
+      "cost": 2,
+      "color": "red",
+      "suit": "moon",
+      "rank": 8,
+      "rankLabel": "昊",
+      "text": "获得 1 点护盾，免疫封口 1 回合。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "shield",
+              "amount": 1
+            },
+            {
+              "op": "immunity",
+              "status": "silence",
+              "amount": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_guardsoul",
+      "name": "护灵",
+      "type": "defense",
+      "cost": 1,
+      "color": "black",
+      "suit": "sun",
+      "rank": 7,
+      "rankLabel": "苍",
+      "text": "获得 2 点护盾，弃 1 张牌。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "shield",
+              "amount": 2
+            },
+            {
+              "op": "discard_self",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_serenity",
+      "name": "静心",
+      "type": "defense",
+      "cost": 1,
+      "color": "red",
+      "suit": "moss",
+      "rank": 6,
+      "rankLabel": "灵",
+      "text": "恢复 1 点体力，免疫中毒 1 回合。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "heal",
+              "amount": 1
+            },
+            {
+              "op": "immunity",
+              "status": "poison",
+              "amount": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_goldenbody",
+      "name": "金身",
+      "type": "defense",
+      "cost": 2,
+      "color": "black",
+      "suit": "bell",
+      "rank": 5,
+      "rankLabel": "虚",
+      "text": "获得 3 点护盾，弃 2 张牌。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "shield",
+              "amount": 3
+            },
+            {
+              "op": "discard_self",
+              "count": 2
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_spiritcharm",
+      "name": "灵枢符",
+      "type": "utility",
+      "cost": 1,
+      "color": "red",
+      "suit": "wind",
+      "rank": 4,
+      "rankLabel": "天",
+      "text": "获得 2 枚灵枢。",
+      "effects": [
+        {
+          "op": "gain_resource",
+          "amount": 2
+        }
+      ]
+    },
+    {
+      "id": "c_bigsymbol",
+      "name": "灵枢符·大",
+      "type": "utility",
+      "cost": 2,
+      "color": "black",
+      "suit": "cloud",
+      "rank": 3,
+      "rankLabel": "地",
+      "text": "获得 3 枚灵枢。",
+      "effects": [
+        {
+          "op": "gain_resource",
+          "amount": 3
+        }
+      ]
+    },
+    {
+      "id": "c_stargaze",
+      "name": "观星",
+      "type": "utility",
+      "cost": 0,
+      "color": "red",
+      "suit": "thunder",
+      "rank": 2,
+      "rankLabel": "玄",
+      "text": "查看牌库顶 2 张牌。",
+      "effects": [
+        {
+          "op": "peek_deck",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "id": "c_washcards",
+      "name": "洗牌",
+      "type": "utility",
+      "cost": 1,
+      "color": "black",
+      "suit": "rain",
+      "rank": 14,
+      "rankLabel": "黄",
+      "text": "弃 1 张牌，抽 2 张牌。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "discard_self",
+              "count": 1
+            },
+            {
+              "op": "draw_cards",
+              "count": 2
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_askdao",
+      "name": "问道",
+      "type": "utility",
+      "cost": 1,
+      "color": "red",
+      "suit": "frost",
+      "rank": 13,
+      "rankLabel": "宇",
+      "text": "抽 2 张牌，获得 1 枚灵枢。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "draw_cards",
+              "count": 2
+            },
+            {
+              "op": "gain_resource",
+              "amount": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_extraroll",
+      "name": "掷符",
+      "type": "utility",
+      "cost": 1,
+      "color": "black",
+      "suit": "ember",
+      "rank": 12,
+      "rankLabel": "宙",
+      "text": "本回合额外获得 1 次掷骰机会。",
+      "effects": [
+        {
+          "op": "extra_roll",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "id": "c_changedestiny",
+      "name": "改运",
+      "type": "utility",
+      "cost": 2,
+      "color": "red",
+      "suit": "stone",
+      "rank": 11,
+      "rankLabel": "洪",
+      "text": "将下次掷骰点数设为 10。",
+      "effects": [
+        {
+          "op": "set_die_result",
+          "value": 10
+        }
+      ]
+    },
+    {
+      "id": "c_throwspirit",
+      "name": "掷灵",
+      "type": "utility",
+      "cost": 1,
+      "color": "black",
+      "suit": "void",
+      "rank": 10,
+      "rankLabel": "荒",
+      "text": "掷 6 面骰，按点数前进。",
+      "effects": [
+        {
+          "op": "move_by_dice",
+          "faces": 6
+        }
+      ]
+    },
+    {
+      "id": "c_exorcise",
+      "name": "驱邪",
+      "type": "utility",
+      "cost": 1,
+      "color": "red",
+      "suit": "moon",
+      "rank": 9,
+      "rankLabel": "昊",
+      "text": "抽 2 张牌，免疫封口 1 回合。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "draw_cards",
+              "count": 2
+            },
+            {
+              "op": "immunity",
+              "status": "silence",
+              "amount": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_gatherup",
+      "name": "收束",
+      "type": "utility",
+      "cost": 2,
+      "color": "black",
+      "suit": "sun",
+      "rank": 8,
+      "rankLabel": "苍",
+      "text": "弃 1 张牌，抽 2 张牌，获得 1 点护盾。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "discard_self",
+              "count": 1
+            },
+            {
+              "op": "draw_cards",
+              "count": 2
+            },
+            {
+              "op": "shield",
+              "amount": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_asktruth",
+      "name": "问道真",
+      "type": "utility",
+      "cost": 2,
+      "color": "red",
+      "suit": "moss",
+      "rank": 7,
+      "rankLabel": "灵",
+      "text": "本次认证免于被质疑。",
+      "effects": [
+        {
+          "op": "certify_free_pass"
+        }
+      ]
+    },
+    {
+      "id": "c_markflag",
+      "name": "立旗",
+      "type": "utility",
+      "cost": 0,
+      "color": "black",
+      "suit": "bell",
+      "rank": 6,
+      "rankLabel": "虚",
+      "text": "获得 1 点护盾并抽 1 张牌。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "shield",
+              "amount": 1
+            },
+            {
+              "op": "draw_cards",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "board": {
+    "length": 28,
+    "peakIndex": 28,
+    "tiles": [
+      {
+        "index": 1,
+        "kind": "plain",
+        "name": "山门"
+      },
+      {
+        "index": 2,
+        "kind": "plain",
+        "name": "石阶"
+      },
+      {
+        "index": 3,
+        "kind": "boon",
+        "name": "灵泉"
+      },
+      {
+        "index": 4,
+        "kind": "plain",
+        "name": "松径"
+      },
+      {
+        "index": 5,
+        "kind": "hazard",
+        "name": "碎石坡"
+      },
+      {
+        "index": 6,
+        "kind": "gate",
+        "name": "落雁关",
+        "gate": {
+          "fee": 3,
+          "trialIds": [
+            "t_sword",
+            "t_mirror"
+          ]
+        }
+      },
+      {
+        "index": 7,
+        "kind": "plain",
+        "name": "雁回径"
+      },
+      {
+        "index": 8,
+        "kind": "plain",
+        "name": "云脚"
+      },
+      {
+        "index": 9,
+        "kind": "boon",
+        "name": "灵田"
+      },
+      {
+        "index": 10,
+        "kind": "plain",
+        "name": "风隙"
+      },
+      {
+        "index": 11,
+        "kind": "hazard",
+        "name": "落霜道"
+      },
+      {
+        "index": 12,
+        "kind": "junction",
+        "name": "岔路口",
+        "branches": [
+          {
+            "to": 18,
+            "label": "云梯"
+          },
+          {
+            "to": 14,
+            "label": "栈道",
+            "effect": {
+              "op": "draw_cards",
+              "count": 1
+            }
+          }
+        ]
+      },
+      {
+        "index": 13,
+        "kind": "plain",
+        "name": "孤松"
+      },
+      {
+        "index": 14,
+        "kind": "plain",
+        "name": "栈道尾"
+      },
+      {
+        "index": 15,
+        "kind": "boon",
+        "name": "丹房"
+      },
+      {
+        "index": 16,
+        "kind": "plain",
+        "name": "石室"
+      },
+      {
+        "index": 17,
+        "kind": "rift",
+        "name": "裂隙"
+      },
+      {
+        "index": 18,
+        "kind": "plain",
+        "name": "云梯顶"
+      },
+      {
+        "index": 19,
+        "kind": "hazard",
+        "name": "雷池"
+      },
+      {
+        "index": 20,
+        "kind": "plain",
+        "name": "碑林"
+      },
+      {
+        "index": 21,
+        "kind": "plain",
+        "name": "风车台"
+      },
+      {
+        "index": 22,
+        "kind": "gate",
+        "name": "云梦渡",
+        "gate": {
+          "fee": 4,
+          "trialIds": [
+            "t_star",
+            "t_riddle"
+          ]
+        }
+      },
+      {
+        "index": 23,
+        "kind": "boon",
+        "name": "灵池"
+      },
+      {
+        "index": 24,
+        "kind": "plain",
+        "name": "望仙崖"
+      },
+      {
+        "index": 25,
+        "kind": "hazard",
+        "name": "碎云阶"
+      },
+      {
+        "index": 26,
+        "kind": "plain",
+        "name": "最后香"
+      },
+      {
+        "index": 27,
+        "kind": "plain",
+        "name": "封顶台前"
+      },
+      {
+        "index": 28,
+        "kind": "peak",
+        "name": "封顶台"
+      }
+    ]
+  },
+  "heavenCards": [
+    {
+      "id": "h_dusk",
+      "name": "日暮",
+      "text": "本回合为夜：所有玩家的封口持续回合数 +1。",
+      "effects": [
+        {
+          "op": "set_phase",
+          "value": "night"
+        }
+      ]
+    },
+    {
+      "id": "h_dawn",
+      "name": "破晓",
+      "text": "本回合为昼：所有玩家抽 1 张牌。",
+      "effects": [
+        {
+          "op": "draw_cards",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "id": "h_spiritwind",
+      "name": "灵气风",
+      "text": "所有玩家灵枢 +1。",
+      "effects": [
+        {
+          "op": "gain_resource",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "h_rain",
+      "name": "甘霖",
+      "text": "所有玩家恢复 1 点体力。",
+      "effects": [
+        {
+          "op": "heal",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "h_thunder",
+      "name": "惊雷",
+      "text": "所有玩家本回合额外获得 1 次掷骰机会。",
+      "effects": [
+        {
+          "op": "extra_roll",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "id": "h_mist",
+      "name": "迷雾",
+      "text": "所有玩家获得 1 点护盾。",
+      "effects": [
+        {
+          "op": "shield",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "h_omen",
+      "name": "异兆",
+      "text": "所有玩家抽 2 张牌。",
+      "effects": [
+        {
+          "op": "draw_cards",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "id": "h_frost",
+      "name": "霜降",
+      "text": "所有玩家护盾 +1，但灵枢 -1。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "shield",
+              "amount": 1
+            },
+            {
+              "op": "spend_resource",
+              "amount": 1
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "trials": [
+    {
+      "id": "t_sword",
+      "text": "展示 2 张同色手牌（红或黑皆可）。",
+      "effects": [
+        {
+          "op": "conditional",
+          "pred": {
+            "kind": "has_card",
+            "filter": {
+              "color": "red"
+            }
+          },
+          "then": {
+            "op": "draw_cards",
+            "count": 1
+          },
+          "else": {
+            "op": "draw_cards",
+            "count": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "t_mirror",
+      "text": "展示任意 1 张手牌并说明其用途。",
+      "effects": [
+        {
+          "op": "draw_cards",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "id": "t_star",
+      "text": "掷指令骰，点数 ≥ 12 即通过。",
+      "effects": [
+        {
+          "op": "conditional",
+          "pred": {
+            "kind": "dice_is_at_least",
+            "amount": 12,
+            "faces": 20
+          },
+          "then": {
+            "op": "gain_resource",
+            "amount": 1
+          },
+          "else": {
+            "op": "silence",
+            "amount": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "t_riddle",
+      "text": "回答在场任意一人的 1 个问题。",
+      "effects": [
+        {
+          "op": "draw_cards",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "id": "t_wind",
+      "text": "本关通过后额外获得 1 枚灵枢。",
+      "effects": [
+        {
+          "op": "gain_resource",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "t_stone",
+      "text": "本关通过后恢复 1 点体力。",
+      "effects": [
+        {
+          "op": "heal",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "t_sutra",
+      "text": "本关通过后抽 1 张牌。",
+      "effects": [
+        {
+          "op": "draw_cards",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "id": "t_mantra",
+      "text": "本关通过后获得 1 点护盾。",
+      "effects": [
+        {
+          "op": "shield",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "t_oath",
+      "text": "本关通过后免疫封口 1 回合。",
+      "effects": [
+        {
+          "op": "immunity",
+          "status": "silence",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "t_silent",
+      "text": "本关通过后免疫减速 1 回合。",
+      "effects": [
+        {
+          "op": "immunity",
+          "status": "slow",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "t_vital",
+      "text": "本关通过后免疫中毒 1 回合。",
+      "effects": [
+        {
+          "op": "immunity",
+          "status": "poison",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "t_empty",
+      "text": "本关通过后什么也不发生——但你还在。",
+      "effects": [
+        {
+          "op": "gain_resource",
+          "amount": 1
+        }
+      ]
+    }
+  ],
+  "certificationCards": [
+    {
+      "id": "cc_1",
+      "prompt": "用你此刻的姿势，描述一个仙门礼仪。"
+    },
+    {
+      "id": "cc_2",
+      "prompt": "你左手此刻正摸着什么？说出来。"
+    },
+    {
+      "id": "cc_3",
+      "prompt": "说出本局你亲眼看到的、别人偷偷做过的 1 件事。"
+    },
+    {
+      "id": "cc_4",
+      "prompt": "复述 3 回合前有人说过的 1 句话。"
+    },
+    {
+      "id": "cc_5",
+      "prompt": "描述你上山的路上，经过的第一处险径。"
+    },
+    {
+      "id": "cc_6",
+      "prompt": "若你现在觉醒一门仙术，你希望它解决你此刻的什么麻烦？"
+    },
+    {
+      "id": "cc_7",
+      "prompt": "你身上的符箓里，哪一张是你此刻最不敢用的？为什么？"
+    },
+    {
+      "id": "cc_8",
+      "prompt": "说出你此刻的灵力值——不许看牌，不许问人，你自己记得吗？"
+    },
+    {
+      "id": "cc_9",
+      "prompt": "用一句江湖话，说明你为什么还没放弃登顶。"
+    },
+    {
+      "id": "cc_10",
+      "prompt": "描述你现在呼吸的节奏或你房间里正在响的声音。"
+    },
+    {
+      "id": "cc_11",
+      "prompt": "说出这局里你最不想再见到的一个对手，并解释为什么。"
+    },
+    {
+      "id": "cc_12",
+      "prompt": "你身上的灵枢是怎么来的？（答不出具体经历就算不活）"
+    },
+    {
+      "id": "cc_13",
+      "prompt": "指认一样此刻在场的、属于别人的东西。"
+    },
+    {
+      "id": "cc_14",
+      "prompt": "说出你此刻最担心被人问出的 1 件事。"
+    },
+    {
+      "id": "cc_15",
+      "prompt": "若山巅只容一人，你会把机会让给谁？当众说。"
+    },
+    {
+      "id": "cc_16",
+      "prompt": "描述你此刻的坐姿——别人能在现场看出什么？"
+    }
+  ],
+  "creationDeck": [
+    {
+      "cardId": "c_talisman",
+      "name": "炉火符",
+      "text": "造物：可装备的护符，不占手牌上限。"
+    },
+    {
+      "cardId": "c_stonewall",
+      "name": "岩壁符",
+      "text": "造物：坚壁之符，可装备。"
+    },
+    {
+      "cardId": "c_guardsoul",
+      "name": "守灵符",
+      "text": "造物：护灵之符，可装备。"
+    },
+    {
+      "cardId": "c_recover",
+      "name": "回春符",
+      "text": "造物：回春之符，可装备。"
+    }
+  ]
+}
