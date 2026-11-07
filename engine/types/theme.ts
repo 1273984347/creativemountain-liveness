@@ -13,7 +13,6 @@ import type {
   CompareOp,
   NegativeStatus,
 } from './common.ts';
-import type { Phase } from './common.ts';
 
 export type { CardColor, CardFilter, CardType, CompareOp, NegativeStatus };
 
@@ -175,7 +174,15 @@ export interface PredicateMap {
   resource_at_least: { readonly amount: number };
   hand_count: { readonly count: number; readonly op: CompareOp };
   is_pending_cert: Record<string, never>;
-  phase_is: { readonly value: Phase };
+  /**
+   * 判定**全局昼夜阶段值**（`state.phaseValue`，取值 `night` / `day`）。
+   *
+   * ⚠️ B8 修正：B2 初版误用回合阶段枚举（`Phase` = 天机/行动/山议/认证/终局），
+   *   导致 `set_phase`（规格 §6.2 的 `phaseValue`）设置的值**没有任何谓词能读到**
+   *   —— 天机牌「本回合为夜/昼」的机制实际失效，且四套主题都无法表达昼夜分岔。
+   *   现与 `set_phase` 对齐：判定 `state.phaseValue`。
+   */
+  phase_is: { readonly value: 'night' | 'day' };
   players_alive: { readonly count: number; readonly op: CompareOp };
   card_type_is: { readonly type: CardType };
   identity_is: { readonly identityId: string };
@@ -388,4 +395,12 @@ export interface ThemePack {
   readonly trials?: readonly TrialCard[];
   /** 造物牌堆（规格 §6.5；`create_card` 的唯一来源） */
   readonly creationDeck?: readonly CreationCard[];
+  /**
+   * 主题专属名词表（规格 §10.1 必须差异化第 ③ 项的机械判据）。
+   *
+   * 认证题卡必须命中至少一个本主题的专属名词 ——
+   * 这让「换场景不是换措辞」从人眼判断变成**可机器判定**的。
+   * 基准主题可不声明；一旦声明就必须被遵守（由第 8 道门核对）。
+   */
+  readonly domainWords?: readonly string[];
 }

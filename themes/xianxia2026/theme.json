@@ -1421,7 +1421,7 @@
     {
       "id": "h_dusk",
       "name": "日暮",
-      "text": "本回合为夜：所有玩家的封口持续回合数 +1。",
+      "text": "本回合为夜。",
       "effects": [
         {
           "op": "set_phase",
@@ -1434,6 +1434,10 @@
       "name": "破晓",
       "text": "本回合为昼：所有玩家抽 1 张牌。",
       "effects": [
+        {
+          "op": "set_phase",
+          "value": "day"
+        },
         {
           "op": "draw_cards",
           "count": 1

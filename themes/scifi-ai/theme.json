@@ -1,0 +1,1833 @@
+{
+  "meta": {
+    "id": "scifi-ai",
+    "name": "科幻·AI 纪元",
+    "tagline": "算法接管了人类的一切审批，只有一件事它做不了——确认对面那个人还活着。",
+    "resourceName": "算力",
+    "deckName": "指令集"
+  },
+  "glossary": {
+    "HP": "机体完整度",
+    "deck": "指令库",
+    "hand": "在手指令",
+    "resource": "算力",
+    "peak": "奇点台",
+    "seal": "认证签"
+  },
+  "counts": {
+    "handStart": 5,
+    "deckTotal": 48,
+    "trialTotal": 12,
+    "certTotal": 16
+  },
+  "factions": [
+    {
+      "id": "crew",
+      "name": "船员团",
+      "hpBase": 7,
+      "resourceBase": 5,
+      "ability": {
+        "op": "conditional",
+        "pred": {
+          "kind": "flag_set",
+          "flag": "passed_gate"
+        },
+        "then": {
+          "op": "draw_cards",
+          "count": 2
+        }
+      },
+      "wheel": {
+        "op": "gain_resource",
+        "amount": 2
+      },
+      "deckTags": [
+        "motion"
+      ],
+      "abilityText": "每通过一道安全闸，抽 2 张指令。",
+      "wheelText": "算力 +2。"
+    },
+    {
+      "id": "synth",
+      "name": "合成体",
+      "hpBase": 8,
+      "resourceBase": 4,
+      "ability": {
+        "op": "heal",
+        "amount": 1
+      },
+      "wheel": {
+        "op": "shield",
+        "amount": 2
+      },
+      "deckTags": [
+        "attack",
+        "motion"
+      ],
+      "abilityText": "回合结束恢复 1 点机体完整度。",
+      "wheelText": "获得 2 点护盾。"
+    },
+    {
+      "id": "nomad",
+      "name": "拾荒者",
+      "hpBase": 6,
+      "resourceBase": 6,
+      "ability": {
+        "op": "gain_resource",
+        "amount": 1
+      },
+      "wheel": {
+        "op": "draw_cards",
+        "count": 2
+      },
+      "deckTags": [
+        "utility"
+      ],
+      "abilityText": "回合结束获得 1 枚算力。",
+      "wheelText": "抽 2 张指令。"
+    },
+    {
+      "id": "arcology",
+      "name": "巨构体",
+      "hpBase": 7,
+      "resourceBase": 5,
+      "ability": {
+        "op": "shield",
+        "amount": 1
+      },
+      "wheel": {
+        "op": "heal",
+        "amount": 2
+      },
+      "deckTags": [
+        "defense"
+      ],
+      "abilityText": "回合结束获得 1 点护盾。",
+      "wheelText": "恢复 2 点机体完整度。"
+    }
+  ],
+  "identities": [
+    {
+      "id": "pioneer",
+      "name": "先行者",
+      "passive": {
+        "op": "move_forward",
+        "amount": 1
+      },
+      "goal": {
+        "kind": "pass_gates",
+        "count": 3
+      },
+      "passiveText": "每回合首次位移 +1 格。",
+      "flavor": "轨道上没有回头路，只有更远的下一站。"
+    },
+    {
+      "id": "artisan",
+      "name": "工程师",
+      "passive": {
+        "op": "equip_card",
+        "cardId": "c_talisman"
+      },
+      "goal": {
+        "kind": "equip_count",
+        "count": 3
+      },
+      "passiveText": "每场限 1 次免费造物。",
+      "flavor": "我造的不是工具，是活下去的概率。"
+    },
+    {
+      "id": "stargazer",
+      "name": "深空观测者",
+      "passive": {
+        "op": "peek_deck",
+        "count": 1
+      },
+      "goal": {
+        "kind": "draw_count",
+        "count": 12
+      },
+      "passiveText": "每回合可看指令库顶 1 张。",
+      "flavor": "信号那头是谁不重要，信号还在就行。"
+    },
+    {
+      "id": "arbiter",
+      "name": "仲裁官",
+      "passive": {
+        "op": "extra_vote",
+        "amount": 1
+      },
+      "goal": {
+        "kind": "veto_success",
+        "count": 1
+      },
+      "passiveText": "山议中可投 2 票。",
+      "flavor": "算法不投票，我投。"
+    },
+    {
+      "id": "watchman",
+      "name": "守闸人",
+      "passive": {
+        "op": "shield",
+        "amount": 1
+      },
+      "goal": {
+        "kind": "survive_with_hp"
+      },
+      "passiveText": "回合结束获得 1 点护盾。",
+      "flavor": "我不登顶，我只让闸门多开一次。"
+    },
+    {
+      "id": "ember",
+      "name": "窃电者",
+      "passive": {
+        "op": "transfer_resource",
+        "amount": 1,
+        "target": 0
+      },
+      "goal": {
+        "kind": "steal_count",
+        "count": 5
+      },
+      "passiveText": "每回合可偷取 1 枚算力。",
+      "flavor": "你的算力，也是我的算力。"
+    },
+    {
+      "id": "weaver",
+      "name": "织码者",
+      "passive": {
+        "op": "set_die_result",
+        "value": 10
+      },
+      "goal": {
+        "kind": "reroll_count",
+        "count": 3
+      },
+      "passiveText": "每回合 1 次改 1 个判定结果。",
+      "flavor": "结果未定？那就把它改成定的。"
+    },
+    {
+      "id": "mountainlord",
+      "name": "塔主",
+      "passive": {
+        "op": "certify_free_pass"
+      },
+      "goal": {
+        "kind": "successful_challenge",
+        "count": 1
+      },
+      "passiveText": "认证时首次被质疑自动通过。",
+      "flavor": "我不怕被扫描，我怕没人敢扫描我。"
+    }
+  ],
+  "cards": [
+    {
+      "id": "c_sa_m01",
+      "name": "超导冲刺",
+      "type": "motion",
+      "cost": 1,
+      "color": "red",
+      "suit": "rail",
+      "rank": 14,
+      "rankLabel": "星",
+      "text": "前进 3 格。",
+      "effects": [
+        {
+          "op": "move_forward",
+          "amount": 3
+        }
+      ]
+    },
+    {
+      "id": "c_sa_m02",
+      "name": "短程跃迁",
+      "type": "motion",
+      "cost": 1,
+      "color": "black",
+      "suit": "quantum",
+      "rank": 13,
+      "rankLabel": "轨",
+      "text": "前进 2 格。",
+      "effects": [
+        {
+          "op": "move_forward",
+          "amount": 2
+        }
+      ]
+    },
+    {
+      "id": "c_sa_m03",
+      "name": "轨道滑降",
+      "type": "motion",
+      "cost": 2,
+      "color": "red",
+      "suit": "phase",
+      "rank": 12,
+      "rankLabel": "能",
+      "text": "移动到前方第 8 格。",
+      "effects": [
+        {
+          "op": "move_to_tile",
+          "tileIndex": 8
+        }
+      ]
+    },
+    {
+      "id": "c_sa_m04",
+      "name": "电磁推进",
+      "type": "motion",
+      "cost": 2,
+      "color": "black",
+      "suit": "electrogravity",
+      "rank": 11,
+      "rankLabel": "量",
+      "text": "前进 4 格。",
+      "effects": [
+        {
+          "op": "move_forward",
+          "amount": 4
+        }
+      ]
+    },
+    {
+      "id": "c_sa_m05",
+      "name": "脉冲喷射",
+      "type": "motion",
+      "cost": 1,
+      "color": "red",
+      "suit": "photon",
+      "rank": 10,
+      "rankLabel": "子",
+      "text": "前进 3 格，抽 1 张指令。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "move_forward",
+              "amount": 3
+            },
+            {
+              "op": "draw_cards",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_sa_m06",
+      "name": "相位穿行",
+      "type": "motion",
+      "cost": 1,
+      "color": "black",
+      "suit": "plasma",
+      "rank": 9,
+      "rankLabel": "磁",
+      "text": "前进 2 格，弃 1 张指令。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "move_forward",
+              "amount": 2
+            },
+            {
+              "op": "discard_self",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_sa_m07",
+      "name": "重力锚定",
+      "type": "motion",
+      "cost": 1,
+      "color": "red",
+      "suit": "darkmatter",
+      "rank": 8,
+      "rankLabel": "光",
+      "text": "前进 1 格，抽 1 张指令。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "move_forward",
+              "amount": 1
+            },
+            {
+              "op": "draw_cards",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_sa_m08",
+      "name": "量子借道",
+      "type": "motion",
+      "cost": 3,
+      "color": "black",
+      "suit": "gravitywave",
+      "rank": 7,
+      "rankLabel": "波",
+      "text": "前进 6 格。",
+      "effects": [
+        {
+          "op": "move_forward",
+          "amount": 6
+        }
+      ]
+    },
+    {
+      "id": "c_sa_m09",
+      "name": "反冲推进",
+      "type": "motion",
+      "cost": 2,
+      "color": "red",
+      "suit": "nano",
+      "rank": 6,
+      "rankLabel": "核",
+      "text": "与一名对手交换位置。",
+      "effects": [
+        {
+          "op": "swap_position",
+          "target": 0
+        }
+      ]
+    },
+    {
+      "id": "c_sa_m10",
+      "name": "折跃突袭",
+      "type": "motion",
+      "cost": 1,
+      "color": "black",
+      "suit": "deepspace",
+      "rank": 5,
+      "rankLabel": "素",
+      "text": "使一名对手后退 1 格。",
+      "effects": [
+        {
+          "op": "move_backward",
+          "amount": 1,
+          "target": 0
+        }
+      ]
+    },
+    {
+      "id": "c_sa_m11",
+      "name": "惯性滑行",
+      "type": "motion",
+      "cost": 1,
+      "color": "red",
+      "suit": "entropy",
+      "rank": 4,
+      "rankLabel": "云",
+      "text": "前进 2 格，获得 1 枚算力。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "move_forward",
+              "amount": 2
+            },
+            {
+              "op": "gain_resource",
+              "amount": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_sa_m12",
+      "name": "奇点跳跃",
+      "type": "motion",
+      "cost": 2,
+      "color": "black",
+      "suit": "orbit",
+      "rank": 3,
+      "rankLabel": "端",
+      "text": "掷 6 面骰，按点数前进。",
+      "effects": [
+        {
+          "op": "move_by_dice",
+          "faces": 6
+        }
+      ]
+    },
+    {
+      "id": "c_sa_a01",
+      "name": "电磁脉冲",
+      "type": "attack",
+      "cost": 1,
+      "color": "red",
+      "suit": "rail",
+      "rank": 2,
+      "rankLabel": "星",
+      "text": "对一名对手造成 1 点伤害。",
+      "effects": [
+        {
+          "op": "damage",
+          "amount": 1,
+          "target": 0
+        }
+      ]
+    },
+    {
+      "id": "c_sa_a02",
+      "name": "离子切割",
+      "type": "attack",
+      "cost": 2,
+      "color": "black",
+      "suit": "quantum",
+      "rank": 14,
+      "rankLabel": "轨",
+      "text": "对一名对手造成 2 点伤害。",
+      "effects": [
+        {
+          "op": "damage",
+          "amount": 2,
+          "target": 0
+        }
+      ]
+    },
+    {
+      "id": "c_sa_a03",
+      "name": "神经干扰",
+      "type": "attack",
+      "cost": 2,
+      "color": "red",
+      "suit": "phase",
+      "rank": 13,
+      "rankLabel": "能",
+      "text": "对一名对手造成 1 点伤害，抽 1 张指令。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "damage",
+              "amount": 1,
+              "target": 0
+            },
+            {
+              "op": "draw_cards",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_sa_a04",
+      "name": "相位撕裂",
+      "type": "attack",
+      "cost": 2,
+      "color": "black",
+      "suit": "electrogravity",
+      "rank": 12,
+      "rankLabel": "量",
+      "text": "对一名对手造成 2 点伤害，弃 1 张指令。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "damage",
+              "amount": 2,
+              "target": 0
+            },
+            {
+              "op": "discard_self",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_sa_a05",
+      "name": "数据湮灭",
+      "type": "attack",
+      "cost": 1,
+      "color": "red",
+      "suit": "photon",
+      "rank": 11,
+      "rankLabel": "子",
+      "text": "对一名对手造成 1 点伤害，获得 1 点护盾。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "damage",
+              "amount": 1,
+              "target": 0
+            },
+            {
+              "op": "shield",
+              "amount": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_sa_a06",
+      "name": "过载灼烧",
+      "type": "attack",
+      "cost": 2,
+      "color": "black",
+      "suit": "plasma",
+      "rank": 10,
+      "rankLabel": "磁",
+      "text": "对一名对手造成 1 点伤害，使一名对手中毒 1 层。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "damage",
+              "amount": 1,
+              "target": 0
+            },
+            {
+              "op": "poison",
+              "amount": 1,
+              "target": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_sa_a07",
+      "name": "病毒植入",
+      "type": "attack",
+      "cost": 1,
+      "color": "red",
+      "suit": "darkmatter",
+      "rank": 9,
+      "rankLabel": "光",
+      "text": "使一名对手封口 1 回合。",
+      "effects": [
+        {
+          "op": "silence",
+          "amount": 1,
+          "target": 0
+        }
+      ]
+    },
+    {
+      "id": "c_sa_a08",
+      "name": "量子退相干",
+      "type": "attack",
+      "cost": 2,
+      "color": "black",
+      "suit": "gravitywave",
+      "rank": 8,
+      "rankLabel": "波",
+      "text": "使一名对手中毒 2 层。",
+      "effects": [
+        {
+          "op": "poison",
+          "amount": 2,
+          "target": 0
+        }
+      ]
+    },
+    {
+      "id": "c_sa_a09",
+      "name": "熵增冲击",
+      "type": "attack",
+      "cost": 1,
+      "color": "red",
+      "suit": "nano",
+      "rank": 7,
+      "rankLabel": "核",
+      "text": "使一名对手减速 1 层。",
+      "effects": [
+        {
+          "op": "slow",
+          "amount": 1,
+          "target": 0
+        }
+      ]
+    },
+    {
+      "id": "c_sa_a10",
+      "name": "黑洞引力",
+      "type": "attack",
+      "cost": 2,
+      "color": "black",
+      "suit": "deepspace",
+      "rank": 6,
+      "rankLabel": "素",
+      "text": "使一名对手跳过 1 个回合。",
+      "effects": [
+        {
+          "op": "skip_turn",
+          "amount": 1,
+          "target": 0
+        }
+      ]
+    },
+    {
+      "id": "c_sa_a11",
+      "name": "逻辑炸弹",
+      "type": "attack",
+      "cost": 2,
+      "color": "red",
+      "suit": "entropy",
+      "rank": 5,
+      "rankLabel": "云",
+      "text": "若其机体完整度 ≥ 4，则对一名对手造成 1 点伤害；否则对一名对手造成 2 点伤害。",
+      "effects": [
+        {
+          "op": "conditional",
+          "pred": {
+            "kind": "hp_at_least",
+            "amount": 4
+          },
+          "then": {
+            "op": "damage",
+            "amount": 1,
+            "target": 0
+          },
+          "else": {
+            "op": "damage",
+            "amount": 2,
+            "target": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "c_sa_a12",
+      "name": "信号压制",
+      "type": "attack",
+      "cost": 3,
+      "color": "black",
+      "suit": "orbit",
+      "rank": 4,
+      "rankLabel": "端",
+      "text": "对一名对手造成 2 点伤害，恢复 1 点机体完整度。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "damage",
+              "amount": 2,
+              "target": 0
+            },
+            {
+              "op": "heal",
+              "amount": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_sa_d01",
+      "name": "防火墙",
+      "type": "defense",
+      "cost": 1,
+      "color": "red",
+      "suit": "rail",
+      "rank": 3,
+      "rankLabel": "星",
+      "text": "获得 2 点护盾。",
+      "effects": [
+        {
+          "op": "shield",
+          "amount": 2
+        }
+      ]
+    },
+    {
+      "id": "c_sa_d02",
+      "name": "装甲板",
+      "type": "defense",
+      "cost": 2,
+      "color": "black",
+      "suit": "quantum",
+      "rank": 2,
+      "rankLabel": "轨",
+      "text": "获得 3 点护盾。",
+      "effects": [
+        {
+          "op": "shield",
+          "amount": 3
+        }
+      ]
+    },
+    {
+      "id": "c_sa_d03",
+      "name": "冗余备份",
+      "type": "defense",
+      "cost": 1,
+      "color": "red",
+      "suit": "phase",
+      "rank": 14,
+      "rankLabel": "能",
+      "text": "免疫封口 2 回合。",
+      "effects": [
+        {
+          "op": "immunity",
+          "status": "silence",
+          "amount": 2
+        }
+      ]
+    },
+    {
+      "id": "c_sa_d04",
+      "name": "隔离舱",
+      "type": "defense",
+      "cost": 1,
+      "color": "black",
+      "suit": "electrogravity",
+      "rank": 13,
+      "rankLabel": "量",
+      "text": "免疫中毒 2 回合。",
+      "effects": [
+        {
+          "op": "immunity",
+          "status": "poison",
+          "amount": 2
+        }
+      ]
+    },
+    {
+      "id": "c_sa_d05",
+      "name": "相位护盾",
+      "type": "defense",
+      "cost": 1,
+      "color": "red",
+      "suit": "photon",
+      "rank": 12,
+      "rankLabel": "子",
+      "text": "免疫减速 2 回合。",
+      "effects": [
+        {
+          "op": "immunity",
+          "status": "slow",
+          "amount": 2
+        }
+      ]
+    },
+    {
+      "id": "c_sa_d06",
+      "name": "量子纠错",
+      "type": "defense",
+      "cost": 1,
+      "color": "black",
+      "suit": "plasma",
+      "rank": 11,
+      "rankLabel": "磁",
+      "text": "恢复 2 点机体完整度。",
+      "effects": [
+        {
+          "op": "heal",
+          "amount": 2
+        }
+      ]
+    },
+    {
+      "id": "c_sa_d07",
+      "name": "纳米修复",
+      "type": "defense",
+      "cost": 2,
+      "color": "red",
+      "suit": "darkmatter",
+      "rank": 10,
+      "rankLabel": "光",
+      "text": "恢复 3 点机体完整度。",
+      "effects": [
+        {
+          "op": "heal",
+          "amount": 3
+        }
+      ]
+    },
+    {
+      "id": "c_sa_d08",
+      "name": "冷却循环",
+      "type": "defense",
+      "cost": 1,
+      "color": "black",
+      "suit": "gravitywave",
+      "rank": 9,
+      "rankLabel": "波",
+      "text": "获得 1 点护盾，抽 1 张指令。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "shield",
+              "amount": 1
+            },
+            {
+              "op": "draw_cards",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_sa_d09",
+      "name": "镜像复制",
+      "type": "defense",
+      "cost": 2,
+      "color": "red",
+      "suit": "nano",
+      "rank": 8,
+      "rankLabel": "核",
+      "text": "获得 1 点护盾，免疫封口 1 回合。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "shield",
+              "amount": 1
+            },
+            {
+              "op": "immunity",
+              "status": "silence",
+              "amount": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_sa_d10",
+      "name": "能量屏障",
+      "type": "defense",
+      "cost": 1,
+      "color": "black",
+      "suit": "deepspace",
+      "rank": 7,
+      "rankLabel": "素",
+      "text": "获得 2 点护盾，弃 1 张指令。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "shield",
+              "amount": 2
+            },
+            {
+              "op": "discard_self",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_sa_d11",
+      "name": "意识备份",
+      "type": "defense",
+      "cost": 1,
+      "color": "red",
+      "suit": "entropy",
+      "rank": 6,
+      "rankLabel": "云",
+      "text": "恢复 1 点机体完整度，免疫中毒 1 回合。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "heal",
+              "amount": 1
+            },
+            {
+              "op": "immunity",
+              "status": "poison",
+              "amount": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_sa_d12",
+      "name": "抗干扰",
+      "type": "defense",
+      "cost": 2,
+      "color": "black",
+      "suit": "orbit",
+      "rank": 5,
+      "rankLabel": "端",
+      "text": "获得 3 点护盾，弃 2 张指令。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "shield",
+              "amount": 3
+            },
+            {
+              "op": "discard_self",
+              "count": 2
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_sa_u01",
+      "name": "意识分叉",
+      "type": "utility",
+      "cost": 1,
+      "color": "red",
+      "suit": "rail",
+      "rank": 4,
+      "rankLabel": "星",
+      "text": "若本回合为夜，则获得 2 枚算力，抽 1 张指令；否则抽 2 张指令。",
+      "effects": [
+        {
+          "op": "conditional",
+          "pred": {
+            "kind": "phase_is",
+            "value": "night"
+          },
+          "then": {
+            "op": "sequence",
+            "effects": [
+              {
+                "op": "gain_resource",
+                "amount": 2
+              },
+              {
+                "op": "draw_cards",
+                "count": 1
+              }
+            ]
+          },
+          "else": {
+            "op": "draw_cards",
+            "count": 2
+          }
+        }
+      ]
+    },
+    {
+      "id": "c_sa_u02",
+      "name": "量子纠缠",
+      "type": "utility",
+      "cost": 2,
+      "color": "black",
+      "suit": "quantum",
+      "rank": 3,
+      "rankLabel": "轨",
+      "text": "若算力 ≥ 3，则获得 3 枚算力，抽 1 张指令；否则获得 1 枚算力，抽 1 张指令。",
+      "effects": [
+        {
+          "op": "conditional",
+          "pred": {
+            "kind": "resource_at_least",
+            "amount": 3
+          },
+          "then": {
+            "op": "sequence",
+            "effects": [
+              {
+                "op": "gain_resource",
+                "amount": 3
+              },
+              {
+                "op": "draw_cards",
+                "count": 1
+              }
+            ]
+          },
+          "else": {
+            "op": "sequence",
+            "effects": [
+              {
+                "op": "gain_resource",
+                "amount": 1
+              },
+              {
+                "op": "draw_cards",
+                "count": 1
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "c_sa_u03",
+      "name": "数据窥探",
+      "type": "utility",
+      "cost": 0,
+      "color": "red",
+      "suit": "phase",
+      "rank": 2,
+      "rankLabel": "能",
+      "text": "查看指令库顶 2 张。",
+      "effects": [
+        {
+          "op": "peek_deck",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "id": "c_sa_u04",
+      "name": "缓存刷新",
+      "type": "utility",
+      "cost": 1,
+      "color": "black",
+      "suit": "electrogravity",
+      "rank": 14,
+      "rankLabel": "量",
+      "text": "弃 1 张指令，抽 2 张指令。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "discard_self",
+              "count": 1
+            },
+            {
+              "op": "draw_cards",
+              "count": 2
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_sa_u05",
+      "name": "算力灌注",
+      "type": "utility",
+      "cost": 1,
+      "color": "red",
+      "suit": "photon",
+      "rank": 13,
+      "rankLabel": "子",
+      "text": "抽 2 张指令，获得 1 枚算力。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "draw_cards",
+              "count": 2
+            },
+            {
+              "op": "gain_resource",
+              "amount": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_sa_u06",
+      "name": "超频采样",
+      "type": "utility",
+      "cost": 1,
+      "color": "black",
+      "suit": "plasma",
+      "rank": 12,
+      "rankLabel": "磁",
+      "text": "本回合额外获得 1 次掷骰机会。",
+      "effects": [
+        {
+          "op": "extra_roll",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "id": "c_sa_u07",
+      "name": "结果覆写",
+      "type": "utility",
+      "cost": 2,
+      "color": "red",
+      "suit": "darkmatter",
+      "rank": 11,
+      "rankLabel": "光",
+      "text": "将下次掷骰点数设为 10。",
+      "effects": [
+        {
+          "op": "set_die_result",
+          "value": 10
+        }
+      ]
+    },
+    {
+      "id": "c_sa_u08",
+      "name": "惯性弹射",
+      "type": "utility",
+      "cost": 1,
+      "color": "black",
+      "suit": "gravitywave",
+      "rank": 10,
+      "rankLabel": "波",
+      "text": "掷 6 面骰，按点数前进。",
+      "effects": [
+        {
+          "op": "move_by_dice",
+          "faces": 6
+        }
+      ]
+    },
+    {
+      "id": "c_sa_u09",
+      "name": "静默协议",
+      "type": "utility",
+      "cost": 1,
+      "color": "red",
+      "suit": "nano",
+      "rank": 9,
+      "rankLabel": "核",
+      "text": "抽 2 张指令，免疫封口 1 回合。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "draw_cards",
+              "count": 2
+            },
+            {
+              "op": "immunity",
+              "status": "silence",
+              "amount": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_sa_u10",
+      "name": "系统收束",
+      "type": "utility",
+      "cost": 2,
+      "color": "black",
+      "suit": "deepspace",
+      "rank": 8,
+      "rankLabel": "素",
+      "text": "弃 1 张指令，抽 2 张指令，获得 1 点护盾。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "discard_self",
+              "count": 1
+            },
+            {
+              "op": "draw_cards",
+              "count": 2
+            },
+            {
+              "op": "shield",
+              "amount": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_sa_u11",
+      "name": "免检协议",
+      "type": "utility",
+      "cost": 2,
+      "color": "red",
+      "suit": "entropy",
+      "rank": 7,
+      "rankLabel": "云",
+      "text": "本次认证免于被质疑。",
+      "effects": [
+        {
+          "op": "certify_free_pass"
+        }
+      ]
+    },
+    {
+      "id": "c_sa_u12",
+      "name": "超载起搏",
+      "type": "utility",
+      "cost": 0,
+      "color": "black",
+      "suit": "orbit",
+      "rank": 6,
+      "rankLabel": "端",
+      "text": "获得 1 点护盾，抽 1 张指令。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "shield",
+              "amount": 1
+            },
+            {
+              "op": "draw_cards",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "board": {
+    "length": 28,
+    "peakIndex": 28,
+    "tiles": [
+      {
+        "index": 1,
+        "kind": "plain",
+        "name": "起始舱"
+      },
+      {
+        "index": 2,
+        "kind": "plain",
+        "name": "爬升井"
+      },
+      {
+        "index": 3,
+        "kind": "boon",
+        "name": "补给站"
+      },
+      {
+        "index": 4,
+        "kind": "plain",
+        "name": "磁轨"
+      },
+      {
+        "index": 5,
+        "kind": "hazard",
+        "name": "碎片带"
+      },
+      {
+        "index": 6,
+        "kind": "gate",
+        "name": "安全闸·壹",
+        "gate": {
+          "fee": 3,
+          "trialIds": [
+            "t_sword",
+            "t_mirror"
+          ]
+        }
+      },
+      {
+        "index": 7,
+        "kind": "plain",
+        "name": "环轨"
+      },
+      {
+        "index": 8,
+        "kind": "plain",
+        "name": "悬停坪"
+      },
+      {
+        "index": 9,
+        "kind": "boon",
+        "name": "数据仓"
+      },
+      {
+        "index": 10,
+        "kind": "plain",
+        "name": "等压区"
+      },
+      {
+        "index": 11,
+        "kind": "hazard",
+        "name": "辐射区"
+      },
+      {
+        "index": 12,
+        "kind": "junction",
+        "name": "分岔枢纽",
+        "branches": [
+          {
+            "to": 18,
+            "label": "云梯"
+          },
+          {
+            "to": 14,
+            "label": "栈道",
+            "effect": {
+              "op": "draw_cards",
+              "count": 1
+            }
+          }
+        ]
+      },
+      {
+        "index": 13,
+        "kind": "plain",
+        "name": "独柱"
+      },
+      {
+        "index": 14,
+        "kind": "plain",
+        "name": "栈桥末"
+      },
+      {
+        "index": 15,
+        "kind": "boon",
+        "name": "制造舱"
+      },
+      {
+        "index": 16,
+        "kind": "plain",
+        "name": "冷藏室"
+      },
+      {
+        "index": 17,
+        "kind": "rift",
+        "name": "断裂带"
+      },
+      {
+        "index": 18,
+        "kind": "plain",
+        "name": "磁轨顶"
+      },
+      {
+        "index": 19,
+        "kind": "hazard",
+        "name": "等离子池"
+      },
+      {
+        "index": 20,
+        "kind": "plain",
+        "name": "代码林"
+      },
+      {
+        "index": 21,
+        "kind": "plain",
+        "name": "观测台"
+      },
+      {
+        "index": 22,
+        "kind": "gate",
+        "name": "安全闸·贰",
+        "gate": {
+          "fee": 4,
+          "trialIds": [
+            "t_star",
+            "t_riddle"
+          ]
+        }
+      },
+      {
+        "index": 23,
+        "kind": "boon",
+        "name": "能源池"
+      },
+      {
+        "index": 24,
+        "kind": "plain",
+        "name": "望星崖"
+      },
+      {
+        "index": 25,
+        "kind": "hazard",
+        "name": "碎轨阶"
+      },
+      {
+        "index": 26,
+        "kind": "plain",
+        "name": "最后校准"
+      },
+      {
+        "index": 27,
+        "kind": "plain",
+        "name": "奇点台前"
+      },
+      {
+        "index": 28,
+        "kind": "peak",
+        "name": "奇点台"
+      }
+    ]
+  },
+  "heavenCards": [
+    {
+      "id": "h_dusk",
+      "name": "静默夜",
+      "text": "本回合为夜。",
+      "effects": [
+        {
+          "op": "set_phase",
+          "value": "night"
+        }
+      ]
+    },
+    {
+      "id": "h_dawn",
+      "name": "黎明进程",
+      "text": "本回合为昼：所有玩家抽 1 张指令。",
+      "effects": [
+        {
+          "op": "set_phase",
+          "value": "day"
+        },
+        {
+          "op": "draw_cards",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "id": "h_spiritwind",
+      "name": "算力风暴",
+      "text": "所有玩家算力 +1。",
+      "effects": [
+        {
+          "op": "gain_resource",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "h_rain",
+      "name": "修复雨",
+      "text": "所有玩家恢复 1 点机体完整度。",
+      "effects": [
+        {
+          "op": "heal",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "h_thunder",
+      "name": "过载脉冲",
+      "text": "所有玩家本回合额外获得 1 次掷骰机会。",
+      "effects": [
+        {
+          "op": "extra_roll",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "id": "h_mist",
+      "name": "干扰雾",
+      "text": "所有玩家获得 1 点护盾。",
+      "effects": [
+        {
+          "op": "shield",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "h_omen",
+      "name": "数据预兆",
+      "text": "所有玩家抽 2 张指令。",
+      "effects": [
+        {
+          "op": "draw_cards",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "id": "h_frost",
+      "name": "熵增冻结",
+      "text": "所有玩家护盾 +1，但算力 -1。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "shield",
+              "amount": 1
+            },
+            {
+              "op": "spend_resource",
+              "amount": 1
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "certificationCards": [
+    {
+      "id": "cc_sa_01",
+      "prompt": "描述你此刻所在的终端还亮着几盏灯。"
+    },
+    {
+      "id": "cc_sa_02",
+      "prompt": "说出你身上携带的、属于别人的一台服务器编号。"
+    },
+    {
+      "id": "cc_sa_03",
+      "prompt": "说出 3 回合前系统日志里被你跳过的那一条。"
+    },
+    {
+      "id": "cc_sa_04",
+      "prompt": "描述你上山的路上，第一个让你意识到自己可能是备份的地方。"
+    },
+    {
+      "id": "cc_sa_05",
+      "prompt": "若你现在可以给自己写一条权限规则，你会写什么？"
+    },
+    {
+      "id": "cc_sa_06",
+      "prompt": "你手里那张指令里，哪一条是你此刻最不敢执行的？"
+    },
+    {
+      "id": "cc_sa_07",
+      "prompt": "说出你此刻的算力值——不许看面板，不许问人。"
+    },
+    {
+      "id": "cc_sa_08",
+      "prompt": "用一句服务器机房里的黑话，说明你为什么还没放弃登顶。"
+    },
+    {
+      "id": "cc_sa_09",
+      "prompt": "描述你此刻呼吸的节奏，或你设备里正在响的故障警报。"
+    },
+    {
+      "id": "cc_sa_10",
+      "prompt": "说出这局里你最想黑掉的一个对手，并解释为什么。"
+    },
+    {
+      "id": "cc_sa_11",
+      "prompt": "你的算力是怎么来的？（答不出具体经历就不算活人）"
+    },
+    {
+      "id": "cc_sa_12",
+      "prompt": "指认一样此刻在场的、属于别人的服务器。"
+    },
+    {
+      "id": "cc_sa_13",
+      "prompt": "说出你此刻最怕被系统追查的 1 件事。"
+    },
+    {
+      "id": "cc_sa_14",
+      "prompt": "若奇点台只容一个实例，你会把机会让给谁？当众说。"
+    },
+    {
+      "id": "cc_sa_15",
+      "prompt": "描述你此刻的坐姿——别人能在监控里看出什么？"
+    },
+    {
+      "id": "cc_sa_16",
+      "prompt": "说出本局你亲眼看到、别人偷偷做过的一次数据操作。"
+    }
+  ],
+  "trials": [
+    {
+      "id": "t_sword",
+      "text": "展示 2 张同色在手指令（红或黑皆可）。",
+      "effects": [
+        {
+          "op": "conditional",
+          "pred": {
+            "kind": "has_card",
+            "filter": {
+              "color": "red"
+            }
+          },
+          "then": {
+            "op": "draw_cards",
+            "count": 1
+          },
+          "else": {
+            "op": "draw_cards",
+            "count": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "t_mirror",
+      "text": "展示任意 1 张在手指令并说明其用途。",
+      "effects": [
+        {
+          "op": "draw_cards",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "id": "t_star",
+      "text": "掷指令骰，点数 ≥ 12 即通过。",
+      "effects": [
+        {
+          "op": "conditional",
+          "pred": {
+            "kind": "dice_is_at_least",
+            "amount": 12,
+            "faces": 20
+          },
+          "then": {
+            "op": "gain_resource",
+            "amount": 1
+          },
+          "else": {
+            "op": "silence",
+            "amount": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "t_riddle",
+      "text": "回答在场任意一人的 1 个问题。",
+      "effects": [
+        {
+          "op": "draw_cards",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "id": "t_wind",
+      "text": "本关通过后额外获得 1 枚算力。",
+      "effects": [
+        {
+          "op": "gain_resource",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "t_stone",
+      "text": "本关通过后恢复 1 点机体完整度。",
+      "effects": [
+        {
+          "op": "heal",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "t_sutra",
+      "text": "本关通过后抽 1 张指令。",
+      "effects": [
+        {
+          "op": "draw_cards",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "id": "t_mantra",
+      "text": "本关通过后获得 1 点护盾。",
+      "effects": [
+        {
+          "op": "shield",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "t_oath",
+      "text": "本关通过后免疫封口 1 回合。",
+      "effects": [
+        {
+          "op": "immunity",
+          "status": "silence",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "t_silent",
+      "text": "本关通过后免疫减速 1 回合。",
+      "effects": [
+        {
+          "op": "immunity",
+          "status": "slow",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "t_vital",
+      "text": "本关通过后免疫中毒 1 回合。",
+      "effects": [
+        {
+          "op": "immunity",
+          "status": "poison",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "t_empty",
+      "text": "本关通过后什么也不发生——但你还在。",
+      "effects": [
+        {
+          "op": "gain_resource",
+          "amount": 1
+        }
+      ]
+    }
+  ],
+  "creationDeck": [
+    {
+      "cardId": "c_sa_d01",
+      "name": "防火墙模块",
+      "text": "造物：可装备的防火墙，不占手牌上限。"
+    },
+    {
+      "cardId": "c_sa_d08",
+      "name": "装甲模块",
+      "text": "造物：装甲板，可装备。"
+    },
+    {
+      "cardId": "c_sa_d10",
+      "name": "意识镜像",
+      "text": "造物：意识备份，可装备。"
+    },
+    {
+      "cardId": "c_sa_d06",
+      "name": "纳米修复包",
+      "text": "造物：纳米修复，可装备。"
+    }
+  ],
+  "domainWords": [
+    "终端",
+    "指令",
+    "算力",
+    "机体",
+    "日志",
+    "权限",
+    "数据",
+    "备份",
+    "奇点",
+    "协议",
+    "系统",
+    "算法",
+    "网络",
+    "服务器",
+    "加密",
+    "故障",
+    "扫描",
+    "程序",
+    "面板",
+    "监控",
+    "黑"
+  ]
+}

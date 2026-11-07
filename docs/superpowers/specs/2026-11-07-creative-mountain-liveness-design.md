@@ -555,6 +555,16 @@ export interface CardFilter {
 
 **条件谓词（predicates）**：`tile_kind` `has_card` `resource_at_least` `hand_count` `is_pending_cert` `phase_is` `players_alive` `card_type_is` `identity_is` `faction_is` `hp_at_least` `flag_set` `last_dice_even` `dice_is_at_least` `card_color_is` 等。
 
+**谓词参数取值白名单**（B8 补，与 `tools/theme-validate.mjs` 的校验同源）——谓词**名**合法不等于**参数取值**合法，参数越界会让条件永不成立，卡牌静默失效：
+
+- `phase_is` 的 `value` ∈ `night` / `day` —— 判定**全局昼夜阶段值** `state.phaseValue`（§6.2），与 `set_phase` 配对
+- `card_type_is` 的 `type` ∈ 四类卡类型；`tile_kind` 的 `kind` ∈ 七类地形
+- `hand_count` / `players_alive` 的 `op` ∈ `lte` / `gte` / `eq` / `neq`
+- `has_card` 的 `filter` 五字段取值均须合法；`identity_is` / `faction_is` 为非空字符串
+- `hp_at_least` / `resource_at_least` / `dice_is_at_least` 为非负整数
+
+> **B8 修正**：`phase_is` 原被实现为读取回合阶段枚举（`Phase` = 天机/行动/山议/认证/终局），而 `set_phase` 写入的是 §6.2 的 `phaseValue`（`night` / `day`）——两者永不相等，导致天机牌「本回合为夜/昼」的机制**对任何谓词都不可见**。B8 已将 `phase_is` 与 `set_phase` 对齐。
+
 **终局目标判定（goal）**：终局目标**不是**普通效果算子，而是由引擎内建的一组**目标判定器**（`goals/registry.ts`）。主题包通过 `goal: { kind, count }` 声明，**只能取下表枚举值**，不得自造 kind：
 
 | kind | 达成条件（`count` 阈值） | 判定时机 | 引擎内建计数器 |
@@ -911,6 +921,7 @@ Chromium 生成的 PDF **字节级不可直接比对**——实测同一份 HTML
 | 装备效果系统 | **V1 不存在装备被动效果**（§4.1），故无对应门禁 |
 | — | **2 人局**不支持（§8），故无对应门禁 |
 | — | **多端联机对局**（§13.3 延后项），故无对应门禁 |
+| 主题差异化清单（标识/术语/认证题/标志卡） | 差异化是否达到「换场景」的**语义深度**（专属名词表只做机械近似） |
 
 **④ 数值溯源比对（精确，判红依据）——堵住「改了引擎数值、忘了改规则书」**：
 

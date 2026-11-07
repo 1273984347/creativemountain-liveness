@@ -8,7 +8,7 @@ import { performAction, advanceTurn, needsCouncilVote, needsCertificationAction 
 import { castVote, resolveCouncil } from '../engine/core/council.ts';
 import { certifySign, certifyChallenge, certifyAbstain, certifyAnswer, certifyAppeal } from '../engine/core/certification.ts';
 import { stateToJson, stateFromJson } from '../engine/core/serialize.ts';
-import { assignIdentitiesAndFactions } from '../engine/core/setup.ts';
+import { installTheme } from '../engine/core/setup.ts';
 import { THEMES, themeById } from './theme.ts';
 import { el, button, section } from './ui/dom.ts';
 import { renderBoard } from './ui/board.ts';
@@ -32,7 +32,7 @@ const SAVE_KEY = 'creativemountain.save.v1';
 const initialTheme = themeById(THEMES[0]?.id ?? 'xianxia2026').theme;
 
 const ui: Ui = {
-  state: assignIdentitiesAndFactions(
+  state: installTheme(
     createInitialState({ players: 4, seed: 42, deckSize: initialTheme.counts.deckTotal }),
     initialTheme,
   ),
@@ -44,8 +44,10 @@ const ui: Ui = {
 
 function newGame(): void {
   const theme = themeById(ui.themeId).theme;
-  ui.state = createInitialState({ players: ui.playerCount, seed: 42, deckSize: theme.counts.deckTotal });
-  ui.state = assignIdentitiesAndFactions(ui.state, theme);
+  ui.state = installTheme(
+    createInitialState({ players: ui.playerCount, seed: 42, deckSize: theme.counts.deckTotal }),
+    theme,
+  );
   ui.seat = 0;
   render();
 }
@@ -117,7 +119,8 @@ function renderToolbar(): HTMLElement {
   themeSel.addEventListener('change', () => {
     ui.themeId = themeSel.value;
     const theme = themeById(ui.themeId).theme;
-    ui.state = assignIdentitiesAndFactions(ui.state, theme);
+    // 换主题 = 换一局：牌池 / 棋盘 / 天机 / 试炼 / 认证题整套装上
+    ui.state = installTheme(ui.state, theme);
     render();
   });
   bar.append(el('label', { class: 'lbl', text: '主题' }), themeSel);

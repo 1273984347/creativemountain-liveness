@@ -49,7 +49,14 @@ export const PREDICATES: PredicateHandlers = {
   resource_at_least: (ctx, p) => (ctx.state.players[ctx.actor]?.resource ?? 0) >= p.amount,
   hand_count: (ctx, p) => compare(handOf(ctx, ctx.actor).length, p.op, p.count),
   is_pending_cert: (ctx) => ctx.state.players[ctx.actor]?.pendingCert === true,
-  phase_is: (ctx, p) => ctx.state.phase === p.value,
+  /**
+   * 全局昼夜阶段判定（与 `set_phase` 配对，规格 §6.2 `phaseValue`）。
+   *
+   * ⚠️ B8 修正：原实现读 `ctx.state.phase`（回合阶段枚举），
+   *   而 `set_phase` 写的是 `state.phaseValue`（night/day）—— 两者永不相等，
+   *   等于「本回合为夜」的机制对任何谓词都不可见。
+   */
+  phase_is: (ctx, p) => ctx.state.phaseValue === p.value,
   players_alive: (ctx, p) =>
     compare(ctx.state.players.filter((pl) => pl.alive).length, p.op, p.count),
   /** 作用域：效果使用者**手牌**中是否存在该类型的牌（缺口 G6 的裁定）。 */

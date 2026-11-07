@@ -19,6 +19,7 @@ const GATES = [
   { name: '主题包校验（theme-validate）', cmd: process.execPath, args: [resolve('tools', 'theme-validate.mjs')] },
   { name: 'IR 契约校验（ir-validate）', cmd: process.execPath, args: [resolve('tools', 'ir-validate.mjs')] },
   { name: '双轨一致性（parity-check）', cmd: process.execPath, args: [resolve('tools', 'parity-check.mjs')] },
+  { name: '主题差异化核对（theme-diff-check，规格 §10.1）', cmd: process.execPath, args: [resolve('tools', 'theme-diff-check.mjs')] },
 ];
 
 /** 声明的门数（与实跑门数必须一致，否则自断言失败）。 */

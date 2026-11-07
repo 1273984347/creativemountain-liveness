@@ -58,4 +58,10 @@ export const COVERAGE_BOUNDARIES = [
     reason: 'V1 仅交付 LocalHotseatTransport + BroadcastChannelTransport 占位（§13.3 延后项）',
     fallback: null,
   },
+  {
+    id: 'theme-differentiation-semantics',
+    notCovered: '主题差异化是否达到「换场景」而非「换措辞」的**语义深度**',
+    reason: '第 ⑧ 道门用专属名词表（domainWords）做机械近似——「命中至少一个本主题名词」能挡住通用题，但判不出「名词对了、场景还是同一出戏」的伪主题化',
+    fallback: '认证题文案由人工撰写并在评审中逐条核对；B9 模拟与 B10 规则书定稿时复看',
+  },
 ];

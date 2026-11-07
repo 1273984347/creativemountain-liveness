@@ -1,0 +1,1836 @@
+{
+  "meta": {
+    "id": "urban-psych",
+    "name": "都市·异能纪",
+    "tagline": "城市里总有人突然变得不一样，而认证只问一句：你还是你吗？",
+    "resourceName": "异能点",
+    "deckName": "异能牌"
+  },
+  "glossary": {
+    "HP": "精神值",
+    "deck": "异能库",
+    "hand": "在手异能",
+    "resource": "异能点",
+    "peak": "天台",
+    "seal": "认证章"
+  },
+  "counts": {
+    "handStart": 5,
+    "deckTotal": 48,
+    "trialTotal": 12,
+    "certTotal": 16
+  },
+  "factions": [
+    {
+      "id": "nightwatch",
+      "name": "夜巡者",
+      "hpBase": 7,
+      "resourceBase": 5,
+      "ability": {
+        "op": "conditional",
+        "pred": {
+          "kind": "flag_set",
+          "flag": "passed_gate"
+        },
+        "then": {
+          "op": "draw_cards",
+          "count": 2
+        }
+      },
+      "wheel": {
+        "op": "gain_resource",
+        "amount": 2
+      },
+      "deckTags": [
+        "motion"
+      ],
+      "abilityText": "每通过一道封锁线，抽 2 张异能牌。",
+      "wheelText": "异能点 +2。"
+    },
+    {
+      "id": "ironblood",
+      "name": "铁人",
+      "hpBase": 8,
+      "resourceBase": 4,
+      "ability": {
+        "op": "heal",
+        "amount": 1
+      },
+      "wheel": {
+        "op": "shield",
+        "amount": 2
+      },
+      "deckTags": [
+        "attack",
+        "motion"
+      ],
+      "abilityText": "回合结束恢复 1 点精神值。",
+      "wheelText": "获得 2 点护盾。"
+    },
+    {
+      "id": "gleaner",
+      "name": "拾光人",
+      "hpBase": 6,
+      "resourceBase": 6,
+      "ability": {
+        "op": "gain_resource",
+        "amount": 1
+      },
+      "wheel": {
+        "op": "draw_cards",
+        "count": 2
+      },
+      "deckTags": [
+        "utility"
+      ],
+      "abilityText": "回合结束获得 1 枚异能点。",
+      "wheelText": "抽 2 张异能牌。"
+    },
+    {
+      "id": "watchtower",
+      "name": "守望楼",
+      "hpBase": 7,
+      "resourceBase": 5,
+      "ability": {
+        "op": "shield",
+        "amount": 1
+      },
+      "wheel": {
+        "op": "heal",
+        "amount": 2
+      },
+      "deckTags": [
+        "defense"
+      ],
+      "abilityText": "回合结束获得 1 点护盾。",
+      "wheelText": "恢复 2 点精神值。"
+    }
+  ],
+  "identities": [
+    {
+      "id": "pioneer",
+      "name": "开路者",
+      "passive": {
+        "op": "move_forward",
+        "amount": 1
+      },
+      "goal": {
+        "kind": "pass_gates",
+        "count": 3
+      },
+      "passiveText": "每回合首次位移 +1 格。",
+      "flavor": "楼顶只有一扇门，总得有人先踹开。"
+    },
+    {
+      "id": "artisan",
+      "name": "改造者",
+      "passive": {
+        "op": "equip_card",
+        "cardId": "c_talisman"
+      },
+      "goal": {
+        "kind": "equip_count",
+        "count": 3
+      },
+      "passiveText": "每场限 1 次免费造物。",
+      "flavor": "我改的不是自己，是我身上的东西。"
+    },
+    {
+      "id": "stargazer",
+      "name": "窥视者",
+      "passive": {
+        "op": "peek_deck",
+        "count": 1
+      },
+      "goal": {
+        "kind": "draw_count",
+        "count": 12
+      },
+      "passiveText": "每回合可看异能库顶 1 张。",
+      "flavor": "我能看见还没发生的那一张。"
+    },
+    {
+      "id": "arbiter",
+      "name": "仲裁者",
+      "passive": {
+        "op": "extra_vote",
+        "amount": 1
+      },
+      "goal": {
+        "kind": "veto_success",
+        "count": 1
+      },
+      "passiveText": "山议中可投 2 票。",
+      "flavor": "在天台上，我的话算两票。"
+    },
+    {
+      "id": "watchman",
+      "name": "守夜人",
+      "passive": {
+        "op": "shield",
+        "amount": 1
+      },
+      "goal": {
+        "kind": "survive_with_hp"
+      },
+      "passiveText": "回合结束获得 1 点护盾。",
+      "flavor": "我不登顶，我只是站着。"
+    },
+    {
+      "id": "ember",
+      "name": "窃能者",
+      "passive": {
+        "op": "transfer_resource",
+        "amount": 1,
+        "target": 0
+      },
+      "goal": {
+        "kind": "steal_count",
+        "count": 5
+      },
+      "passiveText": "每回合可偷取 1 枚异能点。",
+      "flavor": "你的异能点，也是我的。"
+    },
+    {
+      "id": "weaver",
+      "name": "编织者",
+      "passive": {
+        "op": "set_die_result",
+        "value": 10
+      },
+      "goal": {
+        "kind": "reroll_count",
+        "count": 3
+      },
+      "passiveText": "每回合 1 次改 1 个判定结果。",
+      "flavor": "记忆能改，结局凭什么不能？"
+    },
+    {
+      "id": "mountainlord",
+      "name": "楼主",
+      "passive": {
+        "op": "certify_free_pass"
+      },
+      "goal": {
+        "kind": "successful_challenge",
+        "count": 1
+      },
+      "passiveText": "认证时首次被质疑自动通过。",
+      "flavor": "我不怕被问，我怕没人敢问。"
+    }
+  ],
+  "cards": [
+    {
+      "id": "c_up_m01",
+      "name": "疾影冲刺",
+      "type": "motion",
+      "cost": 1,
+      "color": "red",
+      "suit": "street",
+      "rank": 14,
+      "rankLabel": "影",
+      "text": "前进 3 格。",
+      "effects": [
+        {
+          "op": "move_forward",
+          "amount": 3
+        }
+      ]
+    },
+    {
+      "id": "c_up_m02",
+      "name": "空间折叠",
+      "type": "motion",
+      "cost": 1,
+      "color": "black",
+      "suit": "rooftop",
+      "rank": 13,
+      "rankLabel": "霓",
+      "text": "前进 2 格。",
+      "effects": [
+        {
+          "op": "move_forward",
+          "amount": 2
+        }
+      ]
+    },
+    {
+      "id": "c_up_m03",
+      "name": "念动力跃",
+      "type": "motion",
+      "cost": 2,
+      "color": "red",
+      "suit": "neon",
+      "rank": 12,
+      "rankLabel": "雨",
+      "text": "移动到前方第 8 格。",
+      "effects": [
+        {
+          "op": "move_to_tile",
+          "tileIndex": 8
+        }
+      ]
+    },
+    {
+      "id": "c_up_m04",
+      "name": "风驰电掣",
+      "type": "motion",
+      "cost": 2,
+      "color": "black",
+      "suit": "subway",
+      "rank": 11,
+      "rankLabel": "灯",
+      "text": "前进 4 格。",
+      "effects": [
+        {
+          "op": "move_forward",
+          "amount": 4
+        }
+      ]
+    },
+    {
+      "id": "c_up_m05",
+      "name": "梦境潜行",
+      "type": "motion",
+      "cost": 1,
+      "color": "red",
+      "suit": "traffic",
+      "rank": 10,
+      "rankLabel": "巷",
+      "text": "前进 3 格，抽 1 张异能牌。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "move_forward",
+              "amount": 3
+            },
+            {
+              "op": "draw_cards",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_up_m06",
+      "name": "潜行穿墙",
+      "type": "motion",
+      "cost": 1,
+      "color": "black",
+      "suit": "crowd",
+      "rank": 9,
+      "rankLabel": "桥",
+      "text": "前进 2 格，弃 1 张异能牌。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "move_forward",
+              "amount": 2
+            },
+            {
+              "op": "discard_self",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_up_m07",
+      "name": "异能爆发",
+      "type": "motion",
+      "cost": 1,
+      "color": "red",
+      "suit": "dream",
+      "rank": 8,
+      "rankLabel": "梦",
+      "text": "前进 1 格，抽 1 张异能牌。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "move_forward",
+              "amount": 1
+            },
+            {
+              "op": "draw_cards",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_up_m08",
+      "name": "冲刺滑板",
+      "type": "motion",
+      "cost": 3,
+      "color": "black",
+      "suit": "mirror",
+      "rank": 7,
+      "rankLabel": "声",
+      "text": "前进 6 格。",
+      "effects": [
+        {
+          "op": "move_forward",
+          "amount": 6
+        }
+      ]
+    },
+    {
+      "id": "c_up_m09",
+      "name": "影分身移",
+      "type": "motion",
+      "cost": 2,
+      "color": "red",
+      "suit": "signal",
+      "rank": 6,
+      "rankLabel": "铁",
+      "text": "与一名对手交换位置。",
+      "effects": [
+        {
+          "op": "swap_position",
+          "target": 0
+        }
+      ]
+    },
+    {
+      "id": "c_up_m10",
+      "name": "雾中穿行",
+      "type": "motion",
+      "cost": 1,
+      "color": "black",
+      "suit": "rain",
+      "rank": 5,
+      "rankLabel": "风",
+      "text": "使一名对手后退 1 格。",
+      "effects": [
+        {
+          "op": "move_backward",
+          "amount": 1,
+          "target": 0
+        }
+      ]
+    },
+    {
+      "id": "c_up_m11",
+      "name": "电梯跃迁",
+      "type": "motion",
+      "cost": 1,
+      "color": "red",
+      "suit": "underground",
+      "rank": 4,
+      "rankLabel": "电",
+      "text": "前进 2 格，获得 1 枚异能点。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "move_forward",
+              "amount": 2
+            },
+            {
+              "op": "gain_resource",
+              "amount": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_up_m12",
+      "name": "瞬闪位移",
+      "type": "motion",
+      "cost": 2,
+      "color": "black",
+      "suit": "radio",
+      "rank": 3,
+      "rankLabel": "星",
+      "text": "掷 6 面骰，按点数前进。",
+      "effects": [
+        {
+          "op": "move_by_dice",
+          "faces": 6
+        }
+      ]
+    },
+    {
+      "id": "c_up_a01",
+      "name": "精神穿刺",
+      "type": "attack",
+      "cost": 1,
+      "color": "red",
+      "suit": "street",
+      "rank": 2,
+      "rankLabel": "影",
+      "text": "对一名对手造成 1 点伤害。",
+      "effects": [
+        {
+          "op": "damage",
+          "amount": 1,
+          "target": 0
+        }
+      ]
+    },
+    {
+      "id": "c_up_a02",
+      "name": "异能爆破",
+      "type": "attack",
+      "cost": 2,
+      "color": "black",
+      "suit": "rooftop",
+      "rank": 14,
+      "rankLabel": "霓",
+      "text": "对一名对手造成 2 点伤害。",
+      "effects": [
+        {
+          "op": "damage",
+          "amount": 2,
+          "target": 0
+        }
+      ]
+    },
+    {
+      "id": "c_up_a03",
+      "name": "念刃割裂",
+      "type": "attack",
+      "cost": 2,
+      "color": "red",
+      "suit": "neon",
+      "rank": 13,
+      "rankLabel": "雨",
+      "text": "对一名对手造成 1 点伤害，抽 1 张异能牌。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "damage",
+              "amount": 1,
+              "target": 0
+            },
+            {
+              "op": "draw_cards",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_up_a04",
+      "name": "侵蚀污染",
+      "type": "attack",
+      "cost": 2,
+      "color": "black",
+      "suit": "subway",
+      "rank": 12,
+      "rankLabel": "灯",
+      "text": "对一名对手造成 2 点伤害，弃 1 张异能牌。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "damage",
+              "amount": 2,
+              "target": 0
+            },
+            {
+              "op": "discard_self",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_up_a05",
+      "name": "幻觉冲击",
+      "type": "attack",
+      "cost": 1,
+      "color": "red",
+      "suit": "traffic",
+      "rank": 11,
+      "rankLabel": "巷",
+      "text": "对一名对手造成 1 点伤害，获得 1 点护盾。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "damage",
+              "amount": 1,
+              "target": 0
+            },
+            {
+              "op": "shield",
+              "amount": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_up_a06",
+      "name": "痛觉放大",
+      "type": "attack",
+      "cost": 2,
+      "color": "black",
+      "suit": "crowd",
+      "rank": 10,
+      "rankLabel": "桥",
+      "text": "对一名对手造成 1 点伤害，使一名对手中毒 1 层。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "damage",
+              "amount": 1,
+              "target": 0
+            },
+            {
+              "op": "poison",
+              "amount": 1,
+              "target": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_up_a07",
+      "name": "心灵控制",
+      "type": "attack",
+      "cost": 1,
+      "color": "red",
+      "suit": "dream",
+      "rank": 9,
+      "rankLabel": "梦",
+      "text": "使一名对手封口 1 回合。",
+      "effects": [
+        {
+          "op": "silence",
+          "amount": 1,
+          "target": 0
+        }
+      ]
+    },
+    {
+      "id": "c_up_a08",
+      "name": "崩坏冲击",
+      "type": "attack",
+      "cost": 2,
+      "color": "black",
+      "suit": "mirror",
+      "rank": 8,
+      "rankLabel": "声",
+      "text": "使一名对手中毒 2 层。",
+      "effects": [
+        {
+          "op": "poison",
+          "amount": 2,
+          "target": 0
+        }
+      ]
+    },
+    {
+      "id": "c_up_a09",
+      "name": "咒杀",
+      "type": "attack",
+      "cost": 1,
+      "color": "red",
+      "suit": "signal",
+      "rank": 7,
+      "rankLabel": "铁",
+      "text": "使一名对手减速 1 层。",
+      "effects": [
+        {
+          "op": "slow",
+          "amount": 1,
+          "target": 0
+        }
+      ]
+    },
+    {
+      "id": "c_up_a10",
+      "name": "妖化撕裂",
+      "type": "attack",
+      "cost": 2,
+      "color": "black",
+      "suit": "rain",
+      "rank": 6,
+      "rankLabel": "风",
+      "text": "使一名对手跳过 1 个回合。",
+      "effects": [
+        {
+          "op": "skip_turn",
+          "amount": 1,
+          "target": 0
+        }
+      ]
+    },
+    {
+      "id": "c_up_a11",
+      "name": "意识粉碎",
+      "type": "attack",
+      "cost": 2,
+      "color": "red",
+      "suit": "underground",
+      "rank": 5,
+      "rankLabel": "电",
+      "text": "若其精神值 ≥ 4，则对一名对手造成 1 点伤害；否则对一名对手造成 2 点伤害。",
+      "effects": [
+        {
+          "op": "conditional",
+          "pred": {
+            "kind": "hp_at_least",
+            "amount": 4
+          },
+          "then": {
+            "op": "damage",
+            "amount": 1,
+            "target": 0
+          },
+          "else": {
+            "op": "damage",
+            "amount": 2,
+            "target": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "c_up_a12",
+      "name": "磁场压制",
+      "type": "attack",
+      "cost": 3,
+      "color": "black",
+      "suit": "radio",
+      "rank": 4,
+      "rankLabel": "星",
+      "text": "对一名对手造成 2 点伤害，恢复 1 点精神值。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "damage",
+              "amount": 2,
+              "target": 0
+            },
+            {
+              "op": "heal",
+              "amount": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_up_d01",
+      "name": "精神屏障",
+      "type": "defense",
+      "cost": 1,
+      "color": "red",
+      "suit": "street",
+      "rank": 3,
+      "rankLabel": "影",
+      "text": "获得 2 点护盾。",
+      "effects": [
+        {
+          "op": "shield",
+          "amount": 2
+        }
+      ]
+    },
+    {
+      "id": "c_up_d02",
+      "name": "护体罡气",
+      "type": "defense",
+      "cost": 2,
+      "color": "black",
+      "suit": "rooftop",
+      "rank": 2,
+      "rankLabel": "霓",
+      "text": "获得 3 点护盾。",
+      "effects": [
+        {
+          "op": "shield",
+          "amount": 3
+        }
+      ]
+    },
+    {
+      "id": "c_up_d03",
+      "name": "静脉护盾",
+      "type": "defense",
+      "cost": 1,
+      "color": "red",
+      "suit": "neon",
+      "rank": 14,
+      "rankLabel": "雨",
+      "text": "免疫封口 2 回合。",
+      "effects": [
+        {
+          "op": "immunity",
+          "status": "silence",
+          "amount": 2
+        }
+      ]
+    },
+    {
+      "id": "c_up_d04",
+      "name": "符咒护身",
+      "type": "defense",
+      "cost": 1,
+      "color": "black",
+      "suit": "subway",
+      "rank": 13,
+      "rankLabel": "灯",
+      "text": "免疫中毒 2 回合。",
+      "effects": [
+        {
+          "op": "immunity",
+          "status": "poison",
+          "amount": 2
+        }
+      ]
+    },
+    {
+      "id": "c_up_d05",
+      "name": "预知闪避",
+      "type": "defense",
+      "cost": 1,
+      "color": "red",
+      "suit": "traffic",
+      "rank": 12,
+      "rankLabel": "巷",
+      "text": "免疫减速 2 回合。",
+      "effects": [
+        {
+          "op": "immunity",
+          "status": "slow",
+          "amount": 2
+        }
+      ]
+    },
+    {
+      "id": "c_up_d06",
+      "name": "反制格挡",
+      "type": "defense",
+      "cost": 1,
+      "color": "black",
+      "suit": "crowd",
+      "rank": 11,
+      "rankLabel": "桥",
+      "text": "恢复 2 点精神值。",
+      "effects": [
+        {
+          "op": "heal",
+          "amount": 2
+        }
+      ]
+    },
+    {
+      "id": "c_up_d07",
+      "name": "意志锁链",
+      "type": "defense",
+      "cost": 2,
+      "color": "red",
+      "suit": "dream",
+      "rank": 10,
+      "rankLabel": "梦",
+      "text": "恢复 3 点精神值。",
+      "effects": [
+        {
+          "op": "heal",
+          "amount": 3
+        }
+      ]
+    },
+    {
+      "id": "c_up_d08",
+      "name": "护心镜",
+      "type": "defense",
+      "cost": 1,
+      "color": "black",
+      "suit": "mirror",
+      "rank": 9,
+      "rankLabel": "声",
+      "text": "获得 1 点护盾，抽 1 张异能牌。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "shield",
+              "amount": 1
+            },
+            {
+              "op": "draw_cards",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_up_d09",
+      "name": "龟息吐纳",
+      "type": "defense",
+      "cost": 2,
+      "color": "red",
+      "suit": "signal",
+      "rank": 8,
+      "rankLabel": "铁",
+      "text": "获得 1 点护盾，免疫封口 1 回合。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "shield",
+              "amount": 1
+            },
+            {
+              "op": "immunity",
+              "status": "silence",
+              "amount": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_up_d10",
+      "name": "符阵庇护",
+      "type": "defense",
+      "cost": 1,
+      "color": "black",
+      "suit": "rain",
+      "rank": 7,
+      "rankLabel": "风",
+      "text": "获得 2 点护盾，弃 1 张异能牌。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "shield",
+              "amount": 2
+            },
+            {
+              "op": "discard_self",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_up_d11",
+      "name": "灵台护佑",
+      "type": "defense",
+      "cost": 1,
+      "color": "red",
+      "suit": "underground",
+      "rank": 6,
+      "rankLabel": "电",
+      "text": "恢复 1 点精神值，免疫中毒 1 回合。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "heal",
+              "amount": 1
+            },
+            {
+              "op": "immunity",
+              "status": "poison",
+              "amount": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_up_d12",
+      "name": "免疫抵抗",
+      "type": "defense",
+      "cost": 2,
+      "color": "black",
+      "suit": "radio",
+      "rank": 5,
+      "rankLabel": "星",
+      "text": "获得 3 点护盾，弃 2 张异能牌。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "shield",
+              "amount": 3
+            },
+            {
+              "op": "discard_self",
+              "count": 2
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_up_u01",
+      "name": "情绪抽离",
+      "type": "utility",
+      "cost": 1,
+      "color": "red",
+      "suit": "street",
+      "rank": 4,
+      "rankLabel": "影",
+      "text": "若其精神值 ≥ 5，则获得 2 枚异能点，抽 1 张异能牌；否则获得 1 枚异能点，抽 2 张异能牌。",
+      "effects": [
+        {
+          "op": "conditional",
+          "pred": {
+            "kind": "hp_at_least",
+            "amount": 5
+          },
+          "then": {
+            "op": "sequence",
+            "effects": [
+              {
+                "op": "gain_resource",
+                "amount": 2
+              },
+              {
+                "op": "draw_cards",
+                "count": 1
+              }
+            ]
+          },
+          "else": {
+            "op": "sequence",
+            "effects": [
+              {
+                "op": "gain_resource",
+                "amount": 1
+              },
+              {
+                "op": "draw_cards",
+                "count": 2
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "c_up_u02",
+      "name": "群体暗示",
+      "type": "utility",
+      "cost": 2,
+      "color": "black",
+      "suit": "rooftop",
+      "rank": 3,
+      "rankLabel": "霓",
+      "text": "若在手异能牌中有功能牌，则获得 2 枚异能点，抽 1 张异能牌；否则获得 3 枚异能点。",
+      "effects": [
+        {
+          "op": "conditional",
+          "pred": {
+            "kind": "card_type_is",
+            "type": "utility"
+          },
+          "then": {
+            "op": "sequence",
+            "effects": [
+              {
+                "op": "gain_resource",
+                "amount": 2
+              },
+              {
+                "op": "draw_cards",
+                "count": 1
+              }
+            ]
+          },
+          "else": {
+            "op": "gain_resource",
+            "amount": 3
+          }
+        }
+      ]
+    },
+    {
+      "id": "c_up_u03",
+      "name": "记忆读取",
+      "type": "utility",
+      "cost": 0,
+      "color": "red",
+      "suit": "neon",
+      "rank": 2,
+      "rankLabel": "雨",
+      "text": "查看异能牌库顶 2 张。",
+      "effects": [
+        {
+          "op": "peek_deck",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "id": "c_up_u04",
+      "name": "梦境潜入",
+      "type": "utility",
+      "cost": 1,
+      "color": "black",
+      "suit": "subway",
+      "rank": 14,
+      "rankLabel": "灯",
+      "text": "弃 1 张异能牌，抽 2 张异能牌。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "discard_self",
+              "count": 1
+            },
+            {
+              "op": "draw_cards",
+              "count": 2
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_up_u05",
+      "name": "黑客入侵",
+      "type": "utility",
+      "cost": 1,
+      "color": "red",
+      "suit": "traffic",
+      "rank": 13,
+      "rankLabel": "巷",
+      "text": "抽 2 张异能牌，获得 1 枚异能点。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "draw_cards",
+              "count": 2
+            },
+            {
+              "op": "gain_resource",
+              "amount": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_up_u06",
+      "name": "肾上腺素",
+      "type": "utility",
+      "cost": 1,
+      "color": "black",
+      "suit": "crowd",
+      "rank": 12,
+      "rankLabel": "桥",
+      "text": "本回合额外获得 1 次掷骰机会。",
+      "effects": [
+        {
+          "op": "extra_roll",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "id": "c_up_u07",
+      "name": "命运改写",
+      "type": "utility",
+      "cost": 2,
+      "color": "red",
+      "suit": "dream",
+      "rank": 11,
+      "rankLabel": "梦",
+      "text": "将下次掷骰点数设为 10。",
+      "effects": [
+        {
+          "op": "set_die_result",
+          "value": 10
+        }
+      ]
+    },
+    {
+      "id": "c_up_u08",
+      "name": "异能冲刺",
+      "type": "utility",
+      "cost": 1,
+      "color": "black",
+      "suit": "mirror",
+      "rank": 10,
+      "rankLabel": "声",
+      "text": "掷 6 面骰，按点数前进。",
+      "effects": [
+        {
+          "op": "move_by_dice",
+          "faces": 6
+        }
+      ]
+    },
+    {
+      "id": "c_up_u09",
+      "name": "安神香",
+      "type": "utility",
+      "cost": 1,
+      "color": "red",
+      "suit": "signal",
+      "rank": 9,
+      "rankLabel": "铁",
+      "text": "抽 2 张异能牌，免疫封口 1 回合。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "draw_cards",
+              "count": 2
+            },
+            {
+              "op": "immunity",
+              "status": "silence",
+              "amount": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_up_u10",
+      "name": "急救包",
+      "type": "utility",
+      "cost": 2,
+      "color": "black",
+      "suit": "rain",
+      "rank": 8,
+      "rankLabel": "风",
+      "text": "弃 1 张异能牌，抽 2 张异能牌，获得 1 点护盾。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "discard_self",
+              "count": 1
+            },
+            {
+              "op": "draw_cards",
+              "count": 2
+            },
+            {
+              "op": "shield",
+              "amount": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c_up_u11",
+      "name": "免检证",
+      "type": "utility",
+      "cost": 2,
+      "color": "red",
+      "suit": "underground",
+      "rank": 7,
+      "rankLabel": "电",
+      "text": "本次认证免于被质疑。",
+      "effects": [
+        {
+          "op": "certify_free_pass"
+        }
+      ]
+    },
+    {
+      "id": "c_up_u12",
+      "name": "应激护罩",
+      "type": "utility",
+      "cost": 0,
+      "color": "black",
+      "suit": "radio",
+      "rank": 6,
+      "rankLabel": "星",
+      "text": "获得 1 点护盾，抽 1 张异能牌。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "shield",
+              "amount": 1
+            },
+            {
+              "op": "draw_cards",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "board": {
+    "length": 28,
+    "peakIndex": 28,
+    "tiles": [
+      {
+        "index": 1,
+        "kind": "plain",
+        "name": "后巷口"
+      },
+      {
+        "index": 2,
+        "kind": "plain",
+        "name": "消防梯"
+      },
+      {
+        "index": 3,
+        "kind": "boon",
+        "name": "便利店"
+      },
+      {
+        "index": 4,
+        "kind": "plain",
+        "name": "斑马线"
+      },
+      {
+        "index": 5,
+        "kind": "hazard",
+        "name": "高架桥墩"
+      },
+      {
+        "index": 6,
+        "kind": "gate",
+        "name": "封锁线·壹",
+        "gate": {
+          "fee": 3,
+          "trialIds": [
+            "t_sword",
+            "t_mirror"
+          ]
+        }
+      },
+      {
+        "index": 7,
+        "kind": "plain",
+        "name": "天桥"
+      },
+      {
+        "index": 8,
+        "kind": "plain",
+        "name": "地铁口"
+      },
+      {
+        "index": 9,
+        "kind": "boon",
+        "name": "广告牌"
+      },
+      {
+        "index": 10,
+        "kind": "plain",
+        "name": "地下管廊"
+      },
+      {
+        "index": 11,
+        "kind": "hazard",
+        "name": "积水路面"
+      },
+      {
+        "index": 12,
+        "kind": "junction",
+        "name": "十字路口",
+        "branches": [
+          {
+            "to": 18,
+            "label": "云梯"
+          },
+          {
+            "to": 14,
+            "label": "栈道",
+            "effect": {
+              "op": "draw_cards",
+              "count": 1
+            }
+          }
+        ]
+      },
+      {
+        "index": 13,
+        "kind": "plain",
+        "name": "一只垃圾桶"
+      },
+      {
+        "index": 14,
+        "kind": "plain",
+        "name": "断桥头"
+      },
+      {
+        "index": 15,
+        "kind": "boon",
+        "name": "配电房"
+      },
+      {
+        "index": 16,
+        "kind": "plain",
+        "name": "值班室"
+      },
+      {
+        "index": 17,
+        "kind": "rift",
+        "name": "断层"
+      },
+      {
+        "index": 18,
+        "kind": "plain",
+        "name": "楼顶水箱"
+      },
+      {
+        "index": 19,
+        "kind": "hazard",
+        "name": "雷击点"
+      },
+      {
+        "index": 20,
+        "kind": "plain",
+        "name": "霓虹林"
+      },
+      {
+        "index": 21,
+        "kind": "plain",
+        "name": "观景平台"
+      },
+      {
+        "index": 22,
+        "kind": "gate",
+        "name": "封锁线·贰",
+        "gate": {
+          "fee": 4,
+          "trialIds": [
+            "t_star",
+            "t_riddle"
+          ]
+        }
+      },
+      {
+        "index": 23,
+        "kind": "boon",
+        "name": "雨水池"
+      },
+      {
+        "index": 24,
+        "kind": "plain",
+        "name": "望城崖"
+      },
+      {
+        "index": 25,
+        "kind": "hazard",
+        "name": "碎玻璃阶"
+      },
+      {
+        "index": 26,
+        "kind": "plain",
+        "name": "最后一班"
+      },
+      {
+        "index": 27,
+        "kind": "plain",
+        "name": "天台前"
+      },
+      {
+        "index": 28,
+        "kind": "peak",
+        "name": "天台"
+      }
+    ]
+  },
+  "heavenCards": [
+    {
+      "id": "h_dusk",
+      "name": "断电夜",
+      "text": "本回合为夜。",
+      "effects": [
+        {
+          "op": "set_phase",
+          "value": "night"
+        }
+      ]
+    },
+    {
+      "id": "h_dawn",
+      "name": "早高峰",
+      "text": "本回合为昼：所有玩家抽 1 张异能牌。",
+      "effects": [
+        {
+          "op": "set_phase",
+          "value": "day"
+        },
+        {
+          "op": "draw_cards",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "id": "h_spiritwind",
+      "name": "电流过载",
+      "text": "所有玩家异能点 +1。",
+      "effects": [
+        {
+          "op": "gain_resource",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "h_rain",
+      "name": "一场雨",
+      "text": "所有玩家恢复 1 点精神值。",
+      "effects": [
+        {
+          "op": "heal",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "h_thunder",
+      "name": "雷暴",
+      "text": "所有玩家本回合额外获得 1 次掷骰机会。",
+      "effects": [
+        {
+          "op": "extra_roll",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "id": "h_mist",
+      "name": "大雾",
+      "text": "所有玩家获得 1 点护盾。",
+      "effects": [
+        {
+          "op": "shield",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "h_omen",
+      "name": "不祥预感",
+      "text": "所有玩家抽 2 张异能牌。",
+      "effects": [
+        {
+          "op": "draw_cards",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "id": "h_frost",
+      "name": "寒潮",
+      "text": "所有玩家护盾 +1，但异能点 -1。",
+      "effects": [
+        {
+          "op": "sequence",
+          "effects": [
+            {
+              "op": "shield",
+              "amount": 1
+            },
+            {
+              "op": "spend_resource",
+              "amount": 1
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "certificationCards": [
+    {
+      "id": "cc_up_01",
+      "prompt": "说出你此刻站的那层楼是几层，凭什么知道。"
+    },
+    {
+      "id": "cc_up_02",
+      "prompt": "描述你此刻握在手里那部属于别人的手机。"
+    },
+    {
+      "id": "cc_up_03",
+      "prompt": "说出 3 回合前你在哪条街待过。"
+    },
+    {
+      "id": "cc_up_04",
+      "prompt": "描述你上楼的路上，第一个让你意识到自己已经不是原来的自己的瞬间。"
+    },
+    {
+      "id": "cc_up_05",
+      "prompt": "若你现在可以多觉醒一项异能，你希望它解决你此刻的什么麻烦？"
+    },
+    {
+      "id": "cc_up_06",
+      "prompt": "你手里那张异能牌，哪一张是你此刻最不敢用的？"
+    },
+    {
+      "id": "cc_up_07",
+      "prompt": "说出你此刻的异能点数——不许看手机，不许问人。"
+    },
+    {
+      "id": "cc_up_08",
+      "prompt": "用一句地铁站打工人的话，说明你为什么还没放弃登顶。"
+    },
+    {
+      "id": "cc_up_09",
+      "prompt": "描述你此刻的呼吸节奏，或窗外正在响的城市噪声。"
+    },
+    {
+      "id": "cc_up_10",
+      "prompt": "说出这局里你最想盯梢的一个对手，并解释为什么。"
+    },
+    {
+      "id": "cc_up_11",
+      "prompt": "你的异能点是怎么攒出来的？（答不出具体经历就不算活人）"
+    },
+    {
+      "id": "cc_up_12",
+      "prompt": "指认一样此刻在场的、属于别人的手机。"
+    },
+    {
+      "id": "cc_up_13",
+      "prompt": "说出你此刻最怕被读心的 1 件事。"
+    },
+    {
+      "id": "cc_up_14",
+      "prompt": "若天台只容一个人，你会把机会让给谁？当众说。"
+    },
+    {
+      "id": "cc_up_15",
+      "prompt": "描述你此刻的坐姿——别人能从你的表情里看出什么？"
+    },
+    {
+      "id": "cc_up_16",
+      "prompt": "说出本局你亲眼看到、别人偷偷溜进监控盲区做过的一件违禁事。"
+    }
+  ],
+  "trials": [
+    {
+      "id": "t_sword",
+      "text": "展示 2 张同色在手异能牌（红或黑皆可）。",
+      "effects": [
+        {
+          "op": "conditional",
+          "pred": {
+            "kind": "has_card",
+            "filter": {
+              "color": "red"
+            }
+          },
+          "then": {
+            "op": "draw_cards",
+            "count": 1
+          },
+          "else": {
+            "op": "draw_cards",
+            "count": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "t_mirror",
+      "text": "展示任意 1 张在手异能牌并说明其用途。",
+      "effects": [
+        {
+          "op": "draw_cards",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "id": "t_star",
+      "text": "掷指令骰，点数 ≥ 12 即通过。",
+      "effects": [
+        {
+          "op": "conditional",
+          "pred": {
+            "kind": "dice_is_at_least",
+            "amount": 12,
+            "faces": 20
+          },
+          "then": {
+            "op": "gain_resource",
+            "amount": 1
+          },
+          "else": {
+            "op": "silence",
+            "amount": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "t_riddle",
+      "text": "回答在场任意一人的 1 个问题。",
+      "effects": [
+        {
+          "op": "draw_cards",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "id": "t_wind",
+      "text": "本关通过后额外获得 1 枚异能点。",
+      "effects": [
+        {
+          "op": "gain_resource",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "t_stone",
+      "text": "本关通过后恢复 1 点精神值。",
+      "effects": [
+        {
+          "op": "heal",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "t_sutra",
+      "text": "本关通过后抽 1 张异能牌。",
+      "effects": [
+        {
+          "op": "draw_cards",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "id": "t_mantra",
+      "text": "本关通过后获得 1 点护盾。",
+      "effects": [
+        {
+          "op": "shield",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "t_oath",
+      "text": "本关通过后免疫封口 1 回合。",
+      "effects": [
+        {
+          "op": "immunity",
+          "status": "silence",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "t_silent",
+      "text": "本关通过后免疫减速 1 回合。",
+      "effects": [
+        {
+          "op": "immunity",
+          "status": "slow",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "t_vital",
+      "text": "本关通过后免疫中毒 1 回合。",
+      "effects": [
+        {
+          "op": "immunity",
+          "status": "poison",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "t_empty",
+      "text": "本关通过后什么也不发生——但你还在。",
+      "effects": [
+        {
+          "op": "gain_resource",
+          "amount": 1
+        }
+      ]
+    }
+  ],
+  "creationDeck": [
+    {
+      "cardId": "c_up_d01",
+      "name": "屏障贴片",
+      "text": "造物：可装备的精神屏障，不占手牌上限。"
+    },
+    {
+      "cardId": "c_up_d08",
+      "name": "护甲涂层",
+      "text": "造物：护体罡气，可装备。"
+    },
+    {
+      "cardId": "c_up_d10",
+      "name": "龟息贴",
+      "text": "造物：龟息吐纳，可装备。"
+    },
+    {
+      "cardId": "c_up_d06",
+      "name": "急救喷雾",
+      "text": "造物：急救包，可装备。"
+    }
+  ],
+  "domainWords": [
+    "异能",
+    "天台",
+    "街",
+    "地铁",
+    "霓虹",
+    "精神",
+    "人群",
+    "监控",
+    "手机",
+    "出租车",
+    "雨",
+    "楼",
+    "觉醒",
+    "城市",
+    "梦",
+    "信号",
+    "警",
+    "便利店",
+    "楼顶",
+    "窗户",
+    "打卡",
+    "盯梢",
+    "读心",
+    "表情"
+  ]
+}

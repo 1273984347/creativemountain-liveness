@@ -84,6 +84,35 @@ export function parseEffectMap(source) {
   return result;
 }
 
+/**
+ * 只去掉注释，**保留字符串字面量**。
+ *
+ * ⚠️ 不能用 `stripComments`：那个函数会把字面量一并替换成 `''`
+ *   （它服务于「抓成员名」的场景，那里不需要字面量）。
+ *   而谓词的**取值白名单**恰恰要从字面量里提取 —— 用了它就会派生出空数组，
+ *   校验静默失效（实测踩过：phase_is 白名单为空 ⇒ 非法取值不判红）。
+ */
+export function stripCommentsOnly(source) {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\/[^\n]*/g, '');
+}
+
+/**
+ * 从 `PredicateMap` 的某谓词声明里提取**字符串字面量取值**。
+ *
+ * 例：`phase_is: { readonly value: 'night' | 'day' }` → `['night', 'day']`。
+ * 派生而非手抄 —— 手抄清单会成为第二事实源。
+ */
+export function predicateEnumValues(source, predName) {
+  const cleaned = stripCommentsOnly(source);
+  const m = cleaned.match(new RegExp(`${predName}\\s*:\\s*\\{[^}]*\\}`));
+  if (m === null) {
+    return [];
+  }
+  return [...m[0].matchAll(/'([a-z_0-9]+)'/g)].map((x) => x[1]);
+}
+
 /** 派生出的主题包 Schema（校验器据此工作）。 */
 export function deriveThemeSchema() {
   const source = readThemeSource();
@@ -95,5 +124,12 @@ export function deriveThemeSchema() {
     goalKinds: unionMembers(source, 'GoalKind'),
     cardTypes: unionMembers(common, 'CardType'),
     negativeStatuses: unionMembers(common, 'NegativeStatus'),
+    compareOps: unionMembers(common, 'CompareOp'),
+    costOps: unionMembers(common, 'CostOp'),
+    tileKinds: unionMembers(source, 'TileKind'),
+    /** 谓词的字符串字面量取值白名单（如 phase_is 的 night/day）。 */
+    predicateEnums: {
+      phase_is: predicateEnumValues(source, 'phase_is'),
+    },
   };
 }

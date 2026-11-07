@@ -3,12 +3,11 @@
 // 全部判据**从 engine/types/theme.ts 派生**（见 tools/theme-schema.mjs），
 // 不存在手抄的第二事实源。任一错误 → exit 1。
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import { deriveThemeSchema } from './theme-schema.mjs';
-
-const THEME_PATH = resolve(process.argv[2] ?? 'themes/xianxia2026/theme.json');
 
 /** 校验结果。 */
 export function validateTheme(theme, schema) {
@@ -155,13 +154,126 @@ export function validateTheme(theme, schema) {
       checkEffect(effect.effect, `${path}.effect`);
     }
   }
-  /** 递归校验一个谓词。 */
+  /**
+   * 递归校验一个谓词 —— **含参数取值白名单**。
+   *
+   * B8 补：谓词**名**合法不等于**参数取值**合法。
+   * 参数越界（如 `phase_is` 取了 'night' 以外的值）会让条件**永不成立**，
+   * 卡牌就此静默失效 —— 玩家看到「效果生效」却什么都没发生。
+   * 故判据从 `engine/types/theme.ts` **派生**（同源铁律），不手抄。
+   */
   function checkPredicate(pred, path) {
     if (pred === null || typeof pred !== 'object') { err(`${path}：谓词必须是对象`); return; }
     if (!schema.predicateNames.includes(pred.kind)) {
       err(`${path}：未注册的谓词「${pred.kind}」`);
+      return;
     }
-    if (pred.kind === 'conditional') { checkPredicate(pred.pred, `${path}.pred`); }
+    switch (pred.kind) {
+      case 'phase_is': {
+        const allowed = schema.predicateEnums?.phase_is ?? [];
+        if (allowed.length > 0 && !allowed.includes(pred.value)) {
+          err(`${path}（phase_is）：value 必须是 ${allowed.join(' / ')}，实际 ${JSON.stringify(pred.value)}`);
+        }
+        break;
+      }
+      case 'card_type_is':
+        if (!schema.cardTypes.includes(pred.type)) {
+          err(`${path}（card_type_is）：type 不在白名单：${pred.type}（允许 ${schema.cardTypes.join('/')}）`);
+        }
+        break;
+      case 'tile_kind':
+        // 判别字段与参数名同为 `kind` ⇒ JSON 里互相覆盖 ⇒ 该谓词当前无法正确表达。
+        err(`${path}（tile_kind）：该谓词的参数名与判别字段冲突，当前不可用（见规格 §6.4 备注）`);
+        break;
+      case 'hand_count':
+      case 'players_alive': {
+        if (!schema.compareOps.includes(pred.op)) {
+          err(`${path}（${pred.kind}）：op 不在白名单：${pred.op}（允许 ${schema.compareOps.join('/')}）`);
+        }
+        if (!Number.isInteger(pred.count) || pred.count < 0) {
+          err(`${path}（${pred.kind}）：count 必须是非负整数`);
+        }
+        break;
+      }
+      case 'has_card':
+        checkCardFilter(pred.filter, `${path}.filter`);
+        break;
+      case 'identity_is':
+        if (typeof pred.identityId !== 'string' || pred.identityId.length === 0) {
+          err(`${path}（identity_is）：identityId 必须是非空字符串`);
+        }
+        break;
+      case 'faction_is':
+        if (typeof pred.factionId !== 'string' || pred.factionId.length === 0) {
+          err(`${path}（faction_is）：factionId 必须是非空字符串`);
+        }
+        break;
+      case 'hp_at_least':
+      case 'resource_at_least':
+        if (!Number.isInteger(pred.amount) || pred.amount < 0) {
+          err(`${path}（${pred.kind}）：amount 必须是非负整数`);
+        }
+        break;
+      case 'dice_is_at_least':
+        if (!Number.isInteger(pred.amount) || pred.amount < 0) {
+          err(`${path}（dice_is_at_least）：amount 必须是非负整数`);
+        }
+        if (!Number.isInteger(pred.faces) || pred.faces < 2) {
+          err(`${path}（dice_is_at_least）：faces 必须是 ≥2 的整数`);
+        }
+        break;
+      case 'flag_set':
+        if (typeof pred.flag !== 'string' || pred.flag.length === 0) {
+          err(`${path}（flag_set）：flag 必须是非空字符串`);
+        }
+        break;
+      case 'card_color_is':
+        if (pred.color !== 'red' && pred.color !== 'black') {
+          err(`${path}（card_color_is）：color 必须是 red/black`);
+        }
+        if (pred.source?.kind !== 'deckTop' && pred.source?.kind !== 'cardId') {
+          err(`${path}（card_color_is）：source.kind 必须是 deckTop / cardId`);
+        }
+        if (pred.source?.kind === 'cardId'
+          && (typeof pred.source.cardId !== 'string' || pred.source.cardId.length === 0)) {
+          err(`${path}（card_color_is）：source.cardId 必须是非空字符串`);
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
+  /** 校验卡牌筛选条件（五字段 AND；空 filter 匹配任意牌）。 */
+  function checkCardFilter(filter, path) {
+    if (filter === null || typeof filter !== 'object' || Array.isArray(filter)) {
+      err(`${path}：filter 必须是对象`);
+      return;
+    }
+    if (filter.type !== undefined && !schema.cardTypes.includes(filter.type)) {
+      err(`${path}：type 不在白名单：${filter.type}`);
+    }
+    if (filter.color !== undefined && filter.color !== 'red' && filter.color !== 'black') {
+      err(`${path}：color 必须是 red/black`);
+    }
+    if (filter.suit !== undefined && (typeof filter.suit !== 'string' || filter.suit.length === 0)) {
+      err(`${path}：suit 必须是非空字符串`);
+    }
+    if (filter.cardId !== undefined && (typeof filter.cardId !== 'string' || filter.cardId.length === 0)) {
+      err(`${path}：cardId 必须是非空字符串`);
+    }
+    if (filter.cost !== undefined) {
+      if (filter.cost === null || typeof filter.cost !== 'object') {
+        err(`${path}.cost：必须是对象`);
+      } else {
+        if (!schema.costOps.includes(filter.cost.op)) {
+          err(`${path}.cost.op 不在白名单：${filter.cost.op}（允许 ${schema.costOps.join('/')}）`);
+        }
+        if (!Number.isInteger(filter.cost.value) || filter.cost.value < 0) {
+          err(`${path}.cost.value 必须是非负整数`);
+        }
+      }
+    }
   }
   for (const c of theme.cards ?? []) {
     (c.effects ?? []).forEach((e, i) => checkEffect(e, `card[${c.id}].effects[${i}]`));
@@ -232,6 +344,17 @@ export function validateTheme(theme, schema) {
     if (typeof cc.text !== 'string' || cc.text.length === 0) { err(`造物牌 ${cc.cardId} 缺少 text`); }
   }
 
+  // ---------- 主题专属名词表（结构校验）----------
+  if (theme.domainWords !== undefined) {
+    if (!Array.isArray(theme.domainWords)) {
+      err('domainWords 必须是数组');
+    } else {
+      for (const w of theme.domainWords) {
+        if (typeof w !== 'string' || w.length === 0) { err('domainWords 含空值或非字符串'); }
+      }
+    }
+  }
+
   // ---------- 数量一致性 ----------
   if (theme.counts.deckTotal !== (theme.cards?.length ?? 0)) {
     err(`counts.deckTotal（${theme.counts.deckTotal}）与 cards 实际数量（${theme.cards?.length ?? 0}）不符`);
@@ -263,25 +386,69 @@ export function validateTheme(theme, schema) {
 }
 
 // ---------- CLI ----------
-const schema = deriveThemeSchema();
-let theme;
-try {
-  theme = JSON.parse(readFileSync(THEME_PATH, 'utf8'));
-} catch (e) {
-  console.error(`FAIL  主题包读取/解析失败：${THEME_PATH}`);
-  console.error(`      ${e.message}`);
-  process.exit(1);
-}
-const result = validateTheme(theme, schema);
-for (const w of result.warnings) {
-  console.log(`WARN  ${w}`);
-}
-if (result.errors.length > 0) {
-  for (const e of result.errors) {
-    console.error(`FAIL  ${e}`);
+//
+// 用法：
+//   `node tools/theme-validate.mjs`            → 校验 themes/ 下**全部**主题包（B8 起为 4 套）
+//   `node tools/theme-validate.mjs <路径> ...`  → 只校验指定的主题包
+//
+// 门卫第 ⑤ 门用无参形式 ⇒ 新增主题包后**自动纳入门禁**，不会漏检。
+
+/** 列出 themes/ 下的全部主题包路径（按目录名排序）。 */
+export function listThemePaths(root = 'themes') {
+  const dir = resolve(root);
+  if (!existsSync(dir)) {
+    return [];
   }
-  console.error(`\n主题包校验失败：${result.errors.length} 项错误（${THEME_PATH}）`);
-  process.exit(1);
+  return readdirSync(dir, { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => resolve(dir, e.name, 'theme.json'))
+    .filter((p) => existsSync(p))
+    .sort();
 }
-console.log(`PASS  主题包校验通过：${THEME_PATH}`);
-console.log(`      卡牌 ${theme.cards.length} · 阵营 ${theme.factions.length} · 身份 ${theme.identities.length} · 天机 ${theme.heavenCards.length} · 试炼 ${(theme.trials ?? []).length} · 认证题 ${theme.certificationCards.length} · 造物 ${(theme.creationDeck ?? []).length}`);
+
+const isMain = process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (isMain) {
+  const schema = deriveThemeSchema();
+  const args = process.argv.slice(2);
+  const paths = args.length > 0 ? args.map((p) => resolve(p)) : listThemePaths();
+  if (paths.length === 0) {
+    console.error('FAIL  未找到任何主题包（themes/*/theme.json）');
+    process.exit(1);
+  }
+  let failed = 0;
+  for (const p of paths) {
+    let theme;
+    try {
+      theme = JSON.parse(readFileSync(p, 'utf8'));
+    } catch (err) {
+      console.error(`FAIL  主题包读取/解析失败：${p}`);
+      console.error(`      ${err.message}`);
+      failed += 1;
+      continue;
+    }
+    const result = validateTheme(theme, schema);
+    for (const w of result.warnings) {
+      console.log(`WARN  [${theme.meta?.id ?? p}] ${w}`);
+    }
+    if (result.errors.length > 0) {
+      for (const e of result.errors) {
+        console.error(`FAIL  [${theme.meta?.id ?? p}] ${e}`);
+      }
+      console.error(`      主题包校验失败：${result.errors.length} 项错误（${p}）`);
+      failed += 1;
+      continue;
+    }
+    console.log(
+      `PASS  ${p}` +
+      `\n      卡牌 ${theme.cards.length} · 阵营 ${theme.factions.length} · 身份 ${theme.identities.length}` +
+      ` · 天机 ${theme.heavenCards.length} · 试炼 ${(theme.trials ?? []).length}` +
+      ` · 认证题 ${theme.certificationCards.length} · 造物 ${(theme.creationDeck ?? []).length}`,
+    );
+  }
+  if (failed > 0) {
+    console.error(`\nFAIL：${failed} 套主题包校验失败（共 ${paths.length} 套）`);
+    process.exit(1);
+  }
+  console.log(`\nPASS：${paths.length} 套主题包全部校验通过`);
+}

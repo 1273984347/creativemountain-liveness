@@ -80,3 +80,72 @@ test('rank 越界 → 判红', () => {
   const r = validateTheme(bad, schema);
   assert.ok(r.errors.some((e) => e.includes('rank')), 'rank 越界必须判红');
 });
+
+// ---------- 谓词参数取值（B8 补：谓词**名**合法 ≠ **参数取值**合法）----------
+
+test('phase_is 的 value 越界 → 判红', () => {
+  const bad = structuredClone(theme);
+  bad.cards[0].effects = [{
+    op: 'conditional',
+    pred: { kind: 'phase_is', value: 'dusk' },
+    then: { op: 'draw_cards', count: 1 },
+  }];
+  const r = validateTheme(bad, schema);
+  assert.ok(r.errors.some((e) => e.includes('phase_is')), '非法 phase_is 取值必须判红');
+});
+
+test('card_type_is 的 type 越界 → 判红', () => {
+  const bad = structuredClone(theme);
+  bad.cards[0].effects = [{
+    op: 'conditional',
+    pred: { kind: 'card_type_is', type: 'spell' },
+    then: { op: 'draw_cards', count: 1 },
+  }];
+  const r = validateTheme(bad, schema);
+  assert.ok(r.errors.some((e) => e.includes('card_type_is')), '非法 card type 必须判红');
+});
+
+test('tile_kind 谓词 → 判红（参数名与判别字段冲突，当前不可用）', () => {
+  const bad = structuredClone(theme);
+  bad.cards[0].effects = [{
+    op: 'conditional',
+    pred: { kind: 'tile_kind', tileKind: 'plain' },
+    then: { op: 'draw_cards', count: 1 },
+  }];
+  const r = validateTheme(bad, schema);
+  assert.ok(r.errors.some((e) => e.includes('tile_kind')), 'tile_kind 谓词必须判红');
+});
+
+test('hand_count 的 op 越界 → 判红', () => {
+  const bad = structuredClone(theme);
+  bad.cards[0].effects = [{
+    op: 'conditional',
+    pred: { kind: 'hand_count', count: 3, op: 'between' },
+    then: { op: 'draw_cards', count: 1 },
+  }];
+  const r = validateTheme(bad, schema);
+  assert.ok(r.errors.some((e) => e.includes('hand_count')), '非法比较运算符必须判红');
+});
+
+test('has_card 的 filter.type 越界 → 判红', () => {
+  const bad = structuredClone(theme);
+  bad.cards[0].effects = [{
+    op: 'conditional',
+    pred: { kind: 'has_card', filter: { type: 'spell' } },
+    then: { op: 'draw_cards', count: 1 },
+  }];
+  const r = validateTheme(bad, schema);
+  assert.ok(r.errors.some((e) => e.includes('filter')), '非法 filter 取值必须判红');
+});
+
+test('合法谓词参数 → 不判红（B8 新增的白名单不得误伤）', () => {
+  const ok = structuredClone(theme);
+  ok.cards[0].effects = [{
+    op: 'conditional',
+    pred: { kind: 'phase_is', value: 'night' },
+    then: { op: 'draw_cards', count: 1 },
+    else: { op: 'gain_resource', amount: 2 },
+  }];
+  const r = validateTheme(ok, schema);
+  assert.deepEqual(r.errors, [], `合法谓词被误报：${r.errors.join('；')}`);
+});
