@@ -8,6 +8,7 @@
 // 若确需新字段，先改规格 §6.2 并同步本文件，再动手写逻辑。
 
 import type { Card, Tile } from '../types/theme.ts';
+import type { NegativeStatus } from '../types/common.ts';
 import { getScales, type PlayerCount, type ScalesRow } from '../scales.ts';
 import { Rng } from './dice.ts';
 import type { Board } from './board.ts';
@@ -71,6 +72,36 @@ export interface Player {
   readonly pendingCert: boolean;
   /** 回合内临时状态（回合末清零，见 PlayerTurnState） */
   readonly turn: PlayerTurnState;
+  /** 负面状态层数/剩余回合数（规格 §6.4 状态类算子） */
+  readonly statuses: Readonly<Partial<Record<NegativeStatus, number>>>;
+  /** 护盾值（吸收伤害） */
+  readonly shield: number;
+  /** 玩家标记（`set_flag` / `clear_flag`） */
+  readonly flags: Readonly<Record<string, unknown>>;
+  /** 目标计数器（goal kind 对应，规格 §6.4 目标判定表） */
+  readonly counters: Readonly<Record<string, number>>;
+}
+
+/** 日志条目。 */
+export interface LogEntry {
+  readonly round: number;
+  readonly turnIndex: number;
+  readonly actor: number;
+  readonly kind: string;
+  readonly message: string;
+  /** 掷骰记录（`move_by_dice` 等需要记录骰值） */
+  readonly diceRoll?: number;
+}
+
+/** 日志条目。 */
+export interface LogEntry {
+  readonly round: number;
+  readonly turnIndex: number;
+  readonly actor: number;
+  readonly kind: string;
+  readonly message: string;
+  /** 掷骰记录（`move_by_dice` 等需要记录骰值） */
+  readonly diceRoll?: number;
 }
 
 /** 各类牌堆（规格 §6.2）。 */
@@ -81,6 +112,8 @@ export interface Decks {
   readonly discard: readonly Card[];
   /** 造物牌堆（V1.4）：`create_card` 的唯一来源 */
   readonly creation: readonly Card[];
+  /** 已耗尽的牌（`exhaust_card` 移出，不进弃牌堆） */
+  readonly exhausted: readonly Card[];
   /** 天机牌 */
   readonly heaven: readonly Card[];
   /** 关隘试炼牌 */
@@ -109,6 +142,22 @@ export interface State {
   readonly decks: Decks;
   /** 当前局规模配置 */
   readonly scales: ScalesRow;
+  /** 全局阶段值（`set_phase`：night / day） */
+  readonly phaseValue: 'night' | 'day';
+  /** 上次掷骰结果（`last_dice_even` / `dice_is_at_least` 谓词用） */
+  readonly lastDice: number;
+  /** 本回合额外掷骰次数（`extra_roll`） */
+  readonly extraRolls: number;
+  /** 保留的骰子结果（`keep_die`） */
+  readonly keptDice: readonly number[];
+  /** 下一票翻倍标记（`double_next_vote`） */
+  readonly doubleNextVote: boolean;
+  /** 阵营轮使用次数（每局限 1 次；`spirit_wheel` source=manual 消耗） */
+  readonly wheelUsed: number;
+  /** 待认证者额外需要的签印数（`extra_signatures_required`） */
+  readonly extraSignaturesRequired: number;
+  /** 日志 */
+  readonly log: readonly LogEntry[];
 }
 
 /** 构造初始状态的参数。 */
@@ -165,6 +214,10 @@ export function createInitialState(opts: InitialStateOptions): State {
     hasMark: false,
     pendingCert: false,
     turn: EMPTY_TURN,
+    statuses: {},
+    shield: 0,
+    flags: {},
+    counters: {},
   }));
   const base: State = {
     seed: opts.seed,
@@ -178,11 +231,20 @@ export function createInitialState(opts: InitialStateOptions): State {
       deck: makeTestCards(deckSize),
       discard: [],
       creation: [],
+      exhausted: [],
       heaven: [],
       trial: [],
       cert: [],
     },
     scales,
+    phaseValue: 'day',
+    lastDice: 0,
+    extraRolls: 0,
+    keptDice: [],
+    doubleNextVote: false,
+    wheelUsed: 0,
+    extraSignaturesRequired: 0,
+    log: [],
   };
   return dealInitialHands(base);
 }
