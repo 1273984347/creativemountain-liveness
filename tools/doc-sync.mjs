@@ -10,7 +10,7 @@ import { resolve } from 'node:path';
 
 import {
   readSpec, unionMembers, checkFieldNames, checkScaleValues, checkOps,
-  checkPredicates, checkGoals, checkExemptSyntax,
+  checkPredicates, checkGoals, checkExemptSyntax, checkDuplicateRows,
 } from './doc-sync-lib.mjs';
 
 const THEME_SRC = readFileSync(resolve('engine/types/theme.ts'), 'utf8');
@@ -28,6 +28,7 @@ const checks = [
   checkPredicates(spec, PREDICATE_NAMES),
   checkGoals(spec, GOAL_KINDS),
   checkExemptSyntax(spec),
+  checkDuplicateRows(spec),
 ];
 
 const failed = checks.filter((c) => !c.ok);

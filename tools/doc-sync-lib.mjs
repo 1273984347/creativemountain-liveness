@@ -270,6 +270,47 @@ export function checkGoals(spec, codeGoals) {
   };
 }
 
+// ---------- C7 ops 表重复行检测 ----------
+//
+// 起因：C3 用 **Set** 比较，**检测不到重复行**——同一行写两遍，
+// 算子名集合不变，C3 照样绿。（实证：v1.4 回改时 `| 判定与装备 |` 行被写了两次。）
+// ⇒ 必须按**行**（而非按算子名）统计重复。
+export function checkDuplicateRows(spec) {
+  const marker = spec.indexOf('**效果算子（ops）**');
+  if (marker < 0) {
+    return { id: 'C7', title: 'ops 表无重复行', ok: false, detail: '未找到「效果算子（ops）」表格' };
+  }
+  const seen = new Map();
+  const problems = [];
+  let inTable = false;
+  for (const line of spec.slice(marker).split(/\r?\n/)) {
+    if (!line.trim().startsWith('|')) {
+      if (inTable) {
+        break; // 表格结束
+      }
+      continue;
+    }
+    const cells = line.split('|').slice(1, -1).map((s) => s.trim());
+    const key = cells.join('|');
+    // 跳过表头与分隔行
+    if (key.startsWith('---') || cells.includes('类别')) {
+      inTable = true;
+      continue;
+    }
+    const count = (seen.get(key) ?? 0) + 1;
+    seen.set(key, count);
+    if (count === 2) {
+      problems.push(`重复行：| ${key} |`);
+    }
+  }
+  return {
+    id: 'C7',
+    title: 'ops 表无重复行（按行统计，不用 Set）',
+    ok: problems.length === 0,
+    detail: problems.join('; '),
+  };
+}
+
 // ---------- C6 豁免标记自检 ----------
 
 export function checkExemptSyntax(spec) {

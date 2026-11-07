@@ -59,6 +59,26 @@ test('负样本：doc-sync 对规模表数值漂移判红，恢复后判绿', ()
   assert.equal(restored.code, 0, '恢复后 doc-sync 必须判绿');
 });
 
+// ---------- 负样本 6：ops 表重复行 ----------
+//
+// 这条负样本是**被真实 bug 逼出来的**：v1.4 回改时 `| 判定与装备 |` 行被写了两次，
+// 而 C3 用 Set 比较**检测不到**（算子名集合不变）⇒ 补 C7 按行统计。
+
+test('负样本：doc-sync 对 ops 表重复行判红，恢复后判绿', () => {
+  withBrokenSpec(
+    (s) =>
+      s.replace(
+        '| 棋盘 | `place_barrier` |',
+        '| 棋盘 | `place_barrier` |\n| 判定与装备 | `modify_judgement` `create_card` `equip_card` |'
+      ),
+    (out) => {
+      assert.match(out, /C7/, '应报在 C7 重复行检查上');
+    }
+  );
+  const restored = runNode([DOC_SYNC]);
+  assert.equal(restored.code, 0, '恢复后 doc-sync 必须判绿');
+});
+
 // ---------- 负样本 5：字段名契约漂移 ----------
 
 test('负样本：doc-sync 对字段名契约漂移判红，恢复后判绿', () => {

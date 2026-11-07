@@ -2,6 +2,10 @@
 //
 // 单一不可变状态对象，所有动作是纯函数 state → state'。
 // B1 只实现骨架：回合机 / 骰子 / 移动 / 资源 / 手牌 / 地形（关隘、认证、山议留待 B3）。
+//
+// ⚠️ **B1 契约已冻结**：State / Player / Decks / PlayerTurnState 的字段集在 B1 定稿后
+// 不再变更。B2（ops registry）与 B3（关隘/山议/认证）**只实现逻辑，不新增或改名 State 字段**——
+// 若确需新字段，先改规格 §6.2 并同步本文件，再动手写逻辑。
 
 import type { Card, Tile } from '../types/theme.ts';
 import { getScales, type PlayerCount, type ScalesRow } from '../scales.ts';
@@ -11,6 +15,28 @@ import { dealInitialHands } from './hand.ts';
 
 /** 阶段。 */
 export type Phase = '天机' | '行动' | '山议' | '认证' | '终局';
+
+/**
+ * 玩家身上的**回合内临时状态**（规格 §6.2 B1 锁定契约）。
+ *
+ * 三个字段都是「本回合」语义，**回合末一并清零**——放在子对象里便于整体替换
+ * （`player.turn = EMPTY_TURN`），避免逐字段清零时漏清。
+ */
+export interface PlayerTurnState {
+  /** 本回合位移加成（指令 17「本回合移动 +2 格」等）——叠加式，回合末清零 */
+  readonly moveBonus: number;
+  /** 本回合是否已使用过「问天」——链式问天不得连锁（§3.2 第 14 条） */
+  readonly usedAsk: boolean;
+  /** 本回合是否已发生过位移——「每回合首次移动 +1 格」类效果的判定基准（§4.1 开拓者） */
+  readonly movedThisTurn: boolean;
+}
+
+/** 清零用的空回合状态。 */
+export const EMPTY_TURN: PlayerTurnState = {
+  moveBonus: 0,
+  usedAsk: false,
+  movedThisTurn: false,
+};
 
 /** 玩家运行时状态。 */
 export interface Player {
@@ -38,8 +64,13 @@ export interface Player {
   readonly factionId: string;
   /** 是否持有印记 */
   readonly hasMark: boolean;
-  /** 是否处于待认证状态 */
+  /**
+   * 是否处于待认证状态（**待认证锁定**，规格 §5.1）：
+   * 峰顶不能主动移动、不能用位移类牌；唯一离开方式是判罚后退。
+   */
   readonly pendingCert: boolean;
+  /** 回合内临时状态（回合末清零，见 PlayerTurnState） */
+  readonly turn: PlayerTurnState;
 }
 
 /** 各类牌堆（规格 §6.2）。 */
@@ -133,6 +164,7 @@ export function createInitialState(opts: InitialStateOptions): State {
     factionId: `faction_${seat}`,
     hasMark: false,
     pendingCert: false,
+    turn: EMPTY_TURN,
   }));
   const base: State = {
     seed: opts.seed,
@@ -153,4 +185,15 @@ export function createInitialState(opts: InitialStateOptions): State {
     scales,
   };
   return dealInitialHands(base);
+}
+
+/**
+ * 回合末清零：把所有玩家的 `turn` 临时状态整体替换为空。
+ *
+ * 规格 §6.2：`moveBonus` / `usedAsk` / `movedThisTurn` 是「本回合」语义，回合末一并清零。
+ * 整体替换而非逐字段清零——避免漏清某个字段。
+ */
+export function clearTurnStates(state: State): State {
+  const players = state.players.map((p) => (p.turn === EMPTY_TURN ? p : { ...p, turn: EMPTY_TURN }));
+  return { ...state, players };
 }

@@ -1,7 +1,7 @@
 # 《创界山·活人认证》设计规格书
 
 > 2026 重制版 · 桌面多人策略游戏 · 实体+数字双轨
-> 文档版本：v1.4（B2 参数盘点裁定后定稿）　　日期：2026-11-07
+> 文档版本：v1.5（B1 State 契约锁定后定稿）　　日期：2026-11-07
 >
 > **修订记录**：
 > - **v1.0** 起草。
@@ -9,6 +9,7 @@
 > - **v1.2** 依二轮评审裁定 4 项未决：新增新手模式（山议间隔 +2）、V1 不做 AI 陪练改为脚本化教学演示、实体规格定稿（A4×4 + 63×88mm）、B8 执行边界写死两张清单。**全部未决项已关闭**，转入实施计划。
 > - **v1.3** 依三轮评审补实施空白 9 条 + 小点 3 项：指令骰触发时机与位移归属、3 人局山议裁定、对峙比较规则、险径翻牌堆顶、指令 20 与阵营轮、认证动作枚举补全、goal kind 枚举表、IR schema、门槛公式步骤 0 前置分支。
 > - **v1.4** 依 B2 开工前参数盘点（`docs/superpowers/plans/2026-11-07-ops-parameter-audit.md`）落 11 项裁定：G1 `move_by_dice`、造物走独立牌堆、复活机制 V1 删除、`NegativeStatus` 枚举、`CardFilter` 五字段 AND、卡牌 `rank` 数值点数，以及**位移结算语义**（分段结算到达即停 / 行棋必须走满 / 待认证锁定 / 移动为跳到位只结算终点格）。**B1 的 `State` 与 `Card` 类型已按此回改。**
+> - **v1.5** 锁定 **B1 State 契约**（§6.2）：新增 `PlayerTurnState`（`moveBonus` / `usedAsk` / `movedThisTurn`，回合末一并清零）以承载位移结算语义三条；补 §13.4 v1.4 裁定登记表；修复 ops 表重复行并为 doc-sync 增设 **C7 重复行检测**（原 C3 用 Set 比较，检测不到重复行）。
 > 上游：《爱情公寓3》第 21–22 集 · 陆展博《开天辟地之大地的裂变》（创界山）
 
 ---
@@ -447,6 +448,33 @@ type State = {
 };
 ```
 
+**B1 锁定的 State 契约（V1.4 位移语义所需，B2/B3 不得再改）**：
+
+位移结算语义（§3.1 三条）与「跳到位」（§3.3）要求引擎能表达**回合内临时状态**。以下字段随 B1 一并定稿：
+
+```ts
+/** 玩家身上的回合内临时状态（回合末清空）。 */
+type PlayerTurnState = {
+  /** 本回合位移加成（指令 17「本回合移动 +2 格」等）——叠加式，回合末清零 */
+  moveBonus: number;
+  /** 本回合是否已使用过「问天」（链式问天不得连锁，§3.2 第 14 条） */
+  usedAsk: boolean;
+  /** 本回合是否已发生过位移（「每回合首次移动 +1 格」类效果用，§4.1 开拓者） */
+  movedThisTurn: boolean;
+};
+```
+
+| 字段 | 归属 | 生命周期 | 服务的规则 |
+|---|---|---|---|
+| `moveBonus` | `Player.turn.moveBonus` | **回合末清零** | 指令 17「本回合移动 +2 格」；§3.1 位移结算语义 |
+| `usedAsk` | `Player.turn.usedAsk` | **回合末清零** | 链式问天不得连锁（§3.2 第 14 条）；保证「每回合问天至多链式 1 次」 |
+| `movedThisTurn` | `Player.turn.movedThisTurn` | **回合末清零** | 「每回合首次移动 +1 格」（§4.1 开拓者）；「行棋必须走满」的判定基准 |
+| `pendingCert` | `Player.pendingCert` | 直到认证终结 | **待认证锁定**（§5.1）：峰顶不能主动移动、不能用位移类牌；唯一离开方式是判罚后退 |
+
+**关键约束**：`moveBonus` / `usedAsk` / `movedThisTurn` 三者**必须随 round 末一并清零**——它们是「本回合」语义，不是「本局」语义。实现时放在 `Player.turn` 子对象里，便于整体替换（`player.turn = EMPTY_TURN`）而非逐字段清零，避免漏清。
+
+**B1 契约冻结范围**：`State` / `Player` / `Decks` / `PlayerTurnState` 的字段集在 B1 定稿后**不再变更**。B2（ops registry）与 B3（关隘/山议/认证）**只实现逻辑，不新增或改名 State 字段**——若确需新字段，先改规格 §6.2 并同步 `engine/core/state.ts`，再动手写逻辑。
+
 ### 6.3 动作模型
 
 引擎只接受**声明式动作**：`{ type, actor, params }`。UI 与（未来的）AI 都只能提交引擎枚举出的合法动作。
@@ -507,7 +535,6 @@ export interface CardFilter {
 | 投票 | `vote_modifier` `extra_vote` `cancel_vote` `exempt_from_vote` |
 | 认证 | `certify_extra_signer` `certify_free_pass` `certify_extra_round` `certify_forbid_challenge` |
 | 棋盘 | `place_barrier` |
-| 判定与装备 | `modify_judgement` `create_card` `equip_card` |
 | 阵营 | `spirit_wheel`（掷阵营轮） |
 | 组合 | `sequence` `conditional` `count` `random_from_deck` |
 
@@ -860,7 +887,7 @@ Chromium 生成的 PDF **字节级不可直接比对**——实测同一份 HTML
 |---|---|---|---|
 | 门① 类型 | `tsc --noEmit` | TS strict 全量类型检查 | `tests/gates/selfcheck.test.ts` |
 | 门② 测试 | `node --test` | 单元测试 + 门禁自检 | 同上 |
-| 门③ 文档口径 | `tools/doc-sync.mjs` | 规格 ↔ 代码真值双向一致（算子/谓词/goal/字段名/规模表数值） | `tests/gates/doc-sync.test.ts` |
+| 门③ 文档口径 | `tools/doc-sync.mjs` | 规格 ↔ 代码真值双向一致（算子/谓词/goal/字段名/规模表数值/**ops 表重复行**） | `tests/gates/doc-sync.test.ts` |
 | 门④ 构建 | `esbuild.config.mjs` | 单文件 HTML 可产出 | — |
 | 门⑤ PDF 归一化 | `tools/pdf-normalize.mjs` | 构建时刻归一化后的可比性 | `tests/gates/pdf-normalize.test.ts` |
 
@@ -1024,6 +1051,28 @@ D:\<repo>\
 | **2 人局模式** | **暂缓** | 需另设计绕过认证的胜负规则，与主线脱节（§7 理由 1）。注意：此处指「2 人对局」，与 §5.5 的「双人互验」（2 名待认证者同时在场）是两回事，勿混 |
 | **多端联机**（`ServerTransport`） | 后置 | V1 仅交付 `LocalHotseatTransport` + `BroadcastChannelTransport` 占位 |
 | **死亡 / 复活机制**（`revive` 算子） | **V1.1** | V1 **移除**「复活队友 4 灵枢」：本作无死亡机制（只有「存活 / 被放逐出局」两态），复活会消解放逐的社交压力，且复活后的认证资格与位置在规格中无定义。需先引入死亡机制再谈复活 |
+
+### 13.4 v1.4 参数盘点裁定已落（11 项参数 + 3 条位移语义）
+
+| 项 | 裁定 | 落位 |
+|---|---|---|
+| G1 指令骰第 5 条 | 新增 `move_by_dice { faces: 6 }`——**不用参数求值器**（求值器会违反「不提供任意表达式求值」的地基） | §6.4 / §3.2 |
+| G5 造物 | `create_card` 取自**独立造物牌堆** `decks.creation`（不凭空造牌，否则破坏 parity-check 可追溯性） | §4.1 / §6.5 |
+| G5 装备 | `equip_card` 移入 `Player.equipment`：**不占手牌上限**、**公开可见**、**V1 无被动效果**（纯计数目标） | §4.1 / §6.2 |
+| G5 复活 | **V1 删除**「复活队友 4 灵枢」与 `revive` 算子——本作无死亡机制，复活会消解放逐的社交压力 | §4.3 / §13.3 |
+| StatusKind | 定名 `NegativeStatus = 'poison' \| 'slow' \| 'silence' \| 'skip_turn'`——只有通用负面状态可被免疫 | §6.4 |
+| CardFilter | 五字段 **AND** 组合：`type` / `color` / `suit` / `cost` / `cardId`；空 filter 匹配任意牌。`has_card` / `card_type_is` / `gain_card` / `random_from_deck` **共用同一结构** | §6.4 |
+| CardType | 定为 `'motion' \| 'attack' \| 'defense' \| 'utility'` 四类（新增类型 = 改引擎，不改主题） | §6.4 / §6.5 |
+| 卡牌点数 | 新增 `rank: number`（A=14…2=2，**必填**）与可选 `rankLabel`；`suit` **不参与比较**；对峙比较只读 `rank` 数值 | §3.3 / §6.5 |
+| G2 / G3 谓词 | 新增 `dice_is_at_least` / `card_color_is`（待 B2 实现） | §6.4 |
+| G4 棋盘算子 | 新增 `place_barrier { tileIndex }`——现有算子全部作用于玩家，无棋盘格位算子 | §6.4 |
+| G6 谓词作用域 | `card_type_is` 定义为「效果使用者手牌中是否存在该类型」 | §6.4 |
+| G7 阵营轮 | `spirit_wheel` 增加 `source: 'manual' \| 'command'`——指令 20 **不消耗**「每局限 1 次」名额 | §6.4 / §3.2 |
+| **位移结算语义 ①** | **分段结算，到达峰顶即终止后续位移**——多段位移逐段独立结算，第一段到峰顶就停，不允许「刷过峰顶再 clamp」 | §3.1 |
+| **位移结算语义 ②** | **行棋必须走满，不能选择少走**——否则玩家可精确控制登顶时机、永远卡在峰顶前 1 格攒资源 | §3.1 |
+| **位移结算语义 ③** | **待认证锁定**——峰顶不能主动移动/用位移类牌，唯一离开方式是判罚后退；**登顶是单向门** | §5.1 |
+| **关联裁定** | **移动为「跳到位」，只结算终点格**——不逐格触发中间格（经过福地不触发、经过对手不对峙）；支路为显式选择 | §3.3 / §3.4 |
+| **B9 观察项** | 若模拟显示「被迫提前登顶 → 认证失败率 > 40%」，再考虑给**恰好到达峰顶**者 +1 灵枢——奖励「精准」而非补偿「浪费」。**不现在改规则** | §11 |
 
 ---
 
