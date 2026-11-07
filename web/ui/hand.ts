@@ -30,7 +30,7 @@ export function renderHand(
   return wrap;
 }
 
-/** 渲染玩家列表（体力/灵枢/身份/阵营/装备/状态）。 */
+/** 渲染玩家列表（体力/资源/身份/阵营/装备/状态；术语取自主题 glossary）。 */
 export function renderPlayers(state: State, theme: ThemePack): HTMLElement {
   const list = el('div', { class: 'players' });
   for (const p of state.players) {
@@ -39,7 +39,7 @@ export function renderPlayers(state: State, theme: ThemePack): HTMLElement {
     const row = el('div', { class: 'player' + (p.alive ? '' : ' dead') });
     row.append(el('span', { class: 'p-seat', text: '座' + p.seat }));
     row.append(el('span', { class: 'p-name', text: identity?.name ?? p.identityId }));
-    row.append(el('span', { class: 'p-meta', text: (faction?.name ?? p.factionId) + ' · 灵力 ' + p.hp + '/' + p.hpMax + ' · ' + theme.meta.resourceName + ' ' + p.resource + ' · 位 ' + p.position }));
+    row.append(el('span', { class: 'p-meta', text: (faction?.name ?? p.factionId) + ' · ' + theme.glossary.HP + ' ' + p.hp + '/' + p.hpMax + ' · ' + theme.meta.resourceName + ' ' + p.resource + ' · 位 ' + p.position }));
     if (p.hasMark) { row.append(el('span', { class: 'badge mark', text: '印记' })); }
     if (p.pendingCert) { row.append(el('span', { class: 'badge cert', text: '待认证' })); }
     if (p.equipment.length > 0) {

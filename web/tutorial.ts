@@ -7,7 +7,9 @@
 // **走的是真实引擎**（与真实对局同一套规则），因此不引入任何新规则。
 
 import type { State } from '../engine/core/state.ts';
+import type { ThemePack } from '../engine/types/theme.ts';
 import { createInitialState } from '../engine/core/state.ts';
+import { installTheme } from '../engine/core/setup.ts';
 import { performAction, advanceTurn } from '../engine/core/turn-runner.ts';
 import { currentPlayer } from '../engine/core/round.ts';
 import { enterPendingCertification, certifySign } from '../engine/core/certification.ts';
@@ -27,12 +29,16 @@ export interface TutorialStep {
  *
  * 固定 seed，保证每次演示完全一致。
  */
-export function runTutorial(playerCount = 3): TutorialStep[] {
+export function runTutorial(theme: ThemePack, playerCount = 3): TutorialStep[] {
   const steps: TutorialStep[] = [];
-  let state = createInitialState({ players: playerCount as 3 | 4 | 5 | 6 | 7 | 8, seed: 20261107, deckSize: 40 });
+  // 教学演示走**当前主题**的真实牌池（不是 B1 骨架的测试牌）
+  let state = installTheme(
+    createInitialState({ players: playerCount as 3 | 4 | 5 | 6 | 7 | 8, seed: 20261107, deckSize: theme.counts.deckTotal }),
+    theme,
+  );
   steps.push({
     title: '开局',
-    detail: '每名玩家发 ' + state.scales.handStart + ' 张符箓；山道共 ' + state.board.length + ' 格，峰顶在第 ' + state.board.peakIndex + ' 格。规则书上的「登顶即胜」在这里被改写了——登顶只是拿到入场券。',
+    detail: '每名玩家发 ' + state.scales.handStart + ' 张' + theme.meta.deckName + '；山道共 ' + state.board.length + ' 格，峰顶在第 ' + state.board.peakIndex + ' 格。规则书上的「登顶即胜」在这里被改写了——登顶只是拿到入场券。',
     state,
   });
   // 天机：翻开一张天机牌
@@ -55,7 +61,7 @@ export function runTutorial(playerCount = 3): TutorialStep[] {
     state = advanceTurn(state, 'newbie');
     steps.push({
       title: '行动 ' + (i + 1) + ' / 5',
-      detail: '座' + seat + ' 掷移动骰前进（必须走满，不能少走）：位置 ' + before + ' → ' + after + '。回合末结算裁牌与灵枢收入。',
+      detail: '座' + seat + ' 掷移动骰前进（必须走满，不能少走）：位置 ' + before + ' → ' + after + '。回合末结算裁牌与' + theme.glossary.resource + '收入。',
       state,
     });
   }

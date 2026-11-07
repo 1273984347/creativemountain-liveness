@@ -3,6 +3,7 @@
 // 匿名投票：UI **不显示谁投了谁**——只显示各目标的票数。
 
 import type { State } from '../../engine/core/state.ts';
+import type { ThemePack } from '../../engine/types/theme.ts';
 import { el, button, section } from './dom.ts';
 
 /**
@@ -12,6 +13,7 @@ import { el, button, section } from './dom.ts';
  */
 export function renderCouncil(
   state: State,
+  theme: ThemePack,
   seat: number,
   onVote: (target: number) => void,
   onResolve: () => void,
@@ -43,7 +45,7 @@ export function renderCouncil(
   }
   body.push(tally);
   if (alive.length === 3) {
-    body.push(el('div', { class: 'warn', text: '3 人局：山议不淘汰人，得票最高者扣 2 灵枢（并列各扣 1）。' }));
+    body.push(el('div', { class: 'warn', text: '3 人局：山议不淘汰人，得票最高者扣 2 ' + theme.glossary.resource + '（并列各扣 1）。' }));
   }
   body.push(el('div', { class: 'btn-row' }, button('结算山议', () => { onResolve(); })));
   return section('山议（匿名投票）', ...body);

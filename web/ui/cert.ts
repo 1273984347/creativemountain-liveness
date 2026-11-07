@@ -60,7 +60,7 @@ export function renderCertification(
       body.push(el('span', { class: 'muted', text: '你已申请本轮复议，等待第三方裁定。' }));
     } else {
       const row = el('div', { class: 'btn-row' });
-      row.append(button('申请复议（-2 灵枢）', () => { cb.onAppeal(seat); }));
+      row.append(button('申请复议（-2 ' + theme.glossary.resource + '）', () => { cb.onAppeal(seat); }));
       body.push(row);
     }
   }

@@ -206,7 +206,7 @@ function renderActions(): HTMLElement {
 }
 /** 教学演示弹窗。 */
 function showTutorial(): void {
-  const steps = runTutorial(ui.playerCount);
+  const steps = runTutorial(themeById(ui.themeId).theme, ui.playerCount);
   const box = el('div', { class: 'modal' });
   const close = button('关闭', () => { box.remove(); });
   const body = el('div', { class: 'modal-body' });
@@ -246,7 +246,7 @@ function render(): void {
   ];
   // 山议面板
   if (needsCouncilVote(s)) {
-    panels.push(renderCouncil(s, ui.seat,
+    panels.push(renderCouncil(s, theme, ui.seat,
       (target) => { const r = castVote(s, ui.seat, target); ui.state = r.ok ? r.state : s; render(); },
       () => { const r = resolveCouncil(s); ui.state = r.ok ? r.state : s; render(); },
     ));

@@ -644,7 +644,7 @@
     },
     {
       "id": "c_up_a09",
-      "name": "咒杀",
+      "name": "精神咒杀",
       "type": "attack",
       "cost": 1,
       "color": "red",
@@ -662,7 +662,7 @@
     },
     {
       "id": "c_up_a10",
-      "name": "妖化撕裂",
+      "name": "兽化撕裂",
       "type": "attack",
       "cost": 2,
       "color": "black",
@@ -789,7 +789,7 @@
     },
     {
       "id": "c_up_d04",
-      "name": "符咒护身",
+      "name": "血清抗体",
       "type": "defense",
       "cost": 1,
       "color": "black",
@@ -885,7 +885,7 @@
     },
     {
       "id": "c_up_d09",
-      "name": "龟息吐纳",
+      "name": "闭气潜行",
       "type": "defense",
       "cost": 2,
       "color": "red",
@@ -912,7 +912,7 @@
     },
     {
       "id": "c_up_d10",
-      "name": "符阵庇护",
+      "name": "结界护罩",
       "type": "defense",
       "cost": 1,
       "color": "black",
@@ -938,7 +938,7 @@
     },
     {
       "id": "c_up_d11",
-      "name": "灵台护佑",
+      "name": "心智壁垒",
       "type": "defense",
       "cost": 1,
       "color": "red",
@@ -965,7 +965,7 @@
     },
     {
       "id": "c_up_d12",
-      "name": "免疫抵抗",
+      "name": "抗体护盾",
       "type": "defense",
       "cost": 2,
       "color": "black",
