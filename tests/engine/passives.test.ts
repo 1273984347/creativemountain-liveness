@@ -42,14 +42,15 @@ test('grantedFlags：识别被动里的 extra_vote（含嵌套在 sequence 里�
 });
 
 test('分配身份时授予仲裁者额外投票权（flags.extraVotes = 1）', () => {
-  const s = game(4);
+  // 用 8 人局：人数少于 8 时身份槽位只出场一部分（随机缺席），仲裁者未必在场
+  const s = game(8);
   const arbiter = s.players.find((p) => p.identityId === 'arbiter');
   assert.ok(arbiter !== undefined, '应有仲裁者');
   assert.equal((arbiter.flags.extraVotes as number | undefined) ?? 0, 1);
 });
 
 test('非仲裁者没有额外投票权', () => {
-  const s = game(4);
+  const s = game(8);
   const pioneer = s.players.find((p) => p.identityId === 'pioneer');
   assert.ok(pioneer !== undefined);
   assert.equal((pioneer.flags.extraVotes as number | undefined) ?? 0, 0);
@@ -58,11 +59,13 @@ test('非仲裁者没有额外投票权', () => {
 // ---------- extra_vote：读取（山议计票）----------
 
 test('voteWeight：基础 1 票 + 额外投票数', () => {
-  const s = game(4);
+  const s = game(8);
   const arbiter = s.players.find((p) => p.identityId === 'arbiter');
   assert.ok(arbiter !== undefined);
   assert.equal(voteWeight(s, arbiter.seat), 2, '仲裁者应 2 票');
-  assert.equal(voteWeight(s, 0), 1, '普通人 1 票');
+  const other = s.players.find((p) => p.identityId !== 'arbiter');
+  assert.ok(other !== undefined);
+  assert.equal(voteWeight(s, other.seat), 1, '普通人 1 票');
 });
 
 test('山议计票读 extra_vote：权重能**逆转**并列结果', () => {

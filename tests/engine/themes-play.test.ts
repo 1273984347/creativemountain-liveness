@@ -102,10 +102,18 @@ for (const id of THEME_IDS) {
     );
     assert.equal(s.decks.trial.length, (theme.trials ?? []).length);
     assert.equal(s.decks.creation.length, (theme.creationDeck ?? []).length);
-    // 身份与阵营按主题分配（规格 §4.1 明牌竞速 ⇒ 必须可从状态读出）
-    assert.equal(s.players[0]?.identityId, theme.identities[0]?.id);
-    assert.equal(s.players[0]?.factionId, theme.factions[0]?.id);
-    assert.equal(s.players[0]?.hpMax, theme.factions[0]?.hpBase);
+    // 身份与阵营按主题分配（规格 §4.1 明牌竞速 ⇒ 必须可从状态读出）；
+    // B10 起为**开局随机分配**，故只校验「来自主题」而不绑定具体座位
+    const identityIds = new Set(theme.identities.map((i) => i.id));
+    const factionIds = new Set(theme.factions.map((f) => f.id));
+    assert.ok(identityIds.has(s.players[0]?.identityId ?? ''), '身份应来自主题');
+    assert.ok(factionIds.has(s.players[0]?.factionId ?? ''), '阵营应来自主题');
+    const faction = theme.factions.find((f) => f.id === s.players[0]?.factionId);
+    assert.ok(faction !== undefined, '阵营应能在主题里找到');
+    assert.ok(
+      s.players[0]?.hpMax === faction.hpBase || s.players[0]?.hpMax === s.scales.handStart,
+      '体力上限应来自阵营体力或规模表起始手牌下限',
+    );
     // 每人都发到起始手牌（开局天机可能额外发 1 张，故用区间）
     for (const p of s.players) {
       assert.ok(

@@ -12,14 +12,41 @@ import { openHeaven } from './turn-runner.ts';
 import { grantedFlags } from './passives.ts';
 
 /**
- * 按主题分配身份与阵营。
+ * 确定性打乱下标（Fisher–Yates，用状态的 RNG ⇒ 固定 seed 仍可复现）。
+ */
+function shuffledIndices(n: number, state: State): number[] {
+  const idx = Array.from({ length: n }, (_, i) => i);
+  for (let i = n - 1; i > 0; i--) {
+    const j = Math.floor(state.rng.next() * (i + 1));
+    const a = idx[i];
+    const b = idx[j];
+    if (a !== undefined && b !== undefined) {
+      idx[i] = b;
+      idx[j] = a;
+    }
+  }
+  return idx;
+}
+
+/**
+ * 按主题**随机**分配身份与阵营。
  *
- * 身份按座位轮转分配（8 个身份槽位）；阵营每 4 人一轮（4 个阵营槽位）。
+ * ⚠️ B10 修正：原实现按**座位轮转**分配（`identities[i % 8]` / `factions[i % 4]`）
+ *   ⇒ 身份与阵营和座位**一一绑定**，而先行动的座位在「登顶 → 认证 → 封顶」这条主线上占先
+ *   ⇒ 胜率沿座位顺序**严格单调递减**（实测 22.4% → 1.7%）。
+ *   现改为**开局随机分配**（用 state.rng 打乱槽位；固定 seed ⇒ 仍可复现），
+ *   身份/阵营与座位**解耦** ⇒ 胜率反映机制强度而非座位顺序。
+ *
+ * 保持不变的两条约束：
+ *   · 每人身份**唯一**（身份槽位 8 ≥ 人数 3–8）；
+ *   · 阵营人数分布不变（前 4 人各占一个阵营，其后循环）⇒ 不会出现某阵营 0 人。
  */
 export function assignIdentitiesAndFactions(state: State, theme: ThemePack): State {
+  const identityOrder = shuffledIndices(theme.identities.length, state);
+  const factionOrder = shuffledIndices(theme.factions.length, state);
   const players = state.players.map((p, i) => {
-    const identity = theme.identities[i % theme.identities.length];
-    const faction = theme.factions[i % theme.factions.length];
+    const identity = theme.identities[identityOrder[i % theme.identities.length] ?? 0];
+    const faction = theme.factions[factionOrder[i % theme.factions.length] ?? 0];
     // ⚠️ 手牌上限 = 体力上限（§4.2），而规模表的起始手牌（§8）按人数可大于阵营体力
     //   （8 人局 handStart=7 > 散仙 hpBase=6）⇒ 直接用阵营体力会让起始手牌超限。
     //   故体力上限取两者较大值。

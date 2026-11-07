@@ -207,6 +207,7 @@ function runCell(theme, players, games) {
 function summarize(cells) {
   const identityWin = new Map();
   const factionWin = new Map();
+  const seatWin = new Map();
   const certRounds = new Map();
   let total = 0;
   let fallback = 0;
@@ -230,6 +231,7 @@ function summarize(cells) {
       const f = c.factions[w];
       if (id !== undefined) { identityWin.set(id, (identityWin.get(id) ?? 0) + 1); }
       if (f !== undefined) { factionWin.set(f, (factionWin.get(f) ?? 0) + 1); }
+      seatWin.set(w, (seatWin.get(w) ?? 0) + 1);
     }
     if (c.reason === 'certified') {
       const k = '第' + c.certRound + '轮';
@@ -240,7 +242,7 @@ function summarize(cells) {
     total, fallback, certified, noWinner, anomalies, anomalySamples,
     fallbackRate: total > 0 ? fallback / total : 0,
     avgRounds: total > 0 ? roundSum / total : 0,
-    identityWin, factionWin, certRounds,
+    identityWin, factionWin, seatWin, certRounds,
   };
 }
 
@@ -349,11 +351,37 @@ if (args.out !== null) {
   lines.push('## 分析要点');
   lines.push('');
   lines.push('- **兜底触发率**：多数局在回合上限内分出胜负；超过 15% 说明门槛或山道长度需要回调（规格 §9.2）。');
-  lines.push('- **身份/阵营胜率**：注意**身份与阵营按座位轮转分配**，胜率差异同时包含「座位顺序优势」与「机制强度」两项；');
-  lines.push('  单项偏离均匀分布未超 15pp 时不触发记录线，但沿座位顺序的**单调性**仍值得在 V1.1 评估（随机分配身份可打散）。');
+  lines.push('- **身份/阵营胜率**：身份与阵营**开局随机分配**（固定 seed 可复现）⇒ 胜率差异只剩「机制强度」；');
+  lines.push('  单项偏离均匀分布未超 15pp 时不触发记录线。');
   lines.push('- **主题间一致性**：四套主题共享通用卡牌池（效果逐字相同），胜率分布应当几乎重合；差异只来自 2 张标志卡与文案。');
   lines.push('- **模拟 AI 偏置**：AI 优先登顶、认证人倾向签印 ⇒ 放大「先登顶 = 先赢」的座位优势；真人对局的认证是社交博弈，读数须打折。');
   lines.push('');
+  lines.push('## 按座位胜率（检验「座位顺序优势」是否已消除）');
+  lines.push('');
+  lines.push('> **口径说明**：座位胜率**只能在同一人数档位内比较** —— 座 3 只出现在 4 人以上的局，',
+    '> 跨档位汇总会把「该座位出现的局数」混进分母，读数无意义。');
+  lines.push('');
+  for (const players of args.players) {
+    const merged = [];
+    for (const themeId of args.themes) {
+      merged.push(...(perCell.get(themeId + ':' + players) ?? []));
+    }
+    const st = summarize(merged);
+    const winTotal = [...st.seatWin.values()].reduce((a, b) => a + b, 0);
+    const even = 100 / players;
+    lines.push('### ' + players + ' 人局（合并 ' + args.themes.length + ' 套主题 · ' + st.total + ' 局 · 均匀基准 ' + even.toFixed(1) + '%）');
+    lines.push('');
+    lines.push('| 座位 | 胜场 | 胜率 | 偏离均匀 |');
+    lines.push('|---|---|---|---|');
+    for (let seat = 0; seat < players; seat++) {
+      const w = st.seatWin.get(seat) ?? 0;
+      const rate = winTotal > 0 ? (w / winTotal) * 100 : 0;
+      const dev = rate - even;
+      lines.push('| 座' + seat + ' | ' + w + ' | ' + rate.toFixed(1) + '% | '
+        + (dev >= 0 ? '+' : '') + dev.toFixed(1) + 'pp |');
+    }
+    lines.push('');
+  }
   lines.push('## 认证轮次分布');
   lines.push('');
   lines.push('| 主题 | 第 1 轮达成 | 第 2 轮达成 |');
