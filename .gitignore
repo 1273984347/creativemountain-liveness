@@ -1,6 +1,7 @@
 node_modules/
 dist/
-print/
+print/*
+!print/规则书叙述.md
 *.log
 .tmp_*.md
 
