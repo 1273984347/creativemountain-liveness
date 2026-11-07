@@ -3,8 +3,10 @@
 > 用途：B2 开工前的**参数盘点**（实施计划 §3 开工前动作）。
 > 目标：把规格 §6.4 的算子表从「名字清单」变成「可直接写类型签名的参数契约」，
 > 同时暴露「规格写了规则但 ops 表没有对应算子」的缺口。
-> 对应规格：`docs/superpowers/specs/2026-11-07-creative-mountain-liveness-design.md` v1.3
+> 对应规格：`docs/superpowers/specs/2026-11-07-creative-mountain-liveness-design.md` **v1.4**
 > 盘点日期：2026-11-07
+>
+> **状态：11 项裁定已全部落地（v1.4，2026-11-07）。** 裁定摘要见文末 §15。B2 可直接按本文档 §13 的签名草案开工。
 
 ---
 
@@ -377,3 +379,25 @@ export interface OpResult {
 - [ ] 13 + 2 个谓词全部注册，各有单测
 - [ ] 用一份覆盖全部 op 的**临时测试主题**跑通 `theme-validate`
 - [ ] `getLegalActions()` 返回的每种 Action 都有对应枚举逻辑
+
+
+---
+
+## 15. 裁定落地记录（v1.4，2026-11-07）
+
+本文档提出的 **11 项裁定全部已落定并写入规格 v1.4**，B1 的 `State` 与 `Card` 类型已按此回改。
+
+| 编号 | 裁定 | 回流位置 | B1 改动 |
+|---|---|---|---|
+| G1 | `move_by_dice { faces: 6; target? }`，**不引入参数求值器** | 规格 §6.4 | 无 |
+| G5 造物 | `create_card` 取自**独立造物牌堆** `decks.creation`（不凭空生成）；`equip_card` 移入手牌→`Player.equipment`，**不占手牌上限、公开可见、V1 无被动效果** | §6.4 / §6.5 / §6.7.1 / §4.1 | **`State.decks.creation` + `Player.equipment`** |
+| G5 复活 | **V1 删除**「复活队友 4 灵枢」与 `revive` 算子（本作无死亡机制） | §4.3 / §13.3 | 无 |
+| StatusKind | `NegativeStatus = 'poison' \| 'slow' \| 'silence' \| 'skip_turn'` | §6.4 | `engine/types/card.ts` |
+| CardFilter | 五字段 AND（`type`/`color`/`suit`/`cost`/`cardId`），空 filter 匹配任意；**四个算子共用同一结构** | §6.4 | `engine/types/card.ts` |
+| CardType | V1 固定四值 `'motion' \| 'attack' \| 'defense' \| 'utility'`（新增类型 = 改引擎） | §6.4 | `engine/types/theme.ts` |
+| 点数排序 | **新增 `rank: number`（2–14，A=14）+ `rankLabel?`**，比较只读 rank 不解析字符串；`suit` 与 rank 正交 | §3.3 / §6.5 / §6.7.1 | **`Card` 加两字段** |
+| 位移结算 | **分段结算，到达峰顶即终止后续位移**（到达即停，不最后一起 clamp） | §3.1 | 无（引擎逻辑，B2/B3 实现） |
+| 行棋走满 | **不得选择少走**，掷 6 就走 6 | §3.1 | 无 |
+| 待认证锁定 | 峰顶**不能主动移动**，唯一离开方式是判罚后退 | §5.1 | 无 |
+| 跳到位 | 移动为**跳到位，只结算终点格**；不逐格触发 | §3.3 / §3.4 | 无 |
+| B9 观察项 | 精准登顶（点数恰等于距离）+1 灵枢，**作为 B9 观察项，不现在改规则** | §11 风险表 | 无 |

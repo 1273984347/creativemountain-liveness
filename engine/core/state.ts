@@ -24,8 +24,12 @@ export interface Player {
   readonly hpMax: number;
   /** 当前灵枢 */
   readonly resource: number;
-  /** 手牌 */
+  /** 手牌（手牌上限 = 体力上限） */
   readonly hand: readonly Card[];
+  /**
+   * 装备区（V1.4）：**不占手牌上限**、**公开可见**、**V1 无被动效果**（纯计数目标）。
+   */
+  readonly equipment: readonly Card[];
   /** 山道位置 */
   readonly position: number;
   /** 身份 id（公开，规格 §4.1） */
@@ -36,6 +40,22 @@ export interface Player {
   readonly hasMark: boolean;
   /** 是否处于待认证状态 */
   readonly pendingCert: boolean;
+}
+
+/** 各类牌堆（规格 §6.2）。 */
+export interface Decks {
+  /** 主牌库 */
+  readonly deck: readonly Card[];
+  /** 弃牌堆（牌库抽空时洗回主牌库） */
+  readonly discard: readonly Card[];
+  /** 造物牌堆（V1.4）：`create_card` 的唯一来源 */
+  readonly creation: readonly Card[];
+  /** 天机牌 */
+  readonly heaven: readonly Card[];
+  /** 关隘试炼牌 */
+  readonly trial: readonly Card[];
+  /** 认证题卡 */
+  readonly cert: readonly Card[];
 }
 
 /** 引擎状态。 */
@@ -52,12 +72,10 @@ export interface State {
   readonly turnIndex: number;
   /** 玩家列表（按座位序） */
   readonly players: readonly Player[];
-  /** 牌库 */
-  readonly deck: readonly Card[];
-  /** 弃牌堆 */
-  readonly discard: readonly Card[];
   /** 棋盘（格位 + 峰顶） */
   readonly board: Board;
+  /** 各类牌堆 */
+  readonly decks: Decks;
   /** 当前局规模配置 */
   readonly scales: ScalesRow;
 }
@@ -68,7 +86,7 @@ export interface InitialStateOptions {
   readonly players: PlayerCount;
   /** 随机种子 */
   readonly seed: number;
-  /** 牌库容量（B1 测试用；正式由主题包 counts.deckTotal 决定） */
+  /** 主牌库容量（B1 测试用；正式由主题包 counts.deckTotal 决定） */
   readonly deckSize?: number;
 }
 
@@ -77,9 +95,10 @@ function makeTestCards(n: number): Card[] {
   return Array.from({ length: n }, (_, i) => ({
     id: `test_card_${i}`,
     name: `测试牌${i}`,
-    type: 'function' as const,
+    type: 'utility' as const,
     cost: 0,
     color: 'red' as const,
+    rank: 2 + (i % 13),
     text: '测试用牌',
     effects: [],
   }));
@@ -108,6 +127,7 @@ export function createInitialState(opts: InitialStateOptions): State {
     hpMax: hpBase,
     resource: scales.initialResource,
     hand: [],
+    equipment: [],
     position: 0,
     identityId: `identity_${seat}`,
     factionId: `faction_${seat}`,
@@ -121,9 +141,15 @@ export function createInitialState(opts: InitialStateOptions): State {
     round: 1,
     turnIndex: 0,
     players,
-    deck: makeTestCards(deckSize),
-    discard: [],
     board: makeBoard(scales.boardLength),
+    decks: {
+      deck: makeTestCards(deckSize),
+      discard: [],
+      creation: [],
+      heaven: [],
+      trial: [],
+      cert: [],
+    },
     scales,
   };
   return dealInitialHands(base);

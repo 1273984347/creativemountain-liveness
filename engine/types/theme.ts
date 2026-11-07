@@ -73,8 +73,11 @@ export interface Identity {
 /** 卡牌颜色（对峙比较与险径判定都依赖它）。 */
 export type CardColor = 'red' | 'black';
 
-/** 卡牌类型。 */
-export type CardType = 'motion' | 'function' | 'heaven' | 'certification' | 'equipment' | 'trial';
+/**
+ * 卡牌类型（手牌分类）。**V1 固定四类**——新增类型 = 改引擎，不是改主题。
+ * 天机牌 / 认证题卡 / 试炼牌各有独立接口（HeavenCard / CertificationCard / TrialCard），不走本类型。
+ */
+export type CardType = 'motion' | 'attack' | 'defense' | 'utility';
 
 /** 卡牌。 */
 export interface Card {
@@ -83,7 +86,15 @@ export interface Card {
   readonly type: CardType;
   readonly cost: number;
   readonly color: CardColor;
+  /** 花色：主题风味，**不参与任何比较** */
   readonly suit?: string;
+  /**
+   * 点数比较优先级（数值，必填，2–14：A=14、K=13、Q=12、J=11、10…2）。
+   * 对峙比较只读 `rank`，**永不解析字符串**。
+   */
+  readonly rank: number;
+  /** 显示用标签（如仙侠「天/地/玄/黄」、科幻「A/B/C/D」），可选；缺省按 rank 生成扑克牌标签 */
+  readonly rankLabel?: string;
   readonly text: string;
   readonly effects: readonly Effect[];
 }
@@ -134,6 +145,23 @@ export interface CertificationCard {
   readonly prompt: string;
 }
 
+/**
+ * 造物牌（匠师「免费造物」的来源）。
+ * 独立牌堆，不可从普通牌库抽取；装备后不占手牌上限，公开可见，**V1 无被动效果**。
+ */
+export interface CreationCard {
+  readonly cardId: string;
+  readonly name: string;
+  readonly text: string;
+  readonly type?: CardType;
+  readonly cost?: number;
+  readonly color?: CardColor;
+  readonly suit?: string;
+  readonly rank?: number;
+  readonly rankLabel?: string;
+  readonly effects?: readonly Effect[];
+}
+
 /** 关隘试炼牌。 */
 export interface TrialCard {
   readonly id: string;
@@ -179,4 +207,9 @@ export interface ThemePack {
   readonly heavenCards: readonly HeavenCard[];
   readonly certificationCards: readonly CertificationCard[];
   readonly trials?: readonly TrialCard[];
+  /**
+   * 造物牌堆（V1.4）：`create_card` 从这里取牌加入手牌，**不是凭空生成**。
+   * 造物牌必须在 theme.json 声明、在 ir.json 输出、被 parity-check 覆盖。
+   */
+  readonly creationDeck?: readonly CreationCard[];
 }

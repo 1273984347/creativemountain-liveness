@@ -121,7 +121,9 @@ B1 ──► B2 ──► B3 ──► B5
 
 > **开工前动作（已完成）**：参数盘点已产出 —— `docs/superpowers/plans/2026-11-07-ops-parameter-audit.md`（379 行）。含 52 算子 + 13 谓词逐条参数表、作用域约定、签名草案，以及**盘点中发现的 7 处规格缺口**（已回写规格 §6.4）。
 >
-> **开工前仍需拍板的 6 项**（否则实现会返工）：G1 采用 `move_by_dice` 还是参数求值器；G5 的造物/装备与复活语义；`StatusKind` 枚举取值；`CardFilter` 结构；牌面点数是否由 `suit` 承载（对峙比较依赖）；`move_forward` 越过峰顶的 clamp 语义。
+> **开工前 11 项裁定已全部落地**（规格 v1.4）：G1 `move_by_dice`（不引入参数求值器）；造物走**独立造物牌堆** `decks.creation`、`equip_card` 只计数不占手牌上限且无被动；**复活机制 V1 删除**（无死亡机制）；`NegativeStatus = 'poison'|'slow'|'silence'|'skip_turn'`；`CardFilter` 五字段 AND 且四算子共用；`CardType` 固定四值；**新增 `rank: number`（A=14）+ `rankLabel?`**（比较只读 rank）。另补**位移结算语义**三条：分段结算到达即停 / 行棋必须走满 / 待认证锁定，移动为**跳到位只结算终点格**。
+>
+> **B1 已按此回改**：`State.decks`（含 `creation`）、`Player.equipment`、`Card.rank`/`rankLabel` 均已落地（提交见仓库历史），类型门禁与 28 条测试全绿。
 
 ---
 ## 4. B3 — 核心玩法闭环

@@ -18,8 +18,8 @@ export function drawCards(state: State, playerIndex: number, count: number): Sta
     return state;
   }
   const drawn: Card[] = [];
-  let deck = [...state.deck];
-  let discard = [...state.discard];
+  let deck = [...state.decks.deck];
+  let discard = [...state.decks.discard];
   for (let i = 0; i < count; i++) {
     if (deck.length === 0) {
       if (discard.length === 0) {
@@ -40,7 +40,7 @@ export function drawCards(state: State, playerIndex: number, count: number): Sta
     return state;
   }
   players[playerIndex] = { ...target, hand: [...target.hand, ...drawn] };
-  return { ...state, players, deck, discard };
+  return { ...state, players, decks: { ...state.decks, deck, discard } };
 }
 
 /** 裁牌：手牌数超出上限则弃至上限（规格 §3.1 步骤 4）。 */
@@ -57,7 +57,11 @@ export function discardDownToLimit(state: State, playerIndex: number): State {
   const dropped = player.hand.slice(limit);
   const players = [...state.players];
   players[playerIndex] = { ...player, hand: keep };
-  return { ...state, players, discard: [...state.discard, ...dropped] };
+  return {
+    ...state,
+    players,
+    decks: { ...state.decks, discard: [...state.decks.discard, ...dropped] },
+  };
 }
 
 /** 开局发牌：每名玩家发 `scales.handStart` 张（规格 §3.1 开局设置）。 */
