@@ -360,12 +360,49 @@ export function checkStateContract(spec, stateFields) {
   // 取 §6.2 到下一个 ### 之间的原文
   const end = spec.indexOf('\n### ', idx + 10);
   const sec = spec.slice(idx, end === -1 ? idx + 4000 : end);
+
+  // 方向一：代码有 → 规格必须登记
   const missing = stateFields.filter((f) => !sec.includes(f));
+
+  // 方向二：规格写了 → 代码必须存在（防止规格残留已删除的字段）
+  // 抽取 §6.2 代码块里的 `字段名:` 形态（排除嵌套对象内部的键）
+  const codeBlockMatch = sec.match(/```ts\n([\s\S]*?)```/);
+  const specFields = new Set();
+  if (codeBlockMatch !== null) {
+    const body = codeBlockMatch[1];
+    let depth = 0;
+    for (const rawLine of body.split(/\r?\n/)) {
+      const line = rawLine.replace(/\/\/.*$/, '');
+      const m = line.match(/^\s*(?:readonly\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*[?:]/);
+      if (m === null) {
+        continue;
+      }
+      // 只取深度 0 的字段（嵌套的 decks 等算一个字段）
+      if (depth === 0) {
+        specFields.add(m[1]);
+      }
+      depth += (line.match(/\{/g) ?? []).length;
+      depth -= (line.match(/\}/g) ?? []).length;
+      if (depth < 0) {
+        depth = 0;
+      }
+    }
+  }
+  const codeSet = new Set(stateFields);
+  const extra = [...specFields].filter((f) => !codeSet.has(f));
+
+  const problems = [];
+  if (missing.length > 0) {
+    problems.push(`规格 §6.2 未登记：${missing.join('、')}`);
+  }
+  if (extra.length > 0) {
+    problems.push(`规格 §6.2 多写了代码中不存在的字段：${extra.join('、')}`);
+  }
   return {
     id: 'C9',
-    title: `State 字段与规格 §6.2 一致（${stateFields.length} 个字段）`,
-    ok: missing.length === 0,
-    detail: missing.length === 0 ? '' : `规格 §6.2 未登记：${missing.join('、')}`,
+    title: `State 字段与规格 §6.2 双向一致（${stateFields.length} 个字段）`,
+    ok: problems.length === 0,
+    detail: problems.join('; '),
   };
 }
 

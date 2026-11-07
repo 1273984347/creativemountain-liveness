@@ -59,6 +59,24 @@ test('负样本：doc-sync 对规模表数值漂移判红，恢复后判绿', ()
   assert.equal(restored.code, 0, '恢复后 doc-sync 必须判绿');
 });
 
+// ---------- 负样本 7：State 契约漂移（双向）----------
+//
+// C9 是「B1 契约冻结」的机器守卫：口头约定形同虚设，并行开发照样加字段。
+// 两个方向都要能判红：
+//   ① 代码有字段、规格没登记 → 改 state.ts（见 state-contract.test.ts 的配套用例）
+//   ② 规格写了字段、代码没有 → 改规格（本条）
+
+test('负样本：doc-sync 对「规格多写代码没有的字段」判红，恢复后判绿', () => {
+  withBrokenSpec(
+    (s) => s.replace('  scales: ScalesRow;         // 当前局规模配置（§8）', '  scales: ScalesRow;         // 当前局规模配置（§8）\n  ghostField: string;'),
+    (out) => {
+      assert.match(out, /C9/, '应报在 C9 State 契约检查上');
+    }
+  );
+  const restored = runNode([DOC_SYNC]);
+  assert.equal(restored.code, 0, '恢复后 doc-sync 必须判绿');
+});
+
 // ---------- 负样本 6：ops 表重复行 ----------
 //
 // 这条负样本是**被真实 bug 逼出来的**：v1.4 回改时 `| 判定与装备 |` 行被写了两次，
