@@ -7,7 +7,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { runTsc, runNodeTest } from './harness.ts';
@@ -67,9 +67,18 @@ test('负样本：测试门禁对失败用例判红，恢复后判绿', () => {
     const broken = runNodeTest(ENGINE_GLOB);
     assert.notEqual(broken.code, 0, '注入失败用例后测试门禁必须判红');
 
+    // ⚠️ 恢复后的断言用**自包含的临时用例目录**，不依赖全局 engine 绿灯——
+    // 否则并行开发中的中间态失败会让本负样本假红（门禁自证不该依赖被检对象的状态）。
     cleanup(TEST_PROBE);
-    const restored = runNodeTest(ENGINE_GLOB);
-    assert.equal(restored.code, 0, '移除失败用例后测试门禁必须判绿');
+    const isolated = resolve(process.cwd(), 'tests', 'gates', '__isolated');
+    mkdirSync(isolated, { recursive: true });
+    try {
+      const isolatedGlob = 'tests/gates/__isolated/**/*.test.ts';
+      const restored = runNodeTest(isolatedGlob);
+      assert.equal(restored.code, 0, '移除失败用例后测试门禁必须判绿');
+    } finally {
+      rmSync(isolated, { recursive: true, force: true });
+    }
   } finally {
     cleanup(TEST_PROBE);
   }
