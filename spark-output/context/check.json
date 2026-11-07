@@ -1,0 +1,154 @@
+{
+  "skill": "check",
+  "generated_at": "2026-11-07T20:27:42.130Z",
+  "project_name": "创界山·活人认证",
+  "target": "主屏 Web 原型 v2（flow1-4 + host-screen，14 屏，含 16 must 异常态落码）",
+  "mode": "C（chain-driven，v2 改稿）+ A（异常态落码后静态复查）",
+  "regression_of": {
+    "check_v1_major_1": "已修且守住：sitemap host nav=4 flow 分组，与 Focus Rail 一致",
+    "check_v1_major_2": "已修且守住：flow3 结算 crumb 有 onHome，e.preventDefault 无 handler=0",
+    "check_v1_major_3": "已修且扩展：error/offline/loading must 态 16/16 落码"
+  },
+  "findings": [
+    {
+      "category": "accessibility",
+      "severity": "minor",
+      "location": "host-screen.tsx 亮/暗裸 button；flow1 MountainBoard marker（仅 title）；11 个「模拟…」ghost 按钮",
+      "description": "交互控件仍无 aria-label（9.4），待认证仍以「星号 + 颜色」为主传达，缺文字/aria 冗余。",
+      "suggestion": "裸 button/图标按钮加 aria-label 或改 IconButton；待认证补「待认证」文字 Tag。"
+    },
+    {
+      "category": "copy",
+      "severity": "minor",
+      "location": "flows/*.tsx（模拟同步失败/模拟计票异常/模拟题目丢失/模拟加载/模拟房间码冲突/模拟引擎异常 等 11 处）",
+      "description": "「模拟…」为异常态演示触发器，属原型脚手架；当前对用户可见，交付/真人局若不禁用会被误当正式功能。",
+      "suggestion": "包一层 dev-only 开关（import.meta.env.DEV）或交付前移除/折叠到调试抽屉。"
+    },
+    {
+      "category": "components",
+      "severity": "minor",
+      "location": "flow1-host-dashboard.tsx:48,56",
+      "description": "仍有 2 处 text-[10px] 任意字号（山道「封」与占位 marker），未走语义字号（3.4）。",
+      "suggestion": "改 text-xs，或沉淀为棋盘组件时统一。"
+    },
+    {
+      "category": "feedback",
+      "severity": "minor",
+      "location": "host-screen.tsx <Toaster/>；各异常态重试/结算/生成成功路径",
+      "description": "挂载 Toaster 但全项目 0 次 toast()（8.2）：同步恢复、结算成功、会话生成成功等跃迁无正向反馈提示。",
+      "suggestion": "在重试成功/状态恢复处调用 toast.success，或移除空 Toaster 以免误导。"
+    },
+    {
+      "category": "feedback",
+      "severity": "minor",
+      "location": "flow1 resolve / flow2 onVerdict·reveal / flow4 generate·refresh·loading 的 setTimeout",
+      "description": "演示态 setTimeout 未在组件卸载时清理，快速切屏可能触发 React 19 setState-after-unmount 告警（不影响功能）。",
+      "suggestion": "用 useEffect+ref 或组件级 timer 清理；原型可暂容忍。"
+    },
+    {
+      "category": "visual-hierarchy",
+      "severity": "minor",
+      "location": "flow1/flow2/flow3 工具栏「下一步 →」primary 与各屏内容主 CTA 并存",
+      "description": "一屏出现 2 个 primary（4.2），名场面/结算等高潮屏视觉焦点被步进控件分散。",
+      "suggestion": "工具栏 Next 降 secondary/ghost，内容区保留唯一 primary。"
+    },
+    {
+      "category": "responsive",
+      "severity": "minor",
+      "location": "各 flow KPI grid（仅 md/xl）",
+      "description": "断点缺 tablet(sm) 档；共享大屏超宽仅靠 main max-w-7xl，未定义 ≥1440 密度（7.1）。",
+      "suggestion": "补 sm/md/lg 三档 + 大屏密度策略。"
+    },
+    {
+      "category": "edge-states",
+      "severity": "minor",
+      "location": "edge.json：剩余 12 个 should/nice（离线冻结/并列平局/溢出缩写/超时归零自动判定/手机权限）",
+      "description": "must 异常态已 16/16 落码；should/nice 边界与离线细节仍为 backlog，未破主流程（5.4）。",
+      "suggestion": "v1.1 增量补 should；离线/权限随 flow-mobile 一并做。"
+    }
+  ],
+  "summary": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 8,
+    "pass": 3
+  },
+  "chain_verification": {
+    "strategy_dimensions": [
+      {
+        "dimension": "情感化设计",
+        "thesis": "让认证成为反复出现的高潮",
+        "landed_in": "flow2 认证聚焦(三方Tabs+签印进度+reveal)、flow3 排名(名场面即胜利)、异常态保高潮不崩",
+        "verdict": "✅ 通过"
+      },
+      {
+        "dimension": "交互设计",
+        "thesis": "铺垫轻量、认证流程顺畅、待认证锁定",
+        "landed_in": "flow1 状态看板+错误态、flow2 一键认证/锁定/超时、focus 聚焦",
+        "verdict": "✅ 通过（锁定不可移动约束以 Banner 表达，引擎级禁动在手机/引擎侧）"
+      },
+      {
+        "dimension": "用户引导",
+        "thesis": "规则渐进披露、价值前置",
+        "landed_in": "flow4 教学(Steps)+关隘预热+房间码加入",
+        "verdict": "🟡 部分（coachmark 式渐进披露属手机私牌端 flow-mobile）"
+      }
+    ],
+    "stories_acceptance": [
+      {
+        "story": "story-1",
+        "ac": "边玩边学 / 首关预热 / 无长冷场",
+        "where": "flow4 教学+加入会话+错误校验",
+        "verdict": "🟡 部分"
+      },
+      {
+        "story": "story-2",
+        "ac": "每人有动作 / 分心<2 / 预热认证将至",
+        "where": "flow1 看板+离线/同步错误态",
+        "verdict": "🟡 部分（动作在手机；host 显公开态+异常态）"
+      },
+      {
+        "story": "story-3",
+        "ac": "放者可作证 / 不冷场",
+        "where": "flow1 S4 放逐公示 + flow2 证人席",
+        "verdict": "✅ 通过"
+      },
+      {
+        "story": "story-4",
+        "ac": "全桌视线集中 / 有戏",
+        "where": "flow2 聚焦 spotlight + 揭晓 loading",
+        "verdict": "✅ 通过（待真人）"
+      },
+      {
+        "story": "story-5",
+        "ac": "≥3 次全桌集中 / 多数人参与",
+        "where": "flow2 参与计数+门槛N",
+        "verdict": "🟡 部分（局级频次需真人校准）"
+      },
+      {
+        "story": "story-6",
+        "ac": "名场面者赢 / 理解为何赢",
+        "where": "flow3 排名+得分明细+空/加载态",
+        "verdict": "✅ 通过"
+      }
+    ],
+    "journey_dropout_repair": [
+      {
+        "stage": "stage2 铺垫流失",
+        "impl": "flow1 看板 + flow4 教学 + 同步异常态兜底",
+        "verdict": "🟡 部分"
+      },
+      {
+        "stage": "stage4 认证峰值",
+        "impl": "flow2 聚焦 + reveal",
+        "verdict": "✅ 通过"
+      },
+      {
+        "stage": "stage5 终局落差",
+        "impl": "flow3 名场面即胜利排名",
+        "verdict": "✅ 通过"
+      }
+    ]
+  },
+  "no_brief_note": "已读到 Brief，第 10 类一致性检查已执行（本 v2 无 brief-consistency 新发现）。"
+}

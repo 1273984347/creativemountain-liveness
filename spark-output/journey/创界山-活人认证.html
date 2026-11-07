@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>创界山·活人认证 — User Journey Map</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; }
+    body { padding: 32px; background: #FAFAF7; color: #1F2937; }
+    .header { margin-bottom: 24px; }
+    .title { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+    .subtitle { font-size: 14px; color: #6B7280; }
+    .persona-card { display: inline-flex; align-items: center; padding: 12px 20px; background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin: 16px 0 32px; }
+    .persona-avatar { width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #6366F1, #EC4899); margin-right: 12px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; }
+    .persona-info { font-size: 13px; }
+    .persona-info b { display: block; font-size: 15px; color: #111827; }
+    .persona-info span { color: #6B7280; }
+    .jtbd { font-style: italic; padding: 12px 16px; background: #FEF3C7; border-left: 4px solid #F59E0B; border-radius: 4px; margin-bottom: 32px; font-size: 14px; }
+    .journey-grid { display: grid; grid-template-columns: 120px repeat({{stage_count}}, 1fr); gap: 1px; background: #E5E7EB; border-radius: 12px; overflow: hidden; }
+    .grid-row { display: contents; }
+    .row-label, .stage-cell { background: white; padding: 14px 12px; font-size: 12px; }
+    .row-label { background: #F3F4F6; font-weight: 600; color: #4B5563; display: flex; align-items: center; }
+    .stage-header { background: #1F2937; color: white; padding: 16px 12px; font-size: 13px; font-weight: 600; text-align: center; }
+    .stage-header .emoji { font-size: 24px; display: block; margin-bottom: 4px; }
+    .stage-cell ul { list-style: none; }
+    .stage-cell li { padding: 4px 0; line-height: 1.4; }
+    .stage-cell li:before { content: "·"; color: #9CA3AF; margin-right: 6px; }
+    .emotion-cell { font-size: 28px; text-align: center; padding: 16px; }
+    .pain-bar { height: 4px; background: linear-gradient(to right, #10B981, #F59E0B, #EF4444); border-radius: 2px; margin-top: 8px; }
+    .pain-indicator { height: 8px; margin-top: 4px; display: flex; gap: 2px; }
+    .pain-indicator span { flex: 1; height: 100%; background: #E5E7EB; border-radius: 1px; }
+    .pain-indicator span.active { background: currentColor; }
+    .key-moment-badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; margin-top: 4px; }
+    .key-moment-badge.truth { background: #EFF6FF; color: #2563EB; }
+    .key-moment-badge.dropout { background: #FEE2E2; color: #DC2626; }
+    .key-moment-badge.delight { background: #D1FAE5; color: #059669; }
+    .key-moment-badge.recovery { background: #FEF3C7; color: #D97706; }
+    .opportunity { background: #ECFDF5; padding: 6px 8px; border-radius: 4px; font-size: 11px; color: #047857; margin: 3px 0; }
+    .quote { font-style: italic; color: #4B5563; padding: 6px 8px; background: #F9FAFB; border-left: 3px solid #D1D5DB; font-size: 11px; margin: 3px 0; }
+    .curve-section { margin-top: 32px; padding: 24px; background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    .curve-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
+    .curve-svg { width: 100%; height: 120px; }
+    .footer { margin-top: 24px; text-align: center; color: #9CA3AF; font-size: 11px; }
+    @media print { body { padding: 16px; } .journey-grid { page-break-inside: avoid; } }
+    .toolbar { position: fixed; top: 16px; right: 16px; display: flex; gap: 8px; }
+    .toolbar button { padding: 8px 16px; background: #1F2937; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; }
+    .toolbar button:hover { background: #374151; }
+  
+    .hypothesis-banner { background: #FEE2E2; border: 1px solid #DC2626; color: #B91C1C; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-size: 13px; font-weight: 600; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <button onclick="window.print()">打印 / PDF</button>
+  </div>
+
+  <div class="hypothesis-banner">⚠️ 假设性旅程（Hypothesis Journey）— Probe 尚无真人数据（0 人）。情感曲线、痛点与心声均为 Frame 画像推演，标注「待验证」，非已验证洞察；用户原话留空不伪造。找人跑完 playtest 后回填。</div>
+
+  <div class="header">
+    <div class="title">创界山·活人认证 — User Journey Map</div>
+    <div class="subtitle">生成时间: 2026-11-07T18:35:13.828Z · 视角: 单局体验旅程（specific-flow · 6 stage）· 数据源: frame + brief + probe(0 数据·假设性)</div>
+  </div>
+
+  <div class="persona-card">
+    <div class="persona-avatar">大</div>
+    <div class="persona-info">
+      <b>大林</b>
+      <span>31 岁，朋友圈的「聚会局长」，常组织 6–8 人面对面聚会，要的是名场面与整活，策略是次要的</span>
+    </div>
+  </div>
+
+  <div class="jtbd">当组织 6–8 人聚会时，大林想制造一个全桌当场验明登顶者「是活人」的现场表演时刻，从而产出可反复回味的名场面；让朋友觉得他是最会整活的局长；感到全桌同频的嗨 / 避免冷场与闹完就忘</div>
+
+  <div class="journey-grid" style="grid-template-columns: 120px repeat(6, 1fr);">
+    <div class="row-label"></div>
+    <div class="stage-header"><span class="emoji">🎲</span>开场暖局</div>
+    <div class="stage-header"><span class="emoji">⛰️</span>策略铺垫·竞速</div>
+    <div class="stage-header"><span class="emoji">🚩</span>登顶触发</div>
+    <div class="stage-header"><span class="emoji">🎭</span>现场认证高潮</div>
+    <div class="stage-header"><span class="emoji">🏮</span>终局结算</div>
+    <div class="stage-header"><span class="emoji">🔁</span>赛后回味</div>
+
+    <div class="row-label">用户目标</div>
+    <div class="stage-cell">搞懂怎么玩、拿到身份、快速进入状态</div>
+    <div class="stage-cell">爬山攒资源、争取登顶、不被放逐</div>
+    <div class="stage-cell">见证有人登顶、准备进入认证</div>
+    <div class="stage-cell">验明登顶者「是活人」、产出全桌名场面</div>
+    <div class="stage-cell">看谁赢、确认名场面有没有白费</div>
+    <div class="stage-cell">回味精彩瞬间、决定要不要再开</div>
+
+    <div class="row-label">用户行动</div>
+    <div class="stage-cell"><ul><li>抽身份牌</li><li>领起始资源</li><li>听规则讲解</li><li>摆版图</li><li>确认首局模式</li></ul></div>
+    <div class="stage-cell"><ul><li>打行动卡爬山</li><li>过关隘试炼</li><li>攒灵枢</li><li>发起山议投票</li><li>放逐对手</li></ul></div>
+    <div class="stage-cell"><ul><li>登顶宣告</li><li>进入待认证</li><li>锁定峰顶</li><li>转向答题者</li></ul></div>
+    <div class="stage-cell"><ul><li>发起质疑出题</li><li>答题者现场表演</li><li>证人作证</li><li>签印/复议</li><li>全桌判定</li></ul></div>
+    <div class="stage-cell"><ul><li>计算席位数</li><li>比对距峰顶</li><li>公示排名</li><li>判定胜者</li></ul></div>
+    <div class="stage-cell"><ul><li>复盘名场面</li><li>讨论谁最精彩</li><li>决定再开一局</li><li>推荐给朋友</li></ul></div>
+
+    <div class="row-label">触点</div>
+    <div class="stage-cell"><ul><li>身份/角色牌</li><li>灵枢资源 token</li><li>规则书 / 教学页</li><li>山道版图</li><li>数字辅助屏（可选）</li></ul></div>
+    <div class="stage-cell"><ul><li>山道版图</li><li>关隘试炼卡</li><li>灵枢资源</li><li>山议投票</li><li>行动手牌</li><li>数字轨状态屏</li></ul></div>
+    <div class="stage-cell"><ul><li>峰顶格</li><li>待认证标记</li><li>认证面板</li><li>全桌视线</li></ul></div>
+    <div class="stage-cell"><ul><li>认证面板/签印</li><li>质疑出题</li><li>答题者表演</li><li>证人作证</li><li>复议投票</li></ul></div>
+    <div class="stage-cell"><ul><li>活人席计分</li><li>距峰顶格数</li><li>结算面板</li><li>排名公示</li></ul></div>
+    <div class="stage-cell"><ul><li>复盘讨论</li><li>名场面回放（数字轨可选）</li><li>再开局按钮</li><li>分享/推荐</li></ul></div>
+
+    <div class="row-label">用户心声<br><span style="font-weight:400;color:#9CA3AF;">（假设）</span></div>
+    <div class="stage-cell"><ul><li>“这身份牌有意思，但规则好像有点多”</li><li>“希望能快点玩到精彩的”</li></ul></div>
+    <div class="stage-cell"><ul><li>“还要爬多久啊…”</li><li>“我先玩会儿手机”</li><li>“被放逐了我就干坐着？”</li></ul></div>
+    <div class="stage-cell"><ul><li>“哦？有人登顶了，要开始了”</li><li>“终于到重头戏了”</li></ul></div>
+    <div class="stage-cell"><ul><li>“哈哈这也太整活了”</li><li>“全桌都在看他答题，太刺激了”</li><li>“这瞬间值了”</li></ul></div>
+    <div class="stage-cell"><ul><li>“等等，刚才最精彩的人怎么输了？”</li><li>“那我刚才表演图啥…”</li><li>“原来爬到哪也算分”</li></ul></div>
+    <div class="stage-cell"><ul><li>“刚才那段我能笑一年”</li><li>“下次聚会再开一局”</li><li>“得安利给那谁”</li></ul></div>
+
+    <div class="row-label">情绪</div>
+    <div class="stage-cell emotion-cell">🙂<div class="pain-indicator" style="color:#34D399;"><span class="active"></span><span class="active"></span><span class=""></span><span class=""></span><span class=""></span></div></div>
+    <div class="stage-cell emotion-cell">😞<div class="pain-indicator" style="color:#F97316;"><span class="active"></span><span class="active"></span><span class="active"></span><span class="active"></span><span class=""></span></div><span class="key-moment-badge dropout">流失风险</span></div>
+    <div class="stage-cell emotion-cell">🙂<div class="pain-indicator" style="color:#34D399;"><span class="active"></span><span class="active"></span><span class=""></span><span class=""></span><span class=""></span></div><span class="key-moment-badge recovery">体验回升</span></div>
+    <div class="stage-cell emotion-cell">😊<div class="pain-indicator" style="color:#10B981;"><span class="active"></span><span class=""></span><span class=""></span><span class=""></span><span class=""></span></div><span class="key-moment-badge delight">满意峰值</span></div>
+    <div class="stage-cell emotion-cell">😕<div class="pain-indicator" style="color:#F59E0B;"><span class="active"></span><span class="active"></span><span class="active"></span><span class=""></span><span class=""></span></div><span class="key-moment-badge dropout">流失风险</span></div>
+    <div class="stage-cell emotion-cell">🙂<div class="pain-indicator" style="color:#34D399;"><span class="active"></span><span class="active"></span><span class=""></span><span class=""></span><span class=""></span></div><span class="key-moment-badge recovery">体验回升</span></div>
+
+    <div class="row-label">痛点<br><span style="font-weight:400;color:#9CA3AF;">（假设·待验证）</span></div>
+    <div class="stage-cell"><ul><li>规则太重，开场讲解可能劝退整活型玩家</li></ul></div>
+    <div class="stage-cell"><ul><li>铺垫冗长，整活型玩家走神/掏手机（假设#1）</li><li>被放逐者出局干坐冷场</li><li>策略竞速对非极客负担重</li></ul></div>
+    <div class="stage-cell"><ul><li>待认证锁定若不清楚，全桌困惑谁在认证</li></ul></div>
+    <div class="stage-cell"><ul><li>签印门槛 N=4 致多数人无成本签印，表演集中在 1–2 次质疑，密度不足</li></ul></div>
+    <div class="stage-cell"><ul><li>早期取席者需爬回 11+ 格才赢，名场面者可能输整局 ⇒ 白演了（假设#4）</li></ul></div>
+    <div class="stage-cell"><ul><li>若名场面不够重，闹完就忘、无记忆点</li></ul></div>
+
+    <div class="row-label">用户原话</div>
+    <div class="stage-cell"><span style="color:#9CA3AF;font-size:11px;">暂无用户原话<br>待 Probe 补充</span></div>
+    <div class="stage-cell"><span style="color:#9CA3AF;font-size:11px;">暂无用户原话<br>待 Probe 补充</span></div>
+    <div class="stage-cell"><span style="color:#9CA3AF;font-size:11px;">暂无用户原话<br>待 Probe 补充</span></div>
+    <div class="stage-cell"><span style="color:#9CA3AF;font-size:11px;">暂无用户原话<br>待 Probe 补充</span></div>
+    <div class="stage-cell"><span style="color:#9CA3AF;font-size:11px;">暂无用户原话<br>待 Probe 补充</span></div>
+    <div class="stage-cell"><span style="color:#9CA3AF;font-size:11px;">暂无用户原话<br>待 Probe 补充</span></div>
+
+    <div class="row-label">设计机会</div>
+    <div class="stage-cell"><div class="opportunity">💡 渐进披露规则 + 首局教学演示（brief·用户引导）</div></div>
+    <div class="stage-cell"><div class="opportunity">💡 压缩前 60min 认知负担（brief·交互）</div><div class="opportunity">💡 新手模式推迟放逐（brief·用户引导）</div><div class="opportunity">💡 关隘试炼预热认证（brief·用户引导）</div></div>
+    <div class="stage-cell"><div class="opportunity">💡 待认证锁定防混淆（brief·交互）</div><div class="opportunity">💡 认证面板一键操作（brief·交互）</div></div>
+    <div class="stage-cell"><div class="opportunity">💡 降签印门槛提名场面密度（brief·情感化）</div><div class="opportunity">💡 保留三方判定张力（brief·情感化）</div></div>
+    <div class="stage-cell"><div class="opportunity">💡 名场面即胜利叙事保障（brief·情感化）</div><div class="opportunity">💡 席位权重平衡须过回归测试（brief·约束）</div></div>
+    <div class="stage-cell"><div class="opportunity">💡 名场面回放沉淀记忆点（brief·情感化）</div><div class="opportunity">💡 再开局引导促复玩（brief·情感化）</div></div>
+  </div>
+
+  <div class="curve-section">
+    <div class="curve-title">📈 情感曲线（Pain Level over Journey）· 待验证</div>
+    <svg class="curve-svg" viewBox="0 0 1200 120" preserveAspectRatio="none">
+      <line x1="0" y1="20" x2="1200" y2="20" stroke="#E5E7EB" stroke-dasharray="2" />
+      <line x1="0" y1="60" x2="1200" y2="60" stroke="#E5E7EB" stroke-dasharray="2" />
+      <line x1="0" y1="100" x2="1200" y2="100" stroke="#E5E7EB" stroke-dasharray="2" />
+      <polyline points="0,35 240,85 480,35 720,10 960,60 1200,35" fill="none" stroke="#6366F1" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" />
+      <circle cx="0" cy="35" r="6" fill="#34D399" stroke="white" stroke-width="2" />
+      <circle cx="240" cy="85" r="6" fill="#F97316" stroke="white" stroke-width="2" />
+      <circle cx="480" cy="35" r="6" fill="#34D399" stroke="white" stroke-width="2" />
+      <circle cx="720" cy="10" r="6" fill="#10B981" stroke="white" stroke-width="2" />
+      <circle cx="960" cy="60" r="6" fill="#F59E0B" stroke="white" stroke-width="2" />
+      <circle cx="1200" cy="35" r="6" fill="#34D399" stroke="white" stroke-width="2" />
+    </svg>
+    <div style="margin-top:12px;font-size:12px;color:#6B7280;line-height:1.6;">
+      两处流失风险：<b style="color:#DC2626;">策略铺垫（stage 2 · pain 4）</b> 与 <b style="color:#DC2626;">终局落差（stage 5 · pain 3）</b>；满意峰值：<b style="color:#059669;">认证高潮（stage 4 · pain 1）</b>。曲线为假设，须以 6 人真人局观察校准。
+    </div>
+  </div>
+
+  <div class="footer">
+    Generated by SparkSkillsHub Journey Skill · Persona: 大林 · 6 stages · 假设性（待 Probe 验证）
+  </div>
+</body>
+</html>

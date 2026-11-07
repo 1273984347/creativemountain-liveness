@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>创界山·活人认证 — 设计链路归档索引</title>
+<style>
+  :root{
+    --ink:#26221c; --sub:#6b6357; --line:#e6ddcc; --paper:#fbf6ec; --card:#fffdf8;
+    --accent:#8a5a2b; --good:#2f7d54; --warn:#b6791f; --bad:#b4452f; --code:#efe7d8;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;color:var(--ink);background:var(--paper);line-height:1.55;}
+  .wrap{max-width:960px;margin:0 auto;padding:40px 24px 64px;}
+  header.hero{border-bottom:3px double var(--line);padding-bottom:20px;margin-bottom:24px;}
+  .kicker{font-size:13px;letter-spacing:.14em;color:var(--accent);text-transform:uppercase;font-weight:700;}
+  h1{font-size:30px;margin:.25em 0 .1em;font-weight:800;letter-spacing:-.01em;}
+  .prop{color:var(--sub);font-size:15px;}
+  .banner{background:#fdf3e6;border:1px solid #ecd7b3;border-left:5px solid var(--warn);border-radius:10px;padding:16px 18px;margin:20px 0;}
+  .banner h2{margin:0 0 8px;font-size:16px;color:#7a5218;display:flex;align-items:center;gap:8px;}
+  .banner ul{margin:0;padding-left:20px;color:#5f4a24;}
+  .banner li{margin:3px 0;}
+  section{margin:28px 0;}
+  h2.sec{font-size:19px;margin:0 0 6px;display:flex;align-items:center;gap:9px;}
+  h2.sec .n{width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;flex:none;}
+  .lead{color:var(--sub);font-size:14px;margin:0 0 12px;}
+  table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden;font-size:14px;}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top;}
+  th{background:#f3ead9;color:#4a3c26;font-weight:700;font-size:13px;}
+  tr:last-child td{border-bottom:none;}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--code);padding:1px 6px;border-radius:5px;font-size:12.5px;color:#4a3a22;}
+  a{color:var(--accent);text-decoration:none;}
+  a:hover{text-decoration:underline;}
+  .badge{display:inline-block;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:.02em;}
+  .b-inc{background:#f6e2da;color:var(--bad);}
+  .b-val{background:#dcefe2;color:var(--good);}
+  .b-part{background:#f7ecd0;color:var(--warn);}
+  .b-todo{background:#e8e2d4;color:#6b6357;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .box{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;}
+  .box h3{margin:0 0 6px;font-size:14px;color:var(--accent);}
+  .box ul{margin:0;padding-left:18px;font-size:13.5px;}
+  .box li{margin:3px 0;}
+  ul.gaps{list-style:none;padding:0;}
+  ul.gaps li{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--warn);border-radius:8px;padding:10px 12px;margin:8px 0;font-size:14px;}
+  ul.gaps li b{color:var(--bad);}
+  footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--line);color:var(--sub);font-size:12.5px;text-align:center;}
+  .toolbar{position:fixed;top:16px;right:16px;}
+  .toolbar button{background:var(--accent);color:#fff;border:none;padding:8px 14px;border-radius:8px;font-size:13px;cursor:pointer;font-weight:600;}
+  .toolbar button:hover{background:#6f4722;}
+  .path{color:#4a3a22;font-size:12.5px;}
+  @media(max-width:720px){.grid2{grid-template-columns:1fr}.kicker{letter-spacing:.08em}h1{font-size:24px}}
+  @media print{.toolbar{display:none}body{background:#fff}.wrap{max-width:none;padding:0}.banner,.box,table,ul.gaps li{break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="toolbar"><button onclick="window.print()">打印 / 存 PDF</button></div>
+<div class="wrap">
+
+<header class="hero">
+  <div class="kicker">设计链路归档索引</div>
+  <h1>创界山·活人认证</h1>
+  <p class="prop">《爱情公寓》虚构桌游「创界山」2026 重制的体验调优 · 命题：<b>登顶≠胜利，被全桌当场验明「是活人」才赢</b></p>
+</header>
+
+<div class="banner">
+  <h2>⚠️ 诚实标注 · 请先读</h2>
+  <ul>
+    <li>本链路 <b>probe 采集 0 真人数据、项目未上线、无埋点</b>。</li>
+    <li>除「范围纪律（out_of_scope 遵守）」外，方向 A 与关键假设 <b>验证结论一律为 inconclusive</b>。</li>
+    <li>下游/新团队消费时 <b>不得把假设性产物当已验证洞察</b>。</li>
+    <li>唯一能证伪方向 A 的实验：<b>跑一场 6 人真人局 + 观察协议</b>（probe 已备好方案与大纲）。</li>
+  </ul>
+</div>
+
+<section>
+  <h2 class="sec"><span class="n">A</span> 链式上下文 <span class="path">· spark-output/context/ · 12 JSON</span></h2>
+  <p class="lead">结构化产物，供下游 Skill / 下个项目直接读取复用。</p>
+  <table>
+    <thead><tr><th style="width:150px">文件</th><th>作用</th></tr></thead>
+    <tbody>
+      <tr><td><code>frame.json</code></td><td>问题框定：persona 大林、方向 A/B/C、关键假设#1、压力测试</td></tr>
+      <tr><td><code>probe.json</code></td><td>研究方案与访谈大纲（<span class="badge b-inc">0 数据</span> status=plan_ready_data_pending）</td></tr>
+      <tr><td><code>brief.json</code></td><td>设计一页纸：业务目标 / 用户 / 3 策略维度 / 设计标准 / 约束</td></tr>
+      <tr><td><code>journey.json</code></td><td>单局体验旅程 6 stage、情感曲线、2 个 dropout-risk</td></tr>
+      <tr><td><code>stories.json</code></td><td>6 个用户故事（P0 三支柱 + P1），含设计触点与 AC</td></tr>
+      <tr><td><code>sitemap.json</code></td><td>多端 IA（Web 主屏 + 手机私牌端）、25 页、5 跨端 flow、现状/gap</td></tr>
+      <tr><td><code>flow-web.json</code></td><td>主屏 4 flow / 14 屏结构、组件库 sparkdesign、技术栈、验证记录</td></tr>
+      <tr><td><code>check.json</code></td><td>走查 v2：0 Blocker / 0 Major / 8 Minor + Mode C 一致性</td></tr>
+      <tr><td><code>edge.json</code></td><td>异常态矩阵：14 屏 37 态（16 must 落码 + 12 should/nice）</td></tr>
+      <tr><td><code>qa.json</code></td><td>还原度验收 0/0/5 minor + 修复状态 + Check 反向核对</td></tr>
+      <tr><td><code>retro.json</code></td><td>全链复盘：decision/assumption 验证、worked/didnt/surprises、recs</td></tr>
+      <tr><td><code>_session-state.json</code></td><td>链路断点恢复通道（compaction 用）</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2 class="sec"><span class="n">B</span> 人类可读产物 <span class="path">· 双击即看</span></h2>
+  <table>
+    <thead><tr><th>阶段</th><th>文件</th><th style="width:70px">大小</th><th>状态</th></tr></thead>
+    <tbody>
+      <tr><td>Brief</td><td><code>brief/创界山-活人认证.html</code></td><td>~60KB</td><td>一页纸 Chalk 横版 · 3 策略维度 · 假设#1 入约束</td></tr>
+      <tr><td>Journey</td><td><code>journey/创界山-活人认证.html</code></td><td>~16KB</td><td>单局 6 stage 假设旅程 · 2 流失风险 · 红章待验证</td></tr>
+      <tr><td>Stories</td><td><code>stories/strategy-live-certification.md</code></td><td>~14KB</td><td>6 故事 · P0 三支柱（熬得到/高潮值/名场面即胜利）</td></tr>
+      <tr><td>Sitemap</td><td><code>sitemap/creativemountain-liveness.md</code></td><td>~15KB</td><td>站点树 + Mermaid + 路由表 + 现状/gap 地图</td></tr>
+      <tr><td>Flow Web</td><td><a href="file:../creativemountain-host"><code>creativemountain-host/</code></a></td><td>源码</td><td>主屏 React 原型 · 4 flow / 14 屏（见 C）</td></tr>
+      <tr><td>Check</td><td><code>check/创界山-活人认证-走查报告.md</code></td><td>~6KB</td><td>v2 走查 · 含 v1 三 Major 回归确认</td></tr>
+      <tr><td>Edge</td><td><code>edge/创界山-活人认证-异常态.md</code></td><td>~18KB</td><td>6 类状态矩阵 + 每态三件套 + critical_missing</td></tr>
+      <tr><td>QA</td><td><code>qa/创界山-活人认证-验收报告.md</code></td><td>~6KB</td><td>9 维还原度 + Check finding 反向核对</td></tr>
+      <tr><td>Retro</td><td><code>retro/creativemountain-liveness.md</code></td><td>~13KB</td><td>全链复盘 + Lessons + Recommendations</td></tr>
+      <tr><td>链路面板</td><td><a href="dashboard.html"><code>dashboard.html</code></a></td><td>~30KB</td><td>5 阶段 × 27 节点进度看板 · 当前 <b>11/27</b></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2 class="sec"><span class="n">C</span> 主屏 React 原型（flow-web 产物）<span class="path">· creativemountain-host/</span></h2>
+  <div class="grid2">
+    <div class="box">
+      <h3>内容</h3>
+      <ul>
+        <li>源码 <code>src/App.jsx</code>·<code>main.jsx</code>·<code>flows/host-screen/</code>·<code>flow1..4-*.tsx</code>·<code>flows/shared/{types,mock-data}.ts</code></li>
+        <li>配置 <code>vite.config.js</code>·<code>package.json</code>·<code>index.html</code></li>
+        <li>栈：React 19 + Vite 8 + Spark Design 0.4.11 + Tailwind 4（parchment/compact）</li>
+      </ul>
+    </div>
+    <div class="box">
+      <h3>运行 & 门禁</h3>
+      <ul>
+        <li><code>cd creativemountain-host && npm install && npm run dev</code> → :5173</li>
+        <li><code>npm run build</code> / <code>npm run lint</code> 当前 <span class="badge b-val">0 错误</span></li>
+        <li>属<b>设计原型</b>；与既有 <code>web/</code>（vanilla-TS 单文件热座）是两套 UI 栈，<code>engine/</code> 纯 TS 引擎可复用</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2 class="sec"><span class="n">D</span> 归档取舍</h2>
+  <div class="grid2">
+    <div class="box">
+      <h3>纳入版本库</h3>
+      <ul>
+        <li><code>spark-output/**</code>（context + 各报告 + dashboard + 本索引）</li>
+        <li><code>creativemountain-host/</code> 的 <code>src</code> + 配置 + <code>package*.json</code></li>
+      </ul>
+    </div>
+    <div class="box">
+      <h3>不纳入（.gitignore 已忽略）</h3>
+      <ul>
+        <li><code>node_modules/</code>（实测 ~429M）、两个 <code>dist/</code> —— 按需重建</li>
+        <li>去重：<code>creativemountain-host/spark-output/context/</code> 是根 context 的副本，留根目录一份即可</li>
+      </ul>
+    </div>
+  </div>
+  <p class="lead" style="margin-top:12px">本链路之前的既有工程（非链产物，勿混）：<code>engine/</code> · <code>web/</code> · <code>tests/</code> · <code>print/</code> · <code>themes/</code> · <code>docs/</code> · 根 <code>dist/</code></p>
+</section>
+
+<section>
+  <h2 class="sec"><span class="n">E</span> 结转的缺口（下一轮 / 下个项目）</h2>
+  <ul class="gaps">
+    <li><b>真人 playtest 0 人</b> —— 假设#1 唯一证伪实验，最高优先。</li>
+    <li><b>metric 未跑</b> —— 定量标准（≥3 次全桌集中 / 人均分心 &lt;2）无埋点载体，假设验证停在 inconclusive。</li>
+    <li><b>flow-mobile 未跑</b> —— 手机私牌端（私密手牌/出题/签印/投票/复议/旁观）未落地。</li>
+    <li><b>host↔phone 实时同步未实现</b> —— 原型用 mock，多端为纸面架构；须保留引擎与九道门禁、仅拆分 UI。</li>
+  </ul>
+</section>
+
+<footer>
+  生成于 2026-11-08 · product-design 链路：frame → probe → brief → journey → stories → sitemap → flow-web → check → edge → check v2 → qa → retro ·
+  <span class="badge b-inc">假设性 · 待真人 playtest 回填</span>
+</footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,110 @@
+{
+  "skill": "flow-web",
+  "generated_at": "2026-11-07T19:40:00Z",
+  "project_name": "创界山·活人认证",
+  "scenario": "data-analytics",
+  "endpoint": "host（Web 主屏 / 多端中的共享公开状态轨）",
+  "component_library": "sparkdesign",
+  "tech_stack": {
+    "framework": "React 19 + Vite 8 + react-router-dom 7",
+    "styling": "Tailwind 4 + @tailwindcss/vite + Spark token CSS",
+    "components": "sparkdesign 0.4.11",
+    "icons": "lucide-react 1.70",
+    "theme": "parchment / style=compact",
+    "project_dir": "D:/<repo>/creativemountain-host",
+    "run": "cd creativemountain-host && npm install && npm run dev (http://localhost:5173)"
+  },
+  "app_shell": "creativemountain-host/src/flows/host-screen/host-screen.tsx",
+  "shared": [
+    "creativemountain-host/src/flows/shared/types.ts",
+    "creativemountain-host/src/flows/shared/mock-data.ts"
+  ],
+  "navigation_pattern": "左侧 Focus Rail（SidebarMenu，4 视图 = 4 flow），主机/操作者的聚焦选择而非玩家路由",
+  "flows": [
+    {
+      "name": "实时状态看板 Host Realtime Dashboard",
+      "client": "host",
+      "entry_path": "/flow1",
+      "file_path": "creativemountain-host/src/flows/flow1-host-dashboard/flow1-host-dashboard.tsx",
+      "covers_stories": ["story-2", "story-3"],
+      "screens": [
+        { "name": "Overview 对局总览", "sitemap_page": "['/#board','/#seats','/#log']" },
+        { "name": "Player Drill 席位钻取", "sitemap_page": "['/#seats']" },
+        { "name": "Council Tally 山议票数公示", "sitemap_page": "['/#council']" },
+        { "name": "Exile Reveal 放逐公示", "sitemap_page": "['/#council/exile']" }
+      ]
+    },
+    {
+      "name": "认证高潮聚焦 Certification Climax",
+      "client": "host",
+      "entry_path": "/flow2",
+      "file_path": "creativemountain-host/src/flows/flow2-certification-climax/flow2-certification-climax.tsx",
+      "covers_stories": ["story-4", "story-5", "story-3"],
+      "screens": [
+        { "name": "Cert Prompt 待认证触发", "sitemap_page": "['/#board']" },
+        { "name": "Cert Focus 认证聚焦主舞台", "sitemap_page": "['/#cert']" },
+        { "name": "Challenge Reveal 质疑题目公示", "sitemap_page": "['/#cert']" },
+        { "name": "Verdict & Appeal 判定/复议公示", "sitemap_page": "['/#cert/progress','/#cert/witness','/#cert/appeal']" }
+      ]
+    },
+    {
+      "name": "终局结算 + 排名公示 Settlement & Rank",
+      "client": "host",
+      "entry_path": "/flow3",
+      "file_path": "creativemountain-host/src/flows/flow3-settlement-rank/flow3-settlement-rank.tsx",
+      "covers_stories": ["story-6"],
+      "screens": [
+        { "name": "Settle Enter 结算揭示", "sitemap_page": "['/#settle']" },
+        { "name": "Rank Board 排名公示", "sitemap_page": "['/#settle/rank']" },
+        { "name": "Score Detail 得分明细", "sitemap_page": "['/#settle/rank']" }
+      ]
+    },
+    {
+      "name": "开局配置 + 首局教学 Setup & Tutorial",
+      "client": "host",
+      "entry_path": "/flow4",
+      "file_path": "creativemountain-host/src/flows/flow4-setup-tutorial/flow4-setup-tutorial.tsx",
+      "covers_stories": ["story-1"],
+      "screens": [
+        { "name": "Setup 牌局配置", "sitemap_page": "['/#setup']" },
+        { "name": "Join 加入会话（host 镜像）", "sitemap_page": "['/#setup']" },
+        { "name": "Tutorial 首局教学", "sitemap_page": "['/#tutorial']" }
+      ]
+    }
+  ],
+  "routing_table": [
+    { "path": "/", "element": "Navigate to /flow1" },
+    { "path": "/flow1", "label": "实时状态看板" },
+    { "path": "/flow2", "label": "认证高潮聚焦" },
+    { "path": "/flow3", "label": "终局结算 · 排名" },
+    { "path": "/flow4", "label": "开局配置 · 教学" }
+  ],
+  "sitemap_pages_covered": ["#board", "#seats", "#log", "#council", "#council/exile", "#cert", "#cert/progress", "#cert/witness", "#cert/appeal", "#settle", "#settle/rank", "#setup", "#tutorial"],
+  "stories_covered": ["story-1", "story-2", "story-3", "story-4", "story-5", "story-6"],
+  "verification": {
+    "npm_build": "pass · ✓ built in 798ms · 0 error（rollup 解析全部具名导入，无白屏）",
+    "oxlint": "0 warnings 0 errors",
+    "import_type_rule": "shared/types 均以 import type 引入",
+    "browser": "App Shell + Flow1/Flow2 实挂载核验；SidebarMenu.onItemClick→navigate 路由可达；h-full 布局完好；聚焦屏 Tabs/Progress/WitnessRow 正常",
+    "residual_cleanup": "已删 App.css / assets / SetupCheck.tsx"
+  },
+  "missing_spark_components": [
+    "山道版图（格子棋盘 map/board grid）— 手写 token div",
+    "答题倒计时计时器 — Tag + setInterval 代替",
+    "名场面 Reveal 动效 — 状态切换 + transition-colors 代替（未引入动画库）"
+  ],
+  "gaps_this_prototype_visualizes": [
+    "结算面板 / 排名公示（现网仅状态栏 badge）",
+    "放逐公示",
+    "认证证人席 / 作证",
+    "复议第三方投票",
+    "加入会话 / 房间码（多端新增）"
+  ],
+  "out_of_scope_this_run": [
+    "手机私牌端（用 /flow-mobile 覆盖 phone 端）",
+    "host↔phone 实时同步实现（当前 mock 演示，不接网络）",
+    "与真实引擎 state 的接线（当前 mock 快照）"
+  ],
+  "hypothesis": true,
+  "data_note": "probe 0 真人数据；mock 非真人；同步为概念演示。名场面/聚焦/认证流程的体验有效性仍待真人 playtest 验证。"
+}

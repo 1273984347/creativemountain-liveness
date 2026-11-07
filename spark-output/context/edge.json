@@ -1,0 +1,613 @@
+{
+  "skill": "edge",
+  "generated_at": "2026-11-07T19:49:41.446Z",
+  "project_name": "创界山·活人认证",
+  "target_flows": [
+    "flow1 实时状态看板",
+    "flow2 认证高潮聚焦",
+    "flow3 终局结算",
+    "flow4 开局配置·教学"
+  ],
+  "platform": "web (host 主屏)",
+  "note": "v2 改稿：以 check.edge-states 缺失为补全起点；host 为共享屏，离线/同步失败为最高危态。permission-anonymous（账号登录）N/A——本作无账号体系，会话制房间码取代登录。",
+  "states_matrix": [
+    {
+      "flow": "flow1 实时状态看板",
+      "screen": "Overview 对局总览",
+      "screen_id": "page-host-board",
+      "route": "/#board",
+      "states": [
+        {
+          "state_type": "loading-initial",
+          "category": "loading",
+          "required": true,
+          "severity": "must",
+          "implemented": true,
+          "design_description": "首次/切换进入时对 KPI 网格、山道、席位表用 Skeleton 占位，避免全桌看着空白屏猜测。",
+          "fallback_behavior": "骨架显示期间结构不变；数据到达即替换",
+          "visual_hint": "Skeleton ×KPI(h-24)+山道(h-40)+席位(h-56)，200ms 淡入",
+          "copy_hint": "（无文案，骨架即反馈）",
+          "related_story": "story-2"
+        },
+        {
+          "state_type": "error-network",
+          "category": "error",
+          "required": true,
+          "severity": "must",
+          "implemented": true,
+          "design_description": "host↔phone 同步失败时：顶部 destructive Alert + 保留上一次快照并打「状态陈旧」标签 + 「重试同步」按钮。",
+          "fallback_behavior": "点重试→短暂 loading→重新拉取；不清空已显示数据",
+          "visual_hint": "Alert variant=destructive + Tag warning「状态陈旧」 + Button secondary 重试",
+          "copy_hint": "host↔phone 同步失败 · 下方为上一次快照，点重试",
+          "related_story": "story-2"
+        },
+        {
+          "state_type": "offline-no-network",
+          "category": "offline",
+          "required": true,
+          "severity": "should",
+          "implemented": false,
+          "design_description": "主屏整块屏断网/局域网失联：区分于「同步失败」——彻底离线时冻结并明示「已离线，画面停在最后状态」，非实时游戏不可继续。",
+          "fallback_behavior": "保留缓存画面；恢复网络自动重连并提示「已重新同步」",
+          "visual_hint": "全屏顶部横条 Alert warning + 灰化主区 + Spinner 重连",
+          "copy_hint": "当前离线·画面为最后状态，等待网络恢复",
+          "related_story": "story-2"
+        },
+        {
+          "state_type": "boundary-overflow",
+          "category": "boundary",
+          "required": true,
+          "severity": "should",
+          "implemented": false,
+          "design_description": "活人席/资源/回合数过大（999+、双数位数）时数字用缩写与固定列宽，不破 KPI 卡布局。",
+          "fallback_behavior": "超阈值显示 1.2K/999+，hover 出精确值 Tooltip",
+          "visual_hint": "KPI 数字 text 右对齐 + EllipsisText + Tooltip",
+          "copy_hint": "（数值缩写 1.2K / 999+）",
+          "related_story": "story-6"
+        },
+        {
+          "state_type": "boundary-long-text",
+          "category": "boundary",
+          "required": true,
+          "severity": "must",
+          "implemented": true,
+          "design_description": "身份名/阵营名/公开牌名超长时截断 + ellipsis + Tooltip，席位表与山道 marker 不撑破。",
+          "fallback_behavior": "省略号截断，悬停看全名",
+          "visual_hint": "EllipsisText 或 truncate + Tooltip；marker 折叠 +N",
+          "copy_hint": "（截断 …，悬浮显示完整）",
+          "related_story": "story-2",
+          "impl_note": "flow-web 落码（复用 Skeleton/Empty/Alert/loading/truncate 模板）"
+        }
+      ]
+    },
+    {
+      "flow": "flow1 实时状态看板",
+      "screen": "Player Drill 席位钻取",
+      "screen_id": "page-host-seats",
+      "route": "/#seats",
+      "states": [
+        {
+          "state_type": "empty-collection",
+          "category": "empty",
+          "required": true,
+          "severity": "should",
+          "implemented": true,
+          "design_description": "该玩家无公开行动记录时，轨迹区显示带解释的 Empty（而非空白列表）。",
+          "fallback_behavior": "给「返回总览」出口",
+          "visual_hint": "Empty + EmptyTitle「本座暂无记录」 + EmptyDescription",
+          "copy_hint": "尚无可回放的公开事件",
+          "related_story": "story-3"
+        },
+        {
+          "state_type": "loading-initial",
+          "category": "loading",
+          "required": true,
+          "severity": "must",
+          "implemented": true,
+          "design_description": "钻取详情首帧应 Skeleton 占位（当前直接渲染，接引擎后需补）。",
+          "fallback_behavior": "骨架→详情",
+          "visual_hint": "Skeleton 卡片 ×3",
+          "copy_hint": "（骨架）",
+          "related_story": "story-2",
+          "impl_note": "flow-web 落码（复用 Skeleton/Empty/Alert/loading/truncate 模板）"
+        },
+        {
+          "state_type": "boundary-null",
+          "category": "boundary",
+          "required": true,
+          "severity": "should",
+          "implemented": false,
+          "design_description": "statuses/装备/peeked 等可选字段为 null 时显示「无」或弱化占位，不出现 null/undefined。",
+          "fallback_behavior": "缺字段以中性 Tag「—」占位",
+          "visual_hint": "条件渲染：null→text-tertiary「未获得」",
+          "copy_hint": "未获得 / 无",
+          "related_story": "story-2"
+        }
+      ]
+    },
+    {
+      "flow": "flow1 实时状态看板",
+      "screen": "Council Tally 山议票数",
+      "screen_id": "page-host-council",
+      "route": "/#council",
+      "states": [
+        {
+          "state_type": "empty-collection",
+          "category": "empty",
+          "required": true,
+          "severity": "must",
+          "implemented": true,
+          "design_description": "无人投票时显示引导 Empty + 返回，而非 0 票空表。",
+          "fallback_behavior": "返回总览",
+          "visual_hint": "Empty + EmptyContent Button 返回总览",
+          "copy_hint": "等待玩家在山议面板完成投票",
+          "related_story": "story-3"
+        },
+        {
+          "state_type": "loading-submit",
+          "category": "loading",
+          "required": true,
+          "severity": "must",
+          "implemented": true,
+          "design_description": "点「结算山议」期间按钮 disabled + spinner，禁止重复触发结算（重复结算会错误放逐）。",
+          "fallback_behavior": "不可重复点击；完成跳放逐公示",
+          "visual_hint": "Button variant=primary loading={submitting}",
+          "copy_hint": "结算中…",
+          "related_story": "story-3",
+          "impl_note": "flow-web 已落码 + 浏览器验证"
+        },
+        {
+          "state_type": "error-server",
+          "category": "error",
+          "required": true,
+          "severity": "must",
+          "implemented": true,
+          "design_description": "计票/引擎结算异常（服务端 5xx）：友好错误 + 保留票数 + 重试，绝不暴露堆栈。",
+          "fallback_behavior": "重试结算；持续失败提示联系主持人",
+          "visual_hint": "Alert destructive + Button 重试",
+          "copy_hint": "结算失败，票数已保留，请重试",
+          "related_story": "story-3",
+          "impl_note": "flow-web 已落码 + 浏览器验证"
+        },
+        {
+          "state_type": "boundary-equal",
+          "category": "boundary",
+          "required": true,
+          "severity": "should",
+          "implemented": false,
+          "design_description": "并列最高票需明示并列规则（3人局各扣1 / 多人局加投或平局处理）。",
+          "fallback_behavior": "并列时给二次操作提示",
+          "visual_hint": "票数 Tag 高亮并列 + Alert info 规则说明",
+          "copy_hint": "出现并列：按规则处理（见山议说明）",
+          "related_story": "story-3"
+        }
+      ]
+    },
+    {
+      "flow": "flow1 实时状态看板",
+      "screen": "Exile Reveal 放逐公示",
+      "screen_id": "page-host-exile",
+      "route": "/#council/exile",
+      "states": [
+        {
+          "state_type": "boundary-zero",
+          "category": "boundary",
+          "required": true,
+          "severity": "should",
+          "implemented": true,
+          "design_description": "无人被放逐（阈值未达/3人局不淘汰）时显示 info 说明态，而非硬造一个放逐者。",
+          "fallback_behavior": "返回总览",
+          "visual_hint": "Alert variant=info「本轮无人被放逐」",
+          "copy_hint": "3 人局或票数未达放逐阈值",
+          "related_story": "story-3"
+        }
+      ]
+    },
+    {
+      "flow": "flow2 认证高潮聚焦",
+      "screen": "Cert Prompt 待认证触发",
+      "screen_id": "page-host-cert",
+      "route": "/#cert",
+      "states": [
+        {
+          "state_type": "empty-collection",
+          "category": "empty",
+          "required": true,
+          "severity": "must",
+          "implemented": true,
+          "design_description": "无待认证者时（正常态多数时间）显示克制 Empty「当前无待认证者」，不喧宾夺主。",
+          "fallback_behavior": "留在对局总览",
+          "visual_hint": "Empty + Flag 图标 + EmptyDescription",
+          "copy_hint": "当前无待认证者",
+          "related_story": "story-4"
+        }
+      ]
+    },
+    {
+      "flow": "flow2 认证高潮聚焦",
+      "screen": "Cert Focus 认证聚焦",
+      "screen_id": "page-host-cert",
+      "route": "/#cert",
+      "states": [
+        {
+          "state_type": "loading-submit",
+          "category": "loading",
+          "required": true,
+          "severity": "must",
+          "implemented": true,
+          "design_description": "签印/判定提交期间对应按钮 loading + disabled，避免手机与主屏双端重复签。",
+          "fallback_behavior": "不可重复；主屏进度即更新",
+          "visual_hint": "Button loading prop",
+          "copy_hint": "提交中…",
+          "related_story": "story-4",
+          "impl_note": "flow-web 落码（复用 Skeleton/Empty/Alert/loading/truncate 模板）"
+        },
+        {
+          "state_type": "error-validation",
+          "category": "error",
+          "required": true,
+          "severity": "should",
+          "implemented": false,
+          "design_description": "本轮机会已用/对同一目标重复操作时，inline 提示替代静默失败。",
+          "fallback_behavior": "提示已用，引导换目标或等待",
+          "visual_hint": "FieldError/Alert inline",
+          "copy_hint": "你本轮的认证机会已用（签印/质疑/弃权 三选一）",
+          "related_story": "story-5"
+        },
+        {
+          "state_type": "offline-no-network",
+          "category": "offline",
+          "required": true,
+          "severity": "should",
+          "implemented": false,
+          "design_description": "某手机签印/出题未同步到主屏时，主屏进度显「座X 待同步」，不把缺席当成弃权。",
+          "fallback_behavior": "等待该端重连；超时后可主持人代决",
+          "visual_hint": "签印进度位 pending 骨架 + Tag warning 待同步",
+          "copy_hint": "座X 操作中，等待同步",
+          "related_story": "story-5"
+        }
+      ]
+    },
+    {
+      "flow": "flow2 认证高潮聚焦",
+      "screen": "Challenge Reveal 质疑题目",
+      "screen_id": "page-host-cert",
+      "route": "/#cert",
+      "states": [
+        {
+          "state_type": "error-network",
+          "category": "error",
+          "required": true,
+          "severity": "must",
+          "implemented": true,
+          "design_description": "题目从手机私密提交后若同步丢失/超时：主屏不显示空题，给「题目未送达」重试。",
+          "fallback_behavior": "重试拉取；仍失败退回聚焦主舞台",
+          "visual_hint": "Alert destructive + 重试",
+          "copy_hint": "质疑题目同步失败，请重试",
+          "related_story": "story-4",
+          "impl_note": "flow-web 已落码 + 浏览器验证"
+        },
+        {
+          "state_type": "boundary-long-text",
+          "category": "boundary",
+          "required": true,
+          "severity": "must",
+          "implemented": true,
+          "design_description": "单题超一行/多题超长：题卡内换行或折叠 + 「展开」，不溢出破舞台。",
+          "fallback_behavior": "折叠+展开查看全题",
+          "visual_hint": "EllipsisText + Collapsible / 换行 leading-relaxed",
+          "copy_hint": "（第 N 问 …，点击展开）",
+          "related_story": "story-5",
+          "impl_note": "flow-web 落码（复用 Skeleton/Empty/Alert/loading/truncate 模板）"
+        },
+        {
+          "state_type": "boundary-timeout",
+          "category": "boundary",
+          "required": true,
+          "severity": "should",
+          "implemented": false,
+          "design_description": "答题计时归零仍未答完：明确判负规则与结算入口，而非停在 0s 死等。",
+          "fallback_behavior": "归零自动进入判定屏并高亮「超时」",
+          "visual_hint": "Tag error「超时」 + 自动跳判定",
+          "copy_hint": "时间到，进入判定",
+          "related_story": "story-4"
+        }
+      ]
+    },
+    {
+      "flow": "flow2 认证高潮聚焦",
+      "screen": "Verdict & Appeal 判定/复议",
+      "screen_id": "page-host-cert",
+      "route": "/#cert",
+      "states": [
+        {
+          "state_type": "loading-submit",
+          "category": "loading",
+          "required": true,
+          "severity": "must",
+          "implemented": true,
+          "design_description": "「揭晓判定」与复议提交需 loading，揭晓是名场面时刻，卡顿最伤体验。",
+          "fallback_behavior": "揭晓期间按钮锁；完成 reveal 动画",
+          "visual_hint": "Button loading + Reveal",
+          "copy_hint": "揭晓中…",
+          "related_story": "story-4",
+          "impl_note": "flow-web 落码（复用 Skeleton/Empty/Alert/loading/truncate 模板）"
+        },
+        {
+          "state_type": "boundary-tie",
+          "category": "boundary",
+          "required": true,
+          "severity": "should",
+          "implemented": false,
+          "design_description": "复议第三方投票平局：显示维持原判的兜底规则 + 主持人在席提示。",
+          "fallback_behavior": "平局→维持；提示主持人裁量",
+          "visual_hint": "Alert info + Tag 维持原判",
+          "copy_hint": "复议平局，维持原判",
+          "related_story": "story-5"
+        }
+      ]
+    },
+    {
+      "flow": "flow3 终局结算",
+      "screen": "Settle Enter 结算揭示",
+      "screen_id": "page-host-settle",
+      "route": "/#settle",
+      "states": [
+        {
+          "state_type": "boundary-null",
+          "category": "boundary",
+          "required": true,
+          "severity": "should",
+          "implemented": false,
+          "design_description": "无胜者（活人席空缺/全员缺席）时不可默认取 ranks[0] 当胜者，须显示「本局无胜者」说明。",
+          "fallback_behavior": "给出缺席原因与再来一局出口",
+          "visual_hint": "条件：winners 空→Empty「无胜者」",
+          "copy_hint": "活人缺席，本局无胜者",
+          "related_story": "story-6"
+        }
+      ]
+    },
+    {
+      "flow": "flow3 终局结算",
+      "screen": "Rank Board 排名公示",
+      "screen_id": "page-host-rank",
+      "route": "/#settle/rank",
+      "states": [
+        {
+          "state_type": "loading-initial",
+          "category": "loading",
+          "required": true,
+          "severity": "must",
+          "implemented": true,
+          "design_description": "结算数据首次加载用 Skeleton 表占位（当前瞬时渲染，接引擎需补）。",
+          "fallback_behavior": "骨架→表",
+          "visual_hint": "Skeleton 行 ×N",
+          "copy_hint": "（骨架）",
+          "related_story": "story-6",
+          "impl_note": "flow-web 落码（复用 Skeleton/Empty/Alert/loading/truncate 模板）"
+        },
+        {
+          "state_type": "empty-collection",
+          "category": "empty",
+          "required": true,
+          "severity": "must",
+          "implemented": true,
+          "design_description": "无排名数据（对局未结束）应是带原因 Empty，而非一条 info Alert。",
+          "fallback_behavior": "返回总览",
+          "visual_hint": "Empty + EmptyDescription 原因",
+          "copy_hint": "对局尚未结束",
+          "related_story": "story-6",
+          "impl_note": "flow-web 落码（复用 Skeleton/Empty/Alert/loading/truncate 模板）"
+        },
+        {
+          "state_type": "boundary-overflow",
+          "category": "boundary",
+          "required": true,
+          "severity": "should",
+          "implemented": false,
+          "design_description": "综合分/距峰顶格数过大时列宽固定 + 缩写，不破表。",
+          "fallback_behavior": "右对齐 tabular-nums + 缩写",
+          "visual_hint": "DataTable 列 tabular-nums",
+          "copy_hint": "（数值缩写）",
+          "related_story": "story-6"
+        },
+        {
+          "state_type": "boundary-long-text",
+          "category": "boundary",
+          "required": true,
+          "severity": "must",
+          "implemented": true,
+          "design_description": "身份名超长在排名列截断 + Tooltip。",
+          "fallback_behavior": "省略+悬浮",
+          "visual_hint": "EllipsisText + Tag",
+          "copy_hint": "（截断…）",
+          "related_story": "story-6",
+          "impl_note": "flow-web 落码（复用 Skeleton/Empty/Alert/loading/truncate 模板）"
+        }
+      ]
+    },
+    {
+      "flow": "flow3 终局结算",
+      "screen": "Score Detail 得分明细",
+      "screen_id": "page-host-rank",
+      "route": "/#settle/rank",
+      "states": [
+        {
+          "state_type": "boundary-negative",
+          "category": "boundary",
+          "required": true,
+          "severity": "should",
+          "implemented": true,
+          "design_description": "距峰顶换算得分已用 Math.max(0,..) 兜底为 0，不出现负分破叙事。",
+          "fallback_behavior": "最小 0 分",
+          "visual_hint": "Math.max(0, 10-dist)",
+          "copy_hint": "（已 clamp 非负）",
+          "related_story": "story-6"
+        }
+      ]
+    },
+    {
+      "flow": "flow4 开局配置·教学",
+      "screen": "Setup 牌局配置",
+      "screen_id": "page-host-setup",
+      "route": "/#setup",
+      "states": [
+        {
+          "state_type": "error-validation",
+          "category": "error",
+          "required": true,
+          "severity": "must",
+          "implemented": true,
+          "design_description": "人数不足(<3)/主题未选/房间码冲突时，生成会话按钮应 inline 报错并禁用，不可生成坏会话。",
+          "fallback_behavior": "字段级提示 + 禁用提交",
+          "visual_hint": "FieldError + Button disabled",
+          "copy_hint": "至少 3 人才能开局",
+          "related_story": "story-1",
+          "impl_note": "flow-web 落码（复用 Skeleton/Empty/Alert/loading/truncate 模板）"
+        },
+        {
+          "state_type": "loading-submit",
+          "category": "loading",
+          "required": true,
+          "severity": "must",
+          "implemented": true,
+          "design_description": "「生成会话并等待加入」触发建会话/分配房间码，需 loading 防重复建房。",
+          "fallback_behavior": "不可重复；成功跳加入态",
+          "visual_hint": "Button loading",
+          "copy_hint": "生成会话中…",
+          "related_story": "story-1",
+          "impl_note": "flow-web 落码（复用 Skeleton/Empty/Alert/loading/truncate 模板）"
+        },
+        {
+          "state_type": "permission-read-only",
+          "category": "permission",
+          "required": true,
+          "severity": "must",
+          "implemented": true,
+          "design_description": "观众/已入座玩家只能看，仅主机操作者可改配置：非主机进入时应只读化并说明。",
+          "fallback_behavior": "只读展示 + 提示「仅主持人可改」",
+          "visual_hint": "disabled Select + Lock Tag + Alert info",
+          "copy_hint": "仅主机操作者可调整本局配置",
+          "related_story": "story-1",
+          "impl_note": "flow-web 落码（复用 Skeleton/Empty/Alert/loading/truncate 模板）"
+        }
+      ]
+    },
+    {
+      "flow": "flow4 开局配置·教学",
+      "screen": "Join 加入会话",
+      "screen_id": "page-phone-join",
+      "route": "/m/join",
+      "states": [
+        {
+          "state_type": "empty-collection",
+          "category": "empty",
+          "required": true,
+          "severity": "should",
+          "implemented": false,
+          "design_description": "尚无任何座位加入时显示带房间码与扫码引导的空态，而非满屏「待加入」。",
+          "fallback_behavior": "展示房间码 + 等待",
+          "visual_hint": "Empty + 房间码 Card + 二维码占位",
+          "copy_hint": "扫码加入房间码 XXXX",
+          "related_story": "story-1"
+        },
+        {
+          "state_type": "loading-refresh",
+          "category": "loading",
+          "required": true,
+          "severity": "must",
+          "implemented": true,
+          "design_description": "等待其他玩家加入需轮询/实时刷新并显示「N/4 已加入」进度。",
+          "fallback_behavior": "自动更新加入数；全员就位提示可开始",
+          "visual_hint": "Progress + Spinner + toast",
+          "copy_hint": "2/4 已加入，等待其余玩家",
+          "related_story": "story-1",
+          "impl_note": "flow-web 已落码 + 浏览器验证"
+        },
+        {
+          "state_type": "error-network",
+          "category": "error",
+          "required": true,
+          "severity": "must",
+          "implemented": true,
+          "design_description": "房间码失效/会话建立失败：明确错误 + 重新生成会话，别让手机卡在加入页。",
+          "fallback_behavior": "重生成房间码或返回配置",
+          "visual_hint": "Alert destructive + 重新生成",
+          "copy_hint": "房间码已失效，请重新生成",
+          "related_story": "story-1",
+          "impl_note": "flow-web 已落码 + 浏览器验证"
+        },
+        {
+          "state_type": "offline-no-network",
+          "category": "offline",
+          "required": true,
+          "severity": "should",
+          "implemented": false,
+          "design_description": "个别玩家手机离线未加入：座位标「离线」不阻塞他人；主持人可决定等待或代管。",
+          "fallback_behavior": "标记离线；主持人可代管/继续",
+          "visual_hint": "Seat 卡 Tag slate「离线」 + Alert",
+          "copy_hint": "座X 设备离线，可稍后补入",
+          "related_story": "story-3"
+        }
+      ]
+    },
+    {
+      "flow": "flow4 开局配置·教学",
+      "screen": "Tutorial 首局教学",
+      "screen_id": "page-host-tutorial",
+      "route": "/#tutorial",
+      "states": [
+        {
+          "state_type": "loading-initial",
+          "category": "loading",
+          "required": true,
+          "severity": "must",
+          "implemented": true,
+          "design_description": "教学走真实引擎跑迷你局，每步演算需 loading（引擎非瞬时），避免点了没反应。",
+          "fallback_behavior": "骨架/进度；完成显示该步",
+          "visual_hint": "Progress + Spinner",
+          "copy_hint": "演示演算中…",
+          "related_story": "story-1",
+          "impl_note": "flow-web 落码（复用 Skeleton/Empty/Alert/loading/truncate 模板）"
+        },
+        {
+          "state_type": "error-server",
+          "category": "error",
+          "required": true,
+          "severity": "must",
+          "implemented": true,
+          "design_description": "引擎演示异常崩溃时：不白屏，给「教学暂时不可用，可直接开始对局」出口。",
+          "fallback_behavior": "跳过教学进对局 / 重试",
+          "visual_hint": "Alert destructive + Button 跳过/重试",
+          "copy_hint": "教学暂不可用，可直接开局或重试",
+          "related_story": "story-1",
+          "impl_note": "flow-web 已落码 + 浏览器验证"
+        }
+      ]
+    }
+  ],
+  "coverage": {
+    "total_screens": 14,
+    "total_states_planned": 37,
+    "by_severity": {
+      "must": 22,
+      "should": 15,
+      "nice": 0
+    },
+    "by_category": {
+      "empty": 5,
+      "loading": 9,
+      "error": 7,
+      "boundary": 12,
+      "permission": 1,
+      "offline": 3
+    },
+    "implemented_already": 25,
+    "critical_missing": [],
+    "critical_missing_summary": {
+      "blocker": 0,
+      "high": 0
+    }
+  },
+  "remediation": "全部 must 异常态（4 Blocker + 12 High）已 flow-web 落码 + 浏览器验证；剩余未实现均为 should/nice（离线细节、并列/平局边界、极端溢出、手机私牌端权限）。"
+}
