@@ -507,7 +507,7 @@ export interface CardFilter {
 | 投票 | `vote_modifier` `extra_vote` `cancel_vote` `exempt_from_vote` |
 | 认证 | `certify_extra_signer` `certify_free_pass` `certify_extra_round` `certify_forbid_challenge` |
 | 棋盘 | `place_barrier` |
-| 判定与装备 | `modify_judgement` `create_card` `equip_card` `revive` |
+| 判定与装备 | `modify_judgement` `create_card` `equip_card` |
 | 阵营 | `spirit_wheel`（掷阵营轮） |
 | 组合 | `sequence` `conditional` `count` `random_from_deck` |
 
@@ -541,7 +541,7 @@ export interface CardFilter {
 | G2 | 关隘试炼「掷指令骰 ≥ 15」 | 新增谓词 `dice_is_at_least { amount, faces }` |
 | G3 | 对峙与险径的颜色判定 | 新增谓词 `card_color_is { color, source }`；对峙比较规则内建在 `compare_cards` 里 |
 | G4 | 「放置封路印」（§3.4 裂隙） | 新增算子 `place_barrier { tileIndex }`——现有算子全部作用于玩家，无棋盘格位算子 |
-| G5 | 改判 / 造物与装备 / 复活队友 / 凭证 | 新增 `modify_judgement` `create_card` `equip_card` `revive`；凭证**复用** `exempt_from_vote`（补「消耗 3 灵枢 + 公开可见」语义） |
+| G5 | 改判 / 造物与装备 / 复活队友 / 凭证 | 新增 `modify_judgement` `create_card` `equip_card` `revive`；凭证**复用** `exempt_from_vote`（补「消耗 3 灵枢 + 公开可见」语义）。**最终裁定：复活机制 V1 删除**（无死亡机制，延后 V1.1），故 `revive` 不进 §6.4 现役算子表 <!--doc-sync:exempt G5 行的 revive 系 v1.3 时期建议方案，v1.4 已裁定 V1 删除，现役算子表不含 revive --> |
 | G6 | `card_type_is` 作用域不明 | 定义为「效果使用者手牌中是否存在该类型」 |
 | G7 | `spirit_wheel` 与「每局限 1 次」 | 增加 `source: 'manual' \| 'command'`——指令 20 不消耗名额 |
 
@@ -804,6 +804,41 @@ V1 的新手门槛由 **§6.6 脚本化教学演示** 承担（成本低一个�
 **② 辅比对（精确）**：解析产出 **SVG 的文本节点**（SVG 是 XML，可精确解析），验证关键字段确实被渲染进实体件——防止「IR 正确但模板漏印」。
 
 **③ PDF 粗检（不逐项比对）**：仅校验可打开、页数与预期一致、字体已嵌入。
+
+**④ 数值溯源比对（精确，判红依据）——堵住「改了引擎数值、忘了改规则书」**：
+
+规则书里的每一个**数值单元格**都必须能回溯到 `engine/scales.ts` 的具体字段。
+
+- **标记方式**：规则书表格渲染时，每个数值单元格携带不可见的溯源属性 `data-src="scales[<players>].<fieldName>"`（SVG 与打印 HTML 同理，见 §6.7.2）。属性值即 IR 中 `srcRefs` 声明的路径。
+- **验证三步**，任一不符即判红：
+  1. **存在性**：每个数值单元格都有 `data-src` 属性；缺标记 → 判红（说明该数字是手写死的）。
+  2. **可解析性**：`data-src` 的路径能在 `engine/scales.ts` 的 `ScalesRow` 中定位到对应字段（`scales[<players>]` 的行存在，且字段名属于 §8 字段名契约）；路径非法 → 判红。
+  3. **值相等**：该单元格的**渲染文本**（去掉单位与空白后）等于源字段的**当前值**；不等 → 判红。
+- **示例**：「5 人局签印门槛 N=3」这一格必须渲染为 `data-src="scales[5].threshold"`，且 `engine/scales.ts` 中 `players: 5` 那行的 `threshold` 必须确实等于 `3`。
+
+**⑤ PDF 字节比对口径（归一化后方可比）**：
+
+Chromium 生成的 PDF **字节级不可直接比对**——实测同一份 HTML 连续生成两次，长度相同（26460）但 SHA256 不同，因为 PDF 头部含 `CreationDate` / `ModDate` 构建时刻。因此：
+
+- 比对前必须用 `tools/pdf-normalize.mjs` **归一化**：把时间戳的值替换为**等长**占位符。
+- **占位符必须等长**——长度不同会导致该位置之后所有字节偏移移位，「逐字比对」必然失败。
+- **只换值、不整行剔除**——否则同行内的其它字段（如版本号）会被漏检。
+- **`/Title` 不做归一化**：Chromium 在 HTML 无 `<title>` 时会把**源文件名**写进 `/Title`，因此 **build-print 必须显式输出 `<title>`**，否则 /Title 会随模板文件名漂移。
+
+**⑥ 门禁自证（负样本常驻化）**：
+
+每道门禁都必须有对应的**常驻负样本**用例——故意制造违例 → 断言门禁判红 → 恢复 → 断言判绿（「违例必红、恢复必绿」）。否则「人为制造一处漂移 → 必须判红」只是验收清单里的一句话，门禁交付后没人会再验。
+
+**门禁覆盖边界（如实登记，防「绿灯掩盖盲区」）**：
+
+| 覆盖 | 不覆盖 |
+|---|---|---|
+| IR 全字段（结构化数据） | PDF **文本层**（中文提取不稳，不比对） |
+| SVG 文本节点（精确解析） | PDF **原始字节**（含构建时刻，须先归一化） |
+| 规模表数值溯源到 `engine/scales.ts` | 规则书**手写叙述段落**的数值（只有表格受溯源约束） |
+| 算子/谓词/goal 清单与代码真值双向一致 | 主题包**内容质量**（只查结构与引用完整性） |
+| 装备效果系统 | **V1 不存在装备被动效果**（§4.1），故无对应门禁 |
+| — | **2 人局**不支持（§8），故无对应门禁 |
 
 **④ 数值溯源比对（精确，判红依据）——堵住「改了引擎数值、忘了改规则书」**：
 
