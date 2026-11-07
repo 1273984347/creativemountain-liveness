@@ -139,6 +139,7 @@ const SCALE_NUMERIC_FIELDS = [
   'boardLength', 'gateCount', 'initialResource', 'handStart', 'deckTotal',
   'trialTotal', 'certTotal', 'threshold', 'thresholdWithMark',
   'councilIntervalStandard', 'councilIntervalNewbie', 'exileFloor', 'globalRoundLimit',
+  'seatWeight',
 ];
 
 export function checkScaleValues(spec) {

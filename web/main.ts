@@ -327,9 +327,18 @@ function render(): void {
   status.append(el('span', { text: '行动顺序 ' + s.turnOrder.map((x) => '座' + x).join('→') }));
   status.append(el('span', { text: '轮末 ' + (isRoundEnd(s) ? '是' : '否') }));
   status.append(el('span', { text: '签印门槛 N=' + s.scales.threshold }));
+  // B11：活人席计分制 —— 对局中实时显示席位数（谁领先、领先多少）
+  const seatLine = s.players
+    .filter((p) => (s.liveSeats[p.seat] ?? 0) > 0)
+    .map((p) => '座' + p.seat + ':' + String(s.liveSeats[p.seat] ?? 0))
+    .join(' ');
+  if (seatLine !== '') {
+    status.append(el('span', { text: '活人席 ' + seatLine }));
+  }
   if (s.outcome.finished) {
-    const reason = s.outcome.reason === 'certified' ? '认证封顶' : s.outcome.reason === 'fallback' ? '回合上限兜底' : '活人缺席';
-    status.append(el('span', { class: 'badge win', text: '本局结束：' + reason + (s.outcome.winners.length > 0 ? '（座 ' + s.outcome.winners.join(',') + '）' : '（无胜者）') }));
+    const reason = s.outcome.reason === 'seats' ? '席位结算' : s.outcome.reason === 'fallback' ? '无人封顶兜底' : '活人缺席';
+    const seatText = s.outcome.winners.map((w) => '座' + w + '(' + String(s.liveSeats[w] ?? 0) + '席)').join('、');
+    status.append(el('span', { class: 'badge win', text: '本局结束：' + reason + (s.outcome.winners.length > 0 ? '（' + seatText + '）' : '（无胜者）') }));
   }
 
   const panels: (Node | string)[] = [

@@ -48,8 +48,8 @@ function runSim(games: number, players: number): {
   return { seatRates, identityRates, posRates };
 }
 
-// 400 局 × 4 套主题 = 1600 局（样本再少时噪声会盖过信号）
-const SIM = { games: 400, players: 8 };
+// 2000 局 × 4 套主题 = 8000 局（样本再少时噪声会盖过信号；位次胜率的验收口径见规格 §9.2）
+const SIM = { games: 2000, players: 8 };
 
 /**
  * 模拟结果缓存 —— 跑一次、复用多次。
@@ -93,19 +93,18 @@ test('平衡回归：行动顺序确实是随机的（位次胜率表存在且�
   assert.equal(posRates.length, SIM.players, '应解析出每个行动顺序位次的胜率');
 });
 
+test('平衡回归：位次胜率极差 < 4pp（B11 席位制：先动不再决定胜负）', () => {
+  const { posRates } = sim();
+  const spread = Math.max(...posRates) - Math.min(...posRates);
+  // B11 前：位次胜率严格单调递减，8 人局极差 13.0pp（首个登顶者 77.6% 直接获胜）。
+  // B11 活人席计分制 + 终局得分公式后：8000 局下实测 1.1pp。
+  assert.ok(spread < 4, `位次胜率最大差 ${spread.toFixed(1)}pp 应 < 4pp（B11 前约 13pp）`);
+});
+
 // ---------- 已知遗留项（V1.1）----------
 
-test.todo('V1.1：位次胜率 spread 应 < 4pp（消除残余先手优势）', () => {
-  // 当前实测：1 位 19.7% → 8 位 8.3%，spread **11.4pp** 且严格单调递减。
-  // 根源：规则链「先登顶 → 77.6% 直接获胜」⇒ 登顶时间几乎决定胜负。
-  // 修正方向（抢先链规则级改动）：让**认证达成时间与登顶时间解耦**。
-  //
-  // ⚠️ node:test 语义：`todo` 用例**会被执行**（失败不计入失败数）。
-  //   故此处只**记录读数**、不做判定 —— 否则每次跑都吐一个 AssertionError 堆栈，
-  //   看起来像失败。V1.1 修正后把本条转正，届时打开下面的断言：
-  //     assert.ok(spread < 4, `位次胜率最大差 ${spread.toFixed(1)}pp 应 < 4pp`);
-  // 注意：样本量已提到 4000 局（位次胜率噪声 ≈ 3pp），阈值 4pp 才可靠。
-  const { posRates } = runSim(1000, 8);
-  const spread = Math.max(...posRates) - Math.min(...posRates);
-  console.log('  [V1.1 遗留] 当前位次胜率 spread = ' + spread.toFixed(1) + 'pp（目标 < 4pp）');
+test.todo('V1.1：其余 7 个身份的被动触发点（当前仍无消费点）', () => {
+  // 除仲裁者的 extra_vote 外，其余 7 个身份的被动（每回合首次移动 +1 格 / 免费造物 /
+  // 看牌堆顶 / 挡封口 / 偷资源 / 改判定 / 首次质疑自动通过）在引擎里**没有消费点**。
+  // 需逐个设计触发点 + 触发时机 + 资源消耗，并同步规格 §4.1 与主题包文案。
 });

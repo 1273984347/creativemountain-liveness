@@ -10,38 +10,20 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+import { loadScalesFromSource } from '../tools/scales-parse.mjs';
+
 const ROOT = process.cwd();
 
-/** 从 engine/scales.ts 读取规模表（运行时真相源）。 */
+/**
+ * 从 engine/scales.ts 读取规模表（运行时真相源）。
+ *
+ * ⚠️ B11：改为**从源码派生**的共享解析器（`tools/scales-parse.mjs`）——
+ *   此前 build-ir / ir-validate / parity-check **各手抄一份**字段正则，
+ *   加字段要改三处、漏一处就门禁误报。
+ *   数值正确性由 doc-sync C2 保证，溯源一致性由 parity-check 第 ③ 级保证。
+ */
 function loadScales() {
-  // scales.ts 是 TS，无法直接 import —— 这里从源码文本解析（与 doc-sync 同思路）。
-  // 规模表的**数值**由 doc-sync 的 C2 检查保证与 engine/scales.ts 一致，
-  // 因此这里解析出的值不会漂移；B7 的溯源比对会再次校验。
-  const src = readFileSync(resolve(ROOT, 'engine/scales.ts'), 'utf8');
-  const rows = [];
-  const re = /\{\s*players:\s*(\d+),\s*boardLength:\s*(\d+),\s*gateCount:\s*(\d+),\s*initialResource:\s*(\d+),\s*handStart:\s*(\d+),\s*deckTotal:\s*(\d+),\s*trialTotal:\s*(\d+),\s*certTotal:\s*(\d+),\s*threshold:\s*(\d+),\s*thresholdWithMark:\s*(\d+),\s*councilIntervalStandard:\s*(\d+),\s*councilIntervalNewbie:\s*(\d+),\s*exileFloor:\s*(\d+),\s*globalRoundLimit:\s*(\d+)/g;
-  for (const m of src.matchAll(re)) {
-    rows.push({
-      players: Number(m[1]),
-      boardLength: Number(m[2]),
-      gateCount: Number(m[3]),
-      initialResource: Number(m[4]),
-      handStart: Number(m[5]),
-      deckTotal: Number(m[6]),
-      trialTotal: Number(m[7]),
-      certTotal: Number(m[8]),
-      threshold: Number(m[9]),
-      thresholdWithMark: Number(m[10]),
-      councilIntervalStandard: Number(m[11]),
-      councilIntervalNewbie: Number(m[12]),
-      exileFloor: Number(m[13]),
-      globalRoundLimit: Number(m[14]),
-    });
-  }
-  if (rows.length === 0) {
-    throw new Error('无法从 engine/scales.ts 解析规模表');
-  }
-  return rows;
+  return loadScalesFromSource(ROOT);
 }
 
 /** 溯源包装。 */
@@ -124,6 +106,7 @@ export function buildIr(theme, scales) {
       councilIntervalNewbie: src(r.players, 'councilIntervalNewbie', r.councilIntervalNewbie),
       exileFloor: src(r.players, 'exileFloor', r.exileFloor),
       globalRoundLimit: src(r.players, 'globalRoundLimit', r.globalRoundLimit),
+      seatWeight: src(r.players, 'seatWeight', r.seatWeight),
     })),
     instructionTable: instructionTable(terms),
     factions: theme.factions.map((f) => ({

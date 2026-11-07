@@ -165,6 +165,16 @@ export interface State {
   readonly wheelUsed: number;
   /** 待认证者额外需要的签印数（`extra_signatures_required`） */
   readonly extraSignaturesRequired: number;
+  /**
+   * 活人席数：`key` = 座位号，`value` = 该玩家已获得的活人席数。
+   *
+   * ⚠️ B11 活人席计分制（规格 §5.7）：**认证通过不再直接终局** ——
+   *   封顶 = 拿到 1 席并回到山道起点（可再次登顶再取席），
+   *   对局打到全局回合上限后按席位数排名。
+   *   引入前，先登顶者 77.6% 直接获胜（位次胜率极差 12.7pp）；
+   *   引入后「先登顶」只领先 1 席，可被后来者追平 ⇒ 先手优势不再决定胜负。
+   */
+  readonly liveSeats: Readonly<Record<number, number>>;
   /** 日志 */
   readonly log: readonly LogEntry[];
   /** 认证流程状态（§5） */
@@ -276,6 +286,7 @@ export function createInitialState(opts: InitialStateOptions): State {
     council: { heldCount: 0, lastRound: 0, votes: {}, resolved: true, vetoUsed: false },
     outcome: { finished: false, winners: [], reason: 'no_winner' },
     extraSignaturesRequired: 0,
+    liveSeats: {},
     log: [],
   };
   return dealInitialHands(base);

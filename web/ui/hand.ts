@@ -50,7 +50,9 @@ export function renderPlayers(
     const row = el('div', { class: 'player' + (p.alive ? '' : ' dead') + (pickable ? ' pickable' : '') });
     row.append(el('span', { class: 'p-seat', text: '座' + p.seat }));
     row.append(el('span', { class: 'p-name', text: identity?.name ?? p.identityId }));
-    row.append(el('span', { class: 'p-meta', text: (faction?.name ?? p.factionId) + ' · ' + theme.glossary.HP + ' ' + p.hp + '/' + p.hpMax + ' · ' + theme.meta.resourceName + ' ' + p.resource + ' · 位 ' + p.position }));
+    // B11：活人席计分制 —— 玩家行显示已获席位数
+    const seats = state.liveSeats[p.seat] ?? 0;
+    row.append(el('span', { class: 'p-meta', text: (faction?.name ?? p.factionId) + ' · ' + theme.glossary.HP + ' ' + p.hp + '/' + p.hpMax + ' · ' + theme.meta.resourceName + ' ' + p.resource + ' · 位 ' + p.position + (seats > 0 ? ' · 活人席 ' + String(seats) : '') }));
     if (p.hasMark) { row.append(el('span', { class: 'badge mark', text: '印记' })); }
     if (p.pendingCert) { row.append(el('span', { class: 'badge cert', text: '待认证' })); }
     if (p.equipment.length > 0) {

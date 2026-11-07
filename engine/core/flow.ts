@@ -58,6 +58,13 @@ export interface Outcome {
   readonly finished: boolean;
   /** 胜者座位号（可多个 = 并列封顶） */
   readonly winners: readonly number[];
-  /** 结束原因 */
-  readonly reason: 'certified' | 'fallback' | 'no_winner';
+  /**
+   * 结束原因：
+   * - `seats`：**活人席计分制结算**（B11）—— 达到全局回合上限，按席位数排名；
+   * - `fallback`：达到全局回合上限且**无人取得任何席位** ⇒ 纯按距离排名；
+   * - `no_winner`：活人缺席（场上仅剩 ≤1 人）。
+   *
+   * ⚠️ 原 `certified`（「封顶即终局」）已随 B11 计分制移除 —— 封顶不再结束对局。
+   */
+  readonly reason: 'seats' | 'fallback' | 'no_winner';
 }

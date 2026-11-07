@@ -24,12 +24,12 @@ export function scalesTable(ir: IrDocument): string {
     '人数', term(ir.glossary, 'path', '山道') + '格数', term(ir.glossary, 'gate', '关隘') + '数',
     '初始' + term(ir.glossary, 'resource', '资源'), '起始手牌', '牌库总量',
     '试炼牌', '认证题卡', '认证签印门槛 N', '印记后门槛',
-    '山议间隔（标准）', '山议间隔（新手）', '放逐下限', '全局回合上限',
+    '山议间隔（标准）', '山议间隔（新手）', '放逐下限', '全局回合上限', '活人席权重',
   ];
   const keys = [
     'players', 'boardLength', 'gateCount', 'initialResource', 'handStart', 'deckTotal',
     'trialTotal', 'certTotal', 'threshold', 'thresholdWithMark',
-    'councilIntervalStandard', 'councilIntervalNewbie', 'exileFloor', 'globalRoundLimit',
+    'councilIntervalStandard', 'councilIntervalNewbie', 'exileFloor', 'globalRoundLimit', 'seatWeight',
   ];
   const thead = '<tr>' + head.map((h) => `<th>${esc(h)}</th>`).join('') + '</tr>';
   const tbody = ir.scales.map((r) => {

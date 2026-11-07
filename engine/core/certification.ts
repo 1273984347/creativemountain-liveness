@@ -90,7 +90,11 @@ export function certifySign(state: State, actor: number, target: number): Certif
   if (hasUsedCertificationTurn(state, actor)) { return fail(state, '本轮已用过认证机会'); }
   let next: State = { ...state, certification: { ...c, signed: [...c.signed, actor] } };
   next = addSignature(next, target, 1);
-  next = { ...next, players: next.players.map((p) => (p.seat === target ? { ...p, flags: { ...p.flags, signedThisRound: true } } : p)) };
+  // B11：累计签印数（**不随认证轮重置**）—— §5.8 兜底排名的「累计签印数」判据要用它。
+  //   认证轮的 `certification.signatures` 每轮清零，不能当整局累计用。
+  next = { ...next, players: next.players.map((p) => (p.seat === target
+    ? { ...p, flags: { ...p.flags, signedThisRound: true }, counters: { ...p.counters, signaturesTotal: (p.counters.signaturesTotal ?? 0) + 1 } }
+    : p)) };
   return succeed(next, '签印');
 }
 
@@ -330,11 +334,27 @@ export function advanceCertificationRound(state: State): CertifyResult {
   state = settled;
   const certified = c.pending.filter((seat) => signatureCount(state, seat) >= certificationThreshold(state, seat));
   if (certified.length > 0) {
+    // ⚠️ B11 活人席计分制（规格 §5.7）：**封顶不再终局**。
+    //   封顶 = 获得 1 个活人席 + 回到山道起点（可再次登顶再取席）。
+    //   ⇒ 「先登顶」从**终局条件**降格为**领先 1 席**，后者可被后来者追平。
+    //   改造前：首个登顶者 77.6% 直接获胜（位次胜率极差 12.7pp，严格单调）。
+    const liveSeats = { ...state.liveSeats };
+    for (const seat of certified) {
+      liveSeats[seat] = (liveSeats[seat] ?? 0) + 1;
+    }
+    // 封顶者回到山道起点、解除待认证锁定 ⇒ 可再次登顶再取席；仍留在场上当认证人。
+    const players = state.players.map((p) =>
+      certified.includes(p.seat) ? { ...p, position: 0, pendingCert: false } : p,
+    );
     const next: State = {
       ...state,
-      outcome: { finished: true, winners: certified, reason: 'certified' },
+      players,
+      liveSeats,
+      // 认证流程复位 ⇒ 该玩家再次登顶时可开启新的认证轮
+      certification: { ...emptyCertification(), round: 0, pending: [] },
     };
-    return succeed(next, `封顶：座位 ${certified.join(', ')}`);
+    const who = certified.map((s) => '座' + String(s)).join('、');
+    return succeed(next, `坐上活人席：${who}（席位数 +1，回到山道起点，可再次登顶再取席）`);
   }
   // 未达成
   const pendingNow = state.certification.pending;

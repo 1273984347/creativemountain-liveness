@@ -49,7 +49,9 @@ export function deserializeState(data: unknown): State {
   const turnOrder = Array.isArray(rest.turnOrder) && rest.turnOrder.length > 0
     ? rest.turnOrder
     : rest.players.map((p) => p.seat);
-  return { ...rest, turnOrder, rng: Rng.fromSnapshot(rngRaw.initialSeed, rngRaw.snapshot) };
+  // 兼容旧档（B11 之前无 liveSeats）⇒ 补空表（席位制下等同于「一席未得」）
+  const liveSeats = rest.liveSeats ?? {};
+  return { ...rest, turnOrder, liveSeats, rng: Rng.fromSnapshot(rngRaw.initialSeed, rngRaw.snapshot) };
 }
 
 /** 序列化为 JSON 文本。 */

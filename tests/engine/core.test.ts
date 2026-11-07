@@ -38,7 +38,8 @@ test('新手模式山议间隔 = 标准 + 2 回合', () => {
 
 test('全局回合上限 = 12 + 人数', () => {
   for (const s of SCALES) {
-    assert.equal(s.globalRoundLimit, 12 + s.players);
+    // B11：席位制下对局必然打满上限 ⇒ 上限由 12 + 人数 下调为 8 + 人数
+    assert.equal(s.globalRoundLimit, 8 + s.players);
   }
 });
 

@@ -133,7 +133,7 @@ test('§5.3.2 复议申请消耗 2 灵枢，且每轮限 1 次', () => {
 
 // ---------- §5.2 两轮上限 ----------
 
-test('§5.2 达到门槛 → 封顶结束', () => {
+test('§5.2 达到门槛 → 获得 1 个活人席，**不结束本局**（B11 席位制）', () => {
   const s = pendingScene(5);
   let st = s;
   // 3 人签印即达门槛 N=3
@@ -142,9 +142,11 @@ test('§5.2 达到门槛 → 封顶结束', () => {
   st = certifySign(st, 3, 0).state;
   const adv = advanceCertificationRound(st);
   assert.equal(adv.ok, true);
-  assert.equal(adv.state.outcome.finished, true);
-  assert.equal(adv.state.outcome.reason, 'certified');
-  assert.deepEqual(adv.state.outcome.winners, [0]);
+  // ⚠️ B11：认证通过不再终局 —— 封顶 = 获得 1 席并回到山道起点。
+  assert.equal(adv.state.outcome.finished, false, '封顶不再结束本局');
+  assert.equal(adv.state.liveSeats[0], 1, '达标者获得 1 个活人席');
+  assert.equal(adv.state.players[0]?.position, 0, '封顶后回到山道起点');
+  assert.equal(adv.state.players[0]?.pendingCert, false, '待认证锁定解除');
 });
 
 test('§5.2 登顶当轮只开启第 1 轮，不判定（B9：给认证人留出整轮）', () => {
@@ -265,19 +267,16 @@ test('§5.8 兜底排名：距峰顶近者胜', () => {
   assert.equal(ranked[0], 2, '座位 2 离峰顶更近，应排第一');
 });
 
-test('§5.8 兜底排名：距峰顶相同时比签印数，再相同时比灵枢', () => {
+test('§5.8 兜底排名：距峰顶相同时比**累计**签印数，再相同时比灵枢', () => {
   const s = createInitialState({ players: 4, seed: 7, deckSize: 40 });
   const base = { ...s, players: s.players.map((p) => ({ ...p, position: 10 })) };
+  // ⚠️ B11：兜底排名用的是**整局累计**签印数（`counters.signaturesTotal`），
+  //   不是 `certification.signatures`（那是本轮签印数，每轮清零）。
   const withSig = {
     ...base,
-    players: base.players.map((p) => (p.seat === 3 ? { ...p, counters: { } } : p)),
+    players: base.players.map((p) => (p.seat === 3 ? { ...p, counters: { signaturesTotal: 2 } } : p)),
   };
-  const c = withSig.certification;
-  const withSignatures: State = {
-    ...withSig,
-    certification: { ...c, signatures: { 3: 2 } },
-  };
-  assert.equal(fallbackRanking(withSignatures)[0], 3, '签印更多者胜');
+  assert.equal(fallbackRanking(withSig)[0], 3, '累计签印更多者胜');
 });
 
 test('§5.8 达到全局回合上限 → 兜底判定并标记 reason=fallback', () => {

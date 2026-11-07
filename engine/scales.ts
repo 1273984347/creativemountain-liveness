@@ -38,8 +38,16 @@ export interface ScalesRow {
   readonly councilIntervalNewbie: number;
   /** 放逐下限：存活人数不得低于此值 */
   readonly exileFloor: number;
-  /** 全局回合上限 = 12 + 人数 */
+  /** 全局回合上限 = 8 + 人数（B11：席位制下对局必然打满，原 12 + 人数 会让一局膨胀约 50%） */
   readonly globalRoundLimit: number;
+  /**
+   * **活人席权重**：一个活人席抵得上多少格距离（B11，§5.8 终局得分公式）。
+   *
+   * 终局得分 = 活人席数 × 本权重 − 距峰顶格数。
+   * ⚠️ 本值**必须小于山道长度** —— 否则席位成为绝对优势，先登顶者再次独占，
+   *   位次胜率极差会从 1–3pp 反弹到 13pp（实测标定，见规格 §8）。
+   */
+  readonly seatWeight: number;
   /** 预计局长（分钟） */
   readonly estimatedMinutes: number;
 }
@@ -52,27 +60,27 @@ export const SCALES: readonly ScalesRow[] = [
   { players: 3, boardLength: 24, gateCount: 2, initialResource: 4, handStart: 5, deckTotal: 40,
     trialTotal: 10, certTotal: 12, threshold: 2, thresholdWithMark: 1,
     councilIntervalStandard: 6, councilIntervalNewbie: 8, exileFloor: 3,
-    globalRoundLimit: 15, estimatedMinutes: 35 },
+    globalRoundLimit: 11, seatWeight: 12, estimatedMinutes: 40 },
   { players: 4, boardLength: 28, gateCount: 3, initialResource: 5, handStart: 5, deckTotal: 48,
     trialTotal: 12, certTotal: 14, threshold: 3, thresholdWithMark: 2,
     councilIntervalStandard: 6, councilIntervalNewbie: 8, exileFloor: 3,
-    globalRoundLimit: 16, estimatedMinutes: 45 },
+    globalRoundLimit: 12, seatWeight: 20, estimatedMinutes: 50 },
   { players: 5, boardLength: 32, gateCount: 3, initialResource: 6, handStart: 6, deckTotal: 56,
     trialTotal: 12, certTotal: 14, threshold: 3, thresholdWithMark: 2,
     councilIntervalStandard: 5, councilIntervalNewbie: 7, exileFloor: 3,
-    globalRoundLimit: 17, estimatedMinutes: 55 },
+    globalRoundLimit: 13, seatWeight: 16, estimatedMinutes: 60 },
   { players: 6, boardLength: 32, gateCount: 3, initialResource: 6, handStart: 6, deckTotal: 64,
     trialTotal: 14, certTotal: 16, threshold: 4, thresholdWithMark: 2,
     councilIntervalStandard: 5, councilIntervalNewbie: 7, exileFloor: 3,
-    globalRoundLimit: 18, estimatedMinutes: 65 },
+    globalRoundLimit: 14, seatWeight: 20, estimatedMinutes: 70 },
   { players: 7, boardLength: 36, gateCount: 4, initialResource: 7, handStart: 6, deckTotal: 72,
     trialTotal: 14, certTotal: 16, threshold: 5, thresholdWithMark: 3,
     councilIntervalStandard: 4, councilIntervalNewbie: 6, exileFloor: 3,
-    globalRoundLimit: 19, estimatedMinutes: 80 },
+    globalRoundLimit: 15, seatWeight: 24, estimatedMinutes: 85 },
   { players: 8, boardLength: 36, gateCount: 4, initialResource: 8, handStart: 7, deckTotal: 80,
     trialTotal: 16, certTotal: 18, threshold: 5, thresholdWithMark: 3,
     councilIntervalStandard: 4, councilIntervalNewbie: 6, exileFloor: 3,
-    globalRoundLimit: 20, estimatedMinutes: 90 },
+    globalRoundLimit: 16, seatWeight: 24, estimatedMinutes: 100 },
 ];
 
 /** 取指定人数档位的规模配置。 */
@@ -97,7 +105,7 @@ export const SCALE_FIELD_NAMES = [
   'players', 'boardLength', 'gateCount', 'initialResource', 'handStart', 'deckTotal',
   'trialTotal', 'certTotal', 'threshold', 'thresholdWithMark',
   'councilIntervalStandard', 'councilIntervalNewbie', 'exileFloor',
-  'globalRoundLimit', 'estimatedMinutes',
+  'globalRoundLimit', 'seatWeight', 'estimatedMinutes',
 ] as const;
 
 export type ScaleFieldName = (typeof SCALE_FIELD_NAMES)[number];

@@ -206,6 +206,9 @@ function playOne(theme, players, seed) {
     turnOrder: [...s.turnOrder],
     firstPendingSeat, firstPendingRound, firstPendingPos,
     certRound: s.certification.round,
+    // B11 活人席计分制：本局发放的席位数（终局不再由「封顶」触发，而是按席位数排名）
+    liveSeats: { ...s.liveSeats },
+    seatTotal: Object.values(s.liveSeats).reduce((a, b) => a + b, 0),
     anomalies,
   };
 }
@@ -240,9 +243,18 @@ function summarize(cells) {
   let soloGames = 0;
   const certRounds = new Map();
   let total = 0;
-  let fallback = 0;
-  let certified = 0;
+  // ⚠️ B11 席位制：结局语义随之改变 ——
+  //   `seats` = 席位制结算（**主路径**，达到回合上限即按席位数排名）；
+  //   `fallback` = 达到回合上限且**无人取得任何席位**（纯距离排名，异常倾向）；
+  //   `no_winner` = 活人缺席。
+  let seatSettled = 0;
+  let noSeatFallback = 0;
   let noWinner = 0;
+  // 席位统计
+  let seatTotalSum = 0;
+  let gamesWithoutSeat = 0;
+  const seatDist = new Map();
+  const champSeatDist = new Map();
   let roundSum = 0;
   let anomalies = 0;
   const anomalySamples = [];
@@ -251,9 +263,16 @@ function summarize(cells) {
   for (const c of cells) {
     total += 1;
     roundSum += c.rounds;
-    if (c.reason === 'fallback') { fallback += 1; }
-    else if (c.reason === 'certified') { certified += 1; }
+    if (c.reason === 'seats') { seatSettled += 1; }
+    else if (c.reason === 'fallback') { noSeatFallback += 1; }
     else { noWinner += 1; }
+    // 席位统计（B11）
+    const st0 = c.seatTotal ?? 0;
+    seatTotalSum += st0;
+    if (st0 === 0) { gamesWithoutSeat += 1; }
+    seatDist.set(st0, (seatDist.get(st0) ?? 0) + 1);
+    const champSeats = c.winners.reduce((m, w) => Math.max(m, c.liveSeats?.[w] ?? 0), 0);
+    champSeatDist.set(champSeats, (champSeatDist.get(champSeats) ?? 0) + 1);
     if (c.firstPendingSeat >= 0) {
       chain.withPeak += 1;
       chain.peakRoundSum += c.firstPendingRound;
@@ -280,15 +299,13 @@ function summarize(cells) {
       const pos = (c.turnOrder ?? []).indexOf(w);
       if (pos >= 0) { posWin.set(pos, (posWin.get(pos) ?? 0) + 1); }
     }
-    if (c.reason === 'certified') {
-      const k = '第' + c.certRound + '轮';
-      certRounds.set(k, (certRounds.get(k) ?? 0) + 1);
-    }
   }
   return {
-    total, fallback, certified, noWinner, anomalies, anomalySamples,
-    fallbackRate: total > 0 ? fallback / total : 0,
+    total, seatSettled, noSeatFallback, noWinner, anomalies, anomalySamples,
+    noSeatFallbackRate: total > 0 ? noSeatFallback / total : 0,
     avgRounds: total > 0 ? roundSum / total : 0,
+    avgSeats: total > 0 ? seatTotalSum / total : 0,
+    gamesWithoutSeat, seatDist, champSeatDist,
     identityWin, factionWin, seatWin, posWin, certRounds, chain, soloSeatWin, soloPosWin, soloGames,
   };
 }
@@ -314,7 +331,7 @@ const summary = summarize(cells);
 
 console.log('== 创界山·活人认证 规模与平衡模拟 ==');
 console.log('主题 ' + args.themes.length + ' 套 · 人数档 ' + args.players.join('/') + ' · 每档 ' + args.games + ' 局 · 合计 ' + summary.total + ' 局');
-console.log('兜底触发率 ' + (summary.fallbackRate * 100).toFixed(1) + '% · 认证达成 ' + summary.certified + ' · 无胜者 ' + summary.noWinner + ' · 平均回合 ' + summary.avgRounds.toFixed(1));
+console.log('无人封顶兜底率 ' + (summary.noSeatFallbackRate * 100).toFixed(1) + '% · 席位制结算 ' + summary.seatSettled + ' · 平均席位数 ' + summary.avgSeats.toFixed(2) + ' · 无胜者 ' + summary.noWinner + ' · 平均回合 ' + summary.avgRounds.toFixed(1));
 console.log('异常 ' + summary.anomalies + ' 条');
 for (const s of summary.anomalySamples) { console.log('  ! ' + s); }
 
@@ -332,15 +349,17 @@ if (args.out !== null) {
   lines.push('| 人数档位 | ' + args.players.join(' / ') + ' |');
   lines.push('| 每档局数 | ' + args.games + ' |');
   lines.push('| 总局数 | ' + summary.total + ' |');
-  lines.push('| **兜底触发率** | **' + (summary.fallbackRate * 100).toFixed(1) + '%**（门槛 < 15%） |');
-  lines.push('| 认证达成局数 | ' + summary.certified + ' |');
+  lines.push('| **无人封顶兜底率** | **' + (summary.noSeatFallbackRate * 100).toFixed(1) + '%**（门槛 < 25%） |');
+  lines.push('| 席位制结算局数 | ' + summary.seatSettled + ' |');
   lines.push('| 无胜者局数 | ' + summary.noWinner + ' |');
   lines.push('| 平均回合数 | ' + summary.avgRounds.toFixed(1) + ' |');
+  lines.push('| **每局平均席位数** | **' + summary.avgSeats.toFixed(2) + '** |');
+  lines.push('| 无席位局数 | ' + summary.gamesWithoutSeat + ' |');
   lines.push('| **异常条数** | **' + summary.anomalies + '**（门槛 0） |');
   lines.push('');
   lines.push('## 分主题 · 分人数档');
   lines.push('');
-  lines.push('| 主题 | 人数 | 局数 | 兜底率 | 认证达成 | 平均回合 | 异常 |');
+  lines.push('| 主题 | 人数 | 局数 | 无人封顶率 | 平均席位数 | 平均回合 | 异常 |');
   lines.push('|---|---|---|---|---|---|---|');
   for (const themeId of args.themes) {
     const theme = loadTheme(themeId);
@@ -348,7 +367,7 @@ if (args.out !== null) {
       const rs = perCell.get(themeId + ':' + players) ?? [];
       const st = summarize(rs);
       lines.push('| ' + theme.meta.name + ' | ' + players + ' | ' + st.total + ' | '
-        + (st.fallbackRate * 100).toFixed(1) + '% | ' + st.certified + ' | '
+        + (st.noSeatFallbackRate * 100).toFixed(1) + '% | ' + st.avgSeats.toFixed(2) + ' | '
         + st.avgRounds.toFixed(1) + ' | ' + st.anomalies + ' |');
     }
   }
@@ -397,12 +416,14 @@ if (args.out !== null) {
   }
   lines.push('## 分析要点');
   lines.push('');
-  lines.push('- **兜底触发率**：多数局在回合上限内分出胜负；超过 15% 说明门槛或山道长度需要回调（规格 §9.2）。');
+  lines.push('- **无人封顶兜底率**（B11）：席位制下「达到回合上限」是**正常结局**，故原「兜底触发率」改为「**无人取得任何席位**的局占比」——过高说明签印门槛或山道长度失衡（规格 §9.2）。');
+  lines.push('- **活人席分布**（B11）：每局平均席位数反映认证流程的通畅度；席位越充足，先登顶者的领先越容易被追平 ⇒ 先手优势越弱。');
   lines.push('- **身份/阵营胜率**：身份与阵营**开局随机分配**（固定 seed 可复现）⇒ 胜率差异只剩「机制强度」；');
   lines.push('  单项偏离均匀分布未超 15pp 时不触发记录线。');
   lines.push('- **主题间一致性**：四套主题共享通用卡牌池（效果逐字相同），胜率分布应当几乎重合；差异只来自 2 张标志卡与文案。');
   lines.push('- **行动顺序随机化（B10）**：行动顺序在开局**随机决定**，整局沿用 ⇒ 「先手」不再绑定任何固定座位。');
   lines.push('  「按行动顺序位次」表是先手优势的直接读数，「按座位胜率」表是座位与胜率是否解耦的读数。');
+  lines.push('  **B11 席位制**后「先登顶」只领先 1 席 ⇒ 位次胜率应趋于均匀（验收口径：极差 < 4pp）。');
   lines.push('- **模拟 AI 偏置**：AI 优先登顶、认证人倾向签印 ⇒ 放大「先登顶 = 先赢」的优势；真人对局的认证是社交博弈，读数须打折。');
   lines.push('');
   lines.push('## 按行动顺序位次的胜率（检验「先行动优势」是否已消除）');
@@ -517,13 +538,22 @@ if (args.out !== null) {
     }
     lines.push('');
   }
-  lines.push('## 认证轮次分布');
+  lines.push('## 活人席分布（B11 计分制）');
   lines.push('');
-  lines.push('| 主题 | 第 1 轮达成 | 第 2 轮达成 |');
+  lines.push('> **口径**：每局发放的活人席总数（认证通过一次 = 1 席，可重复获取；封顶后回到山道起点）。');
+  lines.push('');
+  lines.push('| 每局席位数 | 局数 | 占比 |');
   lines.push('|---|---|---|');
-  for (const themeId of args.themes) {
-    const st = summarize(perTheme.get(themeId) ?? []);
-    lines.push('| ' + themeId + ' | ' + (st.certRounds.get('第1轮') ?? 0) + ' | ' + (st.certRounds.get('第2轮') ?? 0) + ' |');
+  for (const k of [...summary.seatDist.keys()].sort((a, b) => a - b)) {
+    const n = summary.seatDist.get(k) ?? 0;
+    lines.push('| ' + k + ' 席 | ' + n + ' | ' + ((n / summary.total) * 100).toFixed(1) + '% |');
+  }
+  lines.push('');
+  lines.push('| 冠军席位数 | 局数 | 占比 |');
+  lines.push('|---|---|---|');
+  for (const k of [...summary.champSeatDist.keys()].sort((a, b) => a - b)) {
+    const n = summary.champSeatDist.get(k) ?? 0;
+    lines.push('| ' + k + ' 席 | ' + n + ' | ' + ((n / summary.total) * 100).toFixed(1) + '% |');
   }
   writeFileSync(resolve(ROOT, args.out), lines.join('\n') + '\n', 'utf8');
   console.log('报告 → ' + args.out);
@@ -532,12 +562,12 @@ if (args.out !== null) {
 if (args.check) {
   const problems = [];
   if (summary.anomalies > 0) { problems.push('异常 ' + summary.anomalies + ' 条'); }
-  if (summary.fallbackRate >= 0.15) {
-    problems.push('兜底触发率 ' + (summary.fallbackRate * 100).toFixed(1) + '% ≥ 15%');
+  if (summary.noSeatFallbackRate >= 0.25) {
+    problems.push('无人封顶兜底率 ' + (summary.noSeatFallbackRate * 100).toFixed(1) + '% ≥ 25%');
   }
   if (problems.length > 0) {
     console.error('FAIL  ' + problems.join('；'));
     process.exit(1);
   }
-  console.log('PASS  规模与平衡冒烟通过（异常 0 · 兜底率 < 15%）');
+  console.log('PASS  规模与平衡冒烟通过（异常 0 · 无人封顶兜底率 < 25%）');
 }

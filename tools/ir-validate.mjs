@@ -13,6 +13,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { SCALE_FIELD_NAMES } from '../engine/scales.ts';
+import { loadScalesFromSource } from './scales-parse.mjs';
 
 /** 顶层必备键（与 IrDocument 一一对应）。 */
 export const IR_TOP_KEYS = [
@@ -139,20 +140,8 @@ const cwd0 = process.cwd();
 
 /** 规模表从 engine/scales.ts 解析（与 build-ir 同源）。 */
 function loadScales() {
-  const scaleSrc = readFileSync(resolve(cwd0, 'engine/scales.ts'), 'utf8');
-  const scales = [];
-  const re = /\{\s*players:\s*(\d+),\s*boardLength:\s*(\d+),\s*gateCount:\s*(\d+),\s*initialResource:\s*(\d+),\s*handStart:\s*(\d+),\s*deckTotal:\s*(\d+),\s*trialTotal:\s*(\d+),\s*certTotal:\s*(\d+),\s*threshold:\s*(\d+),\s*thresholdWithMark:\s*(\d+),\s*councilIntervalStandard:\s*(\d+),\s*councilIntervalNewbie:\s*(\d+),\s*exileFloor:\s*(\d+),\s*globalRoundLimit:\s*(\d+)/g;
-  for (const m of scaleSrc.matchAll(re)) {
-    scales.push({
-      players: Number(m[1]), boardLength: Number(m[2]), gateCount: Number(m[3]),
-      initialResource: Number(m[4]), handStart: Number(m[5]), deckTotal: Number(m[6]),
-      trialTotal: Number(m[7]), certTotal: Number(m[8]), threshold: Number(m[9]),
-      thresholdWithMark: Number(m[10]), councilIntervalStandard: Number(m[11]),
-      councilIntervalNewbie: Number(m[12]), exileFloor: Number(m[13]),
-      globalRoundLimit: Number(m[14]),
-    });
-  }
-  return scales;
+  // ⚠️ B11：改为**从源码派生**的共享解析器（见 tools/scales-parse.mjs）。
+  return loadScalesFromSource(cwd0);
 }
 
 /** 列出全部主题 id（themes/<id>/theme.json 存在者）。 */

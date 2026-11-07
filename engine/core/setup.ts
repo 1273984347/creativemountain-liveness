@@ -161,6 +161,8 @@ function resetForNewGame(state: State): State {
     doubleNextVote: false,
     wheelUsed: 0,
     extraSignaturesRequired: 0,
+    // B11：换主题 = 换一局 ⇒ 活人席数一并清零
+    liveSeats: {},
     players,
     certification: {
       // 0 = 第 1 轮尚未开始（待认证者刚登顶）—— 见 B9 修正

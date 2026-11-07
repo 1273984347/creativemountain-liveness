@@ -10,6 +10,8 @@ import { pathToFileURL } from 'node:url';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+import { loadScalesFromSource } from './scales-parse.mjs';
+
 import { countPdfPages, hasEmbeddedFont, isOpenablePdf } from './pdf-inspect.mjs';
 
 export function checkIrVsTheme(ir, theme) {
@@ -212,20 +214,9 @@ export function checkPdfBasic(buffer, label) {
 }
 // ---------- CLI ----------
 function loadScales() {
-  const src = readFileSync(resolve(process.cwd(), 'engine/scales.ts'), 'utf8');
-  const rows = [];
-  const re = /\{\s*players:\s*(\d+),\s*boardLength:\s*(\d+),\s*gateCount:\s*(\d+),\s*initialResource:\s*(\d+),\s*handStart:\s*(\d+),\s*deckTotal:\s*(\d+),\s*trialTotal:\s*(\d+),\s*certTotal:\s*(\d+),\s*threshold:\s*(\d+),\s*thresholdWithMark:\s*(\d+),\s*councilIntervalStandard:\s*(\d+),\s*councilIntervalNewbie:\s*(\d+),\s*exileFloor:\s*(\d+),\s*globalRoundLimit:\s*(\d+)/g;
-  for (const m of src.matchAll(re)) {
-    rows.push({
-      players: Number(m[1]), boardLength: Number(m[2]), gateCount: Number(m[3]),
-      initialResource: Number(m[4]), handStart: Number(m[5]), deckTotal: Number(m[6]),
-      trialTotal: Number(m[7]), certTotal: Number(m[8]), threshold: Number(m[9]),
-      thresholdWithMark: Number(m[10]), councilIntervalStandard: Number(m[11]),
-      councilIntervalNewbie: Number(m[12]), exileFloor: Number(m[13]),
-      globalRoundLimit: Number(m[14]),
-    });
-  }
-  return rows;
+  // ⚠️ B11：改为**从源码派生**的共享解析器 —— 此前此处手抄一份字段正则，
+  //   加字段漏改就会误报（实测新增 seatWeight 时 24 项溯源误报）。
+  return loadScalesFromSource(process.cwd());
 }
 
 /** §8 字段名契约（白名单）。 */

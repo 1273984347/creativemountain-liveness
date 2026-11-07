@@ -43,6 +43,7 @@ export interface IrScaleRow {
   readonly councilIntervalNewbie: SourcedNumber;
   readonly exileFloor: SourcedNumber;
   readonly globalRoundLimit: SourcedNumber;
+  readonly seatWeight: SourcedNumber;
 }
 
 /** 主题元信息（搬运）。 */
