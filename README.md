@@ -1,0 +1,80 @@
+# 创界山·活人认证（2026 重制版）
+
+《爱情公寓 3》中陆展博桌游《创界山》的 2026 重制版：**实体 + 数字双轨**。
+3–8 人，桌游策略 + 社交博弈；核心命题是——**登顶不是胜利**。
+
+## 四套主题
+
+| 主题 | 资源 / 牌 / HP | 气质 |
+|---|---|---|
+| 仙侠·2026（基准） | 灵枢 / 符箓 / 灵力 | 灵气复苏的末法时代 |
+| 科幻·AI 纪元 | 算力 / 指令 / 机体完整度 | 算法接管一切审批，只有一件事它做不了 |
+| 融合·道械双修 | 灵能 / 道箓 / 气血 | 灵气与芯片在同一具身体里打架 |
+| 都市·异能纪 | 异能点 / 异能牌 / 精神值 | 城市里总有人突然变得不一样 |
+
+## 快速开始
+
+**数字轨**：打开 `dist/发布包/数字轨/创界山-活人认证.html`——单文件、离线可用、双击即玩。
+
+**实体轨**：打印 `dist/发布包/实体件/<主题>/` 下的
+
+- `规则书.pdf` —— A4 双面规则书（含规模适配表，数值带溯源标记）；
+- `实体件.pdf` —— 棋盘 + 48 张卡 + 8 张身份牌 + 4 张阵营牌 + 认证题卡 + 筹码；
+- `svg/` —— 全部实体件的**可编辑 SVG 源文件**。
+
+## 构建
+
+```bash
+npm install
+npm run typecheck      # 类型门禁（tsc --noEmit）
+npm test               # 单元与门禁自检
+npm run build          # 类型门禁 + esbuild 打包单文件 HTML
+npm run build:themes   # 由 build/theme-data/*.mjs 重新生成三套新主题
+npm run build:print    # 四套主题的 IR → SVG → HTML → PDF
+npm run build:package  # 打包 dist/发布包/
+npm run release        # build + build:print + build:package
+npm run gate           # 九道门禁全跑
+```
+
+## 门禁（`node tools/gate.mjs`）
+
+| # | 门 | 作用 |
+|---|---|---|
+| ① | 类型 | `tsc --noEmit`，TS strict + noUncheckedIndexedAccess + exactOptionalPropertyTypes |
+| ② | 测试 | `node --test`，单元 + 门禁自检（负样本常驻） |
+| ③ | 文档口径 | 规格 ↔ 代码真值双向一致（C1–C9） |
+| ④ | 构建 | esbuild 单文件 HTML |
+| ⑤ | 主题包校验 | 四套主题的结构、引用完整性、**参数取值域** |
+| ⑥ | IR 契约 | 四套主题的 ir.json ↔ IR 类型契约 |
+| ⑦ | 双轨一致性 | IR/SVG 精确比对 + 数值溯源 + PDF 粗检（4 套 × 4 级） |
+| ⑧ | 主题差异化 | 规格 §10.1 两张清单的机械判定 + **跨主题术语串戏** |
+| ⑨ | 规模与平衡 | 720 局冒烟：零异常 + 兜底触发率 < 15% |
+
+## 目录
+
+```
+engine/     引擎：状态、回合机、57 算子、15 谓词、认证与山议
+web/        数字轨 UI（单文件 HTML 入口）
+themes/     四套主题包（数据）
+build/      构建脚本：主题生成器、实体件管线、发布包
+tools/      九道门禁的实现
+tests/      单元与门禁负样本；tests/sim/ 是规模与平衡模拟器
+docs/       规格、实施计划、批次执行记录、平衡报告
+print/      实体轨产物（按主题分目录）+ 规则书叙述模板
+```
+
+## 已知限制（如实登记）
+
+- **数字轨棋盘按人数自适应**（规格 §8 的 boardLength 24–36），**实体件棋盘是 4 人局 28 格版**；
+  换人数时需自行裁剪/扩展实体棋盘。
+- **出牌目标是自动选取**（位置最高的对手）；引擎已支持 `payload.target`，玩家手动点选待做。
+- **身份与阵营按座位轮转分配**，胜率沿座位顺序递减（详见 `docs/balance-report.md` 的分析与讨论）。
+- `extra_vote` / `extra_roll` 两个算子**只写不读**（引擎暂无消费点），主题包未使用。
+- 主题包的**全量差异化**（各自独立的卡牌池 / 事件池 / 身份设计）属 V1.1 范围。
+
+## 文档
+
+- 规格：`docs/superpowers/specs/2026-11-07-creative-mountain-liveness-design.md`
+- 实施计划：`docs/superpowers/plans/2026-11-07-creative-mountain-liveness-implementation.md`
+- 平衡报告：`docs/balance-report.md`（24000 局模拟，自动生成）
+- 批次执行记录：`docs/批次/`

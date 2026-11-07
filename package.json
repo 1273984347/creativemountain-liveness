@@ -15,7 +15,9 @@
     "gate": "node tools/gate.mjs",
     "build:ir": "node build/build-ir.mjs",
     "build:print": "esbuild build/build-print.ts --bundle --platform=node --format=esm --external:playwright --outfile=build/.build-print.mjs --log-level=error && node build/build-print-all.mjs",
-    "print": "npm run build:ir && npm run build:print"
+    "print": "npm run build:ir && npm run build:print",
+    "build:package": "node build/build-package.mjs",
+    "release": "npm run build && npm run build:print && npm run build:package"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
