@@ -34,7 +34,7 @@ function cleanup(...paths: readonly string[]): void {
 
 // ---------- 负样本 1：类型门禁（tsc --noEmit）----------
 
-test('负样本：类型门禁对类型错误判红，恢复后判绿', () => {
+test('负样本：类型门禁对类型错误判红，恢复后判绿', { concurrency: false }, () => {
   cleanup(TYPE_PROBE);
   try {
     // 故意注入类型错误：number 位置放了 string
@@ -55,7 +55,7 @@ test('负样本：类型门禁对类型错误判红，恢复后判绿', () => {
 
 // ---------- 负样本 2：测试门禁（node --test）----------
 
-test('负样本：测试门禁对失败用例判红，恢复后判绿', () => {
+test('负样本：测试门禁对失败用例判红，恢复后判绿', { concurrency: false }, () => {
   cleanup(TEST_PROBE);
   try {
     writeFileSync(
