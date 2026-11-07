@@ -16,7 +16,7 @@ export type ActionType =
   | 'CERTIFY_CHALLENGE'
   | 'CERTIFY_ABSTAIN'
   | 'CERTIFY_APPEAL'
-  | 'CERTIFY_VALIDATE_QUESTION'
+  | 'CERTIFY_APPEAL_VOTE'
   | 'CERTIFY_ANSWER';
 
 /** 声明式动作。`type` 为判别式字段。 */
@@ -32,5 +32,5 @@ export type Action =
   | { readonly type: 'CERTIFY_CHALLENGE'; readonly actor: number; readonly target: number }
   | { readonly type: 'CERTIFY_ABSTAIN'; readonly actor: number; readonly target: number }
   | { readonly type: 'CERTIFY_APPEAL'; readonly actor: number; readonly target: number }
-  | { readonly type: 'CERTIFY_VALIDATE_QUESTION'; readonly actor: number; readonly target: number; readonly valid: boolean }
-  | { readonly type: 'CERTIFY_ANSWER'; readonly actor: number; readonly questionIndex: number; readonly ok: boolean };
+  | { readonly type: 'CERTIFY_APPEAL_VOTE'; readonly actor: number; readonly target: number; readonly overturn: boolean }
+  | { readonly type: 'CERTIFY_ANSWER'; readonly actor: number; readonly target: number; readonly passed: boolean };

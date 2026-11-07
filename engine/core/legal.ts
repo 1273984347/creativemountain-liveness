@@ -35,17 +35,6 @@ export function getLegalActions(state: State, playerId: number): Action[] {
       }
     }
   }
-  // 复议投票 / 合规裁定投票：非当事人
-  for (const target of c.pending) {
-    if (target === playerId) { continue; }
-    for (const o of others) {
-      if (o.seat === playerId) { continue; }
-      if (c.appealVotes[playerId] === undefined && c.appealed.includes(target)) {
-        actions.push({ type: 'CERTIFY_VALIDATE_QUESTION', actor: playerId, target, valid: true });
-        actions.push({ type: 'CERTIFY_VALIDATE_QUESTION', actor: playerId, target, valid: false });
-      }
-    }
-  }
 
   // ---- 山议投票（§5.6）----
   if (!state.council.resolved) {
