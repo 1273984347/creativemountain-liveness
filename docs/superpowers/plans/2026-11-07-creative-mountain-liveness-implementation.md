@@ -54,7 +54,9 @@ B1 ──► B2 ──► B3 ──► B5
 
 ### 0.4 批次间门禁
 
-每批次结束必须满足：`npm run typecheck`（`tsc --noEmit`）零错误、`npm test`（`node --test`）全绿、`npm run build`（esbuild）产出可加载产物、该批次新增规则在规格文档已有对应条款（**无「代码先行、文档后补」**）。
+每批次结束必须满足 **`node tools/gate.mjs` 全绿**（4 门：类型 / 测试 / 文档口径 / 构建），且该批次新增规则在规格文档已有对应条款（**无「代码先行、文档后补」**）。
+
+门禁本身的纪律见 §0.3——其中「管道会吞退出码」「Windows 不能 spawn `.cmd`」「test runner 内再 spawn test runner 要清 `NODE_TEST_CONTEXT`」三条都是本项目实测踩出来的，不是理论。
 
 ---
 

@@ -854,6 +854,18 @@ Chromium 生成的 PDF **字节级不可直接比对**——实测同一份 HTML
 
 任一不一致 → **exit 1**，本地门禁判红。这是「双轨同批交付」不漂移的唯一硬证据。
 
+**已实现的门禁工具（V1 现状）**：
+
+| 门 | 工具 | 检查什么 | 负样本用例 |
+|---|---|---|---|
+| 门① 类型 | `tsc --noEmit` | TS strict 全量类型检查 | `tests/gates/selfcheck.test.ts` |
+| 门② 测试 | `node --test` | 单元测试 + 门禁自检 | 同上 |
+| 门③ 文档口径 | `tools/doc-sync.mjs` | 规格 ↔ 代码真值双向一致（算子/谓词/goal/字段名/规模表数值） | `tests/gates/doc-sync.test.ts` |
+| 门④ 构建 | `esbuild.config.mjs` | 单文件 HTML 可产出 | — |
+| 门⑤ PDF 归一化 | `tools/pdf-normalize.mjs` | 构建时刻归一化后的可比性 | `tests/gates/pdf-normalize.test.ts` |
+
+一键入口：`node tools/gate.mjs`（串行执行，全绿 exit 0，任一红 exit 1；**门数声明与实跑门数必须一致**，否则自断言失败）。
+
 ### 9.4 主题包校验
 
 `tools/theme-validate.mjs`：JSON 结构校验 + 引用完整性（所有 cardId / trialId / factionId 可解析）+ ops 白名单校验（出现未注册算子 → 报错）+ 数量一致性（牌库总量与配置相符）+ 规模表一致性。
