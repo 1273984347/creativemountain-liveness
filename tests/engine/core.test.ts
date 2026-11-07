@@ -68,11 +68,12 @@ test('手番推进：turnIndex 逐个递增，玩家按座位序轮转', () => {
 
 test('山议与认证检查仅在 round 末触发一次（不是每个手番触发）', () => {
   const s = createInitialState({ players: 3, seed: 42, deckSize: 40 });
-  // 3 人局：手番 0、1 都不是 round 末
+  // turnIndex 语义 = 「已行动的手番数」⇒ 3 人局要行动满 3 次才是 round 末
   assert.equal(isRoundEnd(s), false);
   assert.equal(isRoundEnd(nextTurn(s)), false);
-  // 第 3 个手番是 round 末
-  const third = nextTurn(nextTurn(s));
+  assert.equal(isRoundEnd(nextTurn(nextTurn(s))), false);
+  // 第 3 个手番之后才是 round 末
+  const third = nextTurn(nextTurn(nextTurn(s)));
   assert.equal(isRoundEnd(third), true);
 });
 

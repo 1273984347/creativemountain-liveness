@@ -88,8 +88,10 @@ for (const id of THEME_IDS) {
     const theme = loadTheme(id);
     const s = newGame(theme, 3, 20261107);
     assert.equal(s.players.length, 3);
-    assert.equal(s.board.length, theme.board.length);
-    assert.equal(s.board.peakIndex, theme.board.peakIndex);
+    // 棋盘按规模表格数自适应（§8 boardLength），峰顶恒在末格
+    assert.equal(s.board.length, s.scales.boardLength);
+    assert.equal(s.board.peakIndex, s.board.length);
+    assert.equal(s.board.tiles.length, s.board.length);
     // 牌库规模按**规模表**（人数相关）组装：主题卡池不足时复制通用牌补足
     // （否则 8 人局需要 56 张而主题只有 48 张 ⇒ 最后一名玩家 0 张手牌）
     const inHand = s.players.reduce((n, p) => n + p.hand.length, 0);

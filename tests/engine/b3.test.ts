@@ -18,6 +18,7 @@ import {
 import { castVote, openCouncil, resolveCouncil, topVoted } from '../../engine/core/council.ts';
 import { fallbackRanking, resolveVictory } from '../../engine/core/victory.ts';
 import { getLegalActions } from '../../engine/core/legal.ts';
+import { applyEffect } from '../../engine/ops/registry.ts';
 import { at } from './helpers.ts';
 
 /** 造一个「N 人待认证」的局面。 */
@@ -27,7 +28,8 @@ function pendingScene(playerCount: number, pendingSeats: number[] = [0]) {
   const players = s.players.map((p) =>
     pendingSeats.includes(p.seat) ? { ...p, position: peak, pendingCert: true } : p,
   );
-  const next: State = { ...s, players, certification: { ...s.certification, pending: pendingSeats } };
+  // round: 1 = 「第 1 轮进行中」（0 表示第 1 轮尚未开始，见 B9 修正）
+  const next: State = { ...s, players, certification: { ...s.certification, round: 1, pending: pendingSeats } };
   return next;
 }
 
@@ -145,6 +147,18 @@ test('§5.2 达到门槛 → 封顶结束', () => {
   assert.deepEqual(adv.state.outcome.winners, [0]);
 });
 
+test('§5.2 登顶当轮只开启第 1 轮，不判定（B9：给认证人留出整轮）', () => {
+  const s = createInitialState({ players: 5, seed: 7, deckSize: 40 });
+  const entered = enterPendingCertification(s, 0);
+  assert.equal(entered.ok, true);
+  assert.equal(entered.state.certification.round, 0, '刚登顶时第 1 轮尚未开始');
+  const opened = advanceCertificationRound(entered.state);
+  assert.equal(opened.ok, true);
+  assert.equal(opened.state.certification.round, 1, '应进入第 1 轮');
+  assert.equal(opened.state.outcome.finished, false, '开启第 1 轮不判定、不封顶');
+  assert.deepEqual(opened.state.certification.pending, [0], '待认证者仍在待认证');
+});
+
 test('§5.2 两轮未达成 → 退回山道 60% 位置并终止认证', () => {
   const s = pendingScene(5);
   // 第 1 轮无人签印 → 进入第 2 轮
@@ -158,6 +172,17 @@ test('§5.2 两轮未达成 → 退回山道 60% 位置并终止认证', () => {
   assert.equal(tp.position, Math.max(1, Math.round(s.board.length * 0.6)));
   assert.equal(tp.pendingCert, false);
   assert.deepEqual(r2.state.certification.pending, []);
+});
+
+test('§5.1 移动到峰顶即进入待认证流程（B9 回归：曾只设 pendingCert 而未进流程）', () => {
+  const s = createInitialState({ players: 3, seed: 7, deckSize: 40 });
+  const peak = s.board.peakIndex;
+  // 用 move_to_tile 直接落到峰顶
+  const r = applyEffect({ state: s, actor: 0 }, { op: 'move_to_tile', tileIndex: peak });
+  assert.equal(r.ok, true);
+  assert.equal(at(r.state.players, 0).pendingCert, true, '应锁定为待认证');
+  assert.deepEqual(r.state.certification.pending, [0], '必须进入认证流程的 pending 列表');
+  assert.equal(r.state.certification.round, 0, '第 1 轮尚未开始');
 });
 
 test('§5.1 进入待认证状态', () => {

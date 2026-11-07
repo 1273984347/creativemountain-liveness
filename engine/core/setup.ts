@@ -4,6 +4,8 @@
 // **身份是公开的**（§4.1 明牌竞速），所以分配结果必须进日志。
 
 import type { Card, Effect, ThemePack } from '../types/theme.ts';
+import type { Tile } from '../types/theme.ts';
+import type { Board } from './board.ts';
 import type { State } from './state.ts';
 import { dealInitialHands } from './hand.ts';
 import { openHeaven } from './turn-runner.ts';
@@ -127,7 +129,8 @@ function resetForNewGame(state: State): State {
     extraSignaturesRequired: 0,
     players,
     certification: {
-      round: 1,
+      // 0 = 第 1 轮尚未开始（待认证者刚登顶）—— 见 B9 修正
+      round: 0,
       pending: [],
       signed: [],
       challenged: [],
@@ -146,6 +149,42 @@ function resetForNewGame(state: State): State {
 }
 
 /**
+ * 把主题棋盘**适配到规模表的格数**（规格 §8 `boardLength`：3–8 人 = 24/28/32/32/36/36）。
+ *
+ * ⚠️ B9 修正：主题包固定 28 格（4 人局），而规模表按人数给出不同格数。
+ *   若不缩放 ⇒ 3 人局要爬 28 格（规则书写 24）⇒ **兜底触发率飙到 96%**（实测），
+ *   且规则书与实际对局不一致。
+ *
+ * 缩放规则：截断时保留关隘等关键格位（前段顺序不变），峰顶永远在末格；
+ * 扩展时新增格位用中性名（避免地名重复）。
+ */
+function fitBoard(theme: ThemePack, length: number): Board {
+  const tiles = theme.board.tiles;
+  if (tiles.length === length) {
+    return { length, tiles: [...tiles], peakIndex: theme.board.peakIndex };
+  }
+  const peakTile = tiles[tiles.length - 1];
+  const body = tiles.slice(0, -1);
+  const out: Tile[] = [];
+  for (let i = 0; i < length - 1; i++) {
+    const src = body[i % body.length];
+    if (src === undefined) {
+      continue;
+    }
+    const isRepeat = i >= body.length;
+    out.push({
+      ...src,
+      index: i + 1,
+      ...(isRepeat ? { name: '山道 ' + String(i + 1) } : {}),
+    });
+  }
+  if (peakTile !== undefined) {
+    out.push({ ...peakTile, index: length });
+  }
+  return { length, tiles: out, peakIndex: length };
+}
+
+/**
  * 把主题包装进 State：**牌池 / 棋盘 / 天机 / 试炼 / 认证题 / 造物**。
  *
  * ⚠️ B8 补：`createInitialState` 的 `deckSize` 只是 **B1 骨架的测试牌占位**——
@@ -159,11 +198,7 @@ export function installTheme(state: State, theme: ThemePack): State {
   const creationIds = new Set((theme.creationDeck ?? []).map((c) => c.cardId));
   const withPacks: State = {
     ...state,
-    board: {
-      length: theme.board.length,
-      tiles: [...theme.board.tiles],
-      peakIndex: theme.board.peakIndex,
-    },
+    board: fitBoard(theme, state.scales.boardLength),
     decks: {
       deck: fillDeck(theme, state, state.scales.deckTotal),
       discard: [],

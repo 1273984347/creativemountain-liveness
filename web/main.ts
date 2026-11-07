@@ -88,6 +88,25 @@ function newGame(): void {
   render();
 }
 
+/**
+ * 默认出牌目标：除自己外**位置最高**的存活玩家（离峰顶最近 = 最危险）。
+ *
+ * ⚠️ 临时策略：B10 改为玩家点选目标（引擎 performAction 已支持 payload.target）。
+ */
+function pickDefaultTarget(state: State, seat: number): number | undefined {
+  const others = state.players.filter((p) => p.alive && p.seat !== seat);
+  if (others.length === 0) {
+    return undefined;
+  }
+  let best = others[0];
+  for (const p of others) {
+    if (best !== undefined && p.position > best.position) {
+      best = p;
+    }
+  }
+  return best?.seat;
+}
+
 function saveGame(): void {
   try {
     localStorage.setItem(SAVE_KEY, packSave(ui.themeId, ui.state));
@@ -242,7 +261,10 @@ function renderActions(): HTMLElement {
   body.push(row);
   body.push(el('div', { class: 'muted', text: '出牌：点击手牌中的卡牌（费用自动结算）。' }));
   body.push(renderHand(ui.state, theme, seat, (cardId) => {
-    ui.state = performAction(ui.state, seat, 'act', { cardId });
+    // ⚠️ 临时：攻击牌的目标自动取「位置最高的对手」。
+    //   B10 改为出牌后由玩家点选目标（引擎侧已支持 payload.target）。
+    const target = pickDefaultTarget(ui.state, seat);
+    ui.state = performAction(ui.state, seat, 'act', target === undefined ? { cardId } : { cardId, target });
     ui.state = advanceTurn(ui.state, ui.mode);
     render();
   }));

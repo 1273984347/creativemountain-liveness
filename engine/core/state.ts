@@ -251,7 +251,8 @@ export function createInitialState(opts: InitialStateOptions): State {
     doubleNextVote: false,
     wheelUsed: 0,
     certification: {
-      round: 1,
+      // 0 = 第 1 轮尚未开始（待认证者刚登顶）
+      round: 0,
       pending: [],
       signed: [],
       challenged: [],

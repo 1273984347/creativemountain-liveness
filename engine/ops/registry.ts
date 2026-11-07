@@ -11,6 +11,7 @@ import { RESOURCE_CAP } from '../core/resource.ts';
 import { rollD6, rollD20 } from '../core/dice.ts';
 import { filterMatches } from '../types/card.ts';
 import { evaluatePredicate } from '../predicates.ts';
+import { enterPendingCertification } from '../core/certification.ts';
 import type { State } from '../core/state.ts';
 export type { OpContext, OpResult } from './context.ts';
 import {
@@ -22,6 +23,23 @@ import {
   type OpContext,
   type OpResult,
 } from './context.ts';
+
+/**
+ * 到达峰顶 → **进入活人认证流程**（规格 §5.1）。
+ *
+ * ⚠️ B9 修正：此前移动到峰顶只设了 `pendingCert = true`，
+ *   **没有调用 `enterPendingCertification`** ⇒ `certification.pending` 始终为空
+ *   ⇒ 认证流程永不启动 ⇒ 没有任何人能封顶 ⇒ 兜底触发率 100%（实测）。
+ *   单测没抓到，是因为它们直接调 `enterPendingCertification` 测流程，
+ *   而没有测「移动到峰顶是否真的进入流程」——这是**集成缺口**。
+ */
+function enterPeak(state: State, seat: number, ctx: OpContext): State {
+  const r = enterPendingCertification(state, seat);
+  if (!r.ok) {
+    return state;
+  }
+  return withLog(r.state, ctx, 'peak', `登顶：座位 ${seat} 进入待认证状态`);
+}
 
 /** 算子实现表。 */
 export type OpHandlers = {
@@ -222,7 +240,7 @@ export const OPS: OpHandlers = {
     });
     state = withLog(state, ctx, 'move_forward', `前进 ${next - pl.position} 格${clamped ? '（到达峰顶）' : ''}`);
     if (next === peak) {
-      state = withPlayer(state, t.seat, { pendingCert: true });
+      state = enterPeak(state, t.seat, ctx);
     }
     return ok(state);
   },
@@ -254,7 +272,7 @@ export const OPS: OpHandlers = {
       turn: { ...pl.turn, movedThisTurn: true },
     });
     if (tile.index === ctx.state.board.peakIndex) {
-      state = withPlayer(state, t.seat, { pendingCert: true });
+      state = enterPeak(state, t.seat, ctx);
     }
     return ok(withLog(state, ctx, 'move_to_tile', `移动到第 ${tile.index} 格`));
   },
@@ -296,7 +314,7 @@ export const OPS: OpHandlers = {
       turn: { ...pl.turn, movedThisTurn: true },
     });
     if (tile.index === ctx.state.board.peakIndex) {
-      state = withPlayer(state, t.seat, { pendingCert: true });
+      state = enterPeak(state, t.seat, ctx);
     }
     return ok(withLog(state, ctx, 'teleport', `传送到第 ${tile.index} 格`));
   },
@@ -318,7 +336,7 @@ export const OPS: OpHandlers = {
     state = { ...state, lastDice: roll };
     state = withLog(state, ctx, 'move_by_dice', `掷骰 ${roll}，前进 ${next - pl.position} 格`, roll);
     if (next === peak) {
-      state = withPlayer(state, t.seat, { pendingCert: true });
+      state = enterPeak(state, t.seat, ctx);
     }
     return ok(state);
   },

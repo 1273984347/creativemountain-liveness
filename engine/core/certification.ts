@@ -8,7 +8,8 @@ import type { CertificationState } from './flow.ts';
 /** 空认证状态。 */
 export function emptyCertification(): CertificationState {
   return {
-    round: 1, pending: [], signed: [], challenged: [], abstained: [],
+    // 0 = 第 1 轮尚未开始（待认证者刚登顶）；1 = 第 1 轮进行中；2 = 第 2 轮
+    round: 0, pending: [], signed: [], challenged: [], abstained: [],
     signatures: {}, judgments: {}, appealed: [], appealVotes: {},
     validityVotes: {}, validityDecided: false,
   };
@@ -300,6 +301,18 @@ export function advanceCertificationRound(state: State): CertifyResult {
   const c = state.certification;
   if (c.pending.length === 0) {
     return fail(state, '当前无待认证者');
+  }
+  // ⚠️ B9 修正：`certification.round === 0` 表示「第 1 轮**尚未开始**」。
+  //   待认证者是在某个**手番末**登顶的，若在**同一 round 末**就判定第 1 轮，
+  //   认证人还没来得及签印 ⇒ 第 1 轮必然空转 ⇒ 登顶几乎必然失败
+  //   （实测：兜底触发率 96%，认证达成仅 4%）。
+  //   正确时序：登顶当轮只「开启」第 1 轮，接下来**整轮**供认证人签印。
+  if (c.round === 0) {
+    const opened: State = {
+      ...state,
+      certification: { ...emptyCertification(), round: 1, pending: [...c.pending] },
+    };
+    return succeed(opened, '开始第 1 轮认证');
   }
   // 轮末：对「判不通过且未申请复议」的认证人执行后退后果（§5.3.2）
   // ——判不通过本身不立即后退；复议窗口关闭后才执行。

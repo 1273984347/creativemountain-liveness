@@ -46,6 +46,7 @@ B1 ──► B2 ──► B3 ──► B5
 | ⑥ IR 契约校验 | `tools/ir-validate.mjs` | ir.json ↔ IR 类型契约 | ✅ |
 | ⑦ 双轨一致性 | `tools/parity-check.mjs` | IR/SVG 精确比对 + 数值溯源 + PDF 粗检 | ✅ |
 | ⑧ 主题差异化核对 | `tools/theme-diff-check.mjs` | 规格 §10.1 两张清单的机械核对 | ✅ |
+| ⑨ 规模与平衡冒烟 | `tests/sim/run.mjs --check` | 零异常 + 兜底触发率 < 15%（§9.2） | ✅ |
 
 > 门数从 5 → 8：PDF 归一化本就是 ⑦ parity-check 内部的一环（`tools/pdf-normalize.mjs`），不算独立门；
 > ⑤⑥⑦⑧ 为 B6–B8 陆续接入。**门数声明 == 实跑门数**由 `tools/gate.mjs` 自断言。

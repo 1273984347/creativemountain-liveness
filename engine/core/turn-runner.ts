@@ -14,6 +14,7 @@ import { openCouncil, resolveCouncil, shouldHoldCouncil } from './council.ts';
 import { advanceCertificationRound, enterPendingCertification } from './certification.ts';
 import { resolveVictory } from './victory.ts';
 import type { RuleMode } from '../scales.ts';
+import type { Effect } from '../types/theme.ts';
 import type { State } from './state.ts';
 
 /** 流程运行结果。 */
@@ -93,6 +94,36 @@ export function instructionText(face: number): string {
   return INSTRUCTION_TABLE.find((x) => x.face === face)?.text ?? '（无对应指令）';
 }
 /**
+ * 改写效果里的**目标座位**（递归）。
+ *
+ * ⚠️ 主题包里的攻击牌把目标写成 `target: 0` —— 那只是**占位**，
+ *   真实目标由使用者选择。若不覆盖，引擎会照字面打「座位 0」，
+ *   等于每张攻击牌都只能打固定的那个人（实测：本地多人下攻击牌永远打座 0）。
+ *   故 `performAction` 收到 `payload.target` 时，把效果树里的目标整体改写。
+ */
+function retarget(effect: Effect, target: number | undefined): Effect {
+  if (target === undefined) {
+    return effect;
+  }
+  if (effect === null || typeof effect !== 'object') {
+    return effect;
+  }
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(effect)) {
+    if (k === 'target' && typeof v === 'number') {
+      out[k] = target;
+    } else if (k === 'effects' && Array.isArray(v)) {
+      out[k] = v.map((e) => retarget(e as Effect, target));
+    } else if (k === 'then' || k === 'else' || k === 'effect') {
+      out[k] = retarget(v as Effect, target);
+    } else {
+      out[k] = v;
+    }
+  }
+  return out as unknown as Effect;
+}
+
+/**
  * 执行一个行动（§3.1 行动阶段三选一：行棋 / 问天 / 行事）。
  *
  * - **行棋**：掷 6 面移动骰并前进（**必须走满，不得少走**）。
@@ -135,7 +166,7 @@ export function performAction(
       const hand = player.hand.filter((c) => c.id !== cardId);
       next = { ...next, players: next.players.map((p) => (p.seat === seat ? { ...p, hand } : p)) };
       for (const eff of card.effects) {
-        next = applyEffect({ state: next, actor: seat, sourceCard: card }, eff).state;
+        next = applyEffect({ state: next, actor: seat, sourceCard: card }, retarget(eff, payload.target)).state;
       }
       next = { ...next, log: [...next.log, { round: next.round, turnIndex: next.turnIndex, actor: seat, kind: 'card', message: `行事：打出「${card.name}」` }] };
       break;
@@ -236,6 +267,9 @@ export function openHeaven(state: State): State {
     for (const eff of perPlayerEffects) {
       next = applyEffect({ state: next, actor: p.seat, sourceCard: card }, eff).state;
     }
+    // 天机牌发的牌立即裁到手牌上限
+    // （回合末才裁 ⇒ 中间窗口里手牌超限，实测报「手牌超上限」异常）
+    next = discardDownToLimit(next, p.seat);
   }
   return next;
 }
