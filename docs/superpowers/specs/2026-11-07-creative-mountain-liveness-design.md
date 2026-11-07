@@ -571,7 +571,9 @@ type Action =
 {
   "meta":         { "id": "...", "name": "...", "resourceName": "灵枢" },
   "glossary":     { "HP": "灵力", "deck": "牌堆", "hand": "手牌" },
-  "scales":       [ { "players": 4, "boardLength": 28, "threshold": 3 } ],
+  "scales":       [ { "players": 4, "boardLength": 28, "threshold": 3,
+                      "srcRefs": { "threshold": "scales[4].threshold",
+                                    "globalRoundLimit": "scales[4].globalRoundLimit" } } ],
   "instructionTable": [ { "face": 1, "text": "抽 1 张牌" } ],   // 20 条，顺序与 §3.2 一致
   "factions":     [ { "id": "...", "name": "仙门", "hpBase": 7,
                       "abilityText": "通过关隘后抽 2 张牌" } ],  // effects 已编译为文本
@@ -591,6 +593,29 @@ type Action =
 - ir.json 是**确定性输出**——同样的 theme.json 必须产出**逐字节相同**的 ir.json（不含时间戳、随机 ID、绝对路径）。任何非确定性输出都会让 parity-check 假红。
 - ir.json 中的每一段文本都必须**可追溯到 theme.json 的某个字段**——不允许在渲染模板里写死文案，否则文字改动会绕过数据源、造成双轨漂移。
 - **parity-check 的主比对对象就是这份 ir.json**（§9.3）。
+
+#### 6.7.2 数值溯源的渲染约定（B6 实现约束）
+
+为支撑 §9.3 的第四级门禁（数值溯源比对），`build-print` 渲染规则书表格时必须遵守：
+
+| 规则 | 说明 |
+|---|---|
+| **数值单元格一律带 `data-src`** | 每个来自 `engine/scales.ts` 或 theme.json 的数值单元格，HTML 输出为 `<td data-src="scales[5].threshold">3</td>` |
+| **属性不可见** | `data-src` 是 HTML 自定义属性，不影响打印外观与 PDF 呈现 |
+| **SVG 输出同理** | SVG 中用 `<text data-src="...">` 或外层 `<g data-src="...">` 承载溯源标记 |
+| **渲染文本 = 纯数值** | 单元格内只放裸数值，单位与说明写在表头（例：表头写「认证签印门槛 N」，单元格只写 `3`），便于机器比对 |
+| **路径格式** | `scales[<players>].<fieldName>`（引擎常量）或 `theme.<path>`（主题包字段）；`<players>` 必须与该行 `players` 一致 |
+| **字段名白名单** | `<fieldName>` 必须属于 §8 的字段名契约，不在白名单内的路径判红 |
+
+**为什么不用「文本哈希」或「全文 grep」**：那种做法只能判断「规则书里有没有 3」，无法判断「这个 3 是不是 5 人局的那一格」。溯源标记把「哪个数字」与「来自哪里」绑定，才能真正堵住「改了引擎数值、忘了改规则书」。
+- **`srcRefs` 溯源元数据**：ir.json 中**每一个来自 `engine/scales.ts` 的数值**都必须在同级 `srcRefs` 对象里声明其来源路径，格式为 `scales[<players>].<fieldName>`（例：`scales[5].threshold`）。`srcRefs` 的键 = 该数值的字段名，值 = 溯源路径。
+  - 溯源路径的**目标文件是 `engine/scales.ts`**，不是 theme.json——规模数值属于引擎常量，不属于主题包。
+  - 路径中的 `<players>` 必须与该行 `players` 字段一致。
+  - 规则书表格渲染时，每个数值单元格必须携带其 `srcRefs` 路径（渲染为不可见的 HTML 属性，见 §6.7.2）。
+- **`srcRefs` 溯源元数据**：ir.json 中**每一个来自 `engine/scales.ts` 的数值**都必须在同级 `srcRefs` 对象里声明其来源路径，格式为 `scales[<players>].<fieldName>`（例：`scales[5].threshold`）。`srcRefs` 的键 = 该数值的字段名，值 = 溯源路径。
+  - 溯源路径的**目标文件**是 `engine/scales.ts`，不是 theme.json——规模数值属于引擎常量，不属于主题包。
+  - 规则书表格渲染时，每个数值单元格必须携带其 `srcRefs` 路径（渲染为不可见的 HTML 属性，见 §6.7.2）。
+  - 路径中的 `<players>` 必须与该行 `players` 字段一致。
 
 
 ---
@@ -619,8 +644,11 @@ V1 的新手门槛由 **§6.6 脚本化教学演示** 承担（成本低一个�
 
 ## 8. 规模自适应
 
+**字段名契约（唯一真相源 = `engine/scales.ts`）**：下表每一列对应 `engine/scales.ts` 中 `ScalesRow` 的一个字段名。**规则书表格、IR、引擎三处必须用同一套字段名**，数值溯源门禁（§9.3 第四级）依赖它。字段名一经定稿不得随意更改。
+
 | 人数 | 山道格数 | 关隘数 | 初始灵枢 | 起始手牌 | 牌库总量 | 试炼牌 | 认证题卡 | 认证签印门槛 N | 印记后门槛 | 山议间隔（标准） | 山议间隔（新手） | 放逐下限 | 全局回合上限 | 预计局长 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| `players` | `boardLength` | `gateCount` | `initialResource` | `handStart` | `deckTotal` | `trialTotal` | `certTotal` | `threshold` | `thresholdWithMark` | `councilIntervalStandard` | `councilIntervalNewbie` | `exileFloor` | `globalRoundLimit` | `estimatedMinutes` |
 | 3 | 24 | 2 | 4 | 5 | 40 | 10 | 12 | 2 | 1 | 每 6 回合 | 每 8 回合 | 3 | 15 | ~35 min |
 | 4 | 28 | 3 | 5 | 5 | 48 | 12 | 14 | 3 | 2 | 每 6 回合 | 每 8 回合 | 3 | 16 | ~45 min |
 | 5 | 32 | 3 | 6 | 6 | 56 | 12 | 14 | 3 | 2 | 每 5 回合 | 每 7 回合 | 3 | 17 | ~55 min |
@@ -698,6 +726,18 @@ V1 的新手门槛由 **§6.6 脚本化教学演示** 承担（成本低一个�
 
 **③ PDF 粗检（不逐项比对）**：仅校验可打开、页数与预期一致、字体已嵌入。
 
+**④ 数值溯源比对（精确，判红依据）——堵住「改了引擎数值、忘了改规则书」**：
+
+这是双轨项目中最高频的漂移来源，因此单列一条门禁。规则书里的每一个**数值单元格**都必须能回溯到 `engine/scales.ts` 的具体字段。
+
+- **标记方式**：规则书表格在渲染时，每个数值单元格携带不可见的溯源属性 `data-src="scales[<players>].<fieldName>"`（SVG 与打印 HTML 同理，见 §6.7.2）。属性值即 IR 中 `srcRefs` 声明的路径。
+- **验证方式**：`parity-check` 依次执行三步，任一不符即判红：
+  1. **存在性**：规则书中每个数值单元格都有 `data-src` 属性；缺标记 → 判红（说明该数字是手写死的）。
+  2. **可解析性**：`data-src` 的路径能在 `engine/scales.ts` 的 `ScalesRow` 中定位到对应字段（`scales[<players>]` 的行存在，且字段名属于 §8 字段名契约）；路径非法 → 判红。
+  3. **值相等**：该单元格的**渲染文本**（去掉单位与空白后）等于源字段的**当前值**；不等 → 判红。
+- **示例**：「5 人局签印门槛 N=3」这一格必须渲染为 `data-src="scales[5].threshold"`，且 `engine/scales.ts` 中 `players: 5` 那行的 `threshold` 必须确实等于 `3`。改了 `scales.ts` 而忘记重生成规则书 → 判红。
+- **覆盖范围**：规则书中的**规模适配表**（§8 全部 15 列）必须 100% 带标记；其他表格（阵营表 / 身份表 / 卡牌总表）中的数值同样适用「存在性 + 值相等」两步，但溯源目标为 theme.json 对应字段，路径前缀为 `theme.`。
+
 任一不一致 → **exit 1**，本地门禁判红。这是「双轨同批交付」不漂移的唯一硬证据。
 
 ### 9.4 主题包校验
@@ -720,6 +760,7 @@ V1 的新手门槛由 **§6.6 脚本化教学演示** 承担（成本低一个�
 - [ ] 3 人局山议执行「山议裁定」而非放逐（不放逐违反下限）
 - [ ] `print/ir.json` 生成且逐字节确定性输出，parity-check 主比对通过
 - [ ] 规则书内所有数值与引擎实际行为一致（由 parity-check 覆盖）
+- [ ] **数值溯源门禁生效**：规则书规模表每个数值单元格均带 `data-src`，且渲染值 == `engine/scales.ts` 源字段值（人为改 `scales.ts` 一个数不重生成规则书 → 必须判红）
 
 ---
 
