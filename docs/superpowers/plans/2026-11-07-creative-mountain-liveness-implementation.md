@@ -109,6 +109,8 @@ B1 ──► B2 ──► B3 ──► B5
 - [ ] 空跑一局在 15 回合内结束，日志显示 `round` 与 `turnIndex` 正确推进
 - [ ] **山议 / 认证检查仅在 round 末触发一次**（§3.1 术语定义的直接测试）
 - [ ] **类型门禁独立于打包**：`tsc --noEmit` 失败时 `npm run build` 必须中断（脚本自检）
+- [ ] **B1 State 契约已冻结**：`PlayerTurnState`（`moveBonus` / `usedAsk` / `movedThisTurn`）落地并有测试——回合末**一并**清零、且清零不误伤玩家其他状态（规格 §6.2）
+- [ ] `State` / `Player` / `Decks` / `PlayerTurnState` 字段集**自此不再变更**：B2/B3 只实现逻辑，不新增或改名 State 字段
 
 **预估**：3–4 天。
 
