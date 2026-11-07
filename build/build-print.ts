@@ -1,0 +1,269 @@
+// 实体轨构建（B6）：ir.json → SVG 实体件 + 打印 HTML → headless Edge → PDF。
+//
+// 产出：
+//   print/svg/*.svg   —— 可编辑的实体件源文件（棋盘/卡牌/身份牌/阵营牌/认证题卡/筹码）
+//   print/*.html      —— 打印用页面（@page 精确版面）
+//   print/*.pdf       —— headless Edge 产出的 PDF
+//
+// 规则书：**表格段由 ir.json 生成**（数值带 data-src 溯源），**叙述段手写**（print/规则书叙述.md）。
+//
+// 运行：`npm run build:print`（esbuild 打包本文件 → node 执行）。
+
+import { chromium } from 'playwright';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { tmpdir } from 'node:os';
+
+import { boardSvg, cardRowSvg, cardSvg, certCardSvg, chipSvg, factionSvg, identitySvg } from './print-parts.ts';
+import { cardsTable, factionsTable, identitiesTable, instructionTable, scalesTable } from './print-rules.ts';
+import { esc } from './print-templates.ts';
+import type { IrDocument } from '../engine/types/ir.ts';
+
+const ROOT = process.cwd();
+const PRINT = resolve(ROOT, 'print');
+const SVG_DIR = resolve(PRINT, 'svg');
+
+/** 找 headless 浏览器（优先 Edge，回退 Chrome）。 */
+export function findBrowser(): string | null {
+  const candidates = [
+    'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+    'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+  ];
+  for (const c of candidates) {
+    if (existsSync(c)) { return c; }
+  }
+  return null;
+}
+
+/** 读 ir.json。 */
+function loadIr(): IrDocument {
+  return JSON.parse(readFileSync(resolve(PRINT, 'ir.json'), 'utf8')) as IrDocument;
+}
+/** 导出全部 SVG 实体件。 */
+export function exportSvgs(ir: IrDocument): string[] {
+  mkdirSync(SVG_DIR, { recursive: true });
+  const written: string[] = [];
+  const put = (name: string, svg: string): void => {
+    writeFileSync(resolve(SVG_DIR, name), svg, 'utf8');
+    written.push('svg/' + name);
+  };
+  // 棋盘
+  put('棋盘-A2.svg', boardSvg(ir.board, ir));
+  // 卡牌：每张一个 SVG（可编辑）
+  ir.cards.forEach((c, i) => {
+    put('卡牌-' + String(i + 1).padStart(2, '0') + '-' + c.id + '.svg', cardSvg(c));
+  });
+  // 身份牌
+  ir.identities.forEach((i2, k) => {
+    put('身份牌-' + String(k + 1).padStart(2, '0') + '-' + i2.id + '.svg', identitySvg(i2));
+  });
+  // 阵营牌
+  ir.factions.forEach((f, k) => {
+    put('阵营牌-' + String(k + 1).padStart(2, '0') + '-' + f.id + '.svg', factionSvg(f));
+  });
+  // 认证题卡
+  ir.certCards.forEach((c, k) => {
+    put('认证题卡-' + String(k + 1).padStart(2, '0') + '.svg', certCardSvg(c, k));
+  });
+  // 筹码
+  put('筹码-灵枢.svg', chipSvg('灵枢', 'SP'));
+  put('筹码-印记.svg', chipSvg('印记', 'MK'));
+  return written;
+}
+
+/** 打印页的 CSS（@page 精确版面）。 */
+const PRINT_CSS = `
+@page { size: A4 portrait; margin: 12mm; }
+@page board { size: A3 landscape; margin: 8mm; }
+.board-sheet { page: board; }
+@page :first { margin: 0; }
+body { margin:0; font-family: 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif; color:#1a1613; }
+.sheet { page-break-after: always; break-after: page; }
+.sheet:last-child { page-break-after: auto; break-after: auto; }
+.cover { display:flex; flex-direction:column; align-items:center; justify-content:center; height:297mm; }
+.cover h1 { font-size:34pt; margin:0 0 6mm; color:#8a6420; }
+.cover h2 { font-size:15pt; margin:0 0 12mm; font-weight:400; color:#6a5f52; }
+.cover p { font-size:10pt; color:#6a5f52; max-width:120mm; line-height:1.8; text-align:center; }
+h2.ch { font-size:14pt; color:#8a6420; margin:8mm 0 3mm; border-bottom:1px solid #c9b89c; padding-bottom:1.5mm; }
+h3.ch { font-size:11pt; color:#3a322a; margin:5mm 0 2mm; }
+p { font-size:9.5pt; line-height:1.75; margin:2mm 0; }
+ol, ul { font-size:9.5pt; line-height:1.75; margin:2mm 0 2mm 6mm; padding:0; }
+table.grid { width:100%; border-collapse:collapse; font-size:8pt; margin:3mm 0; }
+table.grid th, table.grid td { border:1px solid #c9b89c; padding:1.4mm 2mm; text-align:left; vertical-align:top; }
+table.grid th { background:#efe6d4; font-weight:700; }
+table.grid.compact { font-size:7pt; }
+table.grid.compact th, table.grid.compact td { padding:1mm 1.5mm; }
+.cards { display:flex; flex-wrap:wrap; gap:4mm; }
+.cards svg { display:block; }
+.note { font-size:8pt; color:#8a7c6a; margin:2mm 0; }
+`;
+/** 把叙述 markdown 转成 HTML（极简：标题 / 列表 / 段落）。 */
+export function narrationHtml(md: string): string {
+  const out: string[] = [];
+  const lines = md.split(/\r?\n/);
+  let inList = false;
+  const closeList = (): void => {
+    if (inList) { out.push('</ul>'); inList = false; }
+  };
+  for (const raw of lines) {
+    const line = raw.trimEnd();
+    if (line.startsWith('# ')) {
+      closeList();
+      out.push('<h2 class="ch">' + esc(line.slice(2)) + '</h2>');
+    } else if (line.startsWith('## ')) {
+      closeList();
+      out.push('<h3 class="ch">' + esc(line.slice(3)) + '</h3>');
+    } else if (line.startsWith('- ')) {
+      if (!inList) { out.push('<ul>'); inList = true; }
+      out.push('<li>' + esc(line.slice(2)) + '</li>');
+    } else if (/^\d+\. /.test(line)) {
+      if (!inList) { out.push('<ul>'); inList = true; }
+      out.push('<li>' + esc(line.replace(/^\d+\. /, '')) + '</li>');
+    } else if (line.length === 0) {
+      closeList();
+    } else {
+      closeList();
+      out.push('<p>' + esc(line) + '</p>');
+    }
+  }
+  closeList();
+  return out.join('\n');
+}
+
+/** 生成规则书 HTML。 */
+export function rulesHtml(ir: IrDocument, narration: string): string {
+  const body: string[] = [];
+  body.push('<div class="sheet">');
+  body.push('<div class="cover">');
+  body.push('<h1>' + esc(ir.meta.name) + '</h1>');
+  body.push('<h2>' + esc(ir.meta.tagline) + '</h2>');
+  body.push('<p>《创界山·活人认证》——桌面多人策略游戏规则书<br/>登顶≠胜利：峰顶只认活人。</p>');
+  body.push('<p>本作由 ' + esc(ir.meta.deckName) + '系统与 ' + esc(ir.meta.resourceName) + '经济驱动。规模参数见下页。</p>');
+  body.push('</div></div>');
+  // 规模表（带溯源）
+  body.push('<div class="sheet">');
+  body.push('<h2 class="ch">规模适配表</h2>');
+  body.push('<p class="note">下表数值与引擎常量一一对应（可回溯）。同一套规则可按人数自动伸缩。</p>');
+  body.push(scalesTable(ir));
+  body.push('</div>');
+  // 叙述
+  body.push('<div class="sheet">');
+  body.push(narrationHtml(narration));
+  body.push('</div>');
+  // 阵营 / 身份 / 指令
+  body.push('<div class="sheet">');
+  body.push('<h2 class="ch">阵营</h2>');
+  body.push(factionsTable(ir));
+  body.push('<h2 class="ch">身份</h2>');
+  body.push(identitiesTable(ir));
+  body.push('</div>');
+  body.push('<div class="sheet">');
+  body.push('<h2 class="ch">指令骰（20 面）· 问天时按点数执行</h2>');
+  body.push(instructionTable(ir));
+  body.push('</div>');
+  // 卡牌总表
+  body.push('<div class="sheet">');
+  body.push('<h2 class="ch">符箓总表</h2>');
+  body.push(cardsTable(ir));
+  body.push('</div>');
+  return '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><title>' + esc(ir.meta.name) + ' 规则书</title><style>' + PRINT_CSS + '</style></head><body>' + body.join('\n') + '</body></html>';
+}
+/** 实体件打印页：棋盘 + 卡牌 + 身份牌 + 阵营牌 + 认证题卡。 */
+export function partsHtml(ir: IrDocument): string {
+  const body: string[] = [];
+  // 棋盘：A2 幅面（单独一页，用自定义 @page 无法覆盖，改用大尺寸 CSS）
+  body.push('<div class="sheet board-sheet">');
+  body.push('<div style="width:420mm;height:594mm;margin:0 auto;">' + boardSvg(ir.board, ir) + '</div>');
+  body.push('</div>');
+  // 卡牌
+  body.push('<div class="sheet">');
+  body.push('<h2 class="ch">符箓（63×88mm + 3mm 出血 · 3mm 圆角）</h2>');
+  body.push('<div class="cards">');
+  ir.cards.forEach((c) => { body.push(cardSvg(c)); });
+  body.push('</div></div>');
+  // 身份牌 + 阵营牌
+  body.push('<div class="sheet">');
+  body.push('<h2 class="ch">身份牌</h2>');
+  body.push('<div class="cards">');
+  ir.identities.forEach((i2) => { body.push(identitySvg(i2)); });
+  body.push('</div>');
+  body.push('<h2 class="ch">阵营牌</h2>');
+  body.push('<div class="cards">');
+  ir.factions.forEach((f) => { body.push(factionSvg(f)); });
+  body.push('</div></div>');
+  // 认证题卡
+  body.push('<div class="sheet">');
+  body.push('<h2 class="ch">认证题卡（' + ir.certCards.length + ' 张）</h2>');
+  body.push('<div class="cards">');
+  ir.certCards.forEach((c, k) => { body.push(certCardSvg(c, k)); });
+  body.push('</div></div>');
+  return '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><title>' + esc(ir.meta.name) + ' 实体件</title><style>' + PRINT_CSS + '</style></head><body>' + body.join('\n') + '</body></html>';
+}
+
+/** 用 headless 浏览器把 HTML 打成 PDF。 */
+export async function htmlToPdf(htmlPath: string, pdfPath: string): Promise<boolean> {
+  // 用 **Playwright 自带的 Chromium**，而不是系统 Edge CLI：
+  //   ① Edge CLI 的 `--print-to-pdf` 在本机会**静默失败**（退出码 0、不产出文件），
+  //      且复用 user-data-dir 时第二次调用必失败；
+  //   ② Playwright 直接调 `page.pdf()`，行为可控，且不依赖系统浏览器。
+  //   ③ **不碰用户的浏览器进程**——headless 实例完全独立。
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage();
+    const url = toFileUrl(htmlPath);
+    await page.goto(url, { waitUntil: 'load' });
+    await page.pdf({
+      path: pdfPath,
+      format: 'A4',
+      printBackground: true,
+      margin: { top: '12mm', bottom: '12mm', left: '12mm', right: '12mm' },
+    });
+    return existsSync(pdfPath);
+  } catch (e) {
+    console.warn('WARN  PDF 生成异常：' + (e instanceof Error ? e.message : String(e)).slice(0, 200));
+    return false;
+  } finally {
+    await browser.close();
+  }
+}
+
+/** 构造百分号编码的 file URL（中文路径必须编码）。 */
+export function toFileUrl(absPath: string): string {
+  const s = absPath.replace(/\\/g, '/');
+  return 'file:///' + s.split('/').map((seg, i) => (i === 0 ? seg : encodeURIComponent(seg))).join('/');
+}
+
+
+async function main(): Promise<void> {
+  mkdirSync(PRINT, { recursive: true });
+  mkdirSync(SVG_DIR, { recursive: true });
+  const ir = loadIr();
+
+  // 1. SVG 实体件
+  const svgs = exportSvgs(ir);
+  console.log('SVG 实体件 ' + svgs.length + ' 个 → print/svg/');
+
+  // 2. 规则书 HTML（叙述段手写 + 表格段生成）
+  const narrationPath = resolve(PRINT, '规则书叙述.md');
+  const narration = existsSync(narrationPath) ? readFileSync(narrationPath, 'utf8') : '# 规则书';
+  const rulesPath = resolve(PRINT, '规则书.html');
+  writeFileSync(rulesPath, rulesHtml(ir, narration), 'utf8');
+  console.log('规则书 → print/规则书.html');
+
+  // 3. 实体件打印 HTML
+  const partsPath = resolve(PRINT, '实体件.html');
+  writeFileSync(partsPath, partsHtml(ir), 'utf8');
+  console.log('实体件 → print/实体件.html');
+
+  // 4. PDF
+  const rulesPdf = resolve(PRINT, '规则书.pdf');
+  const ok1 = await htmlToPdf(rulesPath, rulesPdf);
+  console.log((ok1 ? 'PDF → print/规则书.pdf' : 'PDF 规则书失败'));
+  const partsPdf = resolve(PRINT, '实体件.pdf');
+  const ok2 = await htmlToPdf(partsPath, partsPdf);
+  console.log((ok2 ? 'PDF → print/实体件.pdf' : 'PDF 实体件失败'));
+}
+
+await main();
