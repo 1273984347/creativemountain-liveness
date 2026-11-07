@@ -421,6 +421,12 @@ function render(): void {
   if (seatLine !== '') {
     status.append(el('span', { text: '活人席 ' + seatLine }));
   }
+  // ⚠️ B13：本 round **公开**的亮牌（规格 §3.3：两张牌留在场上公开、不回手牌，round 末清空）
+  if (s.publicCards.length > 0) {
+    status.append(el('span', {
+      text: '场上公开 ' + s.publicCards.map((c) => c.name + '（' + (c.color === 'red' ? '红' : '黑') + '）').join(' '),
+    }));
+  }
   if (s.outcome.finished) {
     const reason = s.outcome.reason === 'seats' ? '席位结算' : s.outcome.reason === 'fallback' ? '无人封顶兜底' : '活人缺席';
     const seatText = s.outcome.winners.map((w) => '座' + w + '(' + String(s.liveSeats[w] ?? 0) + '席)').join('、');
