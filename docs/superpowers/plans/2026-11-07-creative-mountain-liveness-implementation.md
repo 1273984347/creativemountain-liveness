@@ -227,7 +227,7 @@ B1 ──► B2 ──► B3 ──► B5
 
 | 文件 | 内容 |
 |---|---|
-| `tools/parity-check.mjs` | 三级比对，任一不一致 **exit 1** |
+| `tools/parity-check.mjs` | **四级比对**（主比对 / SVG 辅比对 / PDF 粗检 / 数值溯源），任一不一致 **exit 1** |
 
 ### 8.1.1 四级比对结构
 
