@@ -17,6 +17,7 @@ const GATES = [
   { name: '文档口径（doc-sync）', cmd: process.execPath, args: [resolve('tools', 'doc-sync.mjs')] },
   { name: '单文件构建（esbuild）', cmd: process.execPath, args: [resolve('esbuild.config.mjs')] },
   { name: '主题包校验（theme-validate）', cmd: process.execPath, args: [resolve('tools', 'theme-validate.mjs')] },
+  { name: 'IR 契约校验（ir-validate）', cmd: process.execPath, args: [resolve('tools', 'ir-validate.mjs')] },
 ];
 
 /** 声明的门数（与实跑门数必须一致，否则自断言失败）。 */

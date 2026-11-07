@@ -236,6 +236,15 @@ export interface Faction {
   readonly ability: Effect;
   readonly wheel: Effect;
   readonly deckTags: readonly string[];
+  /**
+   * 能力的**可读文本**（规则书印这个）。
+   *
+   * ⚠️ **必须存在**：ir.json 的文本一律从 theme.json **搬运**，不在渲染期现编——
+   * 现编的文字不可追溯，parity-check 的「每段文本都能回溯到 theme.json 字段」就落空了。
+   */
+  readonly abilityText: string;
+  /** 阵营轮的可读文本（同上，必须存在） */
+  readonly wheelText: string;
 }
 
 /** 身份（8 个槽位，全主题共用特权与目标，仅换名字与 flavor）。 */
@@ -245,6 +254,12 @@ export interface Identity {
   readonly passive: Effect;
   readonly goal: Goal;
   readonly flavor?: string;
+  /**
+   * 被动特权的**可读文本**（规则书印这个）。
+   *
+   * ⚠️ **必须存在**：ir.json 的文本一律从 theme.json **搬运**，不在渲染期现编。
+   */
+  readonly passiveText: string;
 }
 
 /** 卡牌（规格 §6.5；`rank` 见 §3.3 点数比较规则）。 */

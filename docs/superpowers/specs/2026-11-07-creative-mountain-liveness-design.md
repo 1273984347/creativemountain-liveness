@@ -599,6 +599,8 @@ export interface CardFilter {
   "counts": { "handStart": 5, "deckTotal": 48, "trialTotal": 12, "certTotal": 16 },
   "factions": [
     { "id": "xianmen", "name": "仙门",
+      "abilityText": "每通过一座关隘，抽 2 张符箓。",
+      "wheelText": "灵枢 +2。",
       "hpBase": 7, "resourceBase": 5,
       "ability": { "op": "conditional", "pred": {"kind":"flag_set","flag":"passed_gate"},
                    "then": {"op":"draw_cards","count":2} },
@@ -683,31 +685,45 @@ export interface CardFilter {
 
 **`build-print` 在生成 PDF/SVG 之前，先输出一份 `print/ir.json`**。这是 B6 与 B7 之间的**唯一接口**，必须在 B6 开工前定稿（否则 B7 无从比对）。
 
-**结构**：ir.json 的顶层键与 theme.json 的对应键**一一对应**，仅做「渲染所需的扁平化展开」——即把 ops 编译为可打印的文本，把嵌套结构摊平为「一页/一卡」为单位：
+**结构（v1.4 定稿）**：ir.json 的顶层键与 `engine/types/ir.ts` 的 `IrDocument` **逐字段一致**——IR 类型是字段契约的真相源，`tools/ir-validate.mjs` 据此校验（门禁第 ⑥ 道）。
 
 ```jsonc
 {
-  "meta":         { "id": "...", "name": "...", "resourceName": "灵枢" },
-  "glossary":     { "HP": "灵力", "deck": "牌堆", "hand": "手牌" },
-  "scales":       [ { "players": 4, "boardLength": 28, "threshold": 3,
-                      "srcRefs": { "threshold": "scales[4].threshold",
-                                    "globalRoundLimit": "scales[4].globalRoundLimit" } } ],
-  "instructionTable": [ { "face": 1, "text": "抽 1 张牌" } ],   // 20 条，顺序与 §3.2 一致
-  "factions":     [ { "id": "...", "name": "仙门", "hpBase": 7,
-                      "abilityText": "通过关隘后抽 2 张牌" } ],  // effects 已编译为文本
+  "version": 1,
+  "meta":         { "id": "...", "name": "...", "tagline": "...",
+                    "resourceName": "灵枢", "deckName": "符箓" },
+  "glossary":     { "HP": "灵力", "deck": "符箓库", "hand": "在手符箓", "resource": "灵枢" },
+  "counts":       { "handStart": 5, "deckTotal": 48, "trialTotal": 12, "certTotal": 16 },
+  "scales":       [ { "players": 4,
+                      "boardLength": { "value": 28, "src": "scales[4].boardLength" },
+                      "threshold":    { "value": 3,  "src": "scales[4].threshold" },
+                      ... } ],                                    // 13 个数值列全部带 src
+  "instructionTable": [ { "face": 1, "text": "抽 1 张牌" } ],     // 20 条，顺序与 §3.2 一致
+  "factions":     [ { "id": "...", "name": "仙门", "hpBase": 7, "resourceBase": 5,
+                      "abilityText": "每通过一座关隘，抽 2 张符箓。",
+                      "wheelText": "灵枢 +2。", "deckTags": ["motion"] } ],
   "identities":   [ { "id": "...", "name": "开拓者",
-                      "passiveText": "每回合首次移动 +1 格",
-                      "goalText": "最先通过 3 座关隘" } ],
+                      "passiveText": "每回合首次移动 +1 格。",
+                      "goalKind": "pass_gates", "goalCount": 3,
+                      "goalText": "最先通过 3 座关隘", "flavor": "..." } ],
   "cards":        [ { "id": "...", "name": "御风", "type": "motion", "cost": 1,
-                      "text": "前进 3 格。", "color": "red",
-                      "rank": 9, "rankLabel": "风" } ],
-  "creationCards": [ { "id": "...", "cardId": "c_forge_1", "name": "炉火",
-                      "text": "造物牌：..." } ],
+                      "color": "red", "suit": "wind", "rank": 9, "rankLabel": "风",
+                      "text": "前进 3 格。" } ],
+  "creationCards": [ { "cardId": "c_forge_1", "name": "炉火", "text": "..." } ],
   "certCards":    [ { "id": "...", "prompt": "说出你左手此刻摸到的东西" } ],
   "trials":       [ { "id": "...", "text": "展示 2 张同色手牌" } ],
-  "heavenCards":  [ { "id": "...", "name": "日暮", "text": "本回合为夜。" } ]
+  "heavenCards":  [ { "id": "...", "name": "日暮", "text": "本回合为夜。" } ],
+  "board":        { "length": 28, "peakIndex": 28,
+                    "tiles": [ { "index": 6, "kind": "gate", "name": "落雁关",
+                                 "gateFee": 3, "gateTrialIds": ["t_sword", "t_mirror"] } ] }
 }
 ```
+
+**两条关键设计（v1.4 裁定）**：
+
+1. **文本一律搬运，不在渲染期现编**。为此 theme.json 的 `faction.abilityText` / `faction.wheelText` / `identity.passiveText` **必须存在**（v1.4 已补）——否则规则书上的文字只能由引擎现编，就**不可追溯**了。
+   - 唯一例外是 `goalText`：它由 `goalKind` + `goalCount` 生成，但**可由这两个字段完全还原**（见 `tools/ir-validate.mjs` 的 `GOAL_TEXT` 表）。
+2. **数值一律带 `src` 溯源路径**，格式 `scales[<players>].<fieldName>`，字段名必须属于 §8 的字段名契约。
 
 **关键约束**：
 
@@ -906,12 +922,25 @@ Chromium 生成的 PDF **字节级不可直接比对**——实测同一份 HTML
 | 门③ 文档口径 | `tools/doc-sync.mjs` | 规格 ↔ 代码真值双向一致（算子/谓词/goal/字段名/规模表数值/**ops 表重复行**） | `tests/gates/doc-sync.test.ts` |
 | 门④ 构建 | `esbuild.config.mjs` | 单文件 HTML 可产出 | — |
 | 门⑤ PDF 归一化 | `tools/pdf-normalize.mjs` | 构建时刻归一化后的可比性 | `tests/gates/pdf-normalize.test.ts` |
+| 门⑥ 主题包校验 | `tools/theme-validate.mjs` | 主题包结构 + 引用完整性 + ops/goal 白名单 + 数量一致性 | `tests/engine/theme.test.ts` |
+| 门⑦ IR 契约校验 | `tools/ir-validate.mjs` | IR 结构 + **数值溯源**（路径合法且值 == 引擎常量）+ **文本可追溯**（逐字等于 theme.json） | `tests/engine/ir.test.ts` |
 
 一键入口：`node tools/gate.mjs`（串行执行，全绿 exit 0，任一红 exit 1；**门数声明与实跑门数必须一致**，否则自断言失败）。
 
 ### 9.4 主题包校验
 
-`tools/theme-validate.mjs`：JSON 结构校验 + 引用完整性（所有 cardId / trialId / factionId 可解析）+ ops 白名单校验（出现未注册算子 → 报错）+ 数量一致性（牌库总量与配置相符）+ 规模表一致性。
+`tools/theme-validate.mjs`：JSON 结构校验 + 引用完整性（所有 cardId / trialId / factionId 可解析）+ ops 白名单校验（出现未注册算子 → 报错）+ 数量一致性（牌库总量与配置相符）+ 规模表一致性 + **卡牌 `rank` ∈ [2,14]** + **认证题卡 ≥ 8 张**。
+
+### 9.4.1 IR 契约校验（B6/B7 的接口守卫）
+
+`tools/ir-validate.mjs`：校验 `print/ir.json` 是否满足 §6.7.1 的字段契约——
+
+1. **结构**：顶层键与 `engine/types/ir.ts` 的 `IrDocument` 逐字段一致（多一个少一个都判红）。
+2. **数值溯源**：每个规模数值都带 `src` 路径，路径格式合法、人数与所在行一致、字段名属于 §8 契约，且**值与 `engine/scales.ts` 当前常量相等**。
+3. **文本可追溯**：ir 的每段文本与 theme.json 对应字段**逐字相等**（阵营 abilityText/wheelText、身份 passiveText、卡牌 text、天机牌 text、试炼牌 text、认证题 prompt）。
+4. **引用完整性**：关隘引用的试炼牌、造物牌引用的卡牌都存在；棋盘格数与 `length` 一致；指令表恰好 20 条。
+
+> **这是 B7 的前置**：parity-check 的主比对对象就是 ir.json，ir.json 自身若已偏离 theme.json，parity-check 再准也白搭。
 
 ### 9.5 验收清单（Definition of Done）
 

@@ -22,6 +22,8 @@
   },
   "factions": [
     {
+      "abilityText": "每通过一座关隘，抽 2 张符箓。",
+      "wheelText": "灵枢 +2。",
       "id": "xianmen",
       "name": "仙门",
       "hpBase": 7,
@@ -46,6 +48,8 @@
       ]
     },
     {
+      "abilityText": "回合结束恢复 1 点灵力。",
+      "wheelText": "获得 2 点护盾。",
       "id": "longyi",
       "name": "龙裔",
       "hpBase": 8,
@@ -64,6 +68,8 @@
       ]
     },
     {
+      "abilityText": "回合结束获得 1 枚灵枢。",
+      "wheelText": "抽 2 张符箓。",
       "id": "sanxian",
       "name": "散仙",
       "hpBase": 6,
@@ -81,6 +87,8 @@
       ]
     },
     {
+      "abilityText": "回合结束获得 1 点护盾。",
+      "wheelText": "恢复 2 点灵力。",
       "id": "lingqiu",
       "name": "灵丘",
       "hpBase": 7,
@@ -100,6 +108,7 @@
   ],
   "identities": [
     {
+      "passiveText": "每回合首次移动 +1 格。",
       "id": "pioneer",
       "name": "开拓者",
       "passive": {
@@ -113,6 +122,7 @@
       "flavor": "路是走出来的，也是撞出来的。"
     },
     {
+      "passiveText": "每场限 1 次免费造物。",
       "id": "artisan",
       "name": "匠师",
       "passive": {
@@ -126,6 +136,7 @@
       "flavor": "手中无剑，炉中有火。"
     },
     {
+      "passiveText": "每回合可看牌库顶 1 张。",
       "id": "stargazer",
       "name": "观星者",
       "passive": {
@@ -139,6 +150,7 @@
       "flavor": "我看得见牌库的顶，因为那是唯一确定的事。"
     },
     {
+      "passiveText": "山议中可投 2 票。",
       "id": "arbiter",
       "name": "仲裁者",
       "passive": {
@@ -152,6 +164,7 @@
       "flavor": "山议之上，我的话算两票。"
     },
     {
+      "passiveText": "回合结束获得 1 点护盾。",
       "id": "watchman",
       "name": "守夜人",
       "passive": {
@@ -164,6 +177,7 @@
       "flavor": "我不封顶，我只是站着。"
     },
     {
+      "passiveText": "每回合可偷取 1 枚灵枢。",
       "id": "ember",
       "name": "窃火者",
       "passive": {
@@ -178,6 +192,7 @@
       "flavor": "你的灵枢，也是我的。"
     },
     {
+      "passiveText": "每回合 1 次改 1 个判定结果。",
       "id": "weaver",
       "name": "织梦者",
       "passive": {
@@ -191,6 +206,7 @@
       "flavor": "结果未定？那就改到定为止。"
     },
     {
+      "passiveText": "认证时首次被质疑自动通过。",
       "id": "mountainlord",
       "name": "山主",
       "passive": {
