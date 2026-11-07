@@ -19,10 +19,16 @@ export type ActionType =
   | 'CERTIFY_APPEAL_VOTE'
   | 'CERTIFY_ANSWER';
 
-/** 声明式动作。`type` 为判别式字段。 */
+/**
+ * 声明式动作。`type` 为判别式字段。
+ *
+ * `PLAY_CARD.target` 可选 = 真实入口 `performAction(s, seat, 'act', { cardId, target? })` 的形状
+ * （设计 §3.2 / §5 的 key 文法含 `play:<cardId>` 与 `play:<cardId>-><seat>` 两式）：
+ * 需选目标的牌（`cardNeedsTarget`）必须带 target，否则引擎不出牌（`turn-runner.ts:228`）。
+ */
 export type Action =
   | { readonly type: 'MOVE'; readonly actor: number; readonly steps: number }
-  | { readonly type: 'PLAY_CARD'; readonly actor: number; readonly cardId: string }
+  | { readonly type: 'PLAY_CARD'; readonly actor: number; readonly cardId: string; readonly target?: number }
   | { readonly type: 'ABILITY'; readonly actor: number; readonly abilityId: string; readonly target?: number }
   | { readonly type: 'ROLL_WHEEL'; readonly actor: number }
   | { readonly type: 'COMPARE'; readonly actor: number; readonly cardId: string; readonly target: number }
