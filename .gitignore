@@ -1,4 +1,5 @@
 node_modules/
+build/.build-print.mjs
 dist/
 print/*
 !print/规则书叙述.md
