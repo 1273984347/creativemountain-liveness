@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { isolatedState, probeAction } from '../../engine/core/probe.ts';
-import { performAction } from '../../engine/core/turn-runner.ts';
+import { advanceTurn, performAction } from '../../engine/core/turn-runner.ts';
 import { currentPlayer } from '../../engine/core/round.ts';
 import { startDuel } from '../../engine/core/duel.ts';
 import {
@@ -10,6 +10,7 @@ import {
 } from './fixtures.ts';
 import type { Action } from '../../engine/core/action.ts';
 import type { State } from '../../engine/core/state.ts';
+import type { Card } from '../../engine/types/theme.ts';
 
 test('隔离（常驻）：试跑不得推进原 state 的随机源——第 ⑨ 门确定性的护栏', () => {
   // ⚠️ 起点必须先推进一次再取快照：`createInitialState` 全程不掷骰，
@@ -32,14 +33,9 @@ test('隔离（常驻）：试跑不得推进原 state 的随机源——第 ⑨
 
 // ============================ Task 4：probeAction 适配三种拒绝表达 ============================
 //
-// 引擎表达「这个动作我不接受」共有**三条互不相同的通道**，探针必须逐条对上：
-//   ① `performAction`（行棋/问天/行事）**没有返回标记** ⇒ 唯一判据是**返回引用等于入参**
-//      （其每个拒绝分支都 `return state`，turn-runner.ts:182/186/223/226/229）；
-//   ② `performAbility` / `castVote` / `certify*` 返回 `{ok, state, note}` ⇒ 判 `ok`，
-//      并额外把「ok=true 但状态没变」也算拒；
-//   ③ `PASS` 走 `advanceTurn`（同样无标记，但**引用变化不等于被接受**——round 末、
-//      裁牌、日志都会产出新对象）⇒ 只能判**手番是否真的推进**（turnIndex 或 round 变了）。
-//
+// 三条拒绝通道（① 引用相等 / ② `{ok,note}` / ③ 手番是否被接受）的完整理由**只写在
+// `engine/core/probe.ts` 文件头一份**；本文件按通道组织用例，引擎侧一律按**函数与分支**指认，
+// 不写行号（防行号漂移）。
 // ⚠️ 场景一律来自 fixtures（认证字段绝不手拼），对峙也走真实入口 `startDuel`。
 
 test('试跑：非法动作必被拒（通道 ① 引用相等 / 通道 ② ok=false）', () => {
@@ -56,12 +52,12 @@ test('试跑：非法动作必被拒（通道 ① 引用相等 / 通道 ② ok=f
 test('试跑：COMPARE 必拒且拒因点名 B14（关隘入口在全仓无调用点）', () => {
   const r = probeAction(mk(), { type: 'COMPARE', actor: 0, cardId: 'c', target: 1 });
   assert.equal(r.ok, false);
-  // 引擎事实：关隘两条通道 payGate / drawTrial（gate.ts:33/55）**除自身定义外零引用**，
+  // 引擎事实：关隘两条通道 `payGate` / `drawTrial`（engine/core/gate.ts）**除自身定义外全仓零引用**，
   // COMPARE 没有任何可试跑的入口 ⇒ 只能显式判拒，不能伪装成「引擎拒绝了」。
   assert.match(r.reason, /B14/, '拒因必须点名 B14，让下游知道自己撞上的是未接线而非规则拒绝');
 });
 
-test('试跑：PASS 判据＝手番是否真的推进——mk() 上 PASS 合法（计划里那条拒因经实测不成立）', () => {
+test('试跑：PASS 判据＝引擎是否接受——mk() 上 PASS 合法（计划里那条拒因经实测不成立）', () => {
   const s = mk();
   // ⚠️ 计划 Task 4 Step 1 写的是 `probeAction(mk(), {type:'PASS', actor:0}).ok === false`，
   //   理由「座 0 不是当前手番 ⇒ 不推进」。**两条都不成立**：
@@ -70,36 +66,45 @@ test('试跑：PASS 判据＝手番是否真的推进——mk() 上 PASS 合法�
   //   · 更根本的是 **`advanceTurn(state, mode)` 没有 actor 参数**，
   //     「谁提交 PASS」引擎从不看，所以「不是当前手番」在引擎里根本不是一个可拒绝的理由。
   //   实测 `advanceTurn(mk(), 'standard')` 把 turnIndex 从 0 推到 1 ⇒ PASS **合法**。
-  //   断言因此改成「合法（手番确实推进）」，另用下面一条把**真·被拒**的 PASS 钉住。
+  //   断言因此改成「合法（手番确实推进）」，另用下面一条钉住**真·被拒**的两条路径
+  //   与「结算时立起对峙＝合法但推进挂起」这条本轮修正的假阴性。
   assert.equal(currentPlayer(s), 0, '前提自查：mk() 的当前手番就是座 0（计划的拒因以此为反而不成立）');
   const r = probeAction(s, { type: 'PASS', actor: 0 });
   assert.equal(r.ok, true, `手番确实推进 ⇒ PASS 合法；实际拒因=${r.reason}`);
-  // 试跑只发生在副本上：原 state 的手番数与随机源都必须逐字不动。
-  assert.equal(s.turnIndex, 0, '原 state 的 turnIndex 不得被试跑改写');
-  assert.equal(s.duel, null, '原 state 不得被试跑写入对峙');
-  assert.equal(s.rng.snapshot(), mk().rng.snapshot(), '原 state 随机源不被消耗');
+  // ⚠️ 这里**不写**「原 state 的 turnIndex / duel 没被试跑改写」：`isolatedState` 返回新的顶层对象
+  //   且引擎全程不可变更新 ⇒ 那两条恒真、任何实现都改不红（本轮变异实测确认）。
+  //   「试跑不改写原 state」的真判据是随机源：见文件顶部常驻隔离用例 + 表驱动 loop 的逐条 rng 比对。
 });
 
-test('试跑：PASS 真·被拒的三条路径（对峙阻塞 / 无当前手番 / 结算才立对峙）', () => {
-  // ① B13：对峙未结算 ⇒ `advanceTurn` 第一行就 `return state`（turn-runner.ts:371）。
+test('试跑：PASS 的两条真·被拒路径 + 结算立对峙必须算合法（本轮修正的假阴性）', () => {
+  // ① B13：**已有一场对峙未结算** ⇒ `advanceTurn` 开头 `state.duel !== null` 那条早退直接 `return state`。
   //    对峙用真实入口 startDuel 造，不手拼 duel 字段。
   const dueling = startDuel(mk(), 0, 1);
   assert.ok(dueling.duel !== null, '前提自查：startDuel 必须真的立起对峙，否则这条用例是空的');
   const blocked = probeAction(dueling, { type: 'PASS', actor: 0 });
   assert.equal(blocked.ok, false, 'duel !== null ⇒ 手番不推进 ⇒ PASS 被拒');
   assert.match(blocked.reason, /手番未推进/, `拒因要说清是「没推进」：实际=${blocked.reason}`);
-  // ② 无当前手番：`currentPlayer` 返回 -1 ⇒ `advanceTurn` 同样原样返回（turn-runner.ts:373）。
+  // ② 无当前手番：`currentPlayer` 返回 -1 ⇒ `advanceTurn` 的 `seat < 0` 早退同样原样返回。
   const noActor = probeAction(noActorScene(), { type: 'PASS', actor: 0 });
   assert.equal(noActor.ok, false, '全员出局 ⇒ 没有手番可推进 ⇒ PASS 被拒');
   assert.match(noActor.reason, /手番未推进/);
-  // ③ 最阴的一条：**手番结算时才立起对峙**（turn-runner.ts:383 `return next`）。
-  //    此时 advanceTurn 返回的是**新对象**，引用判据会说「接受」，但 turnIndex 一格没动 ⇒
-  //    只有「引用变了 **且** 手番真的推进了」才是正确判据。
-  //    变异实测：把判据改成只判 `r !== s`，本条立刻变绿放行（假阳性），故必须钉住。
+  // ③ 最阴的一条，也是本轮修正的那条：**手番结算时才立起对峙**
+  //    （`advanceTurn` 的「结算后进入对峙」分支 `return next`）。
+  //    此时 `finishTurn` 已跑、`turn.finished` 已置、`duel` 对象已生成 ⇒ **引擎确实接受了这次 PASS**，
+  //    只是手番推进要挂起，等双方各自锁定亮牌后再走一次 `advanceTurn`（B13）。
+  //    旧实现在这里报 `ok:false`，把一条合法 PASS 判成被拒 ⇒ 对 Task 5 是**错误的合法性 oracle**。
   const settleIntoDuel = settleIntoDuelScene();
+  // 前提自查：本局面必须真的走「换了对象、duel 立起、但 turnIndex 一格没动」那条分支，
+  //   否则下面这条 ok=true 就成了在测一个不存在的分支（引擎一改就能悄悄失效）。
+  const raw = advanceTurn(settleIntoDuel, 'standard');
+  assert.ok(raw !== settleIntoDuel && raw.duel !== null && raw.turnIndex === settleIntoDuel.turnIndex,
+    `前提自查：settleIntoDuelScene 的 advanceTurn 必须是「新对象 + duel 已立 + turnIndex 未动」，`
+    + `实际 sameRef=${String(raw === settleIntoDuel)}、duel=${String(raw.duel !== null)}、`
+    + `turnIndex=${String(settleIntoDuel.turnIndex)}→${String(raw.turnIndex)}`);
   const lateDuel = probeAction(settleIntoDuel, { type: 'PASS', actor: 0 });
-  assert.equal(lateDuel.ok, false, '结算才触发对峙 ⇒ 手番未推进 ⇒ PASS 不能被记为合法');
-  assert.equal(settleIntoDuel.turnIndex, 0, '原 state 的手番数不得被试跑改写');
+  assert.equal(lateDuel.ok, true, `结算时立起对峙＝引擎已接受 ⇒ PASS 必须判合法；实际拒因=${lateDuel.reason}`);
+  assert.match(lateDuel.reason, /挂起/, `接受理由必须点名「推进挂起」，否则读者会误读成「此处 PASS 非法」（实际=${lateDuel.reason}）`);
+  assert.match(lateDuel.reason, /对峙/, '接受理由必须点名对峙，说清挂起的原因');
 });
 
 test('试跑：合法动作通过且原 state 随机源不被消耗', () => {
@@ -108,11 +113,12 @@ test('试跑：合法动作通过且原 state 随机源不被消耗', () => {
   assert.ok(card !== undefined, '初始手牌必须有牌');
   const r = probeAction(s, { type: 'PLAY_CARD', actor: 0, cardId: card.id });
   assert.equal(r.ok, true, r.reason);
-  assert.equal(s.rng.snapshot(), mk().rng.snapshot());
-  // ⚠️ 上面那条 rng 断言在 PLAY_CARD 上其实是**空判**：mk() 的测试牌 `effects: []`
-  //   （state.ts:228-239），打出它不掷任何骰 ⇒ 变异实测「把 isolatedState 去掉」本条仍绿。
-  //   ⇒ 补一条必然掷骰的动作：行棋内部掷 6 面移动骰，随机源消耗只有隔离能拦住。
+  // ⚠️ 这条 rng 断言是**便宜不变式**，不是判据：mk() 的测试牌 `effects: []`（makeTestCards），
+  //   PASS 路径同理（turnIndex 0 → 1 不触发回合末，`openHeaven` 跑不到）⇒ 掷不到骰，
+  //   「去掉 isolatedState 也照样绿」（实测见 task-4-report.md）。
+  //   rng 隔离的**真**护栏是下面那条 MOVE 断言 + 表驱动用例里逐条的 rng 比对。
   const before = s.rng.snapshot();
+  assert.equal(s.rng.snapshot(), mk().rng.snapshot(), '便宜不变式：新建状态的 rng 仍停在 seed');
   assert.equal(probeAction(s, { type: 'MOVE', actor: 0, steps: 0 }).ok, true, '行棋必须被接受');
   assert.equal(s.rng.snapshot(), before,
     '掷骰动作试跑后原 state 的 rng 快照必须逐字不变（本条是 rng 隔离的真判据）');
@@ -142,8 +148,10 @@ test('试跑：13 个动作类型逐一有明确判定，且每次试跑都不�
       `${c.label}：期望 ok=${String(c.ok)}，实际 ok=${String(r.ok)}（reason=${r.reason}）`);
     if (!r.ok) {
       assert.ok(r.reason.length > 0, `${c.label}：拒绝必须给出可读原因，不能只给布尔`);
-      if (c.reasonRe !== undefined) { assert.match(r.reason, c.reasonRe, c.label); }
     }
+    // 拒因正则对**两种判定**都生效：判定为合法也可能带理由（如「推进挂起」），
+    // 只在拒绝分支上校验的话，「合法但理由丢失」就没人守。
+    if (c.reasonRe !== undefined) { assert.match(r.reason, c.reasonRe, c.label); }
     assert.equal(s.rng.snapshot(), before, `${c.label}：试跑不得消耗原 state 的随机源`);
     covered.add(c.action.type);
   }
@@ -151,18 +159,42 @@ test('试跑：13 个动作类型逐一有明确判定，且每次试跑都不�
     `必须覆盖 Action union 的全部 13 个成员，实际 ${[...covered].sort().join(', ')}`);
 });
 
-/** 全员出局的状态：`currentPlayer` 返回 -1 ⇒ `advanceTurn` 原样返回（只动 alive，不碰认证字段）。 */
+/** 全员出局的状态：`currentPlayer` 返回 -1 ⇒ `advanceTurn` 的 `seat < 0` 早退原样返回（只动 alive，不碰认证字段）。 */
 function noActorScene(): State {
   const s = mk();
   return { ...s, players: s.players.map((p) => ({ ...p, alive: false })) };
 }
 
+/** 取证用的「真的要选目标」的牌 id（effects 里有数字 target ⇒ `cardNeedsTarget` 为真）。 */
+const TARGET_CARD_ID = 'probe_needs_target';
+
+/**
+ * 座 0 手牌里塞一张**需要选择目标**的牌（主题包攻击牌形状），用于 G-a 同族取证：
+ * `performAction` 的 `act` 分支不校验 `target` 是否在候选里 ⇒ 越界目标照样出牌。
+ * ⚠️ 只改手牌内容，不碰认证/山议字段（那些必须走 fixtures 的引擎入口）。
+ */
+function targetCardScene(): State {
+  const card: Card = {
+    id: TARGET_CARD_ID,
+    name: '取证牌（需目标）',
+    type: 'attack',
+    cost: 0,
+    color: 'red',
+    rank: 2,
+    text: '取证用：必须选目标的牌',
+    effects: [{ op: 'discard_opponent', count: 1, target: 0 }],
+  };
+  const s = mk();
+  return { ...s, players: s.players.map((p) => (p.seat === 0 ? { ...p, hand: [card, ...p.hand] } : p)) };
+}
+
 /**
  * 「本手番结算时才立起对峙」的局面：全员同停第 1 格。
  *
- * `advanceTurn` 会先 `finishTurn`（其同格检测调 `startDuel`）再 `return next`
- * （turn-runner.ts:383）⇒ 返回的是**新对象但手番没推进**，
- * 专门用来拦住把判据退化成「引用是否变化」的实现。
+ * `advanceTurn` 会先 `finishTurn`（其同格检测调 `startDuel`），再走它「结算后进入对峙」
+ * 那条 `return next` ⇒ **返回新对象、duel 已生成，但 turnIndex 一格没动**。
+ * 本局面钉两件事：① 引擎已接受这次 PASS ⇒ 探针必须报 `ok:true`（且理由说清「推进挂起」）；
+ * ② 探针不得退化成「引用变了就算接受」那种无说明的实现（那条路径 reason 为空 ⇒ 本行报红）。
  * 只改 `position`（棋盘坐标，与 `resolveTile` 的引擎判据一致），不碰认证字段。
  */
 function settleIntoDuelScene(): State {
@@ -176,7 +208,7 @@ interface ProbeCase {
   readonly scene: () => State;
   readonly action: Action;
   readonly ok: boolean;
-  /** 仅拒绝用例使用：拒因正则（引擎 note 或探针的通道说明）。 */
+  /** 拒因正则：拒绝用例用它钉住「为什么拒」，接受用例用它钉住「理由有没有说清」（如推进挂起）。 */
   readonly reasonRe?: RegExp;
 }
 
@@ -187,6 +219,17 @@ const PROBE_CASES: readonly ProbeCase[] = [
   { label: 'ROLL_WHEEL@常规', scene: mk, action: { type: 'ROLL_WHEEL', actor: 0 }, ok: true },
   { label: 'PLAY_CARD@手牌里的牌', scene: mk, action: { type: 'PLAY_CARD', actor: 0, cardId: firstCardId() }, ok: true },
   { label: 'PLAY_CARD@不存在的牌', scene: mk, action: { type: 'PLAY_CARD', actor: 0, cardId: 'no_such_card' }, ok: false, reasonRe: /原样返回/ },
+  // ---- §5.1 引擎漂移取证（G-a / G-b）：**记录实际行为，不在探针里补规则** ----
+  // G-b：`performAction` 的 `act` 分支**不检查 `pendingCert`**（只有 `move` 分支检查），
+  //   于是同一个锁定者「行棋」被拒（上面 MOVE@待认证锁定）而「出牌」被放行。
+  //   ⇒ 本行是 G-b 的**可执行证据**（Task 9 README 登记条目引用它）；
+  //     若将来引擎补上检查，本行会红，逼着当场复核登记口径，而不是让探针偷偷领先引擎。
+  { label: 'PLAY_CARD@待认证锁定（G-b 取证：act 分支不查 pendingCert ⇒ 引擎放行）', scene: lockedScene, action: { type: 'PLAY_CARD', actor: 0, cardId: firstCardId() }, ok: true },
+  // G-a 同族的另一条：`act` 分支只在「需要目标却没给目标」处原样返回，
+  //   **从不校验 target 是不是 `targetCandidates` 里的存活对手**（那层校验只存在于 UI 的
+  //   `resolveTargetPick`）⇒ 一张真的要选目标的牌带着越界座位 99 照样出牌。
+  //   （`card.cost` 同样既不校验也不扣，即 G-a 本体。）⇒ Task 9 README 的 G-a/G-b 证据行。
+  { label: 'PLAY_CARD@target 越界（G-a 同族取证：act 分支不校验 target ⇒ 引擎放行）', scene: targetCardScene, action: { type: 'PLAY_CARD', actor: 0, cardId: TARGET_CARD_ID, target: 99 }, ok: true },
   // ---- 通道 ②：{ok, state, note} 契约 ----
   { label: 'ABILITY@未授予被动', scene: mk, action: { type: 'ABILITY', actor: 0, abilityId: 'peek_deck' }, ok: false, reasonRe: /没有身份被动/ },
   { label: 'VOTE@山议未开', scene: mk, action: { type: 'VOTE', actor: 0, target: 1 }, ok: false, reasonRe: /山议未在进行中/ },
@@ -201,10 +244,10 @@ const PROBE_CASES: readonly ProbeCase[] = [
   { label: 'CERTIFY_ANSWER@未质疑', scene: pendingScene, action: { type: 'CERTIFY_ANSWER', actor: 1, target: 0, passed: true }, ok: false, reasonRe: /未发起质疑/ },
   { label: 'CERTIFY_APPEAL_VOTE@复议中', scene: appealedScene, action: { type: 'CERTIFY_APPEAL_VOTE', actor: 3, target: 0, overturn: true }, ok: true },
   { label: 'CERTIFY_APPEAL_VOTE@无人复议', scene: pendingScene, action: { type: 'CERTIFY_APPEAL_VOTE', actor: 1, target: 0, overturn: true }, ok: false, reasonRe: /未申请复议/ },
-  // ---- 通道 ③：PASS 以「手番是否推进」裁决 ----
+  // ---- 通道 ③：PASS 以「引擎是否接受」裁决（手番推进 or 结算时立起对峙）----
   { label: 'PASS@有当前手番', scene: mk, action: { type: 'PASS', actor: 0 }, ok: true },
   { label: 'PASS@对峙未决', scene: () => startDuel(mk(), 0, 1), action: { type: 'PASS', actor: 0 }, ok: false, reasonRe: /手番未推进/ },
-  { label: 'PASS@结算才立对峙（新对象但没推进）', scene: settleIntoDuelScene, action: { type: 'PASS', actor: 0 }, ok: false, reasonRe: /手番未推进/ },
+  { label: 'PASS@结算才立对峙（引擎已接受，推进挂起待对峙结算）', scene: settleIntoDuelScene, action: { type: 'PASS', actor: 0 }, ok: true, reasonRe: /挂起/ },
   { label: 'PASS@无当前手番', scene: noActorScene, action: { type: 'PASS', actor: 0 }, ok: false, reasonRe: /手番未推进/ },
   // ---- 未接线：只能显式判拒 ----
   { label: 'COMPARE@关隘未接线', scene: mk, action: { type: 'COMPARE', actor: 0, cardId: 'c_gate_trial', target: 1 }, ok: false, reasonRe: /B14/ },

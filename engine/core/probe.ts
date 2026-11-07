@@ -26,17 +26,28 @@ export function isolatedState(state: State): State {
 // 引擎表达拒绝的方式**不止一种**，Task 5 的试跑式枚举要依赖单一判据，故在这里统一折叠：
 //
 //   ① **引用相等**（`performAction`）：该入口只返回 `State`，**没有任何成功/失败标记**，
-//      而它的每一条拒绝分支都写成 `return state`（turn-runner.ts:182/186/223/226/229）
+//      而它的每一条拒绝分支都写成 `return state`
+//      （`performAction`：座位越界取不到玩家；`move` 分支的 §5.1 待认证锁定；
+//      `act` 分支的无 `cardId` / 手牌里没这张牌 / 需要目标却没给目标）
 //      ⇒ 「返回引用 === 入参引用」是它唯一的被拒信号。
 //   ② **`{ok, state, note}` 契约**（`performAbility` / `castVote` / `certify*`）：判 `ok`；
 //      另把「ok=true 但状态未变」也计为拒（防御：将来某个入口 ok 与落账脱钩时不至于静默放行）。
-//   ③ **手番是否推进**（`PASS`）：`advanceTurn` 同样只返回 `State`，但**引用变化不等于被接受**
-//      —— 收尾结算、裁牌、日志、天机都会产出新对象。唯一可靠信号是
-//      `turnIndex` 或 `round` 真的变了（对峙未决 / 无当前手番时它连对象都不换，
-//      而即使换了也不能证明推进，故两者都要判）。
+//   ③ **手番是否被接受**（`PASS` → `advanceTurn`）：同样无返回标记，但**引用变化不等于被接受**
+//      —— 收尾结算、裁牌、日志、天机都会产出新对象。判据落在**字段**上，两条都算合法：
+//        · `turnIndex` 或 `round` 真的推进了 ⇒ 正常接受；
+//        · 本次调用立起了对峙（`s.duel === null && r.duel !== null`，即 `advanceTurn`
+//          「结算后进入对峙」那条 `return next`）⇒ `finishTurn` 已跑、`turn.finished` 已置、
+//          `duel` 已生成，**引擎确实接受了这个动作**，只是手番推进挂起，
+//          待双方各自锁定亮牌后再走一次 `advanceTurn`（B13）。把它报成 `ok:false`
+//          等于对一条合法 PASS 给出错误的合法性判定 ⇒ Task 5 的 oracle 直接跟着错。
+//      ⚠️ 这里**不判引用是否变化**：`turnIndex` / `round` / `duel` 都是引擎不可变更新的字段，
+//      `r === s` 时它们必然逐字相同 ⇒ 「引用不同」这条前置永远不可能改变判定结果
+//      （变异实测：删掉它全绿）。留着两个判据会让人以为「只判字段」不够严，故只留字段那条。
 //
 // ⚠️ 三条通道都**只问引擎要答案**，不在探针里手写规则镜像——Task 5 的存在意义正是
 //   「`legal.ts` 的手写前置与引擎真实前置漂移」（复议方向就是已注册的历史事故）。
+//   引擎自己漏掉的前置（如 `act` 分支不查 `pendingCert`、不校验 `target`/`card.cost`）
+//   由测试表里的 G-a/G-b 取证行钉住「实际行为」，修不修由批次裁定，探针不替引擎补。
 
 /** 试跑使用的规则档位：标准档（新手档只改山议间隔，不影响动作可接受性）。 */
 const MODE: RuleMode = 'standard';
@@ -87,9 +98,23 @@ export function probeAction(state: State, action: Action): ProbeResult {
     }
     case 'PASS': {
       const r = advanceTurn(s, MODE);
-      return r !== s && (r.turnIndex !== s.turnIndex || r.round !== s.round)
-        ? { ok: true, reason: '' }
-        : reject('手番未推进（对峙阻塞或无当前手番）');
+      // 判据**只有字段这一条**（理由见文件头通道 ③）：手番推进 = 接受；
+      // 本次调用立起对峙 = 也接受，只是推进挂起。
+      // ⚠️ 不再判 `r !== s`：`turnIndex` / `round` / `duel` 都随不可变更新一起换对象，
+      //   引用相同时它们必然逐字相同 ⇒ 「引用是否变化」永远不可能改变判定结果
+      //   （变异实测：加不加它，用例集全绿）。留着只会误导读者以为单判字段不够。
+      const advanced = r.turnIndex !== s.turnIndex || r.round !== s.round;
+      // 「本次调用把对峙从无到有立起来」——只有这里能区分「结算已完成、推进等对峙」。
+      const duelOpened = s.duel === null && r.duel !== null;
+      if (advanced) { return { ok: true, reason: '' }; }
+      if (duelOpened) {
+        return {
+          ok: true,
+          reason: '本手番已结束（finishTurn 已结算、turn.finished 已置），推进挂起：'
+            + '结算时立起对峙，需双方各自锁定亮牌后再走一次 advanceTurn 才会换人（B13）',
+        };
+      }
+      return reject('手番未推进（已有一场对峙未结算，或无当前手番）');
     }
     case 'ABILITY': { const r = performAbility(s, action.actor, action.target); return byFlag(r.ok, r.note, r.state, s); }
     case 'VOTE': { const r = castVote(s, action.actor, action.target); return byFlag(r.ok, r.note, r.state, s); }
