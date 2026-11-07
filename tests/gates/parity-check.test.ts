@@ -17,9 +17,9 @@ import {
 } from '../../tools/parity-check.mjs';
 import { SCALES, SCALE_FIELD_NAMES } from '../../engine/scales.ts';
 
-const ir = JSON.parse(readFileSync(resolve('print/ir.json'), 'utf8'));
+const ir = JSON.parse(readFileSync(resolve('print/xianxia2026/ir.json'), 'utf8'));
 const theme = JSON.parse(readFileSync(resolve('themes/xianxia2026/theme.json'), 'utf8'));
-const rulesHtml = readFileSync(resolve('print/规则书.html'), 'utf8');
+const rulesHtml = readFileSync(resolve('print/xianxia2026/规则书.html'), 'utf8');
 
 const clone = (v: unknown): any => JSON.parse(JSON.stringify(v)) as any;
 
@@ -30,7 +30,7 @@ test('parity-check 正样本：主比对 ir↔theme 零错误', () => {
 });
 
 test('parity-check 正样本：SVG 辅比对零错误', () => {
-  const svgDir = resolve('print/svg');
+  const svgDir = resolve('print/xianxia2026/svg');
   const texts: string[] = [];
   for (const f of readdirSync(svgDir).filter((x) => x.endsWith('.svg'))) {
     texts.push(...extractSvgTexts(readFileSync(resolve(svgDir, f), 'utf8')));
@@ -45,7 +45,7 @@ test('parity-check 正样本：数值溯源零错误且确有溯源单元格', (
 });
 
 test('parity-check 正样本：PDF 粗检零错误', () => {
-  for (const f of ['print/规则书.pdf', 'print/实体件.pdf']) {
+  for (const f of ['print/xianxia2026/规则书.pdf', 'print/xianxia2026/实体件.pdf']) {
     assert.deepEqual(checkPdfBasic(readFileSync(resolve(f)), f), []);
   }
 });

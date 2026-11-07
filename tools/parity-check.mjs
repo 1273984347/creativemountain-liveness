@@ -6,6 +6,7 @@
 //   ③ **数值溯源**：规则书 HTML 的 `data-src` 单元格 → engine/scales.ts（值级）
 //   ④ **PDF 粗检**：可打开 / 页数 / 字体嵌入（**不逐字比对**——中文 PDF 文本层不稳）
 
+import { pathToFileURL } from 'node:url';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -235,10 +236,11 @@ function scaleFieldNames() {
   return [...seg.matchAll(/'([a-zA-Z_0-9]+)'/g)].map((m) => m[1]);
 }
 
-function main() {
-  const cwd = process.cwd();
-  const ir = JSON.parse(readFileSync(resolve(cwd, 'print/ir.json'), 'utf8'));
-  const theme = JSON.parse(readFileSync(resolve(cwd, 'themes/xianxia2026/theme.json'), 'utf8'));
+/** 校验单套主题的四级一致性。 */
+function checkOne(cwd, themeId) {
+  const dir = resolve(cwd, 'print', themeId);
+  const ir = JSON.parse(readFileSync(resolve(dir, 'ir.json'), 'utf8'));
+  const theme = JSON.parse(readFileSync(resolve(cwd, 'themes', themeId, 'theme.json'), 'utf8'));
   const scales = loadScales();
   const fieldNames = scaleFieldNames();
   const levels = [];
@@ -250,7 +252,7 @@ function main() {
   allErrors.push(...e1.map((e) => '[主比对] ' + e));
 
   // ② 辅比对：所有 SVG 的文本节点
-  const svgDir = resolve(cwd, 'print/svg');
+  const svgDir = resolve(dir, 'svg');
   const svgTexts = [];
   if (existsSync(svgDir)) {
     for (const f of readdirSync(svgDir).filter((x) => x.endsWith('.svg'))) {
@@ -262,7 +264,7 @@ function main() {
   allErrors.push(...e2.map((e) => '[辅比对] ' + e));
 
   // ③ 数值溯源
-  const rulesHtml = readFileSync(resolve(cwd, 'print/规则书.html'), 'utf8');
+  const rulesHtml = readFileSync(resolve(dir, '规则书.html'), 'utf8');
   const e3r = checkTracedCells(rulesHtml, scales, fieldNames);
   levels.push({ name: '数值溯源 data-src↔scales', passed: e3r.errors.length === 0 });
   allErrors.push(...e3r.errors.map((e) => '[溯源] ' + e));
@@ -270,23 +272,78 @@ function main() {
 
   // ④ PDF 粗检
   const e4 = [];
-  for (const f of ['print/规则书.pdf', 'print/实体件.pdf']) {
-    const p = resolve(cwd, f);
-    if (!existsSync(p)) { e4.push(f + '：文件不存在（先跑 npm run print）'); continue; }
+  for (const f of ['规则书.pdf', '实体件.pdf']) {
+    const p = resolve(dir, f);
+    if (!existsSync(p)) { e4.push(f + '：文件不存在（先跑 npm run build:print）'); continue; }
     e4.push(...checkPdfBasic(readFileSync(p), f));
   }
   levels.push({ name: 'PDF 粗检', passed: e4.length === 0 });
   allErrors.push(...e4.map((e) => '[PDF] ' + e));
 
-  for (const l of levels) {
-    console.log((l.passed ? 'PASS  ' : 'FAIL  ') + l.name);
-  }
-  if (allErrors.length > 0) {
-    for (const e of allErrors) { console.error('  ' + e); }
-    console.error('\nparity-check: ' + allErrors.length + ' 项不一致');
-    process.exit(1);
-  }
-  console.log('\nparity-check: 4 级全绿（双轨零漂移）');
+  return { levels, allErrors };
 }
 
-main();
+function main() {
+  const cwd = process.cwd();
+  const themeIds = readdirSync(resolve(cwd, 'themes'), { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name)
+    .filter((id) => existsSync(resolve(cwd, 'themes', id, 'theme.json')))
+    .sort();
+  let failed = 0;
+  for (const themeId of themeIds) {
+    console.log('== ' + themeId + ' ==');
+    const dir = resolve(cwd, 'print', themeId);
+    const ir = JSON.parse(readFileSync(resolve(dir, 'ir.json'), 'utf8'));
+    const theme = JSON.parse(readFileSync(resolve(cwd, 'themes', themeId, 'theme.json'), 'utf8'));
+    const scales = loadScales();
+    const fieldNames = scaleFieldNames();
+    const levels = [];
+    const allErrors = [];
+
+    const e1 = checkIrVsTheme(ir, theme);
+    levels.push({ name: '主比对 ir↔theme', passed: e1.length === 0 });
+    allErrors.push(...e1.map((e) => '[主比对] ' + e));
+
+    const svgDir = resolve(dir, 'svg');
+    const svgTexts = [];
+    if (existsSync(svgDir)) {
+      for (const f of readdirSync(svgDir).filter((x) => x.endsWith('.svg'))) {
+        svgTexts.push(...extractSvgTexts(readFileSync(resolve(svgDir, f), 'utf8')));
+      }
+    }
+    const e2 = checkSvgVsIr(svgTexts, ir);
+    levels.push({ name: '辅比对 SVG↔ir', passed: e2.length === 0 });
+    allErrors.push(...e2.map((e) => '[辅比对] ' + e));
+
+    const rulesHtml = readFileSync(resolve(dir, '规则书.html'), 'utf8');
+    const e3r = checkTracedCells(rulesHtml, scales, fieldNames);
+    levels.push({ name: '数值溯源 data-src↔scales', passed: e3r.errors.length === 0 });
+    allErrors.push(...e3r.errors.map((e) => '[溯源] ' + e));
+    console.log('  溯源单元格：' + e3r.count + ' 个带 data-src');
+
+    const e4 = [];
+    for (const f of ['规则书.pdf', '实体件.pdf']) {
+      const p = resolve(dir, f);
+      if (!existsSync(p)) { e4.push(f + '：文件不存在（先跑 npm run build:print）'); continue; }
+      e4.push(...checkPdfBasic(readFileSync(p), f));
+    }
+    levels.push({ name: 'PDF 粗检', passed: e4.length === 0 });
+    allErrors.push(...e4.map((e) => '[PDF] ' + e));
+
+    for (const l of levels) {
+      console.log((l.passed ? 'PASS  ' : 'FAIL  ') + l.name);
+    }
+    if (allErrors.length > 0) {
+      for (const e of allErrors) { console.error('  ' + e); }
+      failed += allErrors.length;
+    }
+  }
+  if (failed > 0) {
+    console.error('\nparity-check: ' + failed + ' 项不一致');
+    process.exit(1);
+  }
+  console.log('\nparity-check: 4 级全绿（双轨零漂移）× ' + themeIds.length + ' 套主题');
+}const isMain = process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (isMain) { main(); }

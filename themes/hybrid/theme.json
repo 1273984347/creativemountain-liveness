@@ -4,7 +4,7 @@
     "name": "融合·道械双修",
     "tagline": "灵气与芯片在同一具身体里打架，而山巅只认那个还能自己说话的人。",
     "resourceName": "灵能",
-    "deckName": "符箓"
+    "deckName": "道箓"
   },
   "glossary": {
     "HP": "气血",
@@ -12,7 +12,15 @@
     "hand": "在手道箓",
     "resource": "灵能",
     "peak": "道顶",
-    "seal": "认证印"
+    "seal": "认证印",
+    "path": "山道",
+    "plain": "荒野",
+    "boon": "灵地",
+    "hazard": "险径",
+    "rift": "裂隙",
+    "branch": "岔路",
+    "gate": "阵门",
+    "player": "修士"
   },
   "counts": {
     "handStart": 5,
@@ -146,7 +154,7 @@
         "kind": "draw_count",
         "count": 12
       },
-      "passiveText": "每回合可看符箓库顶 1 张。",
+      "passiveText": "每回合可看道箓库顶 1 张。",
       "flavor": "我看得见命数，也看得见电路。"
     },
     {
@@ -188,8 +196,8 @@
         "kind": "steal_count",
         "count": 5
       },
-      "passiveText": "每回合可偷取 1 枚灵枢。",
-      "flavor": "你的灵枢，也是我的。"
+      "passiveText": "每回合可偷取 1 枚灵能。",
+      "flavor": "你的灵能，也是我的。"
     },
     {
       "id": "weaver",
@@ -481,7 +489,7 @@
     },
     {
       "id": "c_hy_a02",
-      "name": "符箓灼魂",
+      "name": "道箓灼魂",
       "type": "attack",
       "cost": 2,
       "color": "black",

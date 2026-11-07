@@ -12,7 +12,15 @@
     "hand": "在手符箓",
     "resource": "灵枢",
     "peak": "封顶台",
-    "seal": "认证印"
+    "seal": "认证印",
+    "path": "山道",
+    "plain": "平原",
+    "boon": "福地",
+    "hazard": "险径",
+    "rift": "裂隙",
+    "branch": "支路",
+    "gate": "关隘",
+    "player": "修士"
   },
   "counts": {
     "handStart": 5,

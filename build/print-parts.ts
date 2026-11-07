@@ -56,6 +56,19 @@ export function cardRowSvg(cards: readonly IrCard[], perRow: number, gap = 4): s
   });
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${totalW}mm" height="${totalH}mm" viewBox="0 0 ${totalW} ${totalH}">${parts.join('')}</svg>`;
 }
+/**
+ * 主题术语（从 IR 的 glossary 取，缺键回退通用词）。
+ *
+ * ⚠️ 实体件的文本必须随主题走 —— 基准仙侠的「灵枢 / 符箓 / 灵力 / 山道」
+ *   曾被硬编码进所有实体件模板，导致其余三套主题的实体件串戏。
+ */
+export type Terms = Readonly<Record<string, string>>;
+
+/** 取术语。 */
+export function term(terms: Terms, key: string, fallback: string): string {
+  return terms[key] ?? fallback;
+}
+
 /** 棋盘 SVG（A2 = A4×4 拼接）。 */
 export function boardSvg(board: IrBoard, ir: IrDocument): string {
   const W = A2_W;
@@ -63,7 +76,7 @@ export function boardSvg(board: IrBoard, ir: IrDocument): string {
   const margin = 18;
   const parts: string[] = [];
   parts.push(`<rect x="0" y="0" width="${W}" height="${H}" fill="#f7f2e9"/>`);
-  parts.push(`<text x="${margin}" y="${margin}" font-size="9" fill="#1a1613" font-weight="700">${esc(ir.meta.name)} · 山道</text>`);
+  parts.push(`<text x="${margin}" y="${margin}" font-size="9" fill="#1a1613" font-weight="700">${esc(ir.meta.name)} · ${term(ir.glossary, 'path', '山道')}</text>`);
   parts.push(`<text x="${margin}" y="${margin + 8}" font-size="4.4" fill="#6a5f52">${esc(ir.meta.tagline)}</text>`);
   // 山道：蛇形 7 列 × N 行
   const cols = 7;
@@ -92,7 +105,7 @@ export function boardSvg(board: IrBoard, ir: IrDocument): string {
       parts.push(`<text x="${x + 3}" y="${y + 16 + k * 5}" font-size="3.6" fill="#1a1613" font-weight="600">${esc(l)}</text>`);
     });
     if (tile.gateFee !== undefined) {
-      parts.push(`<text x="${x + 3}" y="${y + cell - 4}" font-size="3.2" fill="#8a6420">过路 ${tile.gateFee} 灵枢</text>`);
+      parts.push(`<text x="${x + 3}" y="${y + cell - 4}" font-size="3.2" fill="#8a6420">过路 ${tile.gateFee} ${term(ir.glossary, 'resource', '资源')}</text>`);
     }
     if (tile.branchTo !== undefined) {
       parts.push(`<text x="${x + 3}" y="${y + cell - 4}" font-size="3.2" fill="#4a5a6a">支路 → ${tile.branchTo.join(' / ')}</text>`);
@@ -101,8 +114,10 @@ export function boardSvg(board: IrBoard, ir: IrDocument): string {
   // 图例
   const legendTop = top + rows * (cell + gap) + 12;
   const legend: [string, string][] = [
-    ['#ffffff', '平原'], ['#d6e4cf', '福地'], ['#eed2c8', '险径'],
-    ['#ded2e8', '裂隙'], ['#d2dde8', '支路'], ['#e3d3b0', '关隘'], ['#c99a4a', '峰顶'],
+    ['#ffffff', term(ir.glossary, 'plain', '平原')], ['#d6e4cf', term(ir.glossary, 'boon', '福地')],
+    ['#eed2c8', term(ir.glossary, 'hazard', '险径')], ['#ded2e8', term(ir.glossary, 'rift', '裂隙')],
+    ['#d2dde8', term(ir.glossary, 'branch', '支路')], ['#e3d3b0', term(ir.glossary, 'gate', '关隘')],
+    ['#c99a4a', term(ir.glossary, 'peak', '峰顶')],
   ];
   legend.forEach(([color, label], i) => {
     const x = margin + (i % 7) * 52;
@@ -110,7 +125,7 @@ export function boardSvg(board: IrBoard, ir: IrDocument): string {
     parts.push(`<rect x="${x}" y="${y}" width="7" height="7" rx="1.5" fill="${color}" stroke="#b8ab99" stroke-width="0.4"/>`);
     parts.push(`<text x="${x + 10}" y="${y + 5.6}" font-size="3.6" fill="#3a322a">${esc(label)}</text>`);
   });
-  parts.push(`<text x="${margin}" y="${H - margin}" font-size="3.4" fill="#8a7c6a">共 ${board.length} 格，峰顶在第 ${board.peakIndex} 格 · 登顶≠胜利，须通过活人认证</text>`);
+  parts.push(`<text x="${margin}" y="${H - margin}" font-size="3.4" fill="#8a7c6a">共 ${board.length} 格，${term(ir.glossary, 'peak', '峰顶')}在第 ${board.peakIndex} 格 · 登顶≠胜利，须通过活人认证</text>`);
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}mm" height="${H}mm" viewBox="0 0 ${W} ${H}">${parts.join('')}</svg>`;
 }
 
@@ -141,7 +156,7 @@ export function identitySvg(identity: IrIdentity): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}mm" height="${h}mm" viewBox="0 0 ${w} ${h}">${parts.join('')}</svg>`;
 }
 /** 阵营牌 SVG。 */
-export function factionSvg(faction: IrFaction): string {
+export function factionSvg(faction: IrFaction, terms: Terms): string {
   const w = CARD_W;
   const h = CARD_H;
   const pad = CARD_PAD;
@@ -150,7 +165,7 @@ export function factionSvg(faction: IrFaction): string {
   parts.push(`<text x="${pad + 2}" y="${pad + 10}" font-size="5.6" fill="#e8e0d4" font-weight="700">${esc(faction.name)}</text>`);
   parts.push(`<text x="${pad + 2}" y="${pad + 16}" font-size="3" fill="#9a8e7e">${esc(faction.id)}</text>`);
   parts.push(`<line x1="${pad}" y1="${pad + 19}" x2="${w - pad}" y2="${pad + 19}" stroke="#8a7c6a" stroke-width="0.3" opacity="0.5"/>`);
-  parts.push(`<text x="${pad + 2}" y="${pad + 27}" font-size="3.4" fill="#c08b3e">基础灵力 ${faction.hpBase} · 初始灵枢 ${faction.resourceBase}</text>`);
+  parts.push(`<text x="${pad + 2}" y="${pad + 27}" font-size="3.4" fill="#c08b3e">基础${term(terms, 'hp', '体力')} ${faction.hpBase} · 初始${term(terms, 'resource', '资源')} ${faction.resourceBase}</text>`);
   const al = wrap('阵营能力：' + faction.abilityText, 15);
   al.forEach((l, i) => {
     parts.push(`<text x="${pad + 2}" y="${pad + 35 + i * 4.4}" font-size="3.2" fill="#d8d0c2">${esc(l)}</text>`);
@@ -197,13 +212,13 @@ export function heavenSvg(item: { readonly id: string; readonly name: string; re
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}mm" height="${h}mm" viewBox="0 0 ${w} ${h}">${parts.join('')}</svg>`;
 }
 /** 试炼牌 SVG（关隘试炼用，标准牌尺寸）。 */
-export function trialSvg(item: { readonly id: string; readonly text: string }, index: number): string {
+export function trialSvg(item: { readonly id: string; readonly text: string }, index: number, terms: Terms): string {
   const w = CARD_W;
   const h = CARD_H;
   const pad = CARD_PAD;
   const parts: string[] = [];
   parts.push(`<rect x="0" y="0" width="${w}" height="${h}" rx="${CARD_RADIUS}" fill="#f4efe4" stroke="#8a6420" stroke-width="0.5"/>`);
-  parts.push(`<text x="${pad + 2}" y="${pad + 8}" font-size="3.4" fill="#8a6420">关隘试炼</text>`);
+  parts.push(`<text x="${pad + 2}" y="${pad + 8}" font-size="3.4" fill="#8a6420">${term(terms, 'gate', '关隘')}试炼</text>`);
   parts.push(`<text x="${w - pad - 2}" y="${pad + 8}" font-size="4.6" fill="#3a322a" text-anchor="end" font-weight="700">#${index + 1}</text>`);
   const lines = wrap(item.text, 15);
   lines.forEach((l, i) => {

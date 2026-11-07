@@ -12,7 +12,15 @@
     "hand": "在手异能",
     "resource": "异能点",
     "peak": "天台",
-    "seal": "认证章"
+    "seal": "认证章",
+    "path": "街区",
+    "plain": "街区",
+    "boon": "便利店",
+    "hazard": "危险区",
+    "rift": "断桥",
+    "branch": "岔道",
+    "gate": "封锁线",
+    "player": "异能者"
   },
   "counts": {
     "handStart": 5,

@@ -9,6 +9,7 @@
 // （单位写在表头），便于 B7 的「渲染文本 == 源字段值」比对。
 
 import { esc } from './print-templates.ts';
+import { term } from './print-parts.ts';
 import type { IrDocument } from '../engine/types/ir.ts';
 
 /** 一个带溯源的数值单元格。 */
@@ -20,7 +21,8 @@ export function srcTd(cell: { readonly value: number; readonly src: string }): s
 export function scalesTable(ir: IrDocument): string {
   const row = ir.scales[0];
   const head = [
-    '人数', '山道格数', '关隘数', '初始灵枢', '起始手牌', '牌库总量',
+    '人数', term(ir.glossary, 'path', '山道') + '格数', term(ir.glossary, 'gate', '关隘') + '数',
+    '初始' + term(ir.glossary, 'resource', '资源'), '起始手牌', '牌库总量',
     '试炼牌', '认证题卡', '认证签印门槛 N', '印记后门槛',
     '山议间隔（标准）', '山议间隔（新手）', '放逐下限', '全局回合上限',
   ];
@@ -42,7 +44,8 @@ export function scalesTable(ir: IrDocument): string {
 }
 /** 阵营表。 */
 export function factionsTable(ir: IrDocument): string {
-  const head = ['阵营', '基础灵力', '初始灵枢', '阵营能力', '阵营轮'];
+  const head = ['阵营', '基础' + term(ir.glossary, 'hp', '体力'),
+    '初始' + term(ir.glossary, 'resource', '资源'), '阵营能力', '阵营轮'];
   const thead = '<tr>' + head.map((h) => `<th>${esc(h)}</th>`).join('') + '</tr>';
   const tbody = ir.factions.map((f) =>
     '<tr>'
@@ -81,7 +84,7 @@ export function instructionTable(ir: IrDocument): string {
 
 /** 卡牌总表。 */
 export function cardsTable(ir: IrDocument): string {
-  const head = ['名称', '类型', '灵枢', '颜色', '点数', '效果'];
+  const head = ['名称', '类型', term(ir.glossary, 'resource', '资源'), '颜色', '点数', '效果'];
   const thead = '<tr>' + head.map((h) => `<th>${esc(h)}</th>`).join('') + '</tr>';
   const tbody = ir.cards.map((c) =>
     '<tr>'

@@ -286,6 +286,72 @@ export function checkThemeDiff(base, theme) {
 }
 
 /**
+ * 收集一套主题的**术语词**（glossary 里的全部词条）。
+ */
+export function termsOfTheme(theme) {
+  const g = theme.glossary ?? {};
+  return Object.values(g).filter((v) => typeof v === 'string' && v.length > 0);
+}
+
+/**
+ * 收集主题里出现的所有文本（含 id / 名称 / 文案 / 效果描述）。
+ */
+export function allTexts(theme) {
+  const out = [];
+  const walk = (v) => {
+    if (typeof v === 'string') {
+      out.push(v);
+      return;
+    }
+    if (Array.isArray(v)) {
+      v.forEach(walk);
+      return;
+    }
+    if (v !== null && typeof v === 'object') {
+      Object.values(v).forEach(walk);
+    }
+  };
+  walk(theme);
+  return out;
+}
+
+/**
+ * **跨主题术语串戏**检查：主题 X 的文本里不得出现主题 Y 的术语词。
+ *
+ * ⚠️ 背景：实体件的文本来自主题包（规则书叙述用术语占位符替换），
+ *   若某套主题的文案里残留了别套主题的术语（实测：融合主题写「灵枢 / 符箓库」，
+ *   而它的资源词是「灵能」、牌词是「道箓」）⇒ 实体件印出来就是串戏。
+ *   这类错误人眼极难在 48 张卡 × 4 套里查全，必须机器判。
+ */
+export function checkTerminologyLeak(themes) {
+  const errors = [];
+  for (const theme of themes) {
+    const own = new Set(termsOfTheme(theme));
+    const texts = allTexts(theme);
+    for (const other of themes) {
+      if (other === theme) {
+        continue;
+      }
+      for (const word of new Set(termsOfTheme(other))) {
+        if (own.has(word)) {
+          continue; // 该词也是本主题自己的术语（如两个主题共用「修士」）⇒ 不算串戏
+        }
+        if (word.length < 2) {
+          continue; // 单字词区分度不足，不据此判红
+        }
+        const hit = texts.find((t) => t.includes(word));
+        if (hit !== undefined) {
+          errors.push(
+            `[${theme.meta.id}] 文本「${hit}」含其他主题[${other.meta.id}]的术语「${word}」——串戏`,
+          );
+        }
+      }
+    }
+  }
+  return errors;
+}
+
+/**
  * 检查若干主题之间**两两**差异化（防止三套新主题其实是同一套换名字）。
  *
  * ⚠️ 这里必须比对**卡牌 effects**，不只比对元信息：
@@ -398,6 +464,17 @@ if (isMain) {
       }
       allErrors.push(...r.errors);
     }
+  }
+
+  const leaks = checkTerminologyLeak(loaded);
+  if (leaks.length === 0) {
+    console.log('\nPASS  无跨主题术语串戏');
+  } else {
+    console.error('\nFAIL  跨主题术语串戏：');
+    for (const e of leaks) {
+      console.error('      ' + e);
+    }
+    allErrors.push(...leaks);
   }
 
   if (loaded.length > 1) {

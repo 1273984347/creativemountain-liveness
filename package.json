@@ -14,7 +14,7 @@
     "build:only": "node esbuild.config.mjs",
     "gate": "node tools/gate.mjs",
     "build:ir": "node build/build-ir.mjs",
-    "build:print": "esbuild build/build-print.ts --bundle --platform=node --format=esm --external:playwright --outfile=build/.build-print.mjs --log-level=error && node build/.build-print.mjs",
+    "build:print": "esbuild build/build-print.ts --bundle --platform=node --format=esm --external:playwright --outfile=build/.build-print.mjs --log-level=error && node build/build-print-all.mjs",
     "print": "npm run build:ir && npm run build:print"
   },
   "devDependencies": {

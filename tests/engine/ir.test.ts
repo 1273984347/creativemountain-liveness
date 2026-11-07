@@ -20,7 +20,7 @@ const theme = JSON.parse(readFileSync(resolve('themes/xianxia2026/theme.json'), 
   readonly trials: readonly { readonly id: string; readonly text: string }[];
   readonly creationDeck?: readonly { readonly cardId: string }[];
 };
-const ir = JSON.parse(readFileSync(resolve('print/ir.json'), 'utf8'));
+const ir = JSON.parse(readFileSync(resolve('print/xianxia2026/ir.json'), 'utf8'));
 
 /** 深拷贝并放宽 readonly（负样本需要就地改字段）。 */
 const clone = (v: unknown): any => JSON.parse(JSON.stringify(v)) as any;

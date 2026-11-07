@@ -8,7 +8,8 @@
 //
 // 任一错误 → exit 1。
 
-import { readFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { SCALE_FIELD_NAMES } from '../engine/scales.ts';
@@ -134,40 +135,80 @@ export function validateIr(ir, theme, scales) {
 }
 
 // ---------- CLI ----------
-const themePath = resolve(process.cwd(), process.argv[2] ?? 'themes/xianxia2026/theme.json');
-const irPath = resolve(process.cwd(), process.argv[3] ?? 'print/ir.json');
+const cwd0 = process.cwd();
 
-let theme;
-let ir;
-try {
-  theme = JSON.parse(readFileSync(themePath, 'utf8'));
-  ir = JSON.parse(readFileSync(irPath, 'utf8'));
-} catch (e) {
-  console.error('FAIL  读取失败：' + (e instanceof Error ? e.message : String(e)));
-  process.exit(1);
+/** 规模表从 engine/scales.ts 解析（与 build-ir 同源）。 */
+function loadScales() {
+  const scaleSrc = readFileSync(resolve(cwd0, 'engine/scales.ts'), 'utf8');
+  const scales = [];
+  const re = /\{\s*players:\s*(\d+),\s*boardLength:\s*(\d+),\s*gateCount:\s*(\d+),\s*initialResource:\s*(\d+),\s*handStart:\s*(\d+),\s*deckTotal:\s*(\d+),\s*trialTotal:\s*(\d+),\s*certTotal:\s*(\d+),\s*threshold:\s*(\d+),\s*thresholdWithMark:\s*(\d+),\s*councilIntervalStandard:\s*(\d+),\s*councilIntervalNewbie:\s*(\d+),\s*exileFloor:\s*(\d+),\s*globalRoundLimit:\s*(\d+)/g;
+  for (const m of scaleSrc.matchAll(re)) {
+    scales.push({
+      players: Number(m[1]), boardLength: Number(m[2]), gateCount: Number(m[3]),
+      initialResource: Number(m[4]), handStart: Number(m[5]), deckTotal: Number(m[6]),
+      trialTotal: Number(m[7]), certTotal: Number(m[8]), threshold: Number(m[9]),
+      thresholdWithMark: Number(m[10]), councilIntervalStandard: Number(m[11]),
+      councilIntervalNewbie: Number(m[12]), exileFloor: Number(m[13]),
+      globalRoundLimit: Number(m[14]),
+    });
+  }
+  return scales;
 }
 
-// 规模表从 engine/scales.ts 解析（与 build-ir 同源）。
-const scaleSrc = readFileSync(resolve(process.cwd(), 'engine/scales.ts'), 'utf8');
-const scales = [];
-const re = /\{\s*players:\s*(\d+),\s*boardLength:\s*(\d+),\s*gateCount:\s*(\d+),\s*initialResource:\s*(\d+),\s*handStart:\s*(\d+),\s*deckTotal:\s*(\d+),\s*trialTotal:\s*(\d+),\s*certTotal:\s*(\d+),\s*threshold:\s*(\d+),\s*thresholdWithMark:\s*(\d+),\s*councilIntervalStandard:\s*(\d+),\s*councilIntervalNewbie:\s*(\d+),\s*exileFloor:\s*(\d+),\s*globalRoundLimit:\s*(\d+)/g;
-for (const m of scaleSrc.matchAll(re)) {
-  scales.push({
-    players: Number(m[1]), boardLength: Number(m[2]), gateCount: Number(m[3]),
-    initialResource: Number(m[4]), handStart: Number(m[5]), deckTotal: Number(m[6]),
-    trialTotal: Number(m[7]), certTotal: Number(m[8]), threshold: Number(m[9]),
-    thresholdWithMark: Number(m[10]), councilIntervalStandard: Number(m[11]),
-    councilIntervalNewbie: Number(m[12]), exileFloor: Number(m[13]),
-    globalRoundLimit: Number(m[14]),
-  });
+/** 列出全部主题 id（themes/<id>/theme.json 存在者）。 */
+function listThemeIds() {
+  const dir = resolve(cwd0, 'themes');
+  if (!existsSync(dir)) { return []; }
+  return readdirSync(dir, { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name)
+    .filter((id) => existsSync(resolve(dir, id, 'theme.json')))
+    .sort();
 }
 
-const result = validateIr(ir, theme, scales);
-for (const w of result.warnings) { console.log('WARN  ' + w); }
-if (result.errors.length > 0) {
-  for (const e of result.errors) { console.error('FAIL  ' + e); }
-  console.error('\nIR 校验失败：' + result.errors.length + ' 项错误');
-  process.exit(1);
+/** 校验一套主题的 IR（主题包 + print/<id>/ir.json）。 */
+function checkOne(themeId) {
+  const themePath = resolve(cwd0, 'themes', themeId, 'theme.json');
+  const irPath = resolve(cwd0, 'print', themeId, 'ir.json');
+  let theme;
+  let ir;
+  try {
+    theme = JSON.parse(readFileSync(themePath, 'utf8'));
+    ir = JSON.parse(readFileSync(irPath, 'utf8'));
+  } catch (e) {
+    return { errors: ['读取失败：' + (e instanceof Error ? e.message : String(e))], warnings: [], info: '' };
+  }
+  const result = validateIr(ir, theme, loadScales());
+  const info = '规模行 ' + ir.scales.length + ' · 指令 ' + ir.instructionTable.length + ' 条 · 卡牌 '
+    + ir.cards.length + ' · 阵营 ' + ir.factions.length + ' · 身份 ' + ir.identities.length
+    + ' · 认证题 ' + ir.certCards.length;
+  return { errors: result.errors, warnings: result.warnings, info };
 }
-console.log('PASS  IR 校验通过：' + irPath);
-console.log('      规模行 ' + ir.scales.length + ' · 指令 ' + ir.instructionTable.length + ' 条 · 卡牌 ' + ir.cards.length + ' · 阵营 ' + ir.factions.length + ' · 身份 ' + ir.identities.length + ' · 认证题 ' + ir.certCards.length);
+
+const isMain = process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
+
+function cli() {
+  const args = process.argv.slice(2);
+  const themeIds = args.length > 0 ? args : listThemeIds();
+  let failed = 0;
+  for (const themeId of themeIds) {
+    const r = checkOne(themeId);
+    for (const w of r.warnings) { console.log('WARN  [' + themeId + '] ' + w); }
+    if (r.errors.length > 0) {
+      for (const e of r.errors) { console.error('FAIL  [' + themeId + '] ' + e); }
+      failed += r.errors.length;
+      continue;
+    }
+    console.log('PASS  IR 校验通过：print/' + themeId + '/ir.json');
+    console.log('      ' + r.info);
+  }
+  if (failed > 0) {
+    console.error('\nIR 校验失败：' + failed + ' 项错误');
+    process.exit(1);
+  }
+  console.log('\nPASS：' + themeIds.length + ' 套主题的 IR 契约全部通过');
+  const themePath = resolve(process.cwd(), process.argv[2] ?? 'themes/xianxia2026/theme.json');
+  const irPath = resolve(process.cwd(), process.argv[3] ?? 'print/ir.json');
+}
+
+if (isMain) { cli(); }

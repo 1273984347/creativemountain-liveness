@@ -9,7 +9,7 @@ export default {
   name: '融合·道械双修',
   tagline: '灵气与芯片在同一具身体里打架，而山巅只认那个还能自己说话的人。',
   resourceName: '灵能',
-  deckName: '符箓',
+  deckName: '道箓',
 
   glossary: {
     HP: '气血',
@@ -18,6 +18,14 @@ export default {
     resource: '灵能',
     peak: '道顶',
     seal: '认证印',
+    path: '山道',
+    plain: '荒野',
+    boon: '灵地',
+    hazard: '险径',
+    rift: '裂隙',
+    branch: '岔路',
+    gate: '阵门',
+    player: '修士',
   },
 
   terms: { hp: '气血', deck: '道箓', resource: '灵能', gate: '阵门' },
@@ -39,10 +47,10 @@ export default {
   identities: [
     { name: '开路者', passiveText: '每回合首次位移 +1 格。', flavor: '双修之人，先走那条没人敢走的路。' },
     { name: '器师', passiveText: '每场限 1 次免费造物。', flavor: '炉火与电弧，在我都认。' },
-    { name: '观天者', passiveText: '每回合可看符箓库顶 1 张。', flavor: '我看得见命数，也看得见电路。' },
+    { name: '观天者', passiveText: '每回合可看道箓库顶 1 张。', flavor: '我看得见命数，也看得见电路。' },
     { name: '仲裁者', passiveText: '山议中可投 2 票。', flavor: '仙门与议会，都认我的印。' },
     { name: '守关人', passiveText: '回合结束获得 1 点护盾。', flavor: '我不封顶，我只守门。' },
-    { name: '窃火者', passiveText: '每回合可偷取 1 枚灵枢。', flavor: '你的灵枢，也是我的。' },
+    { name: '窃火者', passiveText: '每回合可偷取 1 枚灵能。', flavor: '你的灵能，也是我的。' },
     { name: '织符者', passiveText: '每回合 1 次改 1 个判定结果。', flavor: '符可改命，也可改数。' },
     { name: '山主', passiveText: '认证时首次被质疑自动通过。', flavor: '我不怕被问，我怕没人敢问。' },
   ],
@@ -54,7 +62,7 @@ export default {
       '星轨借力', '蓬莱御风', '墨符遁走', '云梦幻步',
     ],
     attack: [
-      '万灵噬魂', '符箓灼魂', '妖火焚心', '灵雷贯体',
+      '万灵噬魂', '道箓灼魂', '妖火焚心', '灵雷贯体',
       '天罚降临', '幽冥夺魄', '混沌撕裂', '星陨坠击',
       '代码咒杀', '丹毒攻心', '虚空崩解', '大道压制',
     ],

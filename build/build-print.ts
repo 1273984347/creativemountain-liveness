@@ -14,14 +14,17 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 
-import { boardSvg, cardRowSvg, cardSvg, certCardSvg, chipSvg, factionSvg, heavenSvg, identitySvg, trialSvg } from './print-parts.ts';
+import { boardSvg, cardRowSvg, cardSvg, certCardSvg, chipSvg, factionSvg, heavenSvg, identitySvg, trialSvg, term } from './print-parts.ts';
 import { cardsTable, factionsTable, identitiesTable, instructionTable, scalesTable } from './print-rules.ts';
 import { esc } from './print-templates.ts';
 import type { IrDocument } from '../engine/types/ir.ts';
 
 const ROOT = process.cwd();
-const PRINT = resolve(ROOT, 'print');
-const SVG_DIR = resolve(PRINT, 'svg');
+/** 输出目录（CLI 参数 1；默认 print/）。按主题分目录时由编排脚本传入。 */
+const OUT_DIR = resolve(ROOT, process.argv[2] ?? 'print');
+/** IR 路径（CLI 参数 2；默认 print/ir.json）。 */
+const IR_PATH = resolve(ROOT, process.argv[3] ?? 'print/ir.json');
+const SVG_DIR = resolve(OUT_DIR, 'svg');
 
 /** 找 headless 浏览器（优先 Edge，回退 Chrome）。 */
 export function findBrowser(): string | null {
@@ -39,7 +42,31 @@ export function findBrowser(): string | null {
 
 /** 读 ir.json。 */
 function loadIr(): IrDocument {
-  return JSON.parse(readFileSync(resolve(PRINT, 'ir.json'), 'utf8')) as IrDocument;
+  return JSON.parse(readFileSync(IR_PATH, 'utf8')) as IrDocument;
+}
+
+/**
+ * 按主题术语替换**叙述模板**里的占位符。
+ *
+ * ⚠️ 规则书叙述是**一份模板**（print/规则书叙述.md，入库源），
+ *   四套主题共用同一段叙述，只替换术语 —— 否则要维护四份会漂移的叙述。
+ */
+export function renderNarration(template: string, ir: IrDocument): string {
+  const g = ir.glossary ?? {};
+  const map: Record<string, string> = {
+    hp: g.HP ?? '体力',
+    deck: ir.meta.deckName,
+    resource: g.resource ?? '资源',
+    gate: g.gate ?? '关隘',
+    peak: g.peak ?? '峰顶',
+    path: g.path ?? '山道',
+    player: g.player ?? '玩家',
+  };
+  let out = template;
+  for (const [k, v] of Object.entries(map)) {
+    out = out.replaceAll('{{' + k + '}}', v);
+  }
+  return out;
 }
 /** 导出全部 SVG 实体件。 */
 export function exportSvgs(ir: IrDocument): string[] {
@@ -61,7 +88,7 @@ export function exportSvgs(ir: IrDocument): string[] {
   });
   // 阵营牌
   ir.factions.forEach((f, k) => {
-    put('阵营牌-' + String(k + 1).padStart(2, '0') + '-' + f.id + '.svg', factionSvg(f));
+    put('阵营牌-' + String(k + 1).padStart(2, '0') + '-' + f.id + '.svg', factionSvg(f, ir.glossary));
   });
   // 认证题卡
   ir.certCards.forEach((c, k) => {
@@ -69,14 +96,14 @@ export function exportSvgs(ir: IrDocument): string[] {
   });
   // 试炼牌
   ir.trials.forEach((t, k) => {
-    put('试炼牌-' + String(k + 1).padStart(2, '0') + '-' + t.id + '.svg', trialSvg(t, k));
+    put('试炼牌-' + String(k + 1).padStart(2, '0') + '-' + t.id + '.svg', trialSvg(t, k, ir.glossary));
   });
   // 天机牌
   ir.heavenCards.forEach((h, k) => {
     put('天机牌-' + String(k + 1).padStart(2, '0') + '-' + h.id + '.svg', heavenSvg(h, k));
   });
   // 筹码
-  put('筹码-灵枢.svg', chipSvg('灵枢', 'SP'));
+  put('筹码-' + term(ir.glossary, 'resource', '资源') + '.svg', chipSvg(term(ir.glossary, 'resource', '资源')));
   put('筹码-印记.svg', chipSvg('印记', 'MK'));
   return written;
 }
@@ -147,7 +174,7 @@ export function rulesHtml(ir: IrDocument, narration: string): string {
   body.push('<div class="cover">');
   body.push('<h1>' + esc(ir.meta.name) + '</h1>');
   body.push('<h2>' + esc(ir.meta.tagline) + '</h2>');
-  body.push('<p>《创界山·活人认证》——桌面多人策略游戏规则书<br/>登顶≠胜利：峰顶只认活人。</p>');
+  body.push('<p>《创界山·活人认证》——桌面多人策略游戏规则书<br/>登顶≠胜利：' + esc(ir.glossary.peak ?? '峰顶') + '只认活人。</p>');
   body.push('<p>本作由 ' + esc(ir.meta.deckName) + '系统与 ' + esc(ir.meta.resourceName) + '经济驱动。规模参数见下页。</p>');
   body.push('</div></div>');
   // 规模表（带溯源）
@@ -173,7 +200,7 @@ export function rulesHtml(ir: IrDocument, narration: string): string {
   body.push('</div>');
   // 卡牌总表
   body.push('<div class="sheet">');
-  body.push('<h2 class="ch">符箓总表</h2>');
+  body.push('<h2 class="ch">' + esc(ir.meta.deckName) + '总表</h2>');
   body.push(cardsTable(ir));
   body.push('</div>');
   return '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><title>' + esc(ir.meta.name) + ' 规则书</title><style>' + PRINT_CSS + '</style></head><body>' + body.join('\n') + '</body></html>';
@@ -187,7 +214,7 @@ export function partsHtml(ir: IrDocument): string {
   body.push('</div>');
   // 卡牌
   body.push('<div class="sheet">');
-  body.push('<h2 class="ch">符箓（63×88mm + 3mm 出血 · 3mm 圆角）</h2>');
+  body.push('<h2 class="ch">' + esc(ir.meta.deckName) + '（63×88mm + 3mm 出血 · 3mm 圆角）</h2>');
   body.push('<div class="cards">');
   ir.cards.forEach((c) => { body.push(cardSvg(c)); });
   body.push('</div></div>');
@@ -199,7 +226,7 @@ export function partsHtml(ir: IrDocument): string {
   body.push('</div>');
   body.push('<h2 class="ch">阵营牌</h2>');
   body.push('<div class="cards">');
-  ir.factions.forEach((f) => { body.push(factionSvg(f)); });
+  ir.factions.forEach((f) => { body.push(factionSvg(f, ir.glossary)); });
   body.push('</div></div>');
   // 认证题卡
   body.push('<div class="sheet">');
@@ -211,7 +238,7 @@ export function partsHtml(ir: IrDocument): string {
   body.push('<div class="sheet">');
   body.push('<h2 class="ch">关隘试炼牌（' + ir.trials.length + ' 张）</h2>');
   body.push('<div class="cards">');
-  ir.trials.forEach((t, k) => { body.push(trialSvg(t, k)); });
+  ir.trials.forEach((t, k) => { body.push(trialSvg(t, k, ir.glossary)); });
   body.push('</div></div>');
   // 天机牌
   body.push('<div class="sheet">');
@@ -257,7 +284,7 @@ export function toFileUrl(absPath: string): string {
 
 
 async function main(): Promise<void> {
-  mkdirSync(PRINT, { recursive: true });
+  mkdirSync(OUT_DIR, { recursive: true });
   mkdirSync(SVG_DIR, { recursive: true });
   const ir = loadIr();
 
@@ -266,24 +293,25 @@ async function main(): Promise<void> {
   console.log('SVG 实体件 ' + svgs.length + ' 个 → print/svg/');
 
   // 2. 规则书 HTML（叙述段手写 + 表格段生成）
-  const narrationPath = resolve(PRINT, '规则书叙述.md');
-  const narration = existsSync(narrationPath) ? readFileSync(narrationPath, 'utf8') : '# 规则书';
-  const rulesPath = resolve(PRINT, '规则书.html');
+  const narrationPath = resolve(ROOT, 'print', '规则书叙述.md');
+  const template = existsSync(narrationPath) ? readFileSync(narrationPath, 'utf8') : '# 规则书';
+  const narration = renderNarration(template, ir);
+  const rulesPath = resolve(OUT_DIR, '规则书.html');
   writeFileSync(rulesPath, rulesHtml(ir, narration), 'utf8');
-  console.log('规则书 → print/规则书.html');
+  console.log('规则书 → ' + rulesPath);
 
   // 3. 实体件打印 HTML
-  const partsPath = resolve(PRINT, '实体件.html');
+  const partsPath = resolve(OUT_DIR, '实体件.html');
   writeFileSync(partsPath, partsHtml(ir), 'utf8');
-  console.log('实体件 → print/实体件.html');
+  console.log('实体件 → ' + partsPath);
 
   // 4. PDF
-  const rulesPdf = resolve(PRINT, '规则书.pdf');
+  const rulesPdf = resolve(OUT_DIR, '规则书.pdf');
   const ok1 = await htmlToPdf(rulesPath, rulesPdf);
-  console.log((ok1 ? 'PDF → print/规则书.pdf' : 'PDF 规则书失败'));
-  const partsPdf = resolve(PRINT, '实体件.pdf');
+  console.log((ok1 ? 'PDF → ' + rulesPdf : 'PDF 规则书失败'));
+  const partsPdf = resolve(OUT_DIR, '实体件.pdf');
   const ok2 = await htmlToPdf(partsPath, partsPdf);
-  console.log((ok2 ? 'PDF → print/实体件.pdf' : 'PDF 实体件失败'));
+  console.log((ok2 ? 'PDF → ' + partsPdf : 'PDF 实体件失败'));
 }
 
 await main();

@@ -17,7 +17,7 @@ export default {
   name: '科幻·AI 纪元',
   tagline: '算法接管了人类的一切审批，只有一件事它做不了——确认对面那个人还活着。',
   resourceName: '算力',
-  deckName: '指令集',
+  deckName: '指令',
 
   glossary: {
     HP: '机体完整度',
@@ -26,6 +26,14 @@ export default {
     resource: '算力',
     peak: '奇点台',
     seal: '认证签',
+    path: '轨道',
+    plain: '空域',
+    boon: '补给点',
+    hazard: '故障区',
+    rift: '数据断层',
+    branch: '分支',
+    gate: '安全闸',
+    player: '行动者',
   },
 
   /** 术语层：卡面文案渲染时替换通用词。 */
