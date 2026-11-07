@@ -457,16 +457,18 @@ type Action =
 |---|---|
 | 资源 | `gain_resource` `spend_resource` `transfer_resource` `set_resource` |
 | 牌 | `draw_cards` `gain_card` `discard_self` `discard_opponent` `exhaust_card` `peek_deck` `add_to_deck` `remove_from_deck` `swap_deck_top` |
-| 位移 | `move_forward` `move_backward` `move_to_tile` `move_relative_to` `swap_position` `teleport` |
+| 位移 | `move_forward` `move_backward` `move_to_tile` `move_relative_to` `swap_position` `teleport` `move_by_dice` |
 | 骰子 | `extra_roll` `reroll` `keep_die` `set_die_result` `roll_opponent` |
 | 状态 | `shield` `poison` `slow` `silence` `skip_turn` `immunity` `double_next_vote` `extra_signatures_required` `set_phase` `set_flag` `clear_flag` |
 | 战斗 | `damage` `heal` `compare_cards` `disarm` |
 | 投票 | `vote_modifier` `extra_vote` `cancel_vote` `exempt_from_vote` |
 | 认证 | `certify_extra_signer` `certify_free_pass` `certify_extra_round` `certify_forbid_challenge` |
+| 棋盘 | `place_barrier` |
+| 判定与装备 | `modify_judgement` `create_card` `equip_card` `revive` |
 | 阵营 | `spirit_wheel`（掷阵营轮） |
 | 组合 | `sequence` `conditional` `count` `random_from_deck` |
 
-**条件谓词（predicates）**：`tile_kind` `has_card` `resource_at_least` `hand_count` `is_pending_cert` `phase_is` `players_alive` `card_type_is` `identity_is` `faction_is` `hp_at_least` `flag_set` `last_dice_even` 等。
+**条件谓词（predicates）**：`tile_kind` `has_card` `resource_at_least` `hand_count` `is_pending_cert` `phase_is` `players_alive` `card_type_is` `identity_is` `faction_is` `hp_at_least` `flag_set` `last_dice_even` `dice_is_at_least` `card_color_is` 等。
 
 **终局目标判定（goal）**：终局目标**不是**普通效果算子，而是由引擎内建的一组**目标判定器**（`goals/registry.ts`）。主题包通过 `goal: { kind, count }` 声明，**只能取下表枚举值**，不得自造 kind：
 
@@ -487,6 +489,20 @@ type Action =
 - **B2 验收要求**：上表 8 个 kind 必须全部注册并各有单测；B4 写主题包时若发现新目标语义，**扩 goal registry，不扩 ops**。
 
 **组合表达**：`conditional` 嵌套 `pred` + `then`/`else`；`sequence` 顺序执行多个算子。**不提供任意表达式求值**，不使用 `eval` / `Function`。
+
+**算子参数契约**：每个算子的参数类型、作用域约定（target 可选 / amount 缺省 / 负数非法 / 失败返回 `ok=false` 且状态不变）、以及逐条参数需求，见 **`docs/superpowers/plans/2026-11-07-ops-parameter-audit.md`**（B2 开工前的参数盘点，2026-11-07）。该文档同时记录了盘点中发现的 **7 处规格缺口**及建议方案：
+
+| 缺口 | 规格规则 | 建议方案 |
+|---|---|---|
+| G1 | 指令骰第 5 条「掷 6 面骰并按点数前进」 | 新增 `move_by_dice { faces }`——步数来自运行时骰子结果，不能用静态 `amount` 表达 |
+| G2 | 关隘试炼「掷指令骰 ≥ 15」 | 新增谓词 `dice_is_at_least { amount, faces }` |
+| G3 | 对峙与险径的颜色判定 | 新增谓词 `card_color_is { color, source }`；对峙比较规则内建在 `compare_cards` 里 |
+| G4 | 「放置封路印」（§3.4 裂隙） | 新增算子 `place_barrier { tileIndex }`——现有算子全部作用于玩家，无棋盘格位算子 |
+| G5 | 改判 / 造物与装备 / 复活队友 / 凭证 | 新增 `modify_judgement` `create_card` `equip_card` `revive`；凭证**复用** `exempt_from_vote`（补「消耗 3 灵枢 + 公开可见」语义） |
+| G6 | `card_type_is` 作用域不明 | 定义为「效果使用者手牌中是否存在该类型」 |
+| G7 | `spirit_wheel` 与「每局限 1 次」 | 增加 `source: 'manual' \| 'command'`——指令 20 不消耗名额 |
+
+**B2 开工前必须先定**（否则实现会返工）：G1 的方案取舍；G5 的造物/装备与复活语义；`StatusKind` 枚举；`CardFilter` 结构；牌面点数是否由 `suit` 字段承载。
 
 ### 6.5 主题包数据规格
 
