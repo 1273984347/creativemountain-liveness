@@ -133,6 +133,14 @@ export interface State {
   readonly phase: Phase;
   /** 回合数：所有存活玩家各行动一次 = 1 个 round（规格 §3.1） */
   readonly round: number;
+  /**
+   * 行动顺序：座位序列（**开局随机决定**，B10）。
+   *
+   * ⚠️ 为什么要有它：行动顺序若固定按座位，座 0 永远先动 ⇒ 永远先登顶 ⇒
+   *   先进认证池 ⇒ 先完成认证 ⇒ 先终局 ⇒ **座位与胜率绑定**（实测残余 ±4pp）。
+   *   随机决定后，「先手」不再绑定任何固定座位，各座位胜率趋于均匀。
+   */
+  readonly turnOrder: readonly number[];
   /** 当前手番在 round 内的位置 */
   readonly turnIndex: number;
   /** 玩家列表（按座位序） */
@@ -231,6 +239,7 @@ export function createInitialState(opts: InitialStateOptions): State {
     rng: new Rng(opts.seed),
     phase: '行动',
     round: 1,
+    turnOrder: players.map((p) => p.seat),
     turnIndex: 0,
     players,
     board: makeBoard(scales.boardLength),

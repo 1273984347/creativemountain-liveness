@@ -125,15 +125,24 @@ export function resolveCouncil(state: State): CouncilResult {
   }
   // 4 人及以上：放逐（需检查下限 / 凭证 / 否决）
   const floor = state.scales.exileFloor;
-  const exiled = tops.filter((seat) => {
+  // ⚠️ B10 收尾④ 修正：放逐下限必须**累计**判断，不能逐个判断。
+  //   原实现对每个被提名的座位**独立**判断 `alive.length - 1 < floor`
+  //   ⇒ 一次山议可放逐多人，把存活人数打到下限以下：
+  //   4 人局若全员并列最高票 ⇒ 4 人**同时**被放逐 ⇒ 存活归零
+  //   ⇒ `currentPlayer` 返回 -1 ⇒ 对局**无结局**（实测 24000 局出现 1 例「未分出胜负」）。
+  //   规格 §5.8：任何时候场上存活玩家不得少于 3 人 ⇒ 下限须按**累计**口径守住。
+  const exiled: number[] = [];
+  let remaining = alive.length;
+  for (const seat of tops) {
     const p = state.players[seat];
-    if (p === undefined) { return false; }
-    // 放逐后存活人数会低于下限 → 不放逐
-    if (alive.length - 1 < floor) { return false; }
+    if (p === undefined) { continue; }
+    // 再放逐一人就会击穿下限 → 停止放逐（后续提名同样不放逐）
+    if (remaining - 1 < floor) { break; }
     // 凭证免疫（公开信息，使用后全场可见）
-    if (p.flags.exemptFromVote === true) { return false; }
-    return true;
-  });
+    if (p.flags.exemptFromVote === true) { continue; }
+    exiled.push(seat);
+    remaining -= 1;
+  }
   if (exiled.length === 0) {
     return succeed(next, '山议：无人被放逐（下限保护 / 凭证 / 否决）');
   }

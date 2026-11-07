@@ -323,6 +323,8 @@ function render(): void {
   const status = el('div', { class: 'status' });
   status.append(el('span', { text: '回合 ' + s.round + ' / 上限 ' + s.scales.globalRoundLimit }));
   status.append(el('span', { text: '当前行动者 座' + currentPlayer(s) }));
+  // 行动顺序是**开局随机决定**的（B10）⇒ 显式展示，避免玩家以为「按座号轮」
+  status.append(el('span', { text: '行动顺序 ' + s.turnOrder.map((x) => '座' + x).join('→') }));
   status.append(el('span', { text: '轮末 ' + (isRoundEnd(s) ? '是' : '否') }));
   status.append(el('span', { text: '签印门槛 N=' + s.scales.threshold }));
   if (s.outcome.finished) {

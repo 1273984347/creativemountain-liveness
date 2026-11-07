@@ -66,15 +66,25 @@ function checkState(s, label) {
   return problems;
 }
 
-/** 挑一个默认出牌目标：除自己外位置最高的存活玩家。 */
+/**
+ * 挑一个默认出牌目标：除自己外位置最高的存活玩家。
+ *
+ * ⚠️ 位置并列时**随机**选（用 state.rng ⇒ 仍可复现）。
+ *   原实现取「座位序最靠前」者 ⇒ 小号座位被系统性地多打一次 ⇒
+ *   读数上表现为「座号越大胜率越高」的假趋势（实测 6 人局 +2.8pp、4 人局严格递增）。
+ *   真实对局中攻击目标是**玩家自选**（B10 收尾①），不存在这种座位绑定，
+ *   模拟器不该把它引入 —— 否则测的是 AI 的偏置，不是规则的公平性。
+ */
 function pickTarget(s, seat) {
   const others = s.players.filter((p) => p.alive && p.seat !== seat);
   if (others.length === 0) { return undefined; }
-  let best = others[0];
+  let maxPos = -1;
   for (const p of others) {
-    if (best !== undefined && p.position > best.position) { best = p; }
+    if (p.position > maxPos) { maxPos = p.position; }
   }
-  return best === undefined ? undefined : best.seat;
+  const tied = others.filter((p) => p.position === maxPos);
+  const chosen = tied[Math.floor(s.rng.next() * tied.length)];
+  return chosen === undefined ? undefined : chosen.seat;
 }
 
 /** 山议：每人投给位置最高的对手，然后结算。 */
@@ -139,6 +149,11 @@ function playOne(theme, players, seed) {
   const anomalies = [];
   const maxSteps = s.scales.globalRoundLimit * players * 8 + 200;
   let steps = 0;
+  // 首个进入待认证（登顶）的玩家 —— 用于追踪「先手优势」的传导路径：
+  // 先动 → 先登顶 → 先收集签印 → 先认证达成 → 先终局。
+  let firstPendingSeat = -1;
+  let firstPendingRound = 0;
+  let firstPendingPos = -1;
   while (!s.outcome.finished) {
     if (steps++ > maxSteps) { anomalies.push('死循环：超过 ' + maxSteps + ' 步'); break; }
     if (needsCouncilVote(s)) { s = councilTurn(s); }
@@ -171,6 +186,11 @@ function playOne(theme, players, seed) {
       }
     }
     s = advanceTurn(s, 'standard');
+    if (firstPendingSeat < 0 && s.certification.pending.length > 0) {
+      firstPendingSeat = s.certification.pending[0] ?? -1;
+      firstPendingRound = s.round;
+      firstPendingPos = s.turnOrder.indexOf(firstPendingSeat);
+    }
   }
   const problems = checkState(s, '终局');
   anomalies.push(...problems);
@@ -182,6 +202,9 @@ function playOne(theme, players, seed) {
     winners: [...s.outcome.winners],
     identities: s.players.map((p) => p.identityId),
     factions: s.players.map((p) => p.factionId),
+    // 开局的行动顺序（座位序列）—— 用于「按行动顺序位次」的胜率统计（先手优势的直接度量）
+    turnOrder: [...s.turnOrder],
+    firstPendingSeat, firstPendingRound, firstPendingPos,
     certRound: s.certification.round,
     anomalies,
   };
@@ -208,6 +231,13 @@ function summarize(cells) {
   const identityWin = new Map();
   const factionWin = new Map();
   const seatWin = new Map();
+  // 「行动顺序位次」胜率：位次 0 = 每 round 最先行动者（B10 随机行动顺序）
+  const posWin = new Map();
+  // **仅单人获胜局**的胜场（排除并列封顶）——
+  //   总胜场口径会把「并列封顶」计给每个并列者 ⇒ 座位/位次胜率被口径扭曲。
+  const soloSeatWin = new Map();
+  const soloPosWin = new Map();
+  let soloGames = 0;
   const certRounds = new Map();
   let total = 0;
   let fallback = 0;
@@ -216,22 +246,39 @@ function summarize(cells) {
   let roundSum = 0;
   let anomalies = 0;
   const anomalySamples = [];
+  // 先手优势的传导链：先动 → 先登顶 → 先认证 → 先终局
+  const chain = { withPeak: 0, firstIsPos0: 0, firstIsWinner: 0, peakRoundSum: 0 };
   for (const c of cells) {
     total += 1;
     roundSum += c.rounds;
     if (c.reason === 'fallback') { fallback += 1; }
     else if (c.reason === 'certified') { certified += 1; }
     else { noWinner += 1; }
+    if (c.firstPendingSeat >= 0) {
+      chain.withPeak += 1;
+      chain.peakRoundSum += c.firstPendingRound;
+      if (c.firstPendingPos === 0) { chain.firstIsPos0 += 1; }
+      if (c.winners.includes(c.firstPendingSeat)) { chain.firstIsWinner += 1; }
+    }
     if (c.anomalies.length > 0) {
       anomalies += c.anomalies.length;
       if (anomalySamples.length < 5) { anomalySamples.push(c.anomalies[0]); }
     }
+    if (c.winners.length === 1) { soloGames += 1; }
     for (const w of c.winners) {
       const id = c.identities[w];
       const f = c.factions[w];
       if (id !== undefined) { identityWin.set(id, (identityWin.get(id) ?? 0) + 1); }
       if (f !== undefined) { factionWin.set(f, (factionWin.get(f) ?? 0) + 1); }
       seatWin.set(w, (seatWin.get(w) ?? 0) + 1);
+      if (c.winners.length === 1) {
+        soloSeatWin.set(w, (soloSeatWin.get(w) ?? 0) + 1);
+        const p0 = (c.turnOrder ?? []).indexOf(w);
+        if (p0 >= 0) { soloPosWin.set(p0, (soloPosWin.get(p0) ?? 0) + 1); }
+      }
+      // 位次 = 该胜者在开局行动顺序中的位置（先手优势的直接度量）
+      const pos = (c.turnOrder ?? []).indexOf(w);
+      if (pos >= 0) { posWin.set(pos, (posWin.get(pos) ?? 0) + 1); }
     }
     if (c.reason === 'certified') {
       const k = '第' + c.certRound + '轮';
@@ -242,7 +289,7 @@ function summarize(cells) {
     total, fallback, certified, noWinner, anomalies, anomalySamples,
     fallbackRate: total > 0 ? fallback / total : 0,
     avgRounds: total > 0 ? roundSum / total : 0,
-    identityWin, factionWin, seatWin, certRounds,
+    identityWin, factionWin, seatWin, posWin, certRounds, chain, soloSeatWin, soloPosWin, soloGames,
   };
 }
 
@@ -354,9 +401,59 @@ if (args.out !== null) {
   lines.push('- **身份/阵营胜率**：身份与阵营**开局随机分配**（固定 seed 可复现）⇒ 胜率差异只剩「机制强度」；');
   lines.push('  单项偏离均匀分布未超 15pp 时不触发记录线。');
   lines.push('- **主题间一致性**：四套主题共享通用卡牌池（效果逐字相同），胜率分布应当几乎重合；差异只来自 2 张标志卡与文案。');
-  lines.push('- **模拟 AI 偏置**：AI 优先登顶、认证人倾向签印 ⇒ 放大「先登顶 = 先赢」的座位优势；真人对局的认证是社交博弈，读数须打折。');
+  lines.push('- **行动顺序随机化（B10）**：行动顺序在开局**随机决定**，整局沿用 ⇒ 「先手」不再绑定任何固定座位。');
+  lines.push('  「按行动顺序位次」表是先手优势的直接读数，「按座位胜率」表是座位与胜率是否解耦的读数。');
+  lines.push('- **模拟 AI 偏置**：AI 优先登顶、认证人倾向签印 ⇒ 放大「先登顶 = 先赢」的优势；真人对局的认证是社交博弈，读数须打折。');
   lines.push('');
-  lines.push('## 按座位胜率（检验「座位顺序优势」是否已消除）');
+  lines.push('## 按行动顺序位次的胜率（检验「先行动优势」是否已消除）');
+  lines.push('');
+  lines.push('> **口径说明**：位次 = 该玩家在本局**开局随机行动顺序**中的位置（位次 1 = 每回合最先行动）。',
+    '> 这是「先手优势」的**直接度量**，比座位胜率锐利 —— 座位胜率会被身份/阵营等其它因素稀释，',
+    '> 而位次胜率只反映「先行动」本身。');
+  lines.push('');
+  for (const players of args.players) {
+    const merged = [];
+    for (const themeId of args.themes) {
+      merged.push(...(perCell.get(themeId + ':' + players) ?? []));
+    }
+    const st = summarize(merged);
+    const winTotal = [...st.posWin.values()].reduce((a, b) => a + b, 0);
+    const even = 100 / players;
+    lines.push('### ' + players + ' 人局（合并 ' + args.themes.length + ' 套主题 · ' + st.total + ' 局 · 均匀基准 ' + even.toFixed(1) + '%）');
+    lines.push('');
+    lines.push('| 位次 | 胜场 | 胜率 | 偏离均匀 |');
+    lines.push('|---|---|---|---|');
+    for (let pos = 0; pos < players; pos++) {
+      const w = st.posWin.get(pos) ?? 0;
+      const rate = winTotal > 0 ? (w / winTotal) * 100 : 0;
+      const dev = rate - even;
+      lines.push('| 第' + (pos + 1) + ' 位 | ' + w + ' | ' + rate.toFixed(1) + '% | '
+        + (dev >= 0 ? '+' : '') + dev.toFixed(1) + 'pp |');
+    }
+    lines.push('');
+  }
+  lines.push('## 先手优势的传导路径（先动 → 先登顶 → 先认证 → 先终局）');
+  lines.push('');
+  lines.push('> 逐环转化率。「位次 1 成为首个登顶者」低 ⇒ 先动者并不必然先登顶；');
+  lines.push('> 「首个登顶者成为获胜者」高 ⇒ 登顶先后**直接决定**胜负（认证轮次错位把「先动」放大成「先赢」）。');
+  lines.push('');
+  for (const players of args.players) {
+    const merged = [];
+    for (const themeId of args.themes) {
+      merged.push(...(perCell.get(themeId + ':' + players) ?? []));
+    }
+    const st = summarize(merged);
+    const denom = st.chain.withPeak > 0 ? st.chain.withPeak : 1;
+    lines.push('### ' + players + ' 人局');
+    lines.push('');
+    lines.push('| 环节 | 数值 | 含义 |');
+    lines.push('|---|---|---|');
+    lines.push('| 位次 1 成为**首个登顶者** | ' + ((st.chain.firstIsPos0 / denom) * 100).toFixed(1) + '% | 先动者并不必然先登顶（随机行棋稀释先后差异） |');
+    lines.push('| **首个登顶者**最终获胜 | ' + ((st.chain.firstIsWinner / denom) * 100).toFixed(1) + '% | 登顶先后**直接决定**胜负 ⇒ 认证轮次错位把「先动」放大成「先赢」 |');
+    lines.push('| 首个登顶者的平均登顶轮次 | ' + (st.chain.peakRoundSum / denom).toFixed(1) + ' | |');
+    lines.push('');
+  }
+  lines.push('## 按座位胜率（检验「座位」与胜率是否已解耦）');
   lines.push('');
   lines.push('> **口径说明**：座位胜率**只能在同一人数档位内比较** —— 座 3 只出现在 4 人以上的局，',
     '> 跨档位汇总会把「该座位出现的局数」混进分母，读数无意义。');
@@ -378,6 +475,44 @@ if (args.out !== null) {
       const rate = winTotal > 0 ? (w / winTotal) * 100 : 0;
       const dev = rate - even;
       lines.push('| 座' + seat + ' | ' + w + ' | ' + rate.toFixed(1) + '% | '
+        + (dev >= 0 ? '+' : '') + dev.toFixed(1) + 'pp |');
+    }
+    lines.push('');
+  }
+  lines.push('## 仅单人获胜局（剔除「并列封顶」的口径影响）');
+  lines.push('');
+  lines.push('> **为什么要剔除**：`certificationThreshold` 在「两人以上同时待认证」时只需 1 个签印，',
+    '> 且达标的待认证者**同时封顶、并列获胜** ⇒ 总胜场口径会把同一场胜利计给每个并列者，',
+    '> 进而扭曲座位/位次胜率。下表只统计**独赢**的局。');
+  lines.push('');
+  for (const players of args.players) {
+    const merged = [];
+    for (const themeId of args.themes) {
+      merged.push(...(perCell.get(themeId + ':' + players) ?? []));
+    }
+    const st = summarize(merged);
+    const even = 100 / players;
+    lines.push('### ' + players + ' 人局（独赢局 ' + st.soloGames + ' / ' + st.total + '）');
+    lines.push('');
+    lines.push('| 座位 | 独赢场次 | 独赢率 | 偏离均匀 |');
+    lines.push('|---|---|---|---|');
+    const seatTotal = [...st.soloSeatWin.values()].reduce((a, b) => a + b, 0);
+    for (let seat = 0; seat < players; seat++) {
+      const w = st.soloSeatWin.get(seat) ?? 0;
+      const rate = seatTotal > 0 ? (w / seatTotal) * 100 : 0;
+      const dev = rate - even;
+      lines.push('| 座' + seat + ' | ' + w + ' | ' + rate.toFixed(1) + '% | '
+        + (dev >= 0 ? '+' : '') + dev.toFixed(1) + 'pp |');
+    }
+    lines.push('');
+    lines.push('| 位次 | 独赢场次 | 独赢率 | 偏离均匀 |');
+    lines.push('|---|---|---|---|');
+    const posTotal = [...st.soloPosWin.values()].reduce((a, b) => a + b, 0);
+    for (let pos = 0; pos < players; pos++) {
+      const w = st.soloPosWin.get(pos) ?? 0;
+      const rate = posTotal > 0 ? (w / posTotal) * 100 : 0;
+      const dev = rate - even;
+      lines.push('| 第' + (pos + 1) + ' 位 | ' + w + ' | ' + rate.toFixed(1) + '% | '
         + (dev >= 0 ? '+' : '') + dev.toFixed(1) + 'pp |');
     }
     lines.push('');

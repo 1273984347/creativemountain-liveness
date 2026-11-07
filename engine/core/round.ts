@@ -5,15 +5,26 @@
 
 import type { State } from './state.ts';
 
-/** 当前手番的玩家座位号。已出局玩家不占手番。 */
+/**
+ * 当前手番的玩家座位号。已出局玩家不占手番。
+ *
+ * ⚠️ B10：行动顺序取自 `state.turnOrder`（开局随机决定的座位序列），
+ *   而非固定的座位序 —— 否则「先行动」永远绑定座 0 ⇒ 先登顶 ⇒ 先认证 ⇒ 先终局，
+ *   座位与胜率绑定（实测残余 ±4pp）。
+ *   出局者跳过；`turnIndex` 仍是「已行动的手番数」。
+ */
 export function currentPlayer(state: State): number {
   const alive = state.players.filter((p) => p.alive);
   if (alive.length === 0) {
     return -1;
   }
-  // turnIndex 是「已行动的手番数」，对存活玩家循环取用
-  const idx = state.turnIndex % alive.length;
-  return alive[idx]?.seat ?? -1;
+  const order = state.turnOrder.length > 0 ? state.turnOrder : state.players.map((p) => p.seat);
+  const aliveOrder = order.filter((seat) => alive.some((p) => p.seat === seat));
+  if (aliveOrder.length === 0) {
+    return -1;
+  }
+  const idx = state.turnIndex % aliveOrder.length;
+  return aliveOrder[idx] ?? -1;
 }
 
 /**

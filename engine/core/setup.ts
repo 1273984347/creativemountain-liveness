@@ -151,6 +151,7 @@ function resetForNewGame(state: State): State {
   return {
     ...state,
     round: 1,
+    turnOrder: state.players.map((p) => p.seat),
     turnIndex: 0,
     phase: '行动',
     phaseValue: 'day',
@@ -248,6 +249,10 @@ export function installTheme(state: State, theme: ThemePack): State {
   //   反过来会把刚授予的 flags 又清掉（实测：仲裁者的额外投票权因此丢失）。
   const reset = resetForNewGame(withPacks);
   const withFactions = assignIdentitiesAndFactions(reset, theme);
+  // 行动顺序：**开局随机决定**（B10）⇒ 先手不再绑定任何固定座位
+  const seats = withFactions.players.map((p) => p.seat);
+  const turnOrder = shuffledIndices(seats.length, withFactions).map((i) => seats[i] ?? 0);
+  const withOrder: State = { ...withFactions, turnOrder };
   // 开局即翻开第 1 回合的天机牌（规格 §3.1 回合第 1 步）
-  return openHeaven(dealInitialHands(withFactions));
+  return openHeaven(dealInitialHands(withOrder));
 }

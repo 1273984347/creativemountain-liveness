@@ -45,7 +45,11 @@ export function deserializeState(data: unknown): State {
     throw new Error('存档缺少状态数据');
   }
   const { rng: _ignored, ...rest } = obj.state as State;
-  return { ...rest, rng: Rng.fromSnapshot(rngRaw.initialSeed, rngRaw.snapshot) };
+  // 兼容旧档（B10 之前无 turnOrder）⇒ 按座位序补
+  const turnOrder = Array.isArray(rest.turnOrder) && rest.turnOrder.length > 0
+    ? rest.turnOrder
+    : rest.players.map((p) => p.seat);
+  return { ...rest, turnOrder, rng: Rng.fromSnapshot(rngRaw.initialSeed, rngRaw.snapshot) };
 }
 
 /** 序列化为 JSON 文本。 */

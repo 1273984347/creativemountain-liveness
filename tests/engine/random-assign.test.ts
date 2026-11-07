@@ -2,13 +2,14 @@
 //
 // 背景：原实现按**座位轮转**分配（identities[i%8] / factions[i%4]）⇒ 身份与座位一一绑定，
 // 而先行动的座位在「登顶 → 认证 → 封顶」主线上占先 ⇒ 胜率沿座位**严格单调递减**。
-// 本文件钉住随机化的三条性质 + 一条平衡回归。
+// 本文件钉住随机化的三条性质 + 分配层的解绑检查。
+//
+// ⚠️ 平衡回归（跑模拟的那几条）已集中到 `balance-regression.test.ts` ——
+//   模拟只跑一次、断言多条，避免重复付出子进程模拟的代价。
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import type { ThemePack } from '../../engine/types/theme.ts';
@@ -71,42 +72,7 @@ test('身份与阵营不再与座位绑定：同一座位在不同 seed 下可�
   assert.ok(seen.size >= 3, `座 0 应能拿到多种阵营，实际 ${seen.size} 种`);
 });
 
-// ---------- 平衡回归 ----------
-
-/** 跑一次模拟并解析报告里的表格。 */
-function runSim(games: number, players: number): { seatRates: number[]; identityRates: number[] } {
-  const dir = mkdtempSync(resolve(tmpdir(), 'cm-sim-'));
-  const out = resolve(dir, 'report.md');
-  const res = spawnSync(process.execPath, [resolve('tests', 'sim', 'run.mjs'),
-    '--games', String(games), '--players', String(players), '--out', out],
-    { encoding: 'utf8', shell: false, cwd: process.cwd(), maxBuffer: 64 * 1024 * 1024 });
-  assert.equal(res.status, 0, '模拟失败：' + (res.stderr ?? ''));
-  const text = readFileSync(out, 'utf8');
-  // 座位胜率：取「N 人局」小节下的表
-  const seatSection = text.slice(text.indexOf('### ' + players + ' 人局'));
-  const seatRates = [...seatSection.matchAll(/^\| 座(\d+) \| \d+ \| ([\d.]+)% \|/gm)]
-    .map((m) => Number(m[2]));
-  // 身份胜率：取第一张身份表
-  const idSection = text.slice(text.indexOf('## 身份胜率'), text.indexOf('## 阵营胜率'));
-  const identityRates = [...idSection.matchAll(/^\| [^|]+ \| \d+ \| ([\d.]+)% \|/gm)]
-    .map((m) => Number(m[1]));
-  return { seatRates, identityRates };
-}
-
-test('平衡回归：身份胜率不再随座位塌缩（随机化前最大差约 20pp）', () => {
-  // 400 局 × 4 套主题 = 1600 局（实测 spread 7.2pp；样本再少噪声会盖过信号）
-  const { identityRates } = runSim(400, 8);
-  assert.ok(identityRates.length >= 8, '应解析出 8 个身份的胜率');
-  const spread = Math.max(...identityRates) - Math.min(...identityRates);
-  assert.ok(spread < 12, `身份胜率最大差 ${spread.toFixed(1)}pp 应 < 12pp（随机化前约 20pp）`);
-});
-
-test('平衡回归：座位胜率不再是严格单调递减（随机化前 22.4% → 1.7%）', () => {
-  const { seatRates } = runSim(400, 8);
-  assert.ok(seatRates.length >= 8, '应解析出 8 个座位的胜率');
-  const spread = Math.max(...seatRates) - Math.min(...seatRates);
-  assert.ok(spread < 12, `座位胜率最大差 ${spread.toFixed(1)}pp 应 < 12pp（随机化前约 20pp）`);
-});
+// ---------- 分配层：身份与座位解绑 ----------
 
 test('分配层：同一身份**不再绑定**某个座位（分布覆盖多个座位且不悬殊）', () => {
   const seatCount = new Map<string, number[]>();
