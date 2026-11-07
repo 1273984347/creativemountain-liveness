@@ -10,6 +10,7 @@ export function renderHand(
   theme: ThemePack,
   seat: number,
   onPlay: (cardId: string) => void,
+  pendingCardId: string | null = null,
 ): HTMLElement {
   const player = state.players[seat];
   if (player === undefined) { return el('div', { class: 'hand' }); }
@@ -19,7 +20,7 @@ export function renderHand(
     return wrap;
   }
   for (const card of player.hand) {
-    const node = el('div', { class: 'card ' + card.color, title: card.text });
+    const node = el('div', { class: 'card ' + card.color + (card.id === pendingCardId ? ' pending' : ''), title: card.text });
     node.append(el('div', { class: 'card-cost', text: theme.meta.resourceName + ' ' + card.cost }));
     node.append(el('div', { class: 'card-name', text: card.name }));
     node.append(el('div', { class: 'card-text', text: card.text }));
@@ -30,13 +31,23 @@ export function renderHand(
   return wrap;
 }
 
-/** 渲染玩家列表（体力/资源/身份/阵营/装备/状态；术语取自主题 glossary）。 */
-export function renderPlayers(state: State, theme: ThemePack): HTMLElement {
+/**
+ * 渲染玩家列表（体力/资源/身份/阵营/装备/状态；术语取自主题 glossary）。
+ *
+ * `onPick` 存在时玩家行可点击（用于**出牌选目标**）；`picking` 为真时才高亮可点行。
+ */
+export function renderPlayers(
+  state: State,
+  theme: ThemePack,
+  onPick?: (seat: number) => void,
+  picking = false,
+): HTMLElement {
   const list = el('div', { class: 'players' });
   for (const p of state.players) {
     const identity = theme.identities.find((i) => i.id === p.identityId);
     const faction = theme.factions.find((f) => f.id === p.factionId);
-    const row = el('div', { class: 'player' + (p.alive ? '' : ' dead') });
+    const pickable = picking && onPick !== undefined && p.alive;
+    const row = el('div', { class: 'player' + (p.alive ? '' : ' dead') + (pickable ? ' pickable' : '') });
     row.append(el('span', { class: 'p-seat', text: '座' + p.seat }));
     row.append(el('span', { class: 'p-name', text: identity?.name ?? p.identityId }));
     row.append(el('span', { class: 'p-meta', text: (faction?.name ?? p.factionId) + ' · ' + theme.glossary.HP + ' ' + p.hp + '/' + p.hpMax + ' · ' + theme.meta.resourceName + ' ' + p.resource + ' · 位 ' + p.position }));
@@ -48,6 +59,9 @@ export function renderPlayers(state: State, theme: ThemePack): HTMLElement {
     const st = Object.entries(p.statuses);
     if (st.length > 0) {
       row.append(el('span', { class: 'badge st', text: st.map(([k, v]) => k + String(v ?? 0)).join(' ') }));
+    }
+    if (onPick !== undefined) {
+      row.addEventListener('click', () => { onPick(p.seat); });
     }
     list.append(row);
   }

@@ -27,6 +27,8 @@ body { margin:0; font-family: system-ui, 'Microsoft YaHei', sans-serif; backgrou
 .players { display:flex; flex-direction:column; gap:6px; }
 .player { display:flex; flex-wrap:wrap; gap:10px; align-items:center; padding:6px 10px; background:#241f1b; border:1px solid var(--line); border-radius:6px; font-size:13px; }
 .player.dead { opacity:.4; text-decoration:line-through; }
+.player.pickable { cursor:pointer; border-color:var(--accent); }
+.player.pickable:hover { background:#312a23; }
 .p-seat { color:var(--accent); font-weight:700; }
 .p-name { min-width:56px; }
 .p-meta { color:#b6a894; }
@@ -38,6 +40,7 @@ body { margin:0; font-family: system-ui, 'Microsoft YaHei', sans-serif; backgrou
 .badge.win { color:#ffd9a0; border-color:var(--accent); }
 .hand { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
 .card { width:118px; min-height:84px; border-radius:6px; padding:6px 8px; cursor:pointer; border:1px solid var(--line); background:#2a2420; font-size:11px; display:flex; flex-direction:column; }
+.card.pending { outline:2px solid var(--accent); }
 .card:hover { border-color:var(--accent); }
 .card.red { border-left:3px solid var(--red); }
 .card.black { border-left:3px solid var(--black); }

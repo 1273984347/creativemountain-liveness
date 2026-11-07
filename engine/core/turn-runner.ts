@@ -8,6 +8,7 @@
 import { applyEffect } from '../ops/registry.ts';
 import { rollD20 } from './dice.ts';
 import { nextTurn, advanceRound, currentPlayer, isRoundEnd } from './round.ts';
+import { cardNeedsTarget } from './targeting.ts';
 import { drawCards, discardDownToLimit } from './hand.ts';
 import { gainResource } from './resource.ts';
 import { openCouncil, resolveCouncil, shouldHoldCouncil } from './council.ts';
@@ -162,6 +163,10 @@ export function performAction(
       const idx = player.hand.findIndex((c) => c.id === cardId);
       const card = player.hand[idx];
       if (card === undefined) { return state; }
+      // ⚠️ 需要选择目标却没选 ⇒ **不出牌**（否则主题包的 target 占位 0 会误伤座位 0）
+      if (cardNeedsTarget(card) && payload.target === undefined) {
+        return state;
+      }
       // 打出：移出手牌 → 依次结算效果
       const hand = player.hand.filter((c) => c.id !== cardId);
       next = { ...next, players: next.players.map((p) => (p.seat === seat ? { ...p, hand } : p)) };

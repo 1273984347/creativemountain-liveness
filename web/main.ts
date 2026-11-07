@@ -13,6 +13,7 @@ import { THEMES, themeById } from './theme.ts';
 import { el, button, section } from './ui/dom.ts';
 import { renderBoard } from './ui/board.ts';
 import { renderHand, renderPlayers } from './ui/hand.ts';
+import { cardNeedsTarget, resolveTargetPick, targetCandidates } from '../engine/core/targeting.ts';
 import { renderLog } from './ui/log.ts';
 import { renderCouncil } from './ui/council.ts';
 import { renderCertification } from './ui/cert.ts';
@@ -25,6 +26,8 @@ interface Ui {
   playerCount: 3 | 4 | 5 | 6 | 7 | 8;
   mode: 'standard' | 'newbie';
   seat: number;
+  /** 正在选目标的卡牌 id（null = 不在选目标模式） */
+  pendingTargetCardId: string | null;
 }
 
 const SAVE_KEY = 'creativemountain.save.v2';
@@ -76,6 +79,7 @@ const ui: Ui = {
   playerCount: 4,
   mode: 'newbie',
   seat: 0,
+  pendingTargetCardId: null,
 };
 
 function newGame(): void {
@@ -85,26 +89,8 @@ function newGame(): void {
     theme,
   );
   ui.seat = 0;
+  ui.pendingTargetCardId = null;
   render();
-}
-
-/**
- * 默认出牌目标：除自己外**位置最高**的存活玩家（离峰顶最近 = 最危险）。
- *
- * ⚠️ 临时策略：B10 改为玩家点选目标（引擎 performAction 已支持 payload.target）。
- */
-function pickDefaultTarget(state: State, seat: number): number | undefined {
-  const others = state.players.filter((p) => p.alive && p.seat !== seat);
-  if (others.length === 0) {
-    return undefined;
-  }
-  let best = others[0];
-  for (const p of others) {
-    if (best !== undefined && p.position > best.position) {
-      best = p;
-    }
-  }
-  return best?.seat;
 }
 
 function saveGame(): void {
@@ -220,6 +206,7 @@ function renderToolbar(): HTMLElement {
   }
   seatSel.addEventListener('change', () => {
     ui.seat = Number(seatSel.value);
+    ui.pendingTargetCardId = null;
     render();
   });
   bar.append(el('label', { class: 'lbl', text: '操作者' }), seatSel);
@@ -231,6 +218,34 @@ function renderToolbar(): HTMLElement {
   bar.append(button('导入', () => { importSave(); }));
   bar.append(button('教学演示', () => { showTutorial(); }));
   return bar;
+}
+
+/**
+ * 出牌（可选带目标）。
+ *
+ * ⚠️ 目标由玩家**点选**决定（见 renderActions）：主题包里攻击牌的 `target: 0`
+ *   只是占位，若不覆盖就会永远打座位 0。
+ */
+function playCard(cardId: string, target?: number): void {
+  const seat = ui.seat;
+  ui.pendingTargetCardId = null;
+  ui.state = performAction(ui.state, seat, 'act', target === undefined ? { cardId } : { cardId, target });
+  ui.state = advanceTurn(ui.state, ui.mode);
+  render();
+}
+
+/** 玩家点选了一个目标（座号）。点自己 = 取消。 */
+function onPickTarget(picked: number): void {
+  if (ui.pendingTargetCardId === null) {
+    return;
+  }
+  const payload = resolveTargetPick(ui.state, ui.seat, ui.pendingTargetCardId, picked);
+  if (payload === null) {
+    ui.pendingTargetCardId = null;
+    render();
+    return;
+  }
+  playCard(payload.cardId, payload.target);
 }
 
 /** 行动区（行棋 / 问天 / 行事）。 */
@@ -259,15 +274,25 @@ function renderActions(): HTMLElement {
     render();
   }));
   body.push(row);
-  body.push(el('div', { class: 'muted', text: '出牌：点击手牌中的卡牌（费用自动结算）。' }));
+  body.push(el('div', { class: 'muted', text: '出牌：点击手牌中的卡牌（费用自动结算）。攻击类牌需要**再点一名对手**选定目标。' }));
+  if (ui.pendingTargetCardId !== null) {
+    body.push(el('div', { class: 'warn', text: '选择目标：点击下方一名对手（点自己或再次点该牌取消）。' }));
+  }
   body.push(renderHand(ui.state, theme, seat, (cardId) => {
-    // ⚠️ 临时：攻击牌的目标自动取「位置最高的对手」。
-    //   B10 改为出牌后由玩家点选目标（引擎侧已支持 payload.target）。
-    const target = pickDefaultTarget(ui.state, seat);
-    ui.state = performAction(ui.state, seat, 'act', target === undefined ? { cardId } : { cardId, target });
-    ui.state = advanceTurn(ui.state, ui.mode);
-    render();
-  }));
+    // 已在选目标模式且再次点同一张牌 ⇒ 取消
+    if (ui.pendingTargetCardId === cardId) {
+      ui.pendingTargetCardId = null;
+      render();
+      return;
+    }
+    const card = player.hand.find((c) => c.id === cardId);
+    if (card !== undefined && cardNeedsTarget(card) && targetCandidates(ui.state, seat).length > 0) {
+      ui.pendingTargetCardId = cardId;
+      render();
+      return;
+    }
+    playCard(cardId);
+  }, ui.pendingTargetCardId));
   return section('行动', ...body);
 }
 /** 教学演示弹窗。 */
@@ -308,7 +333,7 @@ function render(): void {
   const panels: (Node | string)[] = [
     renderToolbar(),
     section('山道', renderBoard(s)),
-    renderPlayers(s, theme),
+    renderPlayers(s, theme, (picked) => { onPickTarget(picked); }, ui.pendingTargetCardId !== null),
   ];
   // 山议面板
   if (needsCouncilVote(s)) {
