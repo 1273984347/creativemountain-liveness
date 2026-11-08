@@ -34,6 +34,10 @@ const GATES = [
   //   **固定 seed + 固定局数** ⇒ 同 seed 同结果 ⇒ 确定性、零 flake；
   //   阈值取该固定 seed 的基线 + 余量（基线：最大极差 8.6pp · 最大 RMS 3.38pp）。
   { name: '位次胜率极差回归锁（tests/sim/run.mjs --position-spread --check）', cmd: process.execPath, args: [resolve('tests', 'sim', 'run.mjs'), '--position-spread', '--games', '100', '--check'] },
+  // ⚠️ 第 13 道门（B33）：余量判定的**离线回归** —— 用已发布的多 seed 数据重算 Welch t 与
+  //   **精确** t 临界值 ⇒ 断言「余量 0 vs 2」的判定仍与 B31 基线一致（显著）。
+  //   ⚠️ 直接 spawn node 脚本（不经 shell、不接管道 —— 纪律 A4）。
+  { name: '余量判定离线回归（docs/沉淀/verify-trial-reserve-critical.mjs）', cmd: process.execPath, args: [resolve('docs', '沉淀', 'verify-trial-reserve-critical.mjs')] },
 ];
 
 /**

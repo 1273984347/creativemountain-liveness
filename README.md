@@ -33,7 +33,7 @@ npm run build:themes   # 由 build/theme-data/*.mjs 重新生成三套新主题
 npm run build:print    # 四套主题的 IR → SVG → HTML → PDF
 npm run build:package  # 打包 dist/发布包/
 npm run release        # build + build:print + build:package
-npm run gate           # 十二道门禁全跑
+npm run gate           # 十三道门禁全跑
 ```
 
 ## 门禁（`node tools/gate.mjs`）
@@ -57,7 +57,7 @@ engine/     引擎：状态、回合机、57 算子、15 谓词、认证与山�
 web/        数字轨 UI（单文件 HTML 入口）
 themes/     四套主题包（数据）
 build/      构建脚本：主题生成器、实体件管线、发布包
-tools/      十二道门禁的实现
+tools/      十三道门禁的实现
 tests/      单元与门禁负样本；tests/sim/ 是规模与平衡模拟器
 docs/       规格、实施计划、批次执行记录、平衡报告
 print/      实体轨产物（按主题分目录）+ 规则书叙述模板

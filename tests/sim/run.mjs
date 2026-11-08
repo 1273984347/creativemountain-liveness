@@ -756,13 +756,8 @@ function runGateReserveScan(args) {
         const se = Math.sqrt(sd(t, k) ** 2 / na + sd(base, k) ** 2 / nb);
         return { tv: se > 0 ? Math.abs(mean(t, k) - mean(base, k)) / se : 0, df: na + nb - 2 };
       };
-      // ⚠️ B31：**t 临界值表**（双侧 p = 0.05）—— df 越大临界越小；查不到就取**最近的较小 df**（保守）。
-      const T_CRIT_05 = {
-        6: 2.447, 8: 2.306, 10: 2.228, 12: 2.179, 14: 2.145, 16: 2.120, 18: 2.101, 20: 2.086,
-        22: 2.074, 24: 2.064, 26: 2.056, 28: 2.048, 30: 2.042, 32: 2.037, 34: 2.032, 36: 2.028,
-        38: 2.024, 40: 2.021, 50: 2.009, 60: 2.000, 100: 1.984, 120: 1.980,
-      };
-      // ⚠️ B32：临界值改为**精确 t 分布分位数**（引擎侧 `tCritical05`）⇒ 表仅留作核对参考。
+      // ⚠️ B33：本地**查表近似**已移除 ⇒ 临界值的唯一来源是引擎侧精确实现 `tCritical05`。
+      // ⚠️ B32/B33：临界值**唯一来源** = 引擎侧精确实现 `tCritical05`（`engine/core/balance.ts`）。
       const tCrit05 = (df) => tCritical05(df);
       // ⚠️ B31：**Welch–Satterthwaite 自由度**（不等方差时的正规做法，不等于 nA+nB−2）。
       const welchDf = (a, b, k) => {
