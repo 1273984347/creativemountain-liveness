@@ -8,6 +8,7 @@ import type { State } from '../../engine/core/state.ts';
 import type { ThemePack } from '../../engine/types/theme.ts';
 import { el, button, section } from './dom.ts';
 import { certificationThreshold, signatureCount } from '../../engine/core/certification.ts';
+import { uiAllows } from '../legal-gate.ts';
 
 /** 认证面板所需的回调。 */
 export interface CertCallbacks {
@@ -16,6 +17,8 @@ export interface CertCallbacks {
   readonly onAbstain: (target: number) => void;
   readonly onJudge: (target: number, passed: boolean) => void;
   readonly onAppeal: (target: number) => void;
+  /** 第三方复议投票（§5.3.2）：overturn=true 推翻原判 / false 维持原判。 */
+  readonly onAppealVote: (target: number, overturn: boolean) => void;
 }
 
 export function renderCertification(
@@ -72,6 +75,17 @@ export function renderCertification(
       row.append(button('判定不通过 座' + target, () => { cb.onJudge(target, false); }));
       body.push(row);
     }
+  }
+  // ---- 第三方复议投票（§5.3.2）：判不通过后由非当事人裁定 ----
+  // ⚠️ Task 7：数字轨此前完全没有复议票入口（人只能「申请复议」却投不了票，只有模拟器会程序化投）。
+  //   显隐统一交 `uiAllows`——它已按引擎口径放行「同场另一名待认证者」（co-pending 仍是独立第三方）。
+  for (const target of c.appealed) {
+    if (!uiAllows(state, seat, { type: 'CERTIFY_APPEAL_VOTE', actor: seat, target, overturn: true })) { continue; }
+    const row = el('div', { class: 'btn-row' });
+    row.append(el('span', { class: 'muted', text: '复议 座' + target + '：' }));
+    row.append(button('推翻原判', () => { cb.onAppealVote(target, true); }));
+    row.append(button('维持原判', () => { cb.onAppealVote(target, false); }));
+    body.push(row);
   }
 
   function showQuestionForm(target: number): void {

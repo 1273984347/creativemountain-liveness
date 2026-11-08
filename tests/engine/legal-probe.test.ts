@@ -14,6 +14,8 @@ import {
 } from '../../engine/core/legal.ts';
 import { activeAbilityId } from '../../engine/core/passives.ts';
 import { cardNeedsTarget, targetCandidates } from '../../engine/core/targeting.ts';
+import { actionKey } from '../../engine/core/action-key.ts';
+import { uiAllowedSet, uiCandidates } from '../../web/legal-gate.ts';
 import { certifyAnswer, certifyAppeal, certifyChallenge, enterPendingCertification } from '../../engine/core/certification.ts';
 import type { Action } from '../../engine/core/action.ts';
 import type { State } from '../../engine/core/state.ts';
@@ -730,3 +732,67 @@ function overCapCornerScene(): State {
   const wide = withWideHand(putPending(mk(8, 23), pendingSeats), LEGAL_ACTION_CAP - 20);
   return { ...wide, players: wide.players.map((p) => (p.seat === 0 ? { ...p, resource: 0 } : p)) };
 }
+
+// ============================ Task 7：漂移守卫（常驻）——两独立实现集合相等 ============================
+//
+// 规格 §7「UI 与 AI 使用同一枚举」的落地判据：`web/legal-gate.ts` 是 UI 门禁的**独立表达**
+// （不 import `getLegalActions`，`uiAllowedSet` 自建候选），本测试把两条独立实现钉成集合相等。
+// ⚠️ 两层都要比（发现 2 的教训）：
+//   · **枚举层** `uiAllowedSet == getLegalActions.map(actionKey)`——最终可点集合；
+//   · **候选层** `uiCandidates == candidatesOf.map(actionKey)`——粗筛本身。
+//   只比枚举层的话，「粗筛与试跑同步收窄」这类漂移对它失明（两边同时少发也照样相等），
+//   故候选层单独立一条：未来任何一侧把粗筛悄悄变窄 ⇒ 这条先红，而不是让模型的选项无声缩水。
+// ⚠️ 局面取自 fixtures + 本文件已有的 `challengedThenPendingScene` / `coPendingAppealScene`
+//   两个**真实引擎构造**的同场双待认证局面——后者正是预测到的那处真漂移（发现 1）：
+//   co-pending 座位依引擎可合法投复议票，而 `web/legal-gate.ts` 的草稿判据 `!pending.includes(seat)`
+//   比引擎严，只有把这个局面放进守卫才会变红。
+
+/** 漂移守卫遍历的局面集（按 seed 参数化；含两处 co-pending 真漂移取证局面）。 */
+function driftScenes(seed: number): State[] {
+  return [
+    mk(4, seed), mk(8, seed), lockedScene(),
+    pendingScene(4, seed), challengedScene(4, seed), appealedScene(5, seed), councilScene(4, seed),
+    challengedThenPendingScene(), coPendingAppealScene(),
+  ];
+}
+
+/** 失败诊断用的一句话局面画像（不手拼状态，只读已有字段）。 */
+function sceneTag(s: State): string {
+  const c = s.certification;
+  return `phase=${s.phase} duel=${s.duel === null ? 'null' : 'yes'}`
+    + ` pending=[${c.pending.join(',')}] challenged=[${c.challenged.join(',')}]`
+    + ` appealed=[${c.appealed.join(',')}] judgments=${JSON.stringify(c.judgments)}`
+    + ` appealVotes=${JSON.stringify(c.appealVotes)}`;
+}
+
+test('漂移守卫（常驻·枚举层）：uiAllowedSet == getLegalActions（UI 与引擎两独立实现集合相等）', () => {
+  for (const seed of [7, 11, 23, 37, 53]) {
+    for (const s of driftScenes(seed)) {
+      for (let seat = 0; seat < s.players.length; seat += 1) {
+        const engine = getLegalActions(s, seat).map(actionKey).sort();
+        assert.deepEqual(
+          uiAllowedSet(s, seat).sort(), engine,
+          `枚举层漂移：seed=${String(seed)} seat=${String(seat)} ${sceneTag(s)}\n`
+          + `  UI=${JSON.stringify(uiAllowedSet(s, seat).sort())}\n`
+          + `  引擎=${JSON.stringify(engine)}`,
+        );
+      }
+    }
+  }
+});
+
+test('漂移守卫（常驻·候选层）：uiCandidates == candidatesOf（粗筛不得被任一侧悄悄收窄）', () => {
+  for (const seed of [7, 11, 23, 37, 53]) {
+    for (const s of driftScenes(seed)) {
+      for (let seat = 0; seat < s.players.length; seat += 1) {
+        const engine = candidatesOf(s, seat).map(actionKey).sort();
+        assert.deepEqual(
+          uiCandidates(s, seat).map(actionKey).sort(), engine,
+          `候选层漂移：seed=${String(seed)} seat=${String(seat)} ${sceneTag(s)}\n`
+          + `  UI候选=${JSON.stringify(uiCandidates(s, seat).map(actionKey).sort())}\n`
+          + `  引擎候选=${JSON.stringify(engine)}`,
+        );
+      }
+    }
+  }
+});

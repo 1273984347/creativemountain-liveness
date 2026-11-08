@@ -6,9 +6,10 @@ import { createInitialState, type State } from '../engine/core/state.ts';
 import { currentPlayer, isRoundEnd } from '../engine/core/round.ts';
 import { performAction, advanceTurn, needsCouncilVote, needsCertificationAction } from '../engine/core/turn-runner.ts';
 import { castVote, resolveCouncil } from '../engine/core/council.ts';
-import { certifySign, certifyChallenge, certifyAbstain, certifyAnswer, certifyAppeal } from '../engine/core/certification.ts';
+import { certifySign, certifyChallenge, certifyAbstain, certifyAnswer, certifyAppeal, certifyAppealVote } from '../engine/core/certification.ts';
 import { stateToJson, stateFromJson } from '../engine/core/serialize.ts';
 import { installTheme } from '../engine/core/setup.ts';
+import { uiAllows } from './legal-gate.ts';
 import { THEMES, themeById } from './theme.ts';
 import { el, button, section } from './ui/dom.ts';
 import { renderBoard } from './ui/board.ts';
@@ -331,16 +332,22 @@ function renderActions(): HTMLElement {
     return section('行动', ...body);
   }
   const row = el('div', { class: 'btn-row' });
-  row.append(button('行棋（掷 6 面，必须走满）', () => {
-    ui.state = performAction(ui.state, seat, 'move');
-    ui.state = advanceTurn(ui.state, ui.mode);
-    render();
-  }));
-  row.append(button('问天（掷 20 面指令骰）', () => {
-    ui.state = performAction(ui.state, seat, 'ask');
-    ui.state = advanceTurn(ui.state, ui.mode);
-    render();
-  }));
+  // ⚠️ Task 7：按钮可点性统一交 `web/legal-gate.ts` 的 `uiAllows`（规格 §7「UI 与 AI 同一枚举」）；
+  //   按钮内部逻辑（performAction + advanceTurn）一字未动。
+  if (uiAllows(ui.state, seat, { type: 'MOVE', actor: seat, steps: 0 })) {
+    row.append(button('行棋（掷 6 面，必须走满）', () => {
+      ui.state = performAction(ui.state, seat, 'move');
+      ui.state = advanceTurn(ui.state, ui.mode);
+      render();
+    }));
+  }
+  if (uiAllows(ui.state, seat, { type: 'ROLL_WHEEL', actor: seat })) {
+    row.append(button('问天（掷 20 面指令骰）', () => {
+      ui.state = performAction(ui.state, seat, 'ask');
+      ui.state = advanceTurn(ui.state, ui.mode);
+      render();
+    }));
+  }
   body.push(row);
   // B12：发动身份被动按钮（仅在可发动时出现）
   const ability = abilityAvailability(ui.state, seat);
@@ -377,6 +384,8 @@ function renderActions(): HTMLElement {
       render();
       return;
     }
+    // ⚠️ Task 7：出牌同样过 `uiAllows` 这道闸（与行棋/问天同源，不动对峙面板的选牌分支）。
+    if (!uiAllows(ui.state, seat, { type: 'PLAY_CARD', actor: seat, cardId })) { return; }
     playCard(cardId);
   }, ui.pendingTargetCardId));
   return section('行动', ...body);
@@ -459,6 +468,7 @@ function render(): void {
       onAbstain: (target) => { const r = certifyAbstain(s, ui.seat, target); ui.state = r.ok ? r.state : s; render(); },
       onJudge: (target, passed) => { const r = certifyAnswer(s, ui.seat, target, passed); ui.state = r.ok ? r.state : s; render(); },
       onAppeal: (target) => { const r = certifyAppeal(s, ui.seat, target); ui.state = r.ok ? r.state : s; render(); },
+      onAppealVote: (target, overturn) => { const r = certifyAppealVote(s, ui.seat, target, overturn); ui.state = r.ok ? r.state : s; render(); },
     }));
   }
   panels.push(renderActions());
