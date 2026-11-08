@@ -741,7 +741,7 @@ function runGateReserveScan(args) {
   const base = table.find((t) => t.reserve === 2) ?? table[0];
   if (base !== undefined) {
     console.log('');
-    console.log('与余量 2 的差异 vs 噪声（|差异| ≤ 2σ ⇒ 不可区分）：');
+    console.log('与余量 2 的差异（**唯一判定口径：Welch t + 95% CI**；2σ 近似仅并列参考）：');
     for (const t of table) {
       if (t === base) { continue; }
       const dF = Math.abs(mean(t, 'fallback') - mean(base, 'fallback'));
@@ -756,13 +756,39 @@ function runGateReserveScan(args) {
         const se = Math.sqrt(sd(t, k) ** 2 / na + sd(base, k) ** 2 / nb);
         return { tv: se > 0 ? Math.abs(mean(t, k) - mean(base, k)) / se : 0, df: na + nb - 2 };
       };
+      // ⚠️ B31：**t 临界值表**（双侧 p = 0.05）—— df 越大临界越小；查不到就取**最近的较小 df**（保守）。
+      const T_CRIT_05 = {
+        6: 2.447, 8: 2.306, 10: 2.228, 12: 2.179, 14: 2.145, 16: 2.120, 18: 2.101, 20: 2.086,
+        22: 2.074, 24: 2.064, 26: 2.056, 28: 2.048, 30: 2.042, 32: 2.037, 34: 2.032, 36: 2.028,
+        38: 2.024, 40: 2.021, 50: 2.009, 60: 2.000, 100: 1.984, 120: 1.980,
+      };
+      const tCrit05 = (df) => {
+        const usable = Object.keys(T_CRIT_05).map(Number).filter((k) => k <= df);
+        const k = usable.length === 0 ? 6 : Math.max(...usable);
+        return T_CRIT_05[k];
+      };
+      // ⚠️ B31：**Welch–Satterthwaite 自由度**（不等方差时的正规做法，不等于 nA+nB−2）。
+      const welchDf = (a, b, k) => {
+        const na = a.samples.length;
+        const nb = b.samples.length;
+        const va = (sd(a, k) ** 2) / na;
+        const vb = (sd(b, k) ** 2) / nb;
+        const den = (va * va) / (na - 1) + (vb * vb) / (nb - 1);
+        return den > 0 ? ((va + vb) ** 2) / den : na + nb - 2;
+      };
       const wF = welch('fallback');
       const wS = welch('seats');
-      console.log('  余量 ' + String(t.reserve) + ' vs 2：兜底率差 ' + dF.toFixed(2) + 'pp（噪声 ' + nF.toFixed(2)
-        + 'pp ⇒ ' + (dF <= 2 * nF ? '不可区分' : '可区分') + '；Welch t=' + wF.tv.toFixed(2)
-        + '（df=' + String(wF.df) + '，|t| ≥ 2.101 ⇒ p<0.05）· 平均席位差 ' + dS.toFixed(3) + '（噪声 '
-        + nS.toFixed(3) + ' ⇒ ' + (dS <= 2 * nS ? '不可区分' : '可区分') + '；Welch t=' + wS.tv.toFixed(2)
-        + '（df=' + String(wS.df) + '））');
+      const dfF = Math.round(welchDf(t, base, 'fallback'));
+      const dfS = Math.round(welchDf(t, base, 'seats'));
+      const cF = tCrit05(dfF);
+      const cS = tCrit05(dfS);
+      console.log('  余量 ' + String(t.reserve) + ' vs 2：'
+        + '兜底率差 ' + dF.toFixed(2) + 'pp ⇒ Welch |t|=' + wF.tv.toFixed(2) + '（df≈' + String(dfF)
+        + '，临界 ' + String(cF) + '）' + (wF.tv >= cF ? ' **显著**' : ' 不显著')
+        + '〔2σ 参考：噪声 ' + nF.toFixed(2) + 'pp〕· '
+        + '平均席位差 ' + dS.toFixed(3) + ' ⇒ Welch |t|=' + wS.tv.toFixed(2) + '（df≈' + String(dfS)
+        + '，临界 ' + String(cS) + '）' + (wS.tv >= cS ? ' **显著**' : ' 不显著')
+        + '〔2σ 参考：噪声 ' + nS.toFixed(3) + '〕');
     }
   }
 }
