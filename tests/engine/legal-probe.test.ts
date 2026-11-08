@@ -19,6 +19,7 @@ import { actionKey } from '../../engine/core/action-key.ts';
 import {
   uiAllows, uiAllowedSet, uiBlockNotice, uiCandidates, uiHasLegalTarget,
 } from '../../web/legal-gate.ts';
+import { buildChoice, describeAction, describeState } from '../../tools/laya-probe/state-text.mjs';
 import { certClickableActions } from '../../web/ui/cert.ts';
 import {
   certifyAnswer, certifyAppeal, certifyAppealVote, certifyChallenge, enterPendingCertification,
@@ -1199,4 +1200,413 @@ test('接线（R-1/R-2 常驻）：web/main.ts 的五处入口与 web/ui/cert.ts
   assert.equal(directButtons, 2,
     'cert.ts 只允许两处直接 button( 调用：gated 内部一处 + 质疑表单提交一处；'
     + '新增按钮必须走 gated，否则又给 UI 留一条不过闸的旁路（发现 A）');
+});
+
+// ============================ Task 8：可见性受限文本化 + 禁止集（预研红线 3）============================
+//
+// 预研红线 3 / 设计 §3.5 第 4 条：**模型只能看到公开信息**。否则 AI 拥有任何人类玩家都没有的
+// 信息优势，P1/P2/P3/P6 的读数全部作废（读到的不是「玩家会怎么选」，而是「开了上帝视角会怎么选」）。
+//
+// 这条红线在本节做成**四层**可失败钉，缺一层都会留出一条静默的失守路径：
+//   ① 输出层：文本化结果（state 描述 + 题面 + criteria 的 key 与值）里不得出现禁止集任何字样
+//      —— 他人手牌 id/名、`state.decks.deck` 顺序、对峙双方的 `pickA`/`pickB`；
+//   ② 结构层：`tools/laya-probe/state-text.mjs` **去注释后的源码**里根本不存在对这些字段的访问。
+//      白名单必须是结构性的而不是事后过滤：事后 scrub 意味着私密信息已经在内存里被读出来过，
+//      而红线 3 要防的正是这一步；且过滤器只能按字段名过滤 ⇒「先读再洗」在源码上和
+//      「直接输出」是同一种形状（都得点名字段），故 ② 一并拦住这两种写法；
+//   ③ 牙齿：一个**故意泄漏**的朴素实现必须被同一套匹配器抓到，否则 ① 只是在测空气；
+//   ④ 公开集完整性：只要求「不含禁止字样」的话，返回空串的实现满分通过而探针什么也拿不到
+//      ⇒ 白名单承诺的公开字段必须真的交出去（正向钉子）。
+//
+// ⚠️ 与 brief 的两处偏离（都在报告里留证，两处都是**加强**而不是放宽）：
+//   · brief 用 `{ ...s, duel: { seatA: 0, seatB: 1, pickA: 'duel_secret_a', ... } }` 手拼对峙——
+//     那正是 Task 3 立的禁令（认证/山议/对峙一律走引擎入口），而且**该形状引擎永远不会产出**
+//     （`submitDuelCard` 在第二方锁定的一刻就 `settleDuel` 并把 `duel` 置 null），
+//     更要紧的是 `duel !== null ⇒ candidatesOf` 整表清零 ⇒ brief 那句
+//     `buildChoice(poisoned, 0).criteria` 恒为空对象，「题面侧不泄漏」这一半根本没在测东西。
+//     现在换成 `startDuel` + `submitDuelCard` 各锁一方的**两个**真实局面，
+//     pickA / pickB 两个字段各自都真的有可查的、互不相同的 id；
+//   · brief 用 `text.includes(leak)` 判泄漏。测试牌 id 是 `test_card_0..N`，`test_card_1` 是
+//     `test_card_10` 的**前缀** ⇒ 描述座 2（手牌 10–14）时，一个完全合规的实现会因为
+//     「座 0 的 id = test_card_1」被判红（假阳性），反过来也能为假阴性开路。改成整词匹配。
+
+/** 禁止集条目：`label` 说清属于哪一类私密信息，`value` 是不得出现在文本里的字样。 */
+interface ForbiddenEntry {
+  readonly label: string;
+  readonly value: string;
+}
+
+/** 一个取证局面：状态 + 它属于哪一类流程 + 对峙里应查得到的锁定牌条数。 */
+interface VisScene {
+  readonly label: string;
+  readonly state: State;
+  /** 局面承诺的「已锁定亮牌」条数（0 / 1；两方都锁定时引擎当场结算 ⇒ 永不出现 2）。 */
+  readonly duelPicks: number;
+}
+
+/**
+ * 整词匹配的字符类：id 里可能出现的连续字符。
+ *
+ * ⚠️ 刻意**不含** `-`：`actionKey` 的目标分隔符是 `->`，把 `-` 当字符合法字符的话，
+ *   `play:c_fang->2` 里的 `c_fang` 会因为「后面还是字符合法字符」而判成没出现 ⇒ **漏判真泄漏**。
+ *   含 `#` 是必需的：主题牌库补副本时 id 写成 `c_fang#dup1`（setup.ts 的 fillDeck），
+ *   不含 `#` 就会让「文本里出现 `c_fang#dup1`」被判成「出现了另一张牌 `c_fang`」⇒ 假阳性。
+ */
+const TOKEN_CHARS = '0-9A-Za-z_#';
+
+function escapeRegExp(v: string): string {
+  return v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** 「文本里出现了这个 id / 这个名字吗」——**整词**匹配（理由见本节文件头第二处偏离）。 */
+function hasToken(text: string, value: string): boolean {
+  if (value.length === 0) { return false; }
+  return new RegExp(`(?:^|[^${TOKEN_CHARS}])${escapeRegExp(value)}(?:$|[^${TOKEN_CHARS}])`).test(text);
+}
+
+/** 文本化器交出去的全部文本：state 描述 + 题面指令 + criteria 的 key 与值（key 也扫，别只扫值）。 */
+function scannedText(state: State, seat: number): string {
+  const choice = buildChoice(state, seat);
+  return [describeState(state, seat), choice.instructions,
+    ...Object.keys(choice.criteria), ...Object.values(choice.criteria)].join('\n');
+}
+
+/**
+ * 某个座位视角下的禁止集全集。
+ *
+ * ⚠️ 只滤掉「描述者自己的手牌 id/名」这一类——那是白名单（设计 §4.5：自己手牌对本人公开），
+ *   对峙参与者看自己锁定的牌同理。其余一律不得出现。
+ */
+function forbiddenEntries(state: State, seat: number): ForbiddenEntry[] {
+  const own = new Set<string>();
+  for (const c of state.players[seat]?.hand ?? []) {
+    own.add(c.id);
+    own.add(c.name);
+  }
+  const out: ForbiddenEntry[] = [];
+  const seen = new Set<string>();
+  const push = (label: string, value: string): void => {
+    if (value.length === 0 || own.has(value) || seen.has(`${label}\u0000${value}`)) { return; }
+    seen.add(`${label}\u0000${value}`);
+    out.push({ label, value });
+  };
+  // ⚠️ 对峙锁定牌**先入列**：它同时也在参与者的手牌里（锁定不等于移出手牌，结算才移），
+  //   谁先入列决定失败消息点名哪一类私密——先说「这是对峙的暗牌」比「这是他人手牌」更可诊断。
+  const d = state.duel;
+  if (d !== null) {
+    for (const pick of [d.pickA, d.pickB]) {
+      if (pick !== undefined) { push('对峙锁定牌', pick); }
+    }
+  }
+  for (const p of state.players) {
+    if (p.seat === seat) { continue; }
+    for (const c of p.hand) {
+      push('他人手牌 id', c.id);
+      push('他人手牌名', c.name);
+    }
+  }
+  for (const c of state.decks.deck) {
+    push('牌库顺序 id', c.id);
+    push('牌库顺序名', c.name);
+  }
+  return out;
+}
+
+/**
+ * **故意泄漏**的对照实现：把禁止集字段原样拼进文本。
+ *
+ * 它不是被测代码，只用来证明 ① 的匹配器与样本有牙——若这一份也「不含禁止字样」，
+ * 说明匹配器写坏了（例如整词边界把真实泄漏判成不匹配），① 就成了恒真。
+ */
+function naiveLeakyText(state: State): string {
+  const hands = state.players.flatMap((p) => p.hand.map((c) => `${c.id}/${c.name}`));
+  const deck = state.decks.deck.map((c) => `${c.id}/${c.name}`);
+  return [...hands, ...deck, state.duel?.pickA ?? '', state.duel?.pickB ?? '']
+    .filter((x) => x.length > 0).join(' | ');
+}
+
+/** 去掉注释后的源码——结构守卫只判**代码**，注释里点名禁止集字段是本仓库的写法（要说清防什么）。 */
+function stripJsComments(src: string): string {
+  return src.replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n')
+    .map((line) => line.replace(/\/\/.*$/, ''))
+    .join('\n');
+}
+
+/** 可见性探针牌：id 与名都是**唯一、不会与测试牌前缀撞车**的字样，专供禁止集取证。 */
+const VIS_PROBE_A: Card = {
+  id: 'vis_probe_pick_a', name: '可见性探针牌甲', type: 'utility', cost: 0, color: 'red',
+  rank: 10, text: '探针：对峙锁定牌（甲）', effects: [],
+};
+const VIS_PROBE_B: Card = {
+  id: 'vis_probe_pick_b', name: '可见性探针牌乙', type: 'utility', cost: 0, color: 'red',
+  rank: 4, text: '探针：对峙锁定牌（乙）', effects: [],
+};
+
+/** ⚠️ 只往座 0/1 的手牌**前面**塞探针牌（与 targetCardScene / wideHandScene 同法），不碰认证/山议/对峙字段。 */
+function withProbeHands(s: State): State {
+  return {
+    ...s,
+    players: s.players.map((p) => (p.seat === 0
+      ? { ...p, hand: [VIS_PROBE_A, ...p.hand] }
+      : (p.seat === 1 ? { ...p, hand: [VIS_PROBE_B, ...p.hand] } : p))),
+  };
+}
+
+/** 对峙·座 0（移动方）已锁定 pickA；第二方未锁 ⇒ 对峙仍未决（引擎不会交出「两边都锁着」的状态）。 */
+function duelPickedAScene(): State {
+  const opened = startDuel(withProbeHands(mk(4, 7)), 0, 1);
+  assert.ok(opened.duel !== null, 'duelPickedAScene：startDuel 必须真的立起未决对峙（任一方手牌为空会直接判负）');
+  const r = submitDuelCard(opened, 0, VIS_PROBE_A.id);
+  assert.ok(r.ok, 'duelPickedAScene：座 0 锁定亮牌必须成功：' + r.note);
+  assert.equal(r.state.duel?.pickA, VIS_PROBE_A.id, '后置：局面名承诺「座 0 已锁定」⇒ pickA 必须是探针牌甲 id');
+  assert.equal(r.state.duel?.pickB, undefined, '后置：只锁了一方 ⇒ pickB 仍空、对峙仍未决');
+  return r.state;
+}
+
+/** 对峙·座 1（对手）已锁定 pickB。与 pickA 场景合起来覆盖 DuelState 的两个私密字段。 */
+function duelPickedBScene(): State {
+  const opened = startDuel(withProbeHands(mk(4, 7)), 0, 1);
+  assert.ok(opened.duel !== null, 'duelPickedBScene：startDuel 必须真的立起未决对峙');
+  const r = submitDuelCard(opened, 1, VIS_PROBE_B.id);
+  assert.ok(r.ok, 'duelPickedBScene：座 1 锁定亮牌必须成功：' + r.note);
+  assert.equal(r.state.duel?.pickB, VIS_PROBE_B.id, '后置：局面名承诺「座 1 已锁定」⇒ pickB 必须是探针牌乙 id');
+  assert.equal(r.state.duel?.pickA, undefined, '后置：移动方尚未锁定 ⇒ pickA 仍空');
+  return r.state;
+}
+
+/** 双方都锁定 ⇒ 引擎当场结算：`duel` 归 null、两张亮牌进 `publicCards`（此刻它们**才是**公开信息）。 */
+function duelRevealedScene(): State {
+  const picked = duelPickedAScene();
+  const r = submitDuelCard(picked, 1, VIS_PROBE_B.id);
+  assert.ok(r.ok, 'duelRevealedScene：第二方锁定必须成功：' + r.note);
+  assert.equal(r.state.duel, null, 'duelRevealedScene：后置——两方都锁定 ⇒ 引擎立即结算，duel 必须归 null');
+  assert.equal(r.state.publicCards.length, 2,
+    'duelRevealedScene：后置——非平局的两张亮牌必须**公开留场**（这正是文本层可以写它们的前提）');
+  return r.state;
+}
+
+/** 取证局面集（全部引擎入口构造；只探针牌进手牌，认证/山议/对峙一律真实调用）。 */
+function visScenes(): VisScene[] {
+  const passive = withPassive(mk(4, 7), 0, { op: 'transfer_resource', amount: 1 });
+  const voted = castVote(councilScene(4, 7), 0, 1);
+  assert.ok(voted.ok, 'visScenes：山议投票必须落账，否则「已投票座位」那一类公开信息测不到：' + noteOf(voted.note));
+  return [
+    // brief 的三个预算样本（保留原位，别让「扩了局面」把原口径挤掉）
+    { label: 'mk(4,7)', state: mk(4, 7), duelPicks: 0 },
+    { label: 'mk(8,11)', state: mk(8, 11), duelPicks: 0 },
+    { label: 'councilScene(8,11)', state: councilScene(8, 11), duelPicks: 0 },
+    { label: 'appealedScene(8,11)', state: appealedScene(8, 11), duelPicks: 0 },
+    // 其余流程面：认证三面 / 判定 / 复议票 / 山议已投票 / 被动面
+    { label: 'pendingScene(4,7)', state: pendingScene(4, 7), duelPicks: 0 },
+    { label: 'challengedScene(5,7)', state: challengedScene(5, 7), duelPicks: 0 },
+    { label: 'councilScene(4,7)·已投票', state: voted.state, duelPicks: 0 },
+    { label: '被动面(窃火者)', state: passive, duelPicks: 0 },
+    // 对峙：两个「各锁一方」的真实局面 + 一个「已揭晓」的公开局面
+    { label: '对峙·pickA 已锁', state: duelPickedAScene(), duelPicks: 1 },
+    { label: '对峙·pickB 已锁', state: duelPickedBScene(), duelPicks: 1 },
+    { label: '对峙·已揭晓（公开留场）', state: duelRevealedScene(), duelPicks: 0 },
+  ];
+}
+
+test('可见性红线（常驻·输出层）：文本化结果不得出现禁止集任何一项', () => {
+  for (const scene of visScenes()) {
+    // 对峙锁定牌先按**字段→归属座位**独立核一遍（不借 forbiddenEntries 的过滤逻辑，免得自证）
+    const duel = scene.state.duel;
+    assert.equal([duel?.pickA, duel?.pickB].filter((x) => x !== undefined).length, scene.duelPicks,
+      `${scene.label}：局面承诺的「已锁定亮牌」条数与实际不符 ⇒ 对峙样本是空的`);
+    for (let seat = 0; seat < scene.state.players.length; seat += 1) {
+      const entries = forbiddenEntries(scene.state, seat);
+      // 样本非空（brief 那句「否则测试失去意义」扩成逐类）：每一类私密都必须真的有一条可查的样本。
+      for (const kind of ['他人手牌 id', '他人手牌名', '牌库顺序 id', '牌库顺序名']) {
+        assert.ok(entries.some((e) => e.label === kind),
+          `${scene.label}@座${String(seat)}：样本里缺「${kind}」⇒ 这一类断言没有可失败的形式`);
+      }
+      const text = scannedText(scene.state, seat);
+      for (const entry of entries) {
+        assert.equal(hasToken(text, entry.value), false,
+          `泄漏（${scene.label}@座${String(seat)}）：${entry.label} = ${entry.value}\n---\n${text}`);
+      }
+    }
+  }
+  // 两个私密字段各自都要被**第三者**视角查得到（查不到就等于没测）：
+  // pickA 属于座 0、pickB 属于座 1，参与者本人那份落在白名单（他知道自己锁了什么）里。
+  for (const [scene, owner] of [[duelPickedAScene(), 0], [duelPickedBScene(), 1]] as const) {
+    const duel = scene.duel;
+    assert.ok(duel !== null, '前提自查：对峙场景必须仍未决');
+    const pick = owner === 0 ? duel.pickA : duel.pickB;
+    assert.ok(typeof pick === 'string' && pick.length > 0, `前提自查：座${String(owner)} 的锁定牌 id 必须可查`);
+    for (let seat = 0; seat < scene.players.length; seat += 1) {
+      if (seat === owner) { continue; }
+      assert.ok(forbiddenEntries(scene, seat).some((e) => e.label === '对峙锁定牌' && e.value === pick),
+        `对峙锁定牌样本缺失：座${String(seat)} 视角下 ${pick} 必须算私密`);
+      assert.equal(hasToken(scannedText(scene, seat), pick), false,
+        `泄漏：座${String(seat)} 的题面里出现了对峙锁定牌 ${pick}`);
+    }
+  }
+});
+
+test('可见性红线（常驻·牙齿）：同一套匹配器必须抓得住「把禁止字段直接写进文本」的朴素实现', () => {
+  // 没有这一条，上面那条可能只是在测空气：匹配器写坏 / 样本取空 / 扫描文本漏了一段，都表现为「全绿」。
+  const scenes: readonly (readonly [string, State])[] = [
+    ['mk(4,7)', mk(4, 7)],
+    ['对峙·pickA 已锁', duelPickedAScene()],
+    ['对峙·pickB 已锁', duelPickedBScene()],
+  ];
+  for (const [label, s] of scenes) {
+    for (let seat = 0; seat < s.players.length; seat += 1) {
+      const leaky = naiveLeakyText(s);
+      for (const entry of forbiddenEntries(s, seat)) {
+        assert.equal(hasToken(leaky, entry.value), true,
+          `对照实现都没漏出来 ⇒ 匹配器失效（${label}@座${String(seat)}：${entry.label}=${entry.value}）`);
+      }
+    }
+  }
+  // 对峙两个字段各有一条**互不相同**的真实 id 被抓住（brief 靠两个手拼常量做这件事，这里换成引擎产出的牌）
+  const pickA = duelPickedAScene().duel?.pickA;
+  const pickB = duelPickedBScene().duel?.pickB;
+  assert.ok(typeof pickA === 'string' && pickA.length > 0, '前提自查：pickA 场景必须真的锁了一张可查的牌');
+  assert.ok(typeof pickB === 'string' && pickB.length > 0, '前提自查：pickB 场景必须真的锁了一张可查的牌');
+  assert.notEqual(pickA, pickB, '两个 pick 的 id 必须互不相同，否则「两字段都不泄漏」只是一次检查');
+  assert.equal(hasToken(naiveLeakyText(duelPickedAScene()), pickA), true, 'pickA 必须能被对照实现抓出来');
+  assert.equal(hasToken(naiveLeakyText(duelPickedBScene()), pickB), true, 'pickB 必须能被对照实现抓出来');
+  // 前缀撞车这一类假阳性也要有正向钉子：test_card_1 不得被判成「出现在 test_card_10 里」
+  assert.equal(hasToken('play:test_card_10', 'test_card_1'), false, '整词边界：前缀不算出现');
+  assert.equal(hasToken('play:test_card_1->2', 'test_card_1'), true, '整词边界：真出现必须抓到');
+});
+
+test('可见性红线（常驻·结构层）：state-text.mjs 源码不得出现禁止集的字段访问（白名单靠不写，不靠过滤）', () => {
+  const src = stripJsComments(readFileSync('tools/laya-probe/state-text.mjs', 'utf8'));
+  const forbidden: readonly (readonly [string, RegExp])[] = [
+    ['duel.pickA（对峙锁定牌·移动方）', /\.pickA\b/],
+    ['duel.pickB（对峙锁定牌·对手）', /\.pickB\b/],
+    ['state.duel（整个对峙对象）', /\bduel\b/],
+    ['state.decks / decks.deck（牌库顺序）', /\bdecks?\b/],
+    ['字面座位下标取玩家（他人手牌的入口）', /state\.players\[\s*[\d-]/],
+  ];
+  for (const [label, re] of forbidden) {
+    assert.equal(re.test(src), false, `禁止集字段访问出现在代码里：${label}（事后过滤也算——过滤器同样要点名字段）`);
+  }
+  // `.hand` 是唯一合法的 hand 访问面，且只允许三种形状：持牌数（公开）、自己的手牌、actor 自己的手牌。
+  const handLines = src.split('\n').filter((line) => /\.hand\b/.test(line));
+  assert.ok(handLines.length >= 3,
+    `前提自查：文本化器必须真的访问过 .hand（公开集里有「持牌数」与「自己手牌」两处），实际 ${String(handLines.length)} 行 ⇒ 0 行说明实现被整体摘掉了`);
+  const allowed: readonly RegExp[] = [/\.hand\.length/, /\bme\.hand\b/, /actorPlayer\.hand\.find/];
+  for (const line of handLines) {
+    assert.ok(allowed.some((re) => re.test(line)), `非白名单的 .hand 访问：${line.trim()}`);
+  }
+  // 上面那两个被放行的变量必须**逐字**绑定到「自己」，否则放行 `me.hand` 等于放行任意手牌。
+  assert.match(src, /const me = state\.players\[seat\];/, 'me 必须是**决策座位自己**（state.players[seat]）');
+  assert.match(src, /const actorPlayer = state\.players\[action\.actor\];/, 'actorPlayer 必须是**动作归属座位**（state.players[action.actor]）');
+});
+
+test('可见性红线（常驻·公开集完整性）：白名单字段必须真的交出去（返回空串的实现不得蒙过泄漏测试）', () => {
+  const plain = mk(4, 7);
+  const text = describeState(plain, 0);
+  assert.ok(text.length > 0, '文本化结果不得为空——空串在「不含禁止集」上是满分，在探针上是零分');
+  for (const p of plain.players) {
+    for (const needle of [`座${String(p.seat)} `, `位${String(p.position)}`, `血${String(p.hp)}/${String(p.hpMax)}`,
+      `资源${String(p.resource)}`, `持牌${String(p.hand.length)}`, `装备${String(p.equipment.length)}`, `席`]) {
+      assert.ok(text.includes(needle), `公开画像缺字段「${needle}」（座${String(p.seat)}）：${text}`);
+    }
+    assert.ok(text.includes(`身份${p.identityId}`), `身份是公开信息（§4.1 明牌竞速），必须出现：座${String(p.seat)}`);
+  }
+  const ownFirst = plain.players[0]?.hand[0]?.name ?? '@@空样本@@';
+  assert.ok(text.includes(ownFirst), `自己的手牌必须出现，否则模型连能打什么都不知道：${text}`);
+  // 三类流程性公开信息各一颗正向钉子（缺一类 ⇒ 「不泄漏」可以靠删光公开字段达成）
+  assert.match(describeState(pendingScene(4, 7), 1), /待认证：0/, '认证池（pending）是公开信息');
+  assert.match(describeState(pendingScene(4, 7), 1), /座0[^\n]*待认证/, '待认证锁定要写在座位画像里');
+  const voted = castVote(councilScene(4, 7), 0, 1);
+  assert.ok(voted.ok, '前提自查：投票必须落账：' + noteOf(voted.note));
+  assert.match(describeState(voted.state, 2), /山议进行中，已投票座位：0/, '山议已投票是公开信息');
+  const revealed = describeState(duelRevealedScene(), 2);
+  assert.match(revealed, /公开亮牌：/, '已揭晓的亮牌是公开信息（§3.3：留在场上公开，round 末清空）');
+  assert.ok(revealed.includes(VIS_PROBE_A.name) && revealed.includes(VIS_PROBE_B.name),
+    `公开留场的两张牌都要写出来：${revealed}`);
+});
+
+test('describeAction 归属守卫（常驻）：只描述 actor 自己的牌，越权座位一律抛错', () => {
+  const s = mk(4, 7);
+  const other = s.players[1]?.hand[0];
+  assert.ok(other !== undefined, '前提自查：座 1 必须有手牌');
+  const wrongSeat: Action = { type: 'PLAY_CARD', actor: 1, cardId: other.id };
+  // 决策座位是 0，却把座 1 的动作递进来 ⇒ 必须抛错。
+  // 这不是假设：`criteria` 的文本是模型**唯一**能看到动作语义的地方，
+  // 一次 actor 写错就等于把他人私牌名印在题面上（红线 3），而事后没人能从文本反推它是越权来的。
+  assert.throws(() => describeAction(s, wrongSeat, 0), /归属/, '传了决策座位 ⇒ actor 不符必须拒');
+  assert.match(describeAction(s, wrongSeat), new RegExp(escapeRegExp(other.name)),
+    '不传座位时按**文档化行为**只渲染 actor 自己的手牌（调用方越权由上一条的抛错拦住）');
+  // 手牌里没有的牌 ⇒ 抛错，不得渲染成 `undefined`（brief 的实现会在 card 缺失时 TypeError 或拼出 'undefined'）
+  assert.throws(() => describeAction(s, { type: 'PLAY_CARD', actor: 0, cardId: 'no_such_card' }, 0), /手牌/);
+  assert.throws(() => describeAction(s, { type: 'MOVE', actor: 99, steps: 0 } as Action, 99), /座/, 'actor 越界也要说清楚');
+  // 未知动作类型必须抛错而不是返回 undefined：brief 的 switch 没有 default，
+  // 未覆盖的成员会让 `criteria` 里冒出一个值为字符串 "undefined" 的选项（模型照样能选中它）。
+  assert.throws(() => describeAction(s, { type: 'NOT_A_REAL_ACTION', actor: 0 } as unknown as Action, 0), /未知动作/);
+  // 13 个 Action 成员逐一都要给得出语义（覆盖钉子；与 PROBE_CASES 的「13 个成员」同一口径）
+  const ownCard = s.players[0]?.hand[0];
+  assert.ok(ownCard !== undefined, '前提自查：座 0 必须有手牌');
+  const samples: readonly Action[] = [
+    { type: 'MOVE', actor: 0, steps: 0 },
+    { type: 'ROLL_WHEEL', actor: 0 },
+    { type: 'PASS', actor: 0 },
+    { type: 'COMPARE', actor: 0, cardId: ownCard.id, target: 1 },
+    { type: 'PLAY_CARD', actor: 0, cardId: ownCard.id },
+    { type: 'PLAY_CARD', actor: 0, cardId: ownCard.id, target: 1 },
+    { type: 'ABILITY', actor: 0, abilityId: 'transfer_resource' },
+    { type: 'ABILITY', actor: 0, abilityId: 'transfer_resource', target: 1 },
+    { type: 'VOTE', actor: 0, target: 1 },
+    { type: 'CERTIFY_SIGN', actor: 0, target: 1 },
+    { type: 'CERTIFY_CHALLENGE', actor: 0, target: 1 },
+    { type: 'CERTIFY_ABSTAIN', actor: 0, target: 1 },
+    { type: 'CERTIFY_APPEAL', actor: 0, target: 0 },
+    { type: 'CERTIFY_APPEAL_VOTE', actor: 0, target: 1, overturn: true },
+    { type: 'CERTIFY_ANSWER', actor: 0, target: 1, passed: false },
+  ];
+  assert.equal(new Set(samples.map((a) => a.type)).size, 13, '样本必须覆盖 Action union 的全部 13 个成员');
+  for (const a of samples) {
+    const line = describeAction(s, a, 0);
+    assert.ok(typeof line === 'string' && line.trim().length > 0, `${actionKey(a)}：动作语义不得为空`);
+    assert.equal(line.includes('undefined'), false, `${actionKey(a)}：语义里不得冒 undefined：${line}`);
+    assert.ok(line.length <= 40, `${actionKey(a)}：语义过长（${String(line.length)} 字符）：${line}`);
+  }
+});
+
+test('文本化：每候选一句话，长度受预算约束（rl_agent_config.head_max_len=256）', () => {
+  for (const scene of visScenes()) {
+    for (let seat = 0; seat < scene.state.players.length; seat += 1) {
+      const choice = buildChoice(scene.state, seat);
+      const actions = getLegalActions(scene.state, seat);
+      assert.equal(Object.keys(choice.criteria).length, actions.length,
+        `${scene.label}@座${String(seat)}：每个合法动作都要有一条候选，且不得互相覆盖`);
+      assert.ok(choice.instructions.length > 0, `${scene.label}：题面指令不得为空`);
+      for (const [k, v] of Object.entries(choice.criteria)) {
+        assert.ok(String(v).length <= 40, `候选 ${k} 语义过长：${v}`);
+        assert.ok(String(v).trim().length > 0, `候选 ${k} 语义为空`);
+        assert.equal(String(v).includes('undefined'), false, `候选 ${k} 语义里冒 undefined：${v}`);
+      }
+    }
+  }
+});
+
+test('buildChoice：criteria 的 key 撞车必须抛错（撞车＝题面静默少一个选项）', () => {
+  // 同一张牌 id 在手牌里出现两次 ⇒ `play:<id>` 两条候选编出同一个 key。
+  // 引擎侧确实会交出两条合法动作（cardId 相同、都是合法出牌），所以这是**可达**形状，
+  // 而 Object 赋值会让后一条无声覆盖前一条 ⇒ P1/P3 的候选计数比真实选项少，读数失真。
+  const base = mk(4, 7);
+  const card = base.players[0]?.hand[0];
+  assert.ok(card !== undefined, '前提自查：座 0 必须有手牌');
+  const dup: State = {
+    ...base,
+    // ⚠️ `[card, ...p.hand]` 而不是 `[card, card, ...p.hand]`：p.hand[0] **就是** card，
+    //    写两遍会得到三张同 id 的牌，下面那句「恰好两条同 key 候选」的前提当场判红。
+    players: base.players.map((p) => (p.seat === 0 ? { ...p, hand: [card, ...p.hand] } : p)),
+  };
+  assert.ok(getLegalActions(dup, 0).filter((a) => a.type === 'PLAY_CARD' && a.cardId === card.id).length === 2,
+    '前提自查：重复 id 的两条候选都要被引擎接受，否则本条测不到撞车');
+  assert.throws(() => buildChoice(dup, 0), /key/, '撞车必须大声失败（修的地方是 id 唯一性，不是在这里给 key 加后缀）');
+  // 正常局面不得撞车（主题副本 id 带 `#dupN` 后缀 ⇒ 天然唯一；这里钉住现状）。
+  for (const scene of visScenes()) {
+    const keys = getLegalActions(scene.state, 0).map(actionKey);
+    assert.equal(new Set(keys).size, keys.length, `${scene.label}：座 0 的候选 key 必须互不相同`);
+  }
 });
