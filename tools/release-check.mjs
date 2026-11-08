@@ -30,7 +30,7 @@ const SIM_PATH = argOf('sim', 'tests/sim/run.mjs');
  * ⚠️ B48：**白名单式拒绝** —— 生产发布检查只认下面这几个**路径注入**前缀，
  *   其余任何 `--` 参数一律**明确拒绝并非零退出**。
  *   ⇒ 源码里**不再出现任何自检/绕过参数名**（连拒绝清单都不列）⇒ 仓库级回归可断言「生产代码不含这些标识」；
- *   ⇒ 自检/绕过入口**仅存在于 `tests/gates/release-check-selftest.mjs`**（tests/ 专用包装器）。
+ *   ⇒ 自检/绕过入口**仅存在于 `tests/gates/tests/gates/ 下的自检包装器`**（tests/ 专用包装器）。
  * ⚠️ 保留的路径注入只**换输入、不跳过任何步骤** ⇒ 生产链 `npm run release:check` 不带它们 ⇒ 无法绕过门禁。
  */
 const ALLOWED_FLAGS = ['--gate=', '--sim=', '--scan=', '--baseline='];
