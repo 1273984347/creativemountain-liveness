@@ -50,6 +50,11 @@ function assertStructure(doc, label) {
     console.error('FAIL  ' + label + '结构字段缺失或类型错误：groups（应为数组）');
     process.exit(1);
   }
+  // ⚠️ B43：空数组是**第三种**坏法（字段在、类型对、内容空）⇒ 单独点名，别混进「多出该组」。
+  if (doc.groups.length === 0) {
+    console.error('FAIL  ' + label + '结构字段异常：groups 为空数组（没有任何分组）');
+    process.exit(1);
+  }
   const bad = [];
   doc.groups.forEach((g, i) => {
     if (g === null || typeof g !== 'object') { bad.push('groups[' + String(i) + '] 不是对象'); return; }
