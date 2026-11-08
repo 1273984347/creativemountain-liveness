@@ -1,10 +1,11 @@
 // tests/engine/legal-probe.test.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { isolatedState, probeAction } from '../../engine/core/probe.ts';
 import { advanceTurn, performAction } from '../../engine/core/turn-runner.ts';
 import { startDuel, submitDuelCard } from '../../engine/core/duel.ts';
-import { castVote } from '../../engine/core/council.ts';
+import { castVote, openCouncil, resolveCouncil } from '../../engine/core/council.ts';
 import { currentPlayer, isRoundEnd } from '../../engine/core/round.ts';
 import {
   appealedScene, challengedScene, councilScene, lockedScene, mk, pendingScene, putPending,
@@ -12,11 +13,16 @@ import {
 import {
   getLegalActions, getLegalActionStats, candidatesOf, actionWindowOpen, LEGAL_ACTION_CAP,
 } from '../../engine/core/legal.ts';
-import { activeAbilityId } from '../../engine/core/passives.ts';
+import { abilityAvailability, activeAbilityId } from '../../engine/core/passives.ts';
 import { cardNeedsTarget, targetCandidates } from '../../engine/core/targeting.ts';
 import { actionKey } from '../../engine/core/action-key.ts';
-import { uiAllowedSet, uiCandidates } from '../../web/legal-gate.ts';
-import { certifyAnswer, certifyAppeal, certifyChallenge, enterPendingCertification } from '../../engine/core/certification.ts';
+import {
+  uiAllows, uiAllowedSet, uiBlockNotice, uiCandidates, uiHasLegalTarget,
+} from '../../web/legal-gate.ts';
+import { certClickableActions } from '../../web/ui/cert.ts';
+import {
+  certifyAnswer, certifyAppeal, certifyAppealVote, certifyChallenge, enterPendingCertification,
+} from '../../engine/core/certification.ts';
 import type { Action } from '../../engine/core/action.ts';
 import type { State } from '../../engine/core/state.ts';
 import type { Card } from '../../engine/types/theme.ts';
@@ -747,12 +753,24 @@ function overCapCornerScene(): State {
 //   co-pending 座位依引擎可合法投复议票，而 `web/legal-gate.ts` 的草稿判据 `!pending.includes(seat)`
 //   比引擎严，只有把这个局面放进守卫才会变红。
 
-/** 漂移守卫遍历的局面集（按 seed 参数化；含两处 co-pending 真漂移取证局面）。 */
+/**
+ * 漂移守卫遍历的局面集（按 seed 参数化；含两处 co-pending 真漂移取证局面）。
+ *
+ * ⚠️ 修复轮新增的后四个局面（裁定 R-3：原九局面**抓不到**以下几处判据被删，变异实测见报告）：
+ *   · `starvedCertScene` —— 全座位灵枢归零 ⇒ 钉 `uiAllows` 的 `resource >= 1 / >= 2` 两条（R-4 保留并钉死）；
+ *   · `appealVoteCastScene` —— 复议票真的落账过 ⇒ 钉「已投过复议票」在门禁层与粗筛层的那一对判据；
+ *   · `exiledCouncilAppealScene` —— 有座位被山议放逐**且**复议窗口还开着 ⇒ 钉存活早退与三处存活/非本人判据；
+ *   · `councilVotedActionPanelScene` —— 山议进行中且座 0 已投过一票 ⇒ 钉 VOTE 的「已投过票」并供 R-2 的行动面板场景。
+ * 四个都由**引擎入口**构造（pending / appealed / 投票 / 放逐一律走 certifyX / castVote / resolveCouncil），
+ * 只动 `resource` 与 `hand`（成本与手牌），认证/山议/对峙字段一个不手拼。
+ */
 function driftScenes(seed: number): State[] {
   return [
     mk(4, seed), mk(8, seed), lockedScene(),
     pendingScene(4, seed), challengedScene(4, seed), appealedScene(5, seed), councilScene(4, seed),
     challengedThenPendingScene(), coPendingAppealScene(),
+    starvedCertScene(seed), appealVoteCastScene(seed),
+    exiledCouncilAppealScene(seed), councilVotedActionPanelScene(seed),
   ];
 }
 
@@ -795,4 +813,390 @@ test('漂移守卫（常驻·候选层）：uiCandidates == candidatesOf（粗�
       }
     }
   }
+});
+
+// ============================ Task 7 修复轮（评审 A–E ⇒ 裁定 R-1 … R-6）============================
+//
+// 评审的 A/B/C 三条都落在同一件事上：**守卫的失败面太窄**——
+//   · A：`uiAllows` 之外还有三处旁路（发动被动按钮、需目标牌的选目标入口**与提交路径**、
+//     `cert.ts` 逐按钮的手写显隐）⇒「legal-gate 是 UI 可点性唯一来源」这句承诺在**发货的 DOM** 里不成立；
+//   · B：被 `uiAllows` 挡下的点击静默 `return` ⇒ 玩家只得到一个死按钮；
+//   · C：原九个漂移局面里**没有**出局座位、**没有**资源见底、**没有**落过账的复议票
+//     ⇒ `uiAllows` 的存活/费用/已投票判据与 `uiCandidates` 的存活早退**四条可删而两守卫全绿**（变异实测见报告）。
+// 下面的四条新常驻用例把这三条做成可失败钉：
+//   ① 门禁层（候选**之外**的越界形状 uiAllows vs probeAction 逐条同判）——C 的失败面；
+//   ② 面板可点性 == 引擎认证面（A 的 cert.ts 部分，无 DOM 也能钉）；
+//   ③ 拒绝不得沉默（B：`uiBlockNotice` 必须给得出点名原因来源的一句话）；
+//   ④ 行动面入口过闸 + 源码接线（A 的 main.ts 部分：纯函数判据 + 锚点文本防旁路回流）。
+// D（保留两条 `resource >=` 并钉死、G-a 冲突交 Task 9）由 ① 与「资源见底」局面承担；
+// E（复议裁定在数字轨无人调用 ⇒ 新登记 G-g）**不在这里实现**，见 `web/ui/cert.ts` 的注释与报告 §7.3。
+
+// ---- 修复轮新增的四个局面（全部引擎入口构造，只动 resource / hand / flags.passive）----
+
+/**
+ * 「灵枢见底」的认证局面（裁定 R-3 其二；同时把 R-4 保留的两条 `resource >=` 钉成可失败判据）。
+ *
+ * `pending` 走 `putPending`（真实 `enterPendingCertification` + `advanceCertificationRound`），
+ * 之后只把 `resource` 归零、`hand` 削到 2 张——质疑要 1 灵枢、复议要 2 灵枢 ⇒ 这两类动作引擎必拒，
+ * 而 `candidatesOf` 的粗筛**不看费用**（G-a 同族）⇒ 「UI 侧少了那条费用判据」只能从**枚举层守卫**露出来。
+ * ⚠️ 手牌削小、待认证者只留 2 名：候选 10 条，远低于 `LEGAL_ACTION_CAP`
+ *   ——撞上限时两侧一起被截断，比的就是截断而不是判据（`overCapCornerScene` 是同一手法的价格参照）。
+ */
+function starvedCertScene(seed: number): State {
+  const base = putPending(mk(4, seed), [1, 2]);
+  const s: State = {
+    ...base,
+    players: base.players.map((p) => ({ ...p, resource: 0, hand: p.hand.slice(0, 2) })),
+  };
+  assert.deepEqual(s.players.map((p) => p.resource), [0, 0, 0, 0],
+    'starvedCertScene：局面名承诺「灵枢见底」⇒ 全座位 resource 必须为 0');
+  for (const seat of [0, 1]) {
+    assert.ok(candidatesOf(s, seat).length < LEGAL_ACTION_CAP,
+      `starvedCertScene：座${String(seat)} 候选必须留在上限之下（否则两侧一起被截断，测不到判据）`);
+    assert.equal(getLegalActionStats(s, seat).dropped, 0,
+      `starvedCertScene：座${String(seat)} 不得有候选因上限而未试跑`);
+  }
+  // 牙齿前提：候选**在册**而枚举**被拒**——这条差值正是 uiAllows 那两条费用判据的容身之处。
+  assert.ok(candidatesOf(s, 0).some((a) => a.type === 'CERTIFY_CHALLENGE'),
+    'starvedCertScene：0 灵枢的质疑候选必须在粗筛里（粗筛不发就谈不上门禁可删）');
+  assert.equal(getLegalActions(s, 0).some((a) => a.type === 'CERTIFY_CHALLENGE'), false,
+    '引擎侧：certifyChallenge 需 1 灵枢 ⇒ 0 灵枢必被拒');
+  assert.ok(candidatesOf(s, 1).some((a) => a.type === 'CERTIFY_APPEAL'),
+    'starvedCertScene：座 1（待认证者）的复议候选必须在粗筛里');
+  assert.equal(getLegalActions(s, 1).some((a) => a.type === 'CERTIFY_APPEAL'), false,
+    '引擎侧：certifyAppeal 需 2 灵枢 ⇒ 0 灵枢必被拒（死的「申请复议」按钮由此判死）');
+  return s;
+}
+
+/**
+ * 「复议票已落账」的局面（裁定 R-3 其三）。
+ *
+ * `certifyAppealVote(座 3)` 真投出去之后，「已投过复议票」这条判据同时存在于
+ * 门禁层（`uiAllows`）与粗筛层（`uiCandidates` ↔ `candidatesOf` 的同名早退）——
+ * ⚠️ 只有把这个局面放进守卫，**两侧同时删**（评审点名的 `:140` + `:213`）才会露出来：
+ *   粗筛删 ⇒ 候选层红；门禁删 ⇒ 枚举层红；两个都删 ⇒ 枚举层仍红（引擎试跑拒）。
+ */
+function appealVoteCastScene(seed: number): State {
+  const appealed = appealedScene(5, seed);
+  const cast = certifyAppealVote(appealed, 3, 0, true);
+  assert.ok(cast.ok, 'appealVoteCastScene：座 3 的复议票必须真的投出去：' + noteOf(cast.note));
+  assert.equal(cast.state.certification.appealVotes[3], true,
+    'appealVoteCastScene：后置——局面名承诺「已落账」⇒ appealVotes[3] 必须是 true');
+  const s = cast.state;
+  assert.equal(candidatesOf(s, 3).some((a) => a.type === 'CERTIFY_APPEAL_VOTE'), false,
+    '引擎侧：已投过票 ⇒ 粗筛不再给座 3 发复议票候选');
+  assert.ok(candidatesOf(s, 2).some((a) => a.type === 'CERTIFY_APPEAL_VOTE'),
+    '对照：座 2 未投票 ⇒ 复议票候选仍在册（否则本局面测的是「压根没有复议票」）');
+  assert.ok(getLegalActions(s, 2).some((a) => a.type === 'CERTIFY_APPEAL_VOTE'),
+    '对照：座 2 的复议票被引擎接受');
+  assert.equal(getLegalActions(s, 3).some((a) => a.type === 'CERTIFY_APPEAL_VOTE'), false,
+    '引擎侧：座 3 已无可投的票');
+  return s;
+}
+
+/**
+ * 「有座位被山议放逐、而复议窗口还开着、山议再次进行中」的局面（裁定 R-3 其一）。
+ *
+ * 全程引擎入口：`appealedScene` → `openCouncil` → 三张票投给座 3 → `resolveCouncil`（真放逐）
+ * → 再 `openCouncil` 一次（⇒ 「出局座位 + 山议进行中」，`uiCandidates` 的存活早退才有牙）。
+ * ⚠️ 一个局面同时覆盖四处判据（评审点名的 `:110-112`、`:141`、`:160-161`）：
+ *   · 出局座位**作为投票人** / **作为投票目标** / **作为复议投票人** 三种越界形状；
+ *   · 出局座位的候选整表必须为空（`candidatesOf` 的存活早退镜像）。
+ */
+function exiledCouncilAppealScene(seed: number): State {
+  let s = appealedScene(5, seed);
+  const opened = openCouncil(s);
+  assert.ok(opened.ok, 'exiledCouncilAppealScene：开启山议必须成功：' + noteOf(opened.note));
+  s = opened.state;
+  for (const voter of [0, 2, 4]) {
+    const r = castVote(s, voter, 3);
+    assert.ok(r.ok, `exiledCouncilAppealScene：座 ${String(voter)} 投票必须成功：` + noteOf(r.note));
+    s = r.state;
+  }
+  const resolved = resolveCouncil(s);
+  assert.ok(resolved.ok, 'exiledCouncilAppealScene：山议结算必须成功：' + noteOf(resolved.note));
+  s = resolved.state;
+  assert.equal(s.players[3]?.alive, false,
+    'exiledCouncilAppealScene：后置——局面名承诺「有座位被放逐」⇒ 座 3 必须真的 alive=false');
+  assert.ok(s.certification.appealed.includes(0), 'exiledCouncilAppealScene：放逐不得关掉复议窗口');
+  assert.equal(s.certification.judgments[1], false, 'exiledCouncilAppealScene：待复议的失败判定必须还在');
+  const reopened = openCouncil(s);
+  assert.ok(reopened.ok, 'exiledCouncilAppealScene：第二次山议必须开起来：' + noteOf(reopened.note));
+  s = reopened.state;
+  assert.equal(s.council.resolved, false,
+    'exiledCouncilAppealScene：后置——山议必须**再次进行中**（否则出局座位发不出 VOTE 候选，存活早退就没牙）');
+  assert.equal(s.players.filter((p) => !p.alive).length, 1, 'exiledCouncilAppealScene：恰有一名出局座位');
+  assert.equal(candidatesOf(s, 3).length, 0, '引擎侧：出局座位整体无候选（UI 侧同名早退被删就在这里露）');
+  assert.ok(candidatesOf(s, 2).some((a) => a.type === 'CERTIFY_APPEAL_VOTE'),
+    'exiledCouncilAppealScene：有人出局不影响他人继续投复议票');
+  return s;
+}
+
+/**
+ * 「山议进行中 ∧ 座 0 已投过一票 ∧ 座 1 的行动面板照常渲染」的局面（裁定 R-3 的 B 项场景）。
+ *
+ * 这是发现 B 的**真实落点**：座 1 存活、未待认证、无对峙 ⇒ `renderActions` 走到行棋/问天/手牌那一支，
+ * 而 `uiAllows` 因 `phase !== '行动'` 全部拒 ⇒ 按钮不出现，但**手牌点击仍会发生**，
+ * 拒了却不说话就等于死按钮。本局面同时钉住 VOTE 的「本轮已投过票」那条判据（座 0）。
+ */
+function councilVotedActionPanelScene(seed: number): State {
+  const opened = openCouncil(mk(4, seed));
+  assert.ok(opened.ok, 'councilVotedActionPanelScene：开启山议必须成功：' + noteOf(opened.note));
+  const voted = castVote(opened.state, 0, 1);
+  assert.ok(voted.ok, 'councilVotedActionPanelScene：座 0 投票必须成功：' + noteOf(voted.note));
+  const s = voted.state;
+  assert.equal(s.phase, '山议', 'councilVotedActionPanelScene：后置——必须是山议阶段（行动面板靠它才被拒）');
+  assert.equal(s.council.resolved, false, 'councilVotedActionPanelScene：后置——山议仍在进行');
+  assert.equal(s.council.votes[0], 1, 'councilVotedActionPanelScene：后置——座 0 的票必须真的落账');
+  assert.equal(s.duel, null, 'councilVotedActionPanelScene：后置——不得有对峙（否则测的是对峙分支）');
+  assert.equal(s.certification.pending.length, 0, 'councilVotedActionPanelScene：后置——本局面不掺认证面');
+  const p1 = s.players[1];
+  assert.ok(p1 !== undefined && p1.alive && !p1.pendingCert && p1.hand.length > 0,
+    'councilVotedActionPanelScene：座 1 的行动面板必须会渲染出行棋/问天与手牌（发现 B 的前提）');
+  assert.equal(getLegalActions(s, 0).some((a) => a.type === 'VOTE'), false,
+    '引擎侧：座 0 已投过票 ⇒ 不再给 VOTE');
+  assert.ok(getLegalActions(s, 1).some((a) => a.type === 'VOTE'),
+    '对照：座 1 未投票 ⇒ VOTE 仍在（本局面不是「全员投完」）');
+  return s;
+}
+
+// ---- ① 门禁层：候选之外的越界形状也要与引擎同判 ----
+
+/**
+ * 逐条形状矩阵：山议面 + 认证面的**全部 target 组合**（含自己、含出局座位）。
+ *
+ * ⚠️ 为什么只有这两面：行动面（MOVE/ROLL_WHEEL/PLAY_CARD/ABILITY）的 `uiAllows` 还多压了
+ *   行动窗口，而窗口那四条判据是**登记过的「粗筛故意窄于引擎」a–d**（见 `legal.ts` 的契约表与
+ *   上面那四条取证用例），逐条等式在这里本来就不成立；`PLAY_CARD` 的越界 target 同属 G-a 取证行。
+ *   山议面与认证面既不读 `phase` 也不读 `duel`，等式可以逐条成立 ⇒ 正是 C 要的第三层失败面。
+ */
+function gateShapes(s: State, seat: number): Action[] {
+  const out: Action[] = [];
+  for (const target of s.players.map((p) => p.seat)) {
+    out.push({ type: 'VOTE', actor: seat, target });
+    out.push({ type: 'CERTIFY_SIGN', actor: seat, target });
+    out.push({ type: 'CERTIFY_CHALLENGE', actor: seat, target });
+    out.push({ type: 'CERTIFY_ABSTAIN', actor: seat, target });
+    out.push({ type: 'CERTIFY_APPEAL', actor: seat, target });
+    for (const passed of [true, false]) { out.push({ type: 'CERTIFY_ANSWER', actor: seat, target, passed }); }
+    for (const overturn of [true, false]) { out.push({ type: 'CERTIFY_APPEAL_VOTE', actor: seat, target, overturn }); }
+  }
+  return out;
+}
+
+/**
+ * 门禁层**登记过**的一处「UI 比引擎严」（与 `legal.ts` 的 a–d 同族，但落在认证面）。
+ *
+ * 引擎 `certifyAnswer` **没有**「同一判定人不得重复判定」的守卫，去重由粗筛的 `!judged` 承担
+ * （既有取证用例「§7 判定权只属于已质疑者，且判定去重由粗筛承担」钉着）。
+ * ⇒「已判定过的人再判一次」= 引擎接受、UI 必须不给点，是**口径**而不是漂移；
+ *   若哪天引擎补上前置，本条会红，逼着回来把等式与登记一起改掉（而不是让门禁悄悄领先引擎）。
+ *
+ * ⚠️ 后三个合取项就是 `certifyAnswer` 自己的前置（目标待认证 ∧ 本人质疑过 ∧ 非自己判自己）：
+ *   它们把登记**限定在引擎真的会接受**的那些形状上。不满足时走等式分支（两侧同为 false），
+ *   所以登记的边界不是靠猜——引擎一旦改口径，`engine === true` 那句立刻红。
+ */
+function registeredUiStricter(state: State, seat: number, action: Action): string | null {
+  const c = state.certification;
+  if (action.type === 'CERTIFY_ANSWER'
+    && c.judgments[seat] !== undefined
+    && c.challenged.includes(seat)
+    && c.pending.includes(action.target)
+    && action.target !== seat) {
+    return '重复判定（引擎无守卫，UI 由粗筛 + 门禁去重）';
+  }
+  return null;
+}
+
+test('漂移守卫（常驻·门禁层）：候选**之外**的越界形状也要 uiAllows == probeAction（R-3 补的第三层）', () => {
+  for (const seed of [7, 23]) {
+    for (const s of driftScenes(seed)) {
+      for (let seat = 0; seat < s.players.length; seat += 1) {
+        for (const a of gateShapes(s, seat)) {
+          const engine = probeAction(s, a).ok;
+          const ui = uiAllows(s, seat, a);
+          const registered = registeredUiStricter(s, seat, a);
+          const where = `seed=${String(seed)} seat=${String(seat)} 动作=${actionKey(a)} ${sceneTag(s)}`;
+          if (registered === null) {
+            assert.equal(ui, engine, `门禁层漂移（${where}）：UI=${String(ui)} 引擎=${String(engine)}`);
+          } else {
+            assert.equal(ui, false, `登记分歧的方向变了（${where}）：${registered} ⇒ UI 应不给点`);
+            assert.equal(engine, true,
+              `登记分歧不再成立（${where}）：${registered} —— 引擎已改为拒绝该形状，须回来把这条并回等式并同步登记`);
+          }
+        }
+      }
+    }
+  }
+});
+
+// ---- ② 面板可点性 == 引擎认证面（R-1 的 cert.ts 部分，无 DOM 表达）----
+
+test('面板可点性 == 引擎认证面（R-1 常驻）：cert 面板每个按钮提交的形状都要与引擎认证面逐项相等', () => {
+  for (const seed of [7, 23]) {
+    for (const s of driftScenes(seed)) {
+      for (let seat = 0; seat < s.players.length; seat += 1) {
+        // 前提：本局面的候选未撞上限（撞了的话引擎侧少发的是**截断**而非规则，等式就不该成立）。
+        assert.equal(getLegalActionStats(s, seat).dropped, 0, `面板比对要求未截断：seed=${String(seed)} seat=${String(seat)}`);
+        const panel = certClickableActions(s, seat).map(actionKey).sort();
+        const engine = getLegalActions(s, seat)
+          .filter((a) => a.type.startsWith('CERTIFY'))
+          .map(actionKey)
+          .sort();
+        assert.deepEqual(panel, engine,
+          `面板可点性与引擎认证面漂移：seed=${String(seed)} seat=${String(seat)} ${sceneTag(s)}\n`
+          + `  面板按钮=${JSON.stringify(panel)}\n`
+          + `  引擎认证面=${JSON.stringify(engine)}`);
+      }
+    }
+  }
+});
+
+test('行为变化 3（R-1 的后果）：待认证者灵枢不足时不再给出死的「申请复议（-2 灵枢）」按钮', () => {
+  const s = starvedCertScene(7);
+  // 旧的手写显隐判据在这里**为真**（本人待认证且未申请过）⇒ 本条测的正是它与 uiAllows 的分歧。
+  assert.equal(s.certification.pending.includes(1) && !s.certification.appealed.includes(1), true,
+    '前提自查：旧手写判据（pending ∧ 未申请）此时必须为真，否则这条没在测分歧');
+  const appeal: Action = { type: 'CERTIFY_APPEAL', actor: 1, target: 1 };
+  assert.equal(uiAllows(s, 1, appeal), false, '引擎 0 灵枢必拒 ⇒ UI 也不给点（新代码必须站 uiAllows 这边）');
+  assert.match(uiBlockNotice(s, 1, appeal) ?? '', /2 灵枢/, '拒绝理由要点名成本来源，不能只说「不可申请」');
+  assert.deepEqual(certClickableActions(s, 1).map(actionKey), [],
+    '座 1 在面板上不得拿到任何按钮（旧代码会挂出一个点了就静默失败的复议按钮）');
+});
+
+// ---- ③ 拒绝不得沉默（R-2）----
+
+test('拒绝不得沉默（R-2 常驻）：uiAllows 挡下的每条点击都要给得出点名原因来源的一句话', () => {
+  // ① 不变式：候选内被拒 ⇒ 理由非空；候选内放行 ⇒ 理由必须是 null（否则「明明可点却报错」）。
+  for (const s of driftScenes(7)) {
+    for (let seat = 0; seat < s.players.length; seat += 1) {
+      for (const a of uiCandidates(s, seat)) {
+        const notice = uiBlockNotice(s, seat, a);
+        if (uiAllows(s, seat, a)) {
+          assert.equal(notice, null, `放行却给了拒绝理由：seat=${String(seat)} ${actionKey(a)} ${sceneTag(s)} ⇒ ${String(notice)}`);
+        } else {
+          assert.ok(typeof notice === 'string' && notice.trim() !== '',
+            `静默拒绝（发现 B）：seat=${String(seat)} ${actionKey(a)} ${sceneTag(s)} 被拒但没有人话`);
+        }
+      }
+    }
+  }
+  // ② 山议里的行动面板：行棋 / 问天 / 出牌都被拒，且理由必须点名「阶段」这一原因来源。
+  const council = councilVotedActionPanelScene(7);
+  const hand = council.players[1]?.hand[0];
+  assert.ok(hand !== undefined, '前提自查：山议局面里座 1 必须有手牌，否则行动面板测不到出牌点击');
+  const windowActions: readonly Action[] = [
+    { type: 'MOVE', actor: 1, steps: 0 },
+    { type: 'ROLL_WHEEL', actor: 1 },
+    { type: 'PLAY_CARD', actor: 1, cardId: hand.id },
+  ];
+  for (const a of windowActions) {
+    assert.equal(uiAllows(council, 1, a), false, `山议阶段本该拒 ${actionKey(a)}`);
+    assert.match(uiBlockNotice(council, 1, a) ?? '', /山议|阶段/,
+      `山议阶段拒 ${actionKey(a)} 时必须说明原因来源是阶段（R-2 的示例口径）`);
+  }
+  // ③ 座 0 已投过票 ⇒ VOTE 的拒因要点名「已投过票」，不能与「山议未开」共用一句糊过去。
+  assert.match(uiBlockNotice(council, 0, { type: 'VOTE', actor: 0, target: 2 }) ?? '', /已投过票/);
+  assert.equal(uiBlockNotice(council, 1, { type: 'VOTE', actor: 1, target: 2 }), null,
+    '可点的投票不该有拒绝理由（否则面板会给个「可点却报错」的按钮）');
+});
+
+// ---- ④ 行动面入口过闸（R-1 的主场景：被动按钮 / 选目标模式入口 / 带目标提交）----
+
+/** 取证用的「需要选目标」的牌 id 与「需要选目标」的主动被动 op。 */
+const PICK_CARD_ID = 'probe_pick_target';
+const PICK_ABILITY_OP = 'transfer_resource';
+
+/** 给某座位装上「需目标的攻击牌 + 窃火者（需目标）被动」——只动 hand 与 flags.passive。 */
+function withPickTools(s: State, seat: number): State {
+  const card: Card = {
+    id: PICK_CARD_ID, name: '取证牌（需目标）', type: 'attack', cost: 0, color: 'red', rank: 2,
+    text: '取证用：必须选目标的牌', effects: [{ op: 'discard_opponent', count: 1, target: 0 }],
+  };
+  assert.ok(cardNeedsTarget(card), 'withPickTools 的前提：这张牌必须真的需要选目标');
+  const withCard: State = { ...s, players: s.players.map((p) => (p.seat === seat ? { ...p, hand: [card, ...p.hand] } : p)) };
+  const withAbility = withPassive(withCard, seat, { op: PICK_ABILITY_OP, amount: 1 });
+  const avail = abilityAvailability(withAbility, seat);
+  assert.equal(avail.usable, true, 'withPickTools 的前提：被动必须真的处于 usable（否则测不到 usable 与 uiAllows 的分歧）');
+  assert.equal(avail.needsTarget, true, 'withPickTools 的前提：该被动需要选目标');
+  assert.equal(activeAbilityId(withAbility, seat), PICK_ABILITY_OP, 'withPickTools 的前提：abilityId 取 activeAbilityId');
+  assert.ok(targetCandidates(withAbility, seat).length > 0, 'withPickTools 的前提：必须有可选目标');
+  return withAbility;
+}
+
+test('行动面入口同样过闸（R-1 其一/其二）：usable 与 uiAllows 分歧时以 uiAllows 为准，选目标入口与提交路径同闸', () => {
+  // 分歧场景：山议阶段 ⇒ `ability.usable` 仍为真（旧的手写判据），而 uiAllows 因行动窗口关闭而拒。
+  const inCouncil = withPickTools(councilVotedActionPanelScene(7), 1);
+  assert.equal(abilityAvailability(inCouncil, 1).usable, true,
+    '前提自查：旧判据 usable 在山议里为真 ⇒ 下面三条测的正是「旧条件 vs uiAllows」');
+  assert.equal(uiAllows(inCouncil, 1, { type: 'ABILITY', actor: 1, abilityId: PICK_ABILITY_OP }), false);
+  assert.equal(uiHasLegalTarget(inCouncil, 1, { type: 'ABILITY', abilityId: PICK_ABILITY_OP }), false,
+    '被动按钮的显隐改由 uiAllows 决定 ⇒ 山议里既不能出现无目标形状、也不能进入选目标模式');
+  assert.equal(uiHasLegalTarget(inCouncil, 1, { type: 'PLAY_CARD', cardId: PICK_CARD_ID }), false,
+    '需目标牌的「选目标模式」入口必须过闸（此前只有非选目标那一支有闸）');
+  assert.equal(uiAllows(inCouncil, 1, { type: 'PLAY_CARD', actor: 1, cardId: PICK_CARD_ID, target: 0 }), false,
+    '提交路径必须按**带目标**的形状过闸（山议里攻击牌不得仍然能打）');
+  // 对照场景：同一批形状在行动阶段必须全为真，否则上面四条在测一个不存在的东西。
+  const inAction = withPickTools(mk(4, 7), 1);
+  assert.equal(inAction.phase, '行动', '前提自查：对照局面必须是行动阶段');
+  assert.equal(uiHasLegalTarget(inAction, 1, { type: 'ABILITY', abilityId: PICK_ABILITY_OP }), true);
+  assert.equal(uiHasLegalTarget(inAction, 1, { type: 'PLAY_CARD', cardId: PICK_CARD_ID }), true);
+  assert.equal(uiAllows(inAction, 1, { type: 'PLAY_CARD', actor: 1, cardId: PICK_CARD_ID, target: 0 }), true);
+  assert.equal(uiAllows(inAction, 1, { type: 'ABILITY', actor: 1, abilityId: PICK_ABILITY_OP }), false,
+    '需目标的被动**没有**无目标形状（按钮靠 uiHasLegalTarget 出现，提交时才带上点选的目标）');
+  // 被闸挡下时同样要有人话（R-2 与 R-1 是同一条闸的两半）。
+  assert.match(uiBlockNotice(inCouncil, 1, { type: 'PLAY_CARD', actor: 1, cardId: PICK_CARD_ID, target: 0 }) ?? '', /山议|阶段/);
+  assert.match(uiBlockNotice(inAction, 1, { type: 'PLAY_CARD', actor: 1, cardId: PICK_CARD_ID }) ?? '', /目标/,
+    '需目标的牌在没带目标时的拒因要点名「目标」');
+  assert.equal(uiHasLegalTarget(inAction, 1, { type: 'PLAY_CARD', cardId: 'no_such_card' }), false,
+    '手牌里没有的牌不得进入选目标模式');
+});
+
+// ---- ⑤ 源码接线：旁路一旦回流就红（纯函数对了但 UI 没消费 = 仍然错）----
+
+/** 取锚点注释**之后**的前 `lines` 行源码；锚点是 web/main.ts 里显式写的 `// 门禁:` 标记。 */
+function afterAnchor(src: string, anchor: string, lines: number): string {
+  const at = src.indexOf(anchor);
+  assert.ok(at >= 0,
+    `源码必须保留锚点「${anchor}」——接线用例按锚点取区域，锚点丢了等于那道闸被摘掉`);
+  return src.slice(at).split('\n').slice(0, lines).join('\n');
+}
+
+test('接线（R-1/R-2 常驻）：web/main.ts 的五处入口与 web/ui/cert.ts 的按钮必须逐处走同一道闸', () => {
+  const mainSrc = readFileSync('web/main.ts', 'utf8');
+  // ① 被动按钮：**显隐条件本身**必须含门禁结果（只看 ability.usable 就是发现 A 旁路一）。
+  //    ⚠️ 不能只按区域正则找 `uiAllows(`——那样常量声明还在区域内、条件被摘掉也照样绿（变异实测如此）。
+  const abilityIf = /if \(ability\.usable([^\n]*)/.exec(mainSrc)?.[1];
+  assert.ok(abilityIf !== undefined,
+    '前提自查：web/main.ts 必须仍有以 `if (ability.usable` 起头的被动按钮条件（写法变了就来同步这条锚点）');
+  assert.match(abilityIf, /abilityTargetless|abilityTargeted/,
+    '被动按钮的显隐必须由 uiAllows / uiHasLegalTarget 的结果决定（发现 A 旁路一：旧写法只看 usable）');
+  // ② 选目标模式入口：进入模式的条件本身必须含门禁结果（发现 A 旁路二·进）。
+  const pickIf = /if \(card !== undefined && cardNeedsTarget\(card\)([\s\S]{0,200}?)\) \{/.exec(mainSrc);
+  assert.ok(pickIf !== null,
+    '前提自查：web/main.ts 必须仍有手牌点击的「需目标 ⇒ 进选目标模式」条件（写法变了就来同步这条锚点）');
+  assert.match(pickIf[1] ?? '', /uiHasLegalTarget/,
+    '需目标牌的选目标模式入口必须过闸（发现 A 旁路二·进：旧写法只看 cardNeedsTarget + targetCandidates.length）');
+  // ③ 提交路径与拒绝文案（区域正则够用：这两处判据就是那一段的主体）。
+  const submit = afterAnchor(mainSrc, '// 门禁:出牌提交', 14);
+  assert.match(submit, /uiAllows\(/, '出牌提交（含已选定目标的形状）必须过闸（R-1 旁路二·出）');
+  assert.match(submit, /uiBlockNotice\(/, '被闸挡下时要把拒绝理由写进 ui.notice，不得静默 return（R-2）');
+  const abilitySubmit = afterAnchor(mainSrc, '// 门禁:被动提交', 14);
+  assert.match(abilitySubmit, /uiAllows\(/, '被动的提交路径（选完目标之后）同样过闸——与出牌同法');
+  assert.match(abilitySubmit, /uiBlockNotice\(/, '被动被闸挡下也要有人话（R-2）');
+  const vote = afterAnchor(mainSrc, '// 门禁:山议投票', 8);
+  assert.match(vote, /uiAllows\(/, '山议投票的提交路径同样过闸（R-1 的第四处旁路：面板显隐在 council.ts，提交在 main.ts）');
+  assert.match(vote, /uiBlockNotice\(/, '投票被闸挡下也要有人话（R-2）');
+  const appealVote = afterAnchor(mainSrc, '// 门禁:复议票', 10);
+  assert.match(appealVote, /ui\.notice\s*=/, '复议票引擎拒绝时必须把 r.note 交出去，不得静默丢 r.ok/r.note（R-2）');
+
+  const certSrc = readFileSync('web/ui/cert.ts', 'utf8');
+  assert.match(certSrc, /export function certClickableActions/, '面板可点性的唯一来源必须是这张表（R-1 旁路三）');
+  assert.match(certSrc, /certClickableActions\(state, seat\)/, '渲染循环必须消费这张表，而不是另写一份显隐判据');
+  assert.match(certSrc, /clickable\.has\(/, '按钮只能由 clickable 表给出');
+  // 面板里**每一颗**按钮都要么走 gated（过闸），要么是质疑表单的提交（其闸在打开表单的那颗按钮上）。
+  const directButtons = certSrc.match(/(?<![A-Za-z])button\(/g)?.length ?? 0;
+  assert.equal(directButtons, 2,
+    'cert.ts 只允许两处直接 button( 调用：gated 内部一处 + 质疑表单提交一处；'
+    + '新增按钮必须走 gated，否则又给 UI 留一条不过闸的旁路（发现 A）');
 });

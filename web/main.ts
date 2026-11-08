@@ -9,14 +9,15 @@ import { castVote, resolveCouncil } from '../engine/core/council.ts';
 import { certifySign, certifyChallenge, certifyAbstain, certifyAnswer, certifyAppeal, certifyAppealVote } from '../engine/core/certification.ts';
 import { stateToJson, stateFromJson } from '../engine/core/serialize.ts';
 import { installTheme } from '../engine/core/setup.ts';
-import { uiAllows } from './legal-gate.ts';
+import type { Action } from '../engine/core/action.ts';
+import { uiAllows, uiBlockNotice, uiHasLegalTarget } from './legal-gate.ts';
 import { THEMES, themeById } from './theme.ts';
 import { el, button, section } from './ui/dom.ts';
 import { renderBoard } from './ui/board.ts';
 import { renderHand, renderPlayers } from './ui/hand.ts';
-import { cardNeedsTarget, resolveTargetPick, targetCandidates } from '../engine/core/targeting.ts';
+import { cardNeedsTarget, resolveTargetPick } from '../engine/core/targeting.ts';
 import { performAbility } from '../engine/core/abilities.ts';
-import { abilityAvailability } from '../engine/core/passives.ts';
+import { abilityAvailability, activeAbilityId } from '../engine/core/passives.ts';
 import { submitDuelCard } from '../engine/core/duel.ts';
 import { renderLog } from './ui/log.ts';
 import { renderCouncil } from './ui/council.ts';
@@ -240,7 +241,19 @@ function renderToolbar(): HTMLElement {
  */
 function playCard(cardId: string, target?: number): void {
   const seat = ui.seat;
+  // 门禁:出牌提交 —— 提交路径（含 `onPickTarget → resolveTargetPick → playCard` 这条选目标支路）
+  //   同样过闸，且按**将要提交的完整形状**问：带目标的攻击牌由此与不需目标的普通牌同闸同源
+  //   （评审发现 A 旁路二·出：此前只有非选目标那一支有闸，山议阶段攻击牌照样打得出去）。
+  const action: Action = target === undefined
+    ? { type: 'PLAY_CARD', actor: seat, cardId }
+    : { type: 'PLAY_CARD', actor: seat, cardId, target };
   ui.pendingTargetCardId = null;
+  if (!uiAllows(ui.state, seat, action)) {
+    // 门禁:拒绝不沉默 —— 被闸挡下时把拒因写进 ui.notice（评审发现 B：点了没反应等于死按钮）。
+    ui.notice = uiBlockNotice(ui.state, seat, action) ?? '当前不可打出该牌。';
+    render();
+    return;
+  }
   ui.state = performAction(ui.state, seat, 'act', target === undefined ? { cardId } : { cardId, target });
   ui.state = advanceTurn(ui.state, ui.mode);
   render();
@@ -278,6 +291,17 @@ function onPickTarget(picked: number): void {
 function useAbility(target?: number): void {
   const seat = ui.seat;
   ui.pendingAbility = false;
+  // 门禁:被动提交 —— 选目标模式的提交路径同样过闸，形状取**已选定目标**的那一条
+  //   （与出牌同法：按钮显隐只能问「存在合法目标形状」，真提交时才确定目标）。
+  const abilityId = activeAbilityId(ui.state, seat);
+  const action: Action = target === undefined
+    ? { type: 'ABILITY', actor: seat, abilityId }
+    : { type: 'ABILITY', actor: seat, abilityId, target };
+  if (!uiAllows(ui.state, seat, action)) {
+    ui.notice = uiBlockNotice(ui.state, seat, action) ?? '被动未能发动。';
+    render();
+    return;
+  }
   const r = performAbility(ui.state, seat, target);
   if (!r.ok) {
     ui.notice = '被动发动失败：' + r.note;
@@ -349,9 +373,16 @@ function renderActions(): HTMLElement {
     }));
   }
   body.push(row);
-  // B12：发动身份被动按钮（仅在可发动时出现）
+  // B12：发动身份被动按钮
+  // 门禁:被动按钮 —— 评审发现 A 旁路一：旧代码只看 `ability.usable`（`passives.ts` 的可用性），
+  //   于是山议阶段 / round 已走完时按钮照样出现、点了照样发动 ⇒ 行动窗口对它形同虚设。
+  //   现在显隐交 `uiAllows`：不需目标的被动问无目标形状，需目标的被动问「存在合法目标形状」
+  //   （需目标的被动**没有**合法的无目标形状 ⇒ 只能这样问，见 legal-gate 的 uiHasLegalTarget 注释）。
   const ability = abilityAvailability(ui.state, seat);
-  if (ability.usable) {
+  const abilityId = activeAbilityId(ui.state, seat);
+  const abilityTargetless = uiAllows(ui.state, seat, { type: 'ABILITY', actor: seat, abilityId });
+  const abilityTargeted = uiHasLegalTarget(ui.state, seat, { type: 'ABILITY', abilityId });
+  if (ability.usable && (abilityTargetless || abilityTargeted)) {
     const identity = theme.identities.find((i) => i.id === player.identityId);
     row.append(button('发动被动（' + (identity?.passiveText ?? '身份能力') + '）', () => {
       if (ability.needsTarget) {
@@ -379,13 +410,17 @@ function renderActions(): HTMLElement {
       return;
     }
     const card = player.hand.find((c) => c.id === cardId);
-    if (card !== undefined && cardNeedsTarget(card) && targetCandidates(ui.state, seat).length > 0) {
+    // 门禁:选目标入口 —— 进入选目标模式**之前**先过闸：只有在「存在合法的带目标形状」时才进模式
+    //   （评审发现 A 旁路二·进：旧写法只看 `cardNeedsTarget` + `targetCandidates.length`，
+    //    山议阶段攻击牌照样进模式，随后由 onPickTarget 直通 performAction 打出）。
+    if (card !== undefined && cardNeedsTarget(card)
+      && uiHasLegalTarget(ui.state, seat, { type: 'PLAY_CARD', cardId })) {
       ui.pendingTargetCardId = cardId;
       render();
       return;
     }
-    // ⚠️ Task 7：出牌同样过 `uiAllows` 这道闸（与行棋/问天同源，不动对峙面板的选牌分支）。
-    if (!uiAllows(ui.state, seat, { type: 'PLAY_CARD', actor: seat, cardId })) { return; }
+    // 其余情形（不需目标的牌 / 无合法目标形状 / 非行动窗口）一律交给 playCard：
+    // 它按将要提交的真实形状过闸，被拒时把拒因写进 ui.notice（门禁:拒绝不沉默）。
     playCard(cardId);
   }, ui.pendingTargetCardId));
   return section('行动', ...body);
@@ -450,7 +485,20 @@ function render(): void {
   // 山议面板
   if (needsCouncilVote(s)) {
     panels.push(renderCouncil(s, theme, ui.seat,
-      (target) => { const r = castVote(s, ui.seat, target); ui.state = r.ok ? r.state : s; render(); },
+      // 门禁:山议投票 —— 面板显隐在 web/ui/council.ts（本任务不动那个文件），其中没有
+      //   「投票人自己是否存活」这条 ⇒ 热座切到已出局座位后点名字会静默失败：
+      //   提交路径在此过闸（R-1 的第四处旁路），并把拒因交出去（R-2：拒绝不得沉默）。
+      (target) => {
+        const action: Action = { type: 'VOTE', actor: ui.seat, target };
+        if (!uiAllows(s, ui.seat, action)) {
+          ui.notice = uiBlockNotice(s, ui.seat, action) ?? '当前不能投票。';
+          render();
+          return;
+        }
+        const r = castVote(s, ui.seat, target);
+        ui.state = r.ok ? r.state : s;
+        render();
+      },
       () => { const r = resolveCouncil(s); ui.state = r.ok ? r.state : s; render(); },
     ));
   }
@@ -468,7 +516,20 @@ function render(): void {
       onAbstain: (target) => { const r = certifyAbstain(s, ui.seat, target); ui.state = r.ok ? r.state : s; render(); },
       onJudge: (target, passed) => { const r = certifyAnswer(s, ui.seat, target, passed); ui.state = r.ok ? r.state : s; render(); },
       onAppeal: (target) => { const r = certifyAppeal(s, ui.seat, target); ui.state = r.ok ? r.state : s; render(); },
-      onAppealVote: (target, overturn) => { const r = certifyAppealVote(s, ui.seat, target, overturn); ui.state = r.ok ? r.state : s; render(); },
+      onAppealVote: (target, overturn) => {
+        // 门禁:复议票 —— 与同级的 onChallenge 一个口径：引擎拒绝时必须把 r.note 交出去，
+        //   不得静默丢弃 r.ok/r.note（评审发现 B）。按钮本身已由 uiAllows 过闸，
+        //   这里是「面板过期 / 状态已被别处推进」时的兜底；G-g（裁定无人调用）另见 web/ui/cert.ts 的注释。
+        const r = certifyAppealVote(s, ui.seat, target, overturn);
+        if (!r.ok) {
+          ui.notice = '复议投票未落账：' + (r.note ?? '引擎未给出原因');
+          render();
+          return;
+        }
+        ui.notice = '复议投票已记录：' + (r.note ?? (overturn ? '推翻原判' : '维持原判'));
+        ui.state = r.state;
+        render();
+      },
     }));
   }
   panels.push(renderActions());
