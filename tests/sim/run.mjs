@@ -39,7 +39,7 @@ const THEME_IDS = ['xianxia2026', 'scifi-ai', 'hybrid', 'urban-psych'];
 
 /** 解析命令行参数。 */
 function parseArgs(argv) {
-  const out = { games: 1000, check: false, out: null, themes: THEME_IDS, players: SCALES.map((s) => s.players), trialRate: false, trialTimes: 400, seedBase: 1000, positionSpread: false, gateReserve: undefined, scanReserves: [], scanSeeds: [] };
+  const out = { games: 1000, check: false, out: null, themes: THEME_IDS, players: SCALES.map((s) => s.players), trialRate: false, trialTimes: 400, seedBase: 1000, positionSpread: false, gateReserve: undefined, scanReserves: [], scanSeeds: [], scanJson: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--games') { out.games = Number(argv[++i]); }
@@ -59,6 +59,8 @@ function parseArgs(argv) {
     else if (a === '--scan-reserves') { out.scanReserves = argv[++i].split(',').map(Number); }
     // ⚠️ B28：**多 seed 独立样本**（每个 seed 基值 = 一批独立样本 ⇒ 可估噪声与差异显著性）
     else if (a === '--scan-seeds') { out.scanSeeds = argv[++i].split(',').map(Number); }
+    // ⚠️ B34：把**各组原始统计量**落盘（JSON）⇒ 离线回归可直接重算 Welch t（无舍入误差）
+    else if (a === '--scan-json') { out.scanJson = argv[++i]; }
   }
   return out;
 }
@@ -716,6 +718,18 @@ function runGateReserveScan(args) {
       });
     }
     table.push({ reserve, samples });
+  }
+  // ⚠️ B34：**各组原始统计量**落盘 ⇒ 离线回归（门 ⑬）据此**直接重算** Welch t 与精确临界值，
+  //   不再依赖报告里**已舍入**的「均值 ± σ」⇒ 消除舍入误差。
+  if (args.scanJson !== null) {
+    const payload = {
+      tool: 'node tests/sim/run.mjs --scan-reserves <...> --scan-seeds <...> --scan-json <path>',
+      seeds,
+      gamesPerGroup: args.games * args.players.length * args.themes.length,
+      groups: table.flatMap((t) => t.samples.map((s) => ({ reserve: t.reserve, ...s }))),
+    };
+    writeFileSync(resolve(ROOT, args.scanJson), JSON.stringify(payload, null, 2) + '\n', 'utf8');
+    console.log('各组原始统计量 → ' + args.scanJson);
   }
   const mean = (t, k) => t.samples.reduce((a, s) => a + s[k], 0) / t.samples.length;
   const sd = (t, k) => {
