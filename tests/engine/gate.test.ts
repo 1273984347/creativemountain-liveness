@@ -76,6 +76,26 @@ test('B18：引擎层门禁 —— 停在关隘上时，行棋/问天/出牌一�
   assert.equal(performAction(s, 0, 'act', { cardId: 'x' }), s, '关隘未过时不得出牌');
 });
 
+test('B18-c：关隘试炼发的牌当场裁到手牌上限（结算期通道选择不破坏手牌上限）', () => {
+  // ⚠️ 根因（实测定位）：超限者**全部停在关隘格**、且只超 **1 张牌**
+  //   ⇒ 关隘 6 的试炼牌 `t_sword` 无论成败都 `draw_cards(1)`；
+  //   而试炼通道发生在**手番结算之后** ⇒ 手番末的裁牌已跑完、回合末裁牌又被阻塞延后 ⇒ 超限。
+  const s = gateScene(1); // 灵枢 1 ⇒ 付费不够，只能走试炼
+  const p0 = s.players[0];
+  assert.ok(p0 !== undefined);
+  // 把座 0 的手牌填满上限（不填满则「超限」测不出来）
+  const full = { ...p0, hand: [...p0.hand, ...p0.hand].slice(0, p0.hpMax) };
+  const fullState = { ...s, players: s.players.map((p) => (p.seat === 0 ? full : p)) };
+  assert.equal(fullState.players[0]?.hand.length, fullState.players[0]?.hpMax, '前置：手牌应已满');
+  const r = resolveGate(fullState, 0, 'trial');
+  assert.equal(r.ok, true, '试炼通道应通过：' + String(r.note));
+  const after = r.state.players[0];
+  assert.ok(
+    (after?.hand.length ?? 99) <= (after?.hpMax ?? 0),
+    '试炼发的牌必须当场裁到手牌上限内：' + String(after?.hand.length) + '/' + String(after?.hpMax),
+  );
+});
+
 test('B18：自动解算出口 —— 灵枢够就付费，不够走试炼', () => {
   const rich = autoResolveGate(gateScene(10), 0);
   assert.equal(rich.players[0]?.flags[`gate_${String(GATE_INDEX)}`], true);

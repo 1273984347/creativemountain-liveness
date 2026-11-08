@@ -64,7 +64,17 @@ function checkState(s, label) {
       problems.push(label + ' 座' + p.seat + ' 位置越界 ' + p.position);
     }
     if (!Number.isFinite(p.shield) || p.shield < 0) problems.push(label + ' 座' + p.seat + ' 护盾非法 ' + p.shield);
-    if (p.hand.length > p.hpMax) problems.push(label + ' 座' + p.seat + ' 手牌超上限');
+    if (p.hand.length > p.hpMax) {
+      // ⚠️ 异常必须带**足够定位的上下文**（B18-c 追「终局手牌超上限」用）：
+      //   只报「座N 手牌超上限」无法区分成因（回合末未跑 / 放逐未清牌 / 抽牌后未裁 / hpMax 口径）。
+      const others = s.players.map((x) => '座' + x.seat + (x.alive ? '' : '(出局)')
+        + ' h' + x.hand.length + '/' + x.hpMax + '@' + x.position).join(' ');
+      problems.push(label + ' 座' + p.seat + ' 手牌超上限 ' + String(p.hand.length) + '/' + String(p.hpMax)
+        + ' | round=' + String(s.round) + ' turnIndex=' + String(s.turnIndex)
+        + ' phase=' + s.phase + ' alive=' + String(s.players.filter((x) => x.alive).length)
+        + ' outcome=' + JSON.stringify(s.outcome)
+        + ' | ' + others);
+    }
   }
   return problems;
 }

@@ -8,6 +8,7 @@
 import type { State } from './state.ts';
 import type { Tile } from '../types/theme.ts';
 import { rollD20 } from './dice.ts';
+import { discardDownToLimit } from './hand.ts';
 import { applyEffectToState } from '../ops/registry.ts';
 
 /** 关隘操作结果。 */
@@ -109,6 +110,14 @@ function trialChannel(state: State, actor: number, tile: Tile): GateResult {
   for (const eff of trial.effects) {
     next = applyEffectToState({ state: next, actor }, eff);
   }
+  // ⚠️ B18-c：**试炼发的牌当场裁到手牌上限**。
+  //   理由：试炼通道发生在**手番结算之后**（结算期的通道选择），而手番末的裁牌
+  //   （`finishTurn`）已经跑完 ⇒ 试炼发的牌会留在手上超限；
+  //   而回合末裁牌又会被「通道选择阻塞」延后（末位手番的玩家还卡在关隘上，回合末本就还没到）
+  //   ⇒ 两者都救不了。实测：24000 局 3 条「终局 手牌超上限」，超限者**全部停在关隘格**、
+  //   且只超 1 张牌 ⇒ 正是试炼牌「本关通过后抽 1 张」的效果。
+  //   （与 `openHeaven` 的「天机牌发的牌立即裁」同款处理。）
+  next = discardDownToLimit(next, actor);
   next = {
     ...next,
     log: [...next.log, {

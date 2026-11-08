@@ -418,6 +418,22 @@ export function advanceTurn(state: State, mode: RuleMode): State {
   if (!isRoundEnd(next)) {
     return next;
   }
+  return endRound(next, mode);
+}
+
+/**
+ * **回合末流程**（规格 §3.1 步骤 7–8 与回合末结算）——与「手番推进」**解耦**的独立入口（B18-c）。
+ *
+ * ⚠️ 为什么解耦：此前回合末流程与手番推进挤在 `advanceTurn` 的一段里 ⇒
+ *   **阻塞路径**（关隘 / 裂隙的结算期通道选择）一旦提前 return，整段回合末流程被一并跳过
+ *   ⇒ 手牌上限、跨 round、天机牌、终局判定全都可能被延后。
+ *   解耦后：① 回合末流程有**独立入口与独立契约**；② 阻塞路径只影响「手番推进」；
+ *   ③ 结算期通道选择**自己负责它带来的副作用**（关隘试炼发的牌当场裁 ⇒ `gate.ts`）。
+ *
+ * ⚠️ 仍然延后的情形（**预期**，不是缺陷）：末位手番的玩家还卡在关隘 / 裂隙上没选通道时，
+ *   回合末**本就还没到**（该玩家还没走完这个手番）⇒ 回合末流程要等他选完通道后才跑。
+ */
+function endRound(next: State, mode: RuleMode): State {
   // ---- round 末：山议（7）----
   if (shouldHoldCouncil(next, mode)) {
     const opened = openCouncil(next);
