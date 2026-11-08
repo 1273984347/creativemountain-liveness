@@ -198,8 +198,18 @@ export function uiBlockNotice(state: State, seat: number, action: Action): strin
     }
     case 'PASS':
       return 'PASS（结束手番）在数字轨没有 UI 入口。';
-    case 'COMPARE':
-      return '关隘比对（COMPARE）通道已定案（B18）但尚未实现，实现列为 B19。';
+    case 'COMPARE': {
+      // ⚠️ B19：关隘出牌比对通道（规格 §3.5 B19 定案）——判据与 probeAction 对齐。
+      const gate = pendingGateHere(state, seat);
+      if (gate === null) { return '你当前不在未通过的关隘格上，无需比对。'; }
+      const card = me?.hand.find((x) => x.id === action.cardId);
+      if (card === undefined) { return '手牌里没有这张牌（可能已被弃掉或不属于你）。'; }
+      if (action.target === seat) { return '不能与自己比对。'; }
+      const foe = state.players.find((p) => p.seat === action.target);
+      if (foe === undefined) { return '目标不存在。'; }
+      if (!foe.alive) { return '目标已出局。'; }
+      return null;
+    }
     case 'GATE_RESOLVE': {
       const gate = pendingGateHere(state, seat);
       if (gate === null) { return '你当前不在未通过的关隘格上，无需选择通道。'; }

@@ -11,7 +11,7 @@ import { resolve } from 'node:path';
 
 import { createInitialState, type State } from '../../engine/core/state.ts';
 import { installTheme } from '../../engine/core/setup.ts';
-import { autoResolveGate, pendingGate, resolveGate } from '../../engine/core/gate.ts';
+import { autoResolveGate, pendingGate, resolveCompareGate, resolveGate } from '../../engine/core/gate.ts';
 import { performAction } from '../../engine/core/turn-runner.ts';
 import type { ThemePack } from '../../engine/types/theme.ts';
 
@@ -94,6 +94,43 @@ test('B18-c：关隘试炼发的牌当场裁到手牌上限（结算期通道选
     (after?.hand.length ?? 99) <= (after?.hpMax ?? 0),
     '试炼发的牌必须当场裁到手牌上限内：' + String(after?.hand.length) + '/' + String(after?.hpMax),
   );
+});
+
+test('B19：出牌比对通道 —— 胜则通过、败则退 1 格并被封口、平局同败', () => {
+  // 场景：座 0 站在关隘 6，座 1 是对手；双方手牌顶的颜色由测试指定。
+  const scene = (myColor: 'red' | 'black', theirColor: 'red' | 'black'): State => {
+    const s = gateScene(1);
+    const me = s.players[0];
+    const foe = s.players[1];
+    assert.ok(me !== undefined && foe !== undefined);
+    const myCard = me.hand[0];
+    const theirCard = foe.hand[0];
+    assert.ok(myCard !== undefined && theirCard !== undefined);
+    return {
+      ...s,
+      players: s.players.map((p) => {
+        if (p.seat === 0) { return { ...p, hand: [{ ...myCard, color: myColor, rank: 9 }, ...p.hand.slice(1)] }; }
+        if (p.seat === 1) { return { ...p, hand: [{ ...theirCard, color: theirColor, rank: 5 }, ...p.hand.slice(1)] }; }
+        return p;
+      }),
+    };
+  };
+  // 红 > 黑 ⇒ 胜 ⇒ 通过关隘
+  const win = resolveCompareGate(scene('red', 'black'), 0, scene('red', 'black').players[0]?.hand[0]?.id ?? '', 1);
+  assert.equal(win.ok, true, '比对应被受理：' + String(win.note));
+  assert.equal(win.passed, true, '红牌胜出 ⇒ 通过关隘');
+  assert.equal(win.state.players[0]?.flags[`gate_${String(GATE_INDEX)}`], true, '应记录通过标记');
+  // 黑 < 红 ⇒ 败 ⇒ 退 1 格并被封口
+  const s2 = scene('black', 'red');
+  const lose = resolveCompareGate(s2, 0, s2.players[0]?.hand[0]?.id ?? '', 1);
+  assert.equal(lose.ok, true);
+  assert.equal(lose.passed, false, '败北不应通过');
+  assert.equal(lose.state.players[0]?.position, GATE_INDEX - 1, '败北 ⇒ 退 1 格');
+  assert.equal(lose.state.players[0]?.statuses.silence ?? 0, 1, '败北 ⇒ 被封口 1 回合');
+  // 目标为自己 / 目标已出局 ⇒ 被拒
+  const s3 = scene('red', 'black');
+  const cardId = s3.players[0]?.hand[0]?.id ?? '';
+  assert.equal(resolveCompareGate(s3, 0, cardId, 0).ok, false, '不能与自己比对');
 });
 
 test('B18：自动解算出口 —— 灵枢够就付费，不够走试炼', () => {

@@ -8,7 +8,7 @@ import { Rng } from './dice.ts';
 import { advanceTurn, performAction } from './turn-runner.ts';
 import { performAbility } from './abilities.ts';
 import { castVote } from './council.ts';
-import { resolveGate } from './gate.ts';
+import { resolveGate, resolveCompareGate } from './gate.ts';
 import { resolveBarrier } from './barrier.ts';
 import {
   certifyAbstain, certifyAnswer, certifyAppeal, certifyAppealVote,
@@ -131,6 +131,8 @@ export function probeAction(state: State, action: Action): ProbeResult {
     // ⚠️ B18：COMPARE 已**定案**为「关隘出牌比对通道」（候选 A，规格 §3.5 B18 定案 4），
     //   但该通道的**实现**列为 B19 ⇒ 这里仍拒（不是「未定案」，是「已定案未实现」）。
     case 'COMPARE': return reject('关隘出牌比对通道已定案但未实现（B19）');
+    // ⚠️ B19：关隘出牌比对通道已接线（规格 §3.5 B18 定案 4 = 候选 A）。
+    case 'COMPARE': { const r = resolveCompareGate(s, action.actor, action.cardId, action.target); return byFlag(r.ok, r.note, r.state, s); }
     // ⚠️ B18：关隘付费 / 试炼两条通道已接线（规格 §3.5 B18 定案）。
     case 'GATE_RESOLVE': { const r = resolveGate(s, action.actor, action.channel); return byFlag(r.ok, r.note, r.state, s); }
     // ⚠️ B18-b：裂隙通道（放印 / 不放）。

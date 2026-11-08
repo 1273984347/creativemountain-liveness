@@ -14,7 +14,7 @@ import type { State } from './state.ts';
 import type { RuleMode } from '../scales.ts';
 import { advanceTurn } from './turn-runner.ts';
 import { autoResolveDuel } from './duel.ts';
-import { autoResolveGate, pendingGate } from './gate.ts';
+import { autoResolveGate, pendingGate, resolveCompareGate } from './gate.ts';
 import { autoResolveBarrier, pendingBarrier } from './barrier.ts';
 import { currentPlayer } from './round.ts';
 
@@ -33,8 +33,28 @@ export function advanceAuto(state: State, mode: RuleMode): State {
   }
   // ---- 关隘闭环（B18）----
   const seat = currentPlayer(next);
+  // ---- 关隘通道（AI 策略，**顺序即强度**）----
+  // ⚠️ B19 平衡修正：AI 若**总是**先比牌（胜则免灵枢过关）⇒ 资源经济被改写 ⇒
+  //   位次胜率极差从 <4pp 反弹到 **5.5pp**（实测，门 ② 平衡回归判红）。
+  // ⇒ 改为：**付费优先**（灵枢够就付费）→ **付费不可用时**才比牌 → 最后试炼兜底。
+  //   这样比对通道仍**可达**（不是死机制），但只在「付不起」时影响对局。
   if (seat >= 0 && pendingGate(next, seat) !== null) {
-    next = autoResolveGate(next, seat);
+    const me = next.players[seat];
+    const fee = next.board.tiles.find((t) => t.index === me?.position)?.gate?.fee ?? 0;
+    const canPay = (me?.resource ?? 0) >= fee;
+    if (!canPay) {
+      const foe = next.players.filter((p) => p.alive && p.seat !== seat).sort((a, b) => b.position - a.position)[0];
+      const best = [...(me?.hand ?? [])].sort((a, b) => b.rank - a.rank)[0];
+      if (foe !== undefined && best !== undefined) {
+        const r = resolveCompareGate(next, seat, best.id, foe.seat);
+        if (r.ok) { next = r.state; }
+      }
+    }
+  }
+  // ---- 关隘付费 / 试炼通道（付费优先：灵枢够就付费，否则试炼）----
+  const seatPay = currentPlayer(next);
+  if (seatPay >= 0 && pendingGate(next, seatPay) !== null) {
+    next = autoResolveGate(next, seatPay);
     next = advanceTurn(next, mode);
   }
   // ---- 裂隙闭环（B18-b）----

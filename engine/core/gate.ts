@@ -9,6 +9,7 @@ import type { State } from './state.ts';
 import type { Tile } from '../types/theme.ts';
 import { rollD20 } from './dice.ts';
 import { discardDownToLimit } from './hand.ts';
+import { compareCards } from './duel.ts';
 import { applyEffectToState } from '../ops/registry.ts';
 
 /** 关隘操作结果。 */
@@ -142,6 +143,89 @@ export function resolveGate(state: State, actor: number, channel: 'pay' | 'trial
   if (tile === null) { return fail(state, false, '当前不在未通过的关隘格上'); }
   if (channel === 'pay') { return payGate(state, actor, tile); }
   return trialChannel(state, actor, tile);
+}
+
+/**
+ * 关隘**出牌比对**通道（规格 §3.5，B18 定案 4 = 候选 A；B19 实现）。
+ *
+ * ⚠️ 规则口径（B19 裁定）：
+ *   · **我出一张牌** vs **目标玩家的手牌顶**（**明牌**：对方的牌面公开）；
+ *   · 比法与对峙同款（§3.3）：先比颜色（红 > 黑）→ 同色比点数（`rank`，A=14 最大）；
+ *   · **胜** ⇒ 通过关隘；**败或平局** ⇒ 退 1 格并被封口（`silence` +1）；
+ *   · **我方手牌为空** ⇒ 无牌可出（动作被拒）；**对方手牌为空** ⇒ 自动胜出（直接通过）；
+ *   · **出牌即弃**（无论胜负，我方那张牌离手）。
+ *
+ * ⚠️ 为什么「对方手牌顶」是**明牌**：关隘是**公开的硬门槛**，比牌结果要当场公开；
+ *   而对峙是**隐藏信息**流程（双方各自选牌、同时揭晓）—— 两者不可混用。
+ */
+export function resolveCompareGate(
+  state: State,
+  actor: number,
+  cardId: string,
+  target: number,
+): GateResult {
+  const p = state.players[actor];
+  if (p === undefined) { return fail(state, false, '玩家不存在'); }
+  const tile = pendingGate(state, actor);
+  if (tile === null) { return fail(state, false, '当前不在未通过的关隘格上'); }
+  if (target === actor) { return fail(state, false, '不能与自己比对'); }
+  const other = state.players[target];
+  if (other === undefined) { return fail(state, false, '目标不存在'); }
+  if (!other.alive) { return fail(state, false, '目标已出局'); }
+  const myCard = p.hand.find((c) => c.id === cardId);
+  if (myCard === undefined) { return fail(state, false, `手牌中无 ${cardId}`); }
+  // 出牌即弃（无论胜负）。
+  let next: State = {
+    ...state,
+    players: state.players.map((x) =>
+      x.seat === actor ? { ...x, hand: x.hand.filter((c) => c.id !== cardId) } : x),
+  };
+  const theirCard = other.hand[0];
+  if (theirCard === undefined) {
+    // 对方手牌为空 ⇒ 自动胜出（与对峙「任一方空手 ⇒ 自动落败」同款，但方向相反）。
+    const passed = passGate(next, actor, tile, '对方手牌为空，自动胜出');
+    return passed;
+  }
+  const outcome = compareCards(myCard, theirCard);
+  if (outcome === 'a') {
+    const passed = passGate(next, actor, tile, `比牌胜出（${myCard.name} > ${theirCard.name}）`);
+    return passed;
+  }
+  // 败 / 平局 ⇒ 退 1 格并被封口。
+  // ⚠️ 退格用**显式实现**（与对峙 `duel.pushBack` 同款）—— 不走 `move_backward` 算子：
+  //   该算子的 target 语义是「被移动的玩家」，实测按预期传参**未生效** ⇒ 显式更可控。
+  next = {
+    ...next,
+    players: next.players.map((x) =>
+      x.seat === actor ? { ...x, position: Math.max(1, x.position - 1) } : x),
+  };
+  next = applyEffectToState({ state: next, actor }, { op: 'silence', amount: 1, target: actor });
+  next = {
+    ...next,
+    log: [...next.log, {
+      round: next.round, turnIndex: next.turnIndex, actor, kind: 'gate',
+      message: outcome === 'b'
+        ? `比牌败北（${myCard.name} < ${theirCard.name}）—— 退 1 格并被封口`
+        : `比牌平局（${myCard.name} = ${theirCard.name}）—— 退 1 格并被封口`,
+    }],
+  };
+  return { ok: true, state: next, passed: false, note: '比牌未胜：退 1 格并被封口' };
+}
+
+/**
+ * 标记关隘已通过（写 `gate_<index>` 标记并留日志）。
+ */
+function passGate(state: State, actor: number, tile: Tile, note: string): GateResult {
+  const next: State = {
+    ...state,
+    players: state.players.map((x) =>
+      x.seat === actor ? { ...x, flags: { ...x.flags, [`gate_${tile.index}`]: true } } : x),
+    log: [...state.log, {
+      round: state.round, turnIndex: state.turnIndex, actor, kind: 'gate',
+      message: `关隘：${note}`,
+    }],
+  };
+  return { ok: true, state: next, passed: true, note };
 }
 
 /**

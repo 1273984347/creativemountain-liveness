@@ -69,10 +69,19 @@ function actionPhaseCandidates(state: State, seat: number): Action[] {
   // ⚠️ 这一分支**不受行动窗口的其它判据约束**（含 isRoundEnd）：该手番已经行动过
   //   （地形在手番末结算），若沿用行动窗口会把通道候选也一并关掉 ⇒ 关隘永远选不了。
   if (pendingGate(state, seat) !== null) {
-    return [
+    const out: Action[] = [
       { type: 'GATE_RESOLVE', actor: seat, channel: 'pay' },
       { type: 'GATE_RESOLVE', actor: seat, channel: 'trial' },
     ];
+    // ⚠️ B19：出牌比对通道 —— 候选 = 我的每张牌 × 每个存活对手（引擎试跑会拒掉无效组合）。
+    const me = state.players[seat];
+    for (const other of state.players) {
+      if (!other.alive || other.seat === seat) { continue; }
+      for (const card of me?.hand ?? []) {
+        out.push({ type: 'COMPARE', actor: seat, cardId: card.id, target: other.seat });
+      }
+    }
+    return out;
   }
   // ⚠️ B18-b：停在**可放印的裂隙格** ⇒ 只发两条通道候选（放印 / 不放）。
   if (pendingBarrier(state, seat) !== null) {
