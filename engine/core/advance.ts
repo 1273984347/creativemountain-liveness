@@ -41,8 +41,12 @@ export function advanceAuto(state: State, mode: RuleMode): State {
   if (seat >= 0 && pendingGate(next, seat) !== null) {
     const me = next.players[seat];
     const fee = next.board.tiles.find((t) => t.index === me?.position)?.gate?.fee ?? 0;
+    // ⚠️ B24：**比牌门槛仍是「完全付不起」**（B19 口径：比对通道只在付费通道不可用时才影响对局
+    //   ⇒ 位次胜率极差不反弹）；B24 只把「付费」的门槛抬高为「付费后仍有余量」。
+    // ⚠️ 但**已改为付费**的关隘只剩付费通道 ⇒ 此时不得比牌（否则绕过粗筛的既定口径）。
+    const fallback = me?.flags[`gate_pay_${String(me?.position)}`] === true;
     const canPay = (me?.resource ?? 0) >= fee;
-    if (!canPay) {
+    if (!canPay && !fallback) {
       const foe = next.players.filter((p) => p.alive && p.seat !== seat).sort((a, b) => b.position - a.position)[0];
       const best = [...(me?.hand ?? [])].sort((a, b) => b.rank - a.rank)[0];
       if (foe !== undefined && best !== undefined) {

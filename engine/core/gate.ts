@@ -12,6 +12,26 @@ import { discardDownToLimit } from './hand.ts';
 import { compareCards } from './duel.ts';
 import { applyEffectToState } from '../ops/registry.ts';
 
+/**
+ * AI 关隘策略的**余量门槛**：付费后仍要留有余量灵枢，才值得直接付费。
+ *
+ * ⚠️ 为什么改（B24）：原策略「灵枢够就付费」⇒ 试炼通道在真实对局里几乎不被使用
+ *   （实测 24000 局仅 **9 次**，12 张试炼牌里 6 张一次都没出现）⇒ 试炼机制形同虚设。
+ * ⚠️ 余量规则的**真实含义**：试炼失败 ⇒ 本关改为付费 ⇒ 最终仍要付费；
+ *   余量不是「省下来」，而是「**先博一把**」——试炼通过还有额外收益（主题包 then 分支）。
+ */
+export const GATE_RESOURCE_RESERVE = 2;
+
+/**
+ * AI 是否**体面地**付得起这道关隘：付费后仍余 ≥ `reserve` 灵枢。
+ *
+ * ⚠️ **单一事实源**：`advance.ts`（要不要先比牌）与 `autoResolveGate`（付费还是试炼）共用本判据，
+ *   各写一份 ⇒ 两处口径漂移 ⇒ 出现「不比对牌也不付费」或「付费了却先比牌」等怪状态。
+ */
+export function canPayGateWithReserve(resource: number, fee: number, reserve = GATE_RESOURCE_RESERVE): boolean {
+  return resource - fee >= reserve;
+}
+
 /** 关隘操作结果。 */
 export interface GateResult {
   readonly ok: boolean;
@@ -159,6 +179,11 @@ export function resolveGate(state: State, actor: number, channel: 'pay' | 'trial
   if (p === undefined) { return fail(state, false, '玩家不存在'); }
   const tile = pendingGate(state, actor);
   if (tile === null) { return fail(state, false, '当前不在未通过的关隘格上'); }
+  // ⚠️ B24：**本关已改为付费**（试炼失败后）⇒ 引擎层**拒绝**再走试炼通道。
+  //   粗筛（legal.ts）早已只发 `pay`，但引擎层不拒 ⇒ 脚本/测试可绕过粗筛重复试炼。
+  if (channel === 'trial' && p.flags[`gate_pay_${tile.index}`] === true) {
+    return fail(state, false, '本关已改为付费（试炼失败后），不能再走试炼通道');
+  }
   if (channel === 'pay') {
     const fee = tile.gate?.fee ?? 0;
     const mine = p.resource;
@@ -200,6 +225,10 @@ export function resolveCompareGate(
   const tile = pendingGate(state, actor);
   if (tile === null) { return fail(state, false, '当前不在未通过的关隘格上'); }
   if (target === actor) { return fail(state, false, '不能与自己比对'); }
+  // ⚠️ B24：**本关已改为付费**（试炼失败后）⇒ 只剩付费通道 ⇒ 引擎层**拒绝**出牌比对。
+  if (p.flags[`gate_pay_${tile.index}`] === true) {
+    return fail(state, false, '本关已改为付费（试炼失败后），不能再走出牌比对通道');
+  }
   const other = state.players[target];
   if (other === undefined) { return fail(state, false, '目标不存在'); }
   if (!other.alive) { return fail(state, false, '目标已出局'); }
@@ -302,7 +331,10 @@ export function autoResolveGate(state: State, seat: number): State {
   // ⚠️ B22：**已转为付费**（试炼失败后）⇒ 只能走付费通道；付不起时 resolveGate('pay')
   //   会判「未通过并放行」⇒ 否则 AI 会反复试炼同一张失败牌 ⇒ **死循环**（实测：超 584 步）。
   const fallback = p !== undefined && p.flags[`gate_pay_${tile.index}`] === true;
-  const channel = (p !== undefined && p.resource >= fee) || fallback ? 'pay' : 'trial';
+  // ⚠️ B24：**付费后仍要留有余量**才付费 ⇒ 否则走试炼（博一把：通过有额外收益，失败则改为付费）。
+  //   fallback 分支仍必须走 pay（否则又回到 B22 的死循环）。
+  const channel = fallback ? 'pay'
+    : (canPayGateWithReserve(p?.resource ?? 0, fee) ? 'pay' : 'trial');
   const r = resolveGate(state, seat, channel);
   return r.ok ? r.state : state;
 }

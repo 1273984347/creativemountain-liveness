@@ -883,6 +883,15 @@ if (args.check) {
   if (summary.duelTotal <= 0) {
     problems.push('对峙在真实对局中从未发生（对峙消费点可能已丢失）');
   }
+  // ⚠️ B24：**试炼通道可达性** —— 每张试炼牌都必须在真实对局中被抽到过。
+  //   B23 实测：AI「灵枢够就付费」⇒ 24000 局仅 9 次 ⇒ 12 张里 6 张一次都没出现（机制形同虚设）。
+  //   B24 的余量规则把使用率提上来 ⇒ 这里锁住「每张牌都被抽到过」，防策略再退化。
+  const unseen = [...allTrialIds].filter((id) => (summary.trialDraws.get(id) ?? 0) <= 0);
+  if (allTrialIds.size === 0) {
+    problems.push('未找到任何试炼牌（主题包数据异常）');
+  } else if (unseen.length > 0) {
+    problems.push('以下试炼牌在真实对局中一次都没被抽到：' + unseen.join('、'));
+  }
   if (problems.length > 0) {
     console.error('FAIL  ' + problems.join('；'));
     process.exit(1);

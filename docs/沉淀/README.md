@@ -21,6 +21,7 @@
 - [从源码派生避免第二事实源.md](从源码派生避免第二事实源.md) —— 手抄清单的替代做法与已知反例
 - [经验教训索引.md](经验教训索引.md) —— B10–B13 实证坑与通用化结论
 - [clean-room-gate-check.mjs](clean-room-gate-check.mjs) —— 干净副本门禁自检脚本（可直接跑：`node docs/沉淀/clean-room-gate-check.mjs`）
+- [balance-extract.mjs](balance-extract.mjs) —— 从平衡报告抽**位次胜率极差**（§9.2 口径；默认报告模式，`--strict` 才判红）
 - `theme-*.mjs` —— 主题包改造工具（文本级替换，禁 JSON 往返）：
   - [theme-trial-challenges.mjs](theme-trial-challenges.mjs) —— 试炼批量改造为**挑战型** + 四池互不重复（B22）
   - [theme-board-expand.mjs](theme-board-expand.mjs) —— 棋盘扩展 + 关隘编排（B21）
