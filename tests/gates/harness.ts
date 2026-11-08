@@ -33,13 +33,14 @@ export interface GateRun {
  *    会误以为自己是「被指定文件」的子进程，于是**不扫 glob**。
  *    实测：注入一个必失败的测试文件后，内层仍返回 0 ⇒ 负样本**假绿**。
  */
-export function runNode(args: readonly string[]): GateRun {
+export function runNode(args: readonly string[], opts: { readonly cwd?: string } = {}): GateRun {
   const env = { ...process.env };
   delete env.NODE_TEST_CONTEXT;
   const res = spawnSync(process.execPath, [...args], {
     encoding: 'utf8',
     shell: false,
-    cwd: process.cwd(),
+    // ⚠️ B17：支持指定 cwd —— 负样本要在**隔离副本**里跑（就地改共享工作树会污染并行测试）。
+    cwd: opts.cwd ?? process.cwd(),
     env,
     maxBuffer: 64 * 1024 * 1024,
   });

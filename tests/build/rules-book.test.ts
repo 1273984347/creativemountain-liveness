@@ -10,35 +10,21 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 
 import { checkRulesBookTerrain, TERRAIN_CONTRACT } from '../../tools/rules-book-contract.mjs';
-import { copyTracked } from '../../tools/repo-copy.mjs';
+import { DOC_SYNC_INCLUDE, makeIsolatedRepo } from '../../tools/repo-copy.mjs';
 import { narrationHtml } from '../../build/narration.ts';
 
 const ROOT = process.cwd();
 const SPEC_REL = 'docs/superpowers/specs/2026-11-07-creative-mountain-liveness-design.md';
 const NARRATION_REL = 'print/规则书叙述.md';
 
-/** 副本清单：doc-sync 的全部依赖（它只读规格 + 代码 + 规则书叙述模板）。 */
-const COPY_INCLUDE = [
-  'tools/',
-  'engine/',
-  'docs/superpowers/specs/',
-  'print/规则书叙述.md',
-  'package.json',
-  'tsconfig.json',
-  'esbuild.config.mjs',
-];
-
-/** 建立隔离副本。 */
+/** 建立隔离副本（清单与门禁负样本共用 `tools/repo-copy.mjs` 的**单一事实源**）。 */
 function makeCopy(): string {
-  const dir = mkdtempSync(resolve(tmpdir(), 'cm-rb-'));
-  copyTracked(ROOT, dir, { include: COPY_INCLUDE });
-  return dir;
+  return makeIsolatedRepo(ROOT, DOC_SYNC_INCLUDE);
 }
 
 /** 在副本里跑真门禁（门 ③ doc-sync）。 */
@@ -97,6 +83,31 @@ test('正样本 D（渲染链）：叙述渲染支持三级小节 / 表格 / 行
   assert.match(html, /<table class="grid compact">/, '表格应渲染为 table');
   assert.doesNotMatch(html, /\|---/, '表格分隔行不应出现在输出里');
   assert.doesNotMatch(html, /###/, '输出不应残留 Markdown 标记 ###');
+});
+
+test('防复活（B17 裁定）：规格 §3.4 险径行与规则书都不得再出现「失去本回合剩余行动」', () => {
+  const s = spec();
+  const i = s.indexOf('### 3.4 地形');
+  const j = s.indexOf('### 3.5', i);
+  assert.ok(i >= 0 && j > i, '规格应含 §3.4 地形段');
+  const row = s.slice(i, j).split(/\r?\n/).find((l) => l.trim().startsWith('|') && l.includes('险径'));
+  assert.ok(row !== undefined, '§3.4 应有险径行');
+  assert.doesNotMatch(row, /失去本回合剩余行动/, 'B17 已裁定删除该子句，规格不得回填');
+  assert.doesNotMatch(narration(), /失去本回合剩余行动/, '规则书不得保留已删除的子句');
+});
+
+test('裂隙判定口径（B17 裁定）：小节与地形总表口径一致（都必须是「任何玩家」）', () => {
+  // ⚠️ 只改小节不改总表 ⇒ 规则书**内部自相矛盾**（实测踩过），故两处都要钉。
+  const n = narration();
+  const row = n.split(/\r?\n/).find((l) => l.trim().startsWith('|') && l.includes('{{rift}}'));
+  assert.ok(row !== undefined, '地形总表应有裂隙行');
+  assert.match(row, /任何玩家/, '地形总表的裂隙口径必须是「任何玩家」：' + row);
+  assert.doesNotMatch(row, /持有者经过时需判定/, '总表不得残留旧口径');
+});
+
+test('裂隙判定口径（B17 裁定）：该格任何玩家经过都需判定，含放置者本人', () => {
+  assert.match(narration(), /任何玩家.*经过该格都需判定/, '规则书应写明任何玩家经过都判定');
+  assert.match(narration(), /包括放置封路印的人本人/, '规则书应写明放置者本人同样要判定');
 });
 
 test('正样本（函数级）：当前规则书覆盖规格 §3.4 全部地形', () => {

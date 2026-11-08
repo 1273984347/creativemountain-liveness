@@ -1,10 +1,14 @@
-// 负样本集中文件：**所有会修改共享文件的负样本都在这里**。
+// 负样本集中文件：**所有会修改文件的负样本都在这里**。
 //
-// 为什么要集中在一个文件：node:test 默认**跨文件并发**跑测试文件。两个负样本分别改
-// 「规格」与「state.ts」时并发执行，A 的「恢复」会冲掉 B 的「破坏」⇒ 两个都假红。
-// 放在**同一文件**内 ⇒ 天然串行 ⇒ 互不干扰。
+// ⚠️ **B17 改造（从「就地改共享工作树」改为「隔离副本」）**：
+//   原实现就地改仓库里的规格 / state.ts（改 → 跑 → 恢复）。文件头注释说「集中在同一
+//   文件内即可互不干扰」—— 但那只解决了**负样本之间**的冲突，**没解决与其它测试文件
+//   的冲突**：node:test 跨文件并发跑，而 `discipline.test.ts` 也读同一份规格
+//   ⇒ 它会在本文件「破坏窗口」内读到**中间态** ⇒ 门禁瞬时假红。
+//   实测：门 ② 红在「规格必须含『门禁覆盖边界』小节」，而**单跑该文件全绿**。
+//   ⇒ 现在一律在**隔离副本**里改副本，共享工作树全程只读。
 //
-// 每个用例都用 try/finally 保证恢复（无论断言是否失败）。
+// 每个用例都用 try/finally 清理副本（无论断言是否失败）。
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -12,10 +16,11 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { runNode } from './harness.ts';
+import { DOC_SYNC_INCLUDE, makeIsolatedRepo, removeIsolatedRepo } from '../../tools/repo-copy.mjs';
 
-const SPEC = resolve('docs/superpowers/specs/2026-11-07-creative-mountain-liveness-design.md');
-const STATE = resolve('engine/core/state.ts');
-const DOC_SYNC = resolve('tools', 'doc-sync.mjs');
+const ROOT = process.cwd();
+const SPEC_REL = 'docs/superpowers/specs/2026-11-07-creative-mountain-liveness-design.md';
+const STATE_REL = 'engine/core/state.ts';
 
 /**
  * 在规格文件上做一次「改坏 → 跑门禁 → 还原」的完整负样本。
@@ -24,19 +29,23 @@ const DOC_SYNC = resolve('tools', 'doc-sync.mjs');
  * 表达式体末尾的 `;` 会落在函数实参列表内部，TS 报 TS1005「')' expected」。
  */
 function withBrokenSpec(mutate: (spec: string) => string, assertFail: (output: string) => void): void {
-  const original = readFileSync(SPEC, 'utf8');
-  const broken = mutate(original);
-  assert.notEqual(broken, original, '负样本必须真的改动文件，否则证明不了任何东西');
-  writeFileSync(SPEC, broken, 'utf8');
+  const dir = makeIsolatedRepo(ROOT, DOC_SYNC_INCLUDE);
   try {
-    const run = runNode([DOC_SYNC]);
+    const specPath = resolve(dir, SPEC_REL);
+    const original = readFileSync(specPath, 'utf8');
+    const broken = mutate(original);
+    assert.notEqual(broken, original, '负样本必须真的改动文件，否则证明不了任何东西');
+    writeFileSync(specPath, broken, 'utf8');
+    const run = runNode([resolve(dir, 'tools', 'doc-sync.mjs')], { cwd: dir });
     assert.notEqual(run.code, 0, 'doc-sync 对口径漂移必须判红');
     assertFail(run.output);
+    // 「恢复必绿」：在副本里恢复后仍须判绿（副本可恢复 ⇒ 仓库自然不受影响）
+    writeFileSync(specPath, original, 'utf8');
+    const restored = runNode([resolve(dir, 'tools', 'doc-sync.mjs')], { cwd: dir });
+    assert.equal(restored.code, 0, '恢复后 doc-sync 必须判绿');
   } finally {
-    writeFileSync(SPEC, original, 'utf8');
+    removeIsolatedRepo(dir);
   }
-  const restored = runNode([DOC_SYNC]);
-  assert.equal(restored.code, 0, '恢复后 doc-sync 必须判绿');
 }
 
 // ---------- 负样本：算子清单漂移 ----------
@@ -96,18 +105,21 @@ test('负样本：doc-sync 对「规格多写代码没有的字段」判红，�
 
 // ---------- 负样本：C9 方向一（代码多字段）----------
 test('C9 方向一：代码加了字段但规格未登记 → doc-sync 判红，恢复后判绿', () => {
-  const original = readFileSync(STATE, 'utf8');
-  const patched = original.replace('  readonly scales: ScalesRow;', '  readonly scales: ScalesRow;\n  brandNewField: string;');
-  assert.notEqual(patched, original, '必须真的改到代码，否则证明不了任何东西');
-  writeFileSync(STATE, patched, 'utf8');
+  const dir = makeIsolatedRepo(ROOT, DOC_SYNC_INCLUDE);
   try {
-    const run = runNode([DOC_SYNC]);
+    const statePath = resolve(dir, STATE_REL);
+    const original = readFileSync(statePath, 'utf8');
+    const patched = original.replace('  readonly scales: ScalesRow;', '  readonly scales: ScalesRow;\n  brandNewField: string;');
+    assert.notEqual(patched, original, '必须真的改到代码，否则证明不了任何东西');
+    writeFileSync(statePath, patched, 'utf8');
+    const run = runNode([resolve(dir, 'tools', 'doc-sync.mjs')], { cwd: dir });
     assert.notEqual(run.code, 0, '代码加了字段而规格未登记，doc-sync 必须判红');
     assert.match(run.output, /C9/, '应报在 C9 State 契约检查上');
     assert.match(run.output, /brandNewField/, '报错信息应指出未登记的字段名');
+    writeFileSync(statePath, original, 'utf8');
+    const restored = runNode([resolve(dir, 'tools', 'doc-sync.mjs')], { cwd: dir });
+    assert.equal(restored.code, 0, '恢复后 doc-sync 必须判绿');
   } finally {
-    writeFileSync(STATE, original, 'utf8');
+    removeIsolatedRepo(dir);
   }
-  const restored = runNode([DOC_SYNC]);
-  assert.equal(restored.code, 0, '恢复后 doc-sync 必须判绿');
 });

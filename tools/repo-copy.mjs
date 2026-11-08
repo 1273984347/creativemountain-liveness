@@ -7,7 +7,8 @@
 // ⚠️ 复制的是**工作树内容**（不是 git 检出）—— 副本要反映当前未提交的改动。
 
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 
 /**
@@ -60,4 +61,41 @@ export function copyTracked(root, dest, { include = [], exclude = [] } = {}) {
     n += 1;
   }
   return n;
+}
+
+/**
+ * 跑门 ③（doc-sync）所需的最小文件集 —— **单一事实源**。
+ *
+ * ⚠️ 为什么要含 `print/规则书叙述.md`：C10 要读它（规则书地形覆盖校验）⇒
+ *   副本缺它 ⇒ doc-sync 因 C10 判红 ⇒ 「恢复后判绿」的断言会被误判为缺陷。
+ */
+export const DOC_SYNC_INCLUDE = [
+  'tools/',
+  'engine/',
+  'docs/superpowers/specs/',
+  'print/规则书叙述.md',
+  'package.json',
+  'tsconfig.json',
+  'esbuild.config.mjs',
+];
+
+/**
+ * 建一个**隔离副本**（工作树快照），供负样本在副本里改副本。
+ *
+ * ⚠️ 为什么必须隔离：node:test **跨文件并发**跑测试文件；负样本若就地改共享工作树
+ *   ⇒ 并行读的其它测试会读到**中间态** ⇒ 门禁瞬时假红（B17 实测踩过）。
+ *
+ * @param {string} root 仓库根
+ * @param {readonly string[]} [include] 复制清单（默认 DOC_SYNC_INCLUDE）
+ * @returns {string} 副本目录
+ */
+export function makeIsolatedRepo(root, include = DOC_SYNC_INCLUDE) {
+  const dir = mkdtempSync(resolve(tmpdir(), 'cm-iso-'));
+  copyTracked(root, dir, { include });
+  return dir;
+}
+
+/** 清理隔离副本（务必在 finally 里调用）。 */
+export function removeIsolatedRepo(dir) {
+  rmSync(dir, { recursive: true, force: true });
 }
