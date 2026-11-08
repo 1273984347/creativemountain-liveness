@@ -11,7 +11,7 @@ import { stateToJson, stateFromJson } from '../engine/core/serialize.ts';
 import { installTheme } from '../engine/core/setup.ts';
 import type { Action } from '../engine/core/action.ts';
 import { uiAllows, uiBlockNotice, uiHasLegalTarget, pendingGateHere, pendingBarrierHere } from './legal-gate.ts';
-import { resolveGate } from '../engine/core/gate.ts';
+import { resolveGate, resolveCompareGate } from '../engine/core/gate.ts';
 import { resolveBarrier } from '../engine/core/barrier.ts';
 import { THEMES, themeById } from './theme.ts';
 import { el, button, section } from './ui/dom.ts';
@@ -37,6 +37,8 @@ interface Ui {
   pendingTargetCardId: string | null;
   /** B12：发动身份被动时等待选目标（窃火者偷灵枢） */
   pendingAbility: boolean;
+  /** B19-c：关隘出牌比对 —— 已选定的对手座位号（null = 未进入比对选择） */
+  pendingCompareTarget: number | null;
   /** 一次性提示（发动结果 / 失败原因） */
   notice: string | null;
 }
@@ -92,6 +94,7 @@ const ui: Ui = {
   seat: 0,
   pendingTargetCardId: null,
   pendingAbility: false,
+  pendingCompareTarget: null,
   notice: null,
 };
 
@@ -104,6 +107,7 @@ function newGame(): void {
   ui.seat = 0;
   ui.pendingTargetCardId = null;
   ui.pendingAbility = false;
+  ui.pendingCompareTarget = null;
   ui.notice = null;
   render();
 }
@@ -222,6 +226,7 @@ function renderToolbar(): HTMLElement {
   seatSel.addEventListener('change', () => {
     ui.seat = Number(seatSel.value);
     ui.pendingTargetCardId = null;
+    ui.pendingCompareTarget = null;
     render();
   });
   bar.append(el('label', { class: 'lbl', text: '操作者' }), seatSel);
@@ -339,6 +344,33 @@ function resolveBarrierChannel(channel: 'place' | 'skip'): void {
 }
 
 /**
+ * 提交关隘**出牌比对**（规格 §3.5，B19-c）。
+ *
+ * ⚠️ 两段交互的第二段：玩家已选好对手，这里只差「我出哪张牌」。
+ */
+function submitCompare(cardId: string, target: number): void {
+  const seat = ui.seat;
+  ui.pendingCompareTarget = null;
+  const action: Action = { type: 'COMPARE', actor: seat, cardId, target };
+  // 门禁:比牌提交 —— 与出牌 / 被动 / 关隘通道同闸（拒绝不沉默）。
+  if (!uiAllows(ui.state, seat, action)) {
+    ui.notice = uiBlockNotice(ui.state, seat, action) ?? '当前无法出牌比对。';
+    render();
+    return;
+  }
+  const r = resolveCompareGate(ui.state, seat, cardId, target);
+  if (!r.ok) {
+    ui.notice = '比牌未能进行：' + r.note;
+    render();
+    return;
+  }
+  ui.state = r.state;
+  ui.notice = r.note ?? '';
+  ui.state = advanceTurn(ui.state, ui.mode);
+  render();
+}
+
+/**
  * B12：发动身份被动（规格 §4.1 主动型：匠师 / 观星者 / 窃火者 / 织梦者）。
  *
  * 发动**占用本回合的行动**（规格 §3.1 行动三选一）⇒ 成功后直接推进回合。
@@ -394,6 +426,32 @@ function renderActions(): HTMLElement {
     }
     body.push(button('付费通过（' + String(gate.fee) + '）', () => { resolveGateChannel('pay'); }, !canPay));
     body.push(button('试炼闯关', () => { resolveGateChannel('trial'); }));
+    // ⚠️ B19-c：出牌比对通道（**两段交互**：先选对手 → 再点自己的一张牌）。
+    //   仅在「本关未转为付费」时提供（转为付费后只剩付费通道）。
+    if (!gate.payOnly) {
+      if (ui.pendingCompareTarget === null) {
+        for (const other of ui.state.players) {
+          if (!other.alive || other.seat === seat) { continue; }
+          body.push(button('与座' + String(other.seat) + ' 比牌', () => {
+            ui.pendingCompareTarget = other.seat;
+            ui.notice = '已选座' + String(other.seat) + '：现在点你的一张牌（对方亮出的是他手牌顶）。';
+            render();
+          }));
+        }
+      } else {
+        body.push(el('div', { class: 'warn', text: '出牌比对：已选座' + String(ui.pendingCompareTarget) + ' —— 点你的一张牌完成比对（对方亮出的是他手牌顶）。' }));
+        body.push(button('取消比对', () => {
+          ui.pendingCompareTarget = null;
+          ui.notice = '已取消出牌比对。';
+          render();
+        }));
+        body.push(renderHand(ui.state, theme, seat, (cardId) => {
+          const target = ui.pendingCompareTarget;
+          if (target === null) { return; }
+          submitCompare(cardId, target);
+        }));
+      }
+    }
     return section('关隘', ...body);
   }
   // ⚠️ B18-b：停在**可放印的裂隙格** ⇒ 只显示裂隙面板（放印 / 不放）。

@@ -1169,6 +1169,13 @@ function afterAnchor(src: string, anchor: string, lines: number): string {
   return src.slice(at).split('\n').slice(0, lines).join('\n');
 }
 
+test('接线（R-3 常驻，B19-c）：关隘比牌的提交路径必须走同一道闸', () => {
+  const mainSrc = readFileSync('web/main.ts', 'utf8');
+  const area = afterAnchor(mainSrc, '// 门禁:比牌提交', 12);
+  assert.match(area, /uiAllows\(/, '比牌提交必须过闸（否则玩家能在不该比时比牌）');
+  assert.match(area, /uiBlockNotice\(/, '被拒时必须给出拒因（拒绝不沉默）');
+});
+
 test('接线（R-1/R-2 常驻）：web/main.ts 的五处入口与 web/ui/cert.ts 的按钮必须逐处走同一道闸', () => {
   const mainSrc = readFileSync('web/main.ts', 'utf8');
   // ① 被动按钮：**显隐条件本身**必须含门禁结果（只看 ability.usable 就是发现 A 旁路一）。
