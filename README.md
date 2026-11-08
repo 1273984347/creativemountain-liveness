@@ -29,7 +29,6 @@ npm install
 npm run typecheck      # 类型门禁（tsc --noEmit）
 npm test               # 单元与门禁自检
 npm run build          # 类型门禁 + esbuild 打包单文件 HTML
-npm run build:themes   # 由 build/theme-data/*.mjs 重新生成三套新主题
 npm run build:print    # 四套主题的 IR → SVG → HTML → PDF
 npm run build:package  # 打包 dist/发布包/
 npm run release:check  # 发布前检查：门禁 + 全量重扫 + 逐组比对（漂移即失败，约 10 分钟）
@@ -49,7 +48,11 @@ npm run gate           # 十三道门禁全跑
 | ⑥ | IR 契约 | 四套主题的 ir.json ↔ IR 类型契约 |
 | ⑦ | 双轨一致性 | IR/SVG 精确比对 + 数值溯源 + PDF 粗检（4 套 × 4 级） |
 | ⑧ | 主题差异化 | 规格 §10.1 两张清单的机械判定 + **跨主题术语串戏** |
-| ⑨ | 规模与平衡 | 720 局冒烟：零异常 + 兜底触发率 < 15% |
+| ⑨ | 规模与平衡 | 30 局冒烟：零异常 + 兜底触发率 < 15% |
+| ⑩ | 对峙端到端 | Playwright 真浏览器：触发对峙 → 回合锁定 → 选牌 → 揭晓 → 解锁 |
+| ⑪ | 试炼通过率平衡 | 12 张试炼牌实测通过率 vs 目标区间（单色≈95% / 单类型≈55% / 类型+颜色≈20%） |
+| ⑫ | 位次极差回归锁 | 固定 seed + 固定局数 ⇒ 确定性：最大极差 ≤ 11pp 且 RMS 偏离 ≤ 4.5pp |
+| ⑬ | 余量判定离线回归 | 用已发布的多 seed 数据重算 Welch t 与精确临界值 ⇒ 判定不漂移 |
 
 ## 目录
 

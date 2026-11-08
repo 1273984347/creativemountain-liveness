@@ -70,4 +70,22 @@ export const COVERAGE_BOUNDARIES = [
     reason: '关隘与裂隙的「到达即结算」在引擎侧尚未接线（payGate/drawTrial 全仓零引用；place_barrier 无卡牌入口）⇒ 规则书按规格写全即与引擎存在可预见的暂时差距（施工方案见规格 §3.4 / §3.5 的 B17 条款）',
     fallback: 'C10 只做**章节与要点关键词**的结构性覆盖校验；双轨行为一致性待 B18 接线后由 parity-check 增补比对。险径黑牌的「失去本回合剩余行动」已由 B17 裁定删除（无执行语义），不属本边界。',
   },
+  {
+    id: 'ci-config-absent',
+    notCovered: 'CI 配置里的自检入口标识（仓库当前**没有任何** CI 配置）',
+    reason: 'CI 路径清单（.github / .gitlab-ci.yml / .circleci / azure-pipelines.yml / Jenkinsfile）在真实仓库上全部不存在 ⇒ 该类断言恒为空集；空集无法区分「检查有效」与「断言写错了」',
+    fallback: '负样本 tests/gates/repo-selftest-scope-negative.test.ts 在**隔离临时目录**造出含标识的 CI 配置 ⇒ 断言 CI 检查确实会红（B51）',
+  },
+  {
+    id: 'scan-skip-dirs',
+    notCovered: '扫描器跳过的目录**内部**（node_modules / .git / dist / print / coverage / .tmp / .vscode / .idea）',
+    reason: '这些目录体量大且多为生成物与依赖，逐一读取会拖慢门禁且无意义；实测已有一个**已入库的源文件**（print/ 下的规则书叙述模板）落在其中；另：隔离副本无 git 元数据时，「已入库」判定不执行（该守卫在副本里显式 skipped，非静默通过）',
+    fallback: '跳过目录内的**已入库**文件由例外白名单 SCAN_EXCEPTIONS 登记并单独扫描；「实际集合 == 登记集合」的断言保证盲区不会静默扩大（B51）',
+  },
+  {
+    id: 'scan-binary-and-large',
+    notCovered: '**二进制**文件与**大于 2MB** 的文件内容（按体积与字节标记判定跳过）',
+    reason: '二进制/大文件的字节流里做标识匹配无意义，且会拖慢门禁',
+    fallback: '断言「无已入库文件超过体积上限」⇒ 跳过集合不随时间静默扩大（B51）',
+  },
 ];

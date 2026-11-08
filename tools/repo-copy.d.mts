@@ -1,4 +1,5 @@
 export declare function repoFiles(root: string): string[];
+export declare function trackedFiles(root: string): string[];
 export declare function copyTracked(
   root: string,
   dest: string,

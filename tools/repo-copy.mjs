@@ -36,6 +36,26 @@ export function repoFiles(root) {
 }
 
 /**
+ * 列出**已入库**的文件（相对路径，/ 分隔）—— 不含未跟踪文件。
+ *
+ * = `git ls-files --cached`（同样带 `-c core.quotePath=false` ⇒ 中文路径不转义）。
+ *
+ * ⚠️ 为什么与 `repoFiles()` 分开：`repoFiles()` 是「工作树快照」（含未跟踪文件），
+ *   用于**复制副本**；本函数用于「判断某个目录里**哪些文件是入库的**」——
+ *   即「扫描盲区里有没有真源文件」⇒ 必须排除未跟踪的生成物。
+ *
+ * @param {string} root 仓库根
+ * @returns {string[]}
+ */
+export function trackedFiles(root) {
+  const r = spawnSync('git', ['-c', 'core.quotePath=false', 'ls-files', '--cached'], {
+    cwd: root, encoding: 'utf8', shell: false, maxBuffer: 64 * 1024 * 1024,
+  });
+  if (r.status !== 0) { throw new Error('git ls-files --cached 失败：' + (r.stderr ?? '')); }
+  return r.stdout.split(/\r?\n/).filter((l) => l.length > 0);
+}
+
+/**
  * 把跟踪文件复制到目标目录（保持相对路径）。
  *
  * @param {string} root 仓库根
