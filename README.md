@@ -32,7 +32,8 @@ npm run build          # 类型门禁 + esbuild 打包单文件 HTML
 npm run build:themes   # 由 build/theme-data/*.mjs 重新生成三套新主题
 npm run build:print    # 四套主题的 IR → SVG → HTML → PDF
 npm run build:package  # 打包 dist/发布包/
-npm run release        # build + build:print + build:package
+npm run release:check  # 发布前检查：门禁 + 全量重扫 + 逐组比对（漂移即失败，约 10 分钟）
+npm run release        # release:check + build + build:print + build:package
 npm run gate           # 十三道门禁全跑
 ```
 

@@ -18,7 +18,8 @@
     "build:print": "node build/build-print-all.mjs",
     "print": "npm run build:ir && npm run build:print",
     "build:package": "node build/build-package.mjs",
-    "release": "npm run build && npm run build:print && npm run build:package"
+    "release:check": "node tools/release-check.mjs",
+    "release": "npm run release:check && npm run build && npm run build:print && npm run build:package"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
