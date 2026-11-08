@@ -12,7 +12,7 @@ import { join, resolve } from 'node:path';
 
 const ROOT = process.cwd();
 const BASELINE = resolve(ROOT, 'docs', 'baselines', 'trial-reserve-scan-B34.json');
-const RELEASE_CHECK = resolve(ROOT, 'tools', 'release-check.mjs');
+const RELEASE_CHECK = resolve(ROOT, 'tests', 'gates', 'release-check-selftest.mjs');
 
 function check(scanPath: string): { status: number | null; out: string } {
   const res = spawnSync(process.execPath, [

@@ -12,7 +12,7 @@ import { join, resolve } from 'node:path';
 
 const ROOT = process.cwd();
 const BASELINE = resolve(ROOT, 'docs', 'baselines', 'trial-reserve-scan-B34.json');
-const RELEASE_CHECK = resolve(ROOT, 'tools', 'release-check.mjs');
+const RELEASE_CHECK = resolve(ROOT, 'tests', 'gates', 'release-check-selftest.mjs');
 
 /** 在临时目录里造一个「必失败」的脚本。 */
 function failingScript(dir: string, name: string, code: number): string {

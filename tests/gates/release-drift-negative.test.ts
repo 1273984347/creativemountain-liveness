@@ -13,7 +13,7 @@ import { join, resolve } from 'node:path';
 const ROOT = process.cwd();
 const BASELINE = resolve(ROOT, 'docs', 'baselines', 'trial-reserve-scan-B34.json');
 const COMPARE = resolve(ROOT, 'docs', '沉淀', 'compare-scan-baseline.mjs');
-const RELEASE_CHECK = resolve(ROOT, 'tools', 'release-check.mjs');
+const RELEASE_CHECK = resolve(ROOT, 'tests', 'gates', 'release-check-selftest.mjs');
 
 /** 造一份**篡改过**的扫描产物：改动某一组的某个指标 ⇒ 逐组比对必然不一致。 */
 function tamperedScan(): { path: string; dir: string } {

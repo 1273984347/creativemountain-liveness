@@ -15,7 +15,7 @@ import { join, resolve } from 'node:path';
 
 const ROOT = process.cwd();
 const BASELINE = resolve(ROOT, 'docs', 'baselines', 'trial-reserve-scan-B34.json');
-const RELEASE_CHECK = resolve(ROOT, 'tools', 'release-check.mjs');
+const RELEASE_CHECK = resolve(ROOT, 'tests', 'gates', 'release-check-selftest.mjs');
 
 /** 跑一次发布检查（跳过门禁与重扫 ⇒ 只走比对这一步）。 */
 function check(baselinePath: string, scanPath: string): { status: number | null; out: string } {

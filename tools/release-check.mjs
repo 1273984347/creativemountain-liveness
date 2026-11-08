@@ -29,17 +29,20 @@ const SIM_PATH = argOf('sim', 'tests/sim/run.mjs');
 /**
  * ⚠️ 自检模式开关：仅供**负样本测试**用（跳过门禁 / 跳过重扫）⇒ 生产路径不可用。
  *
- * ⚠️ B24 起**再收紧一层**：跳过开关只有�� `CM_SELFTEST=1` 时才生效；否则**直接拒绝执行**
- *   （而不是静默继续）⇒ 误用/漏配环境变量 ⇒ 发布检查立刻失败，不会悄悄少跑检查。
+ * ⚠️ B45：**双条件上锁** —— 跳过生效需**同时**满足：① `CM_SELFTEST=1` ② 显式传入 `--selftest`。
+ *   ⇒ `npm run release:check`（**不带** `--selftest`）**结构上无法绕过门禁**：
+ *   即使外部设了 `CM_SELFTEST=1`，也会被拒绝（而不是静默继续）。
+ *   ⇒ 绕过入口统一收敛到 `tests/gates/release-check-selftest.mjs`（tests/ 专用包装器）。
  */
 const SELFTEST = process.env.CM_SELFTEST === '1';
 const wantsSkip = argv.includes('--skip-gate') || argv.includes('--skip-rescan');
-if (wantsSkip && !SELFTEST) {
-  console.error('✗ 自检开关（--skip-gate / --skip-rescan）仅在 CM_SELFTEST=1 时可用 ⇒ 本次拒绝执行');
+const selftestMode = SELFTEST && argv.includes('--selftest');
+if (wantsSkip && !selftestMode) {
+  console.error('✗ 自检模式需同时满足：CM_SELFTEST=1 且传入 --selftest（生产发布检查不得绕过门禁）');
   process.exit(1);
 }
-const skipGate = SELFTEST && argv.includes('--skip-gate');
-const skipRescan = SELFTEST && argv.includes('--skip-rescan');
+const skipGate = selftestMode && argv.includes('--skip-gate');
+const skipRescan = selftestMode && argv.includes('--skip-rescan');
 
 /**
  * 扫描参数 —— 必须与 **B34 基线**一致。
