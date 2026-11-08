@@ -26,7 +26,7 @@ import { performAbility } from '../../engine/core/abilities.ts';
 import { autoResolveDuel } from '../../engine/core/duel.ts';
 import { advanceAuto } from '../../engine/core/advance.ts';
 import { resolveGate } from '../../engine/core/gate.ts';
-import { computePositionSpread, POSITION_RMS_GATE_LIMIT, POSITION_SPREAD_GATE_LIMIT } from '../../engine/core/balance.ts';
+import { computePositionSpread, POSITION_RMS_GATE_LIMIT, POSITION_SPREAD_GATE_LIMIT, TRIAL_PASS_RANGES } from '../../engine/core/balance.ts';
 import { castVote, resolveCouncil } from '../../engine/core/council.ts';
 import {
   certifySign, certifyChallenge, certifyAnswer, certifyAppeal, certifyAppealVote,
@@ -495,19 +495,29 @@ function runTrialRate(args) {
     const gates = theme.board.tiles.filter((t) => t.kind === 'gate');
     for (const t of theme.trials ?? []) {
       const pred = t.effects?.[0]?.pred;
-      if (pred?.kind !== 'dice_is_at_least') { continue; }
+      if (pred === undefined) { continue; }
+      // ⚠️ B26：骰子型有**解析理论期望**；其余按**设计目标区间**（单一事实源：engine/core/balance.ts）。
+      const isDice = pred.kind === 'dice_is_at_least';
       const gate = gates.find((g) => (g.gate?.trialIds ?? []).includes(t.id));
       if (gate === undefined) { problems.push(themeId + '/' + t.id + ' 未被任何关隘引用（死牌）'); continue; }
       const m = measureTrial(theme, t.id, gate.index, args.trialTimes);
       const rate = (m.passes / m.times) * 100;
       const faces = pred.faces ?? 20;
       const amount = pred.amount ?? 0;
-      const theory = ((faces - amount + 1) / faces) * 100;
-      const dev = rate - theory;
-      rows.push({ themeId, id: t.id, gate: gate.index, amount, faces, theory, rate, dev, ...m });
-      if (Math.abs(dev) > 10) {
-        problems.push(themeId + '/' + t.id + ' 通过率 ' + rate.toFixed(1) + '% 偏离理论 '
-          + theory.toFixed(1) + '% 达 ' + dev.toFixed(1) + 'pp（> 10pp）');
+      const theory = isDice ? ((faces - amount + 1) / faces) * 100 : null;
+      const dev = theory === null ? null : rate - theory;
+      const range = TRIAL_PASS_RANGES[t.id] ?? null;
+      rows.push({ themeId, id: t.id, gate: gate.index, kind: pred.kind, count: pred.count ?? null, amount, faces, theory, rate, dev, range, ...m });
+      if (theory !== null) {
+        if (Math.abs(dev ?? 0) > 10) {
+          problems.push(themeId + '/' + t.id + ' 通过率 ' + rate.toFixed(1) + '% 偏离理论 '
+            + theory.toFixed(1) + '% 达 ' + (dev ?? 0).toFixed(1) + 'pp（> 10pp）');
+        }
+      } else if (range !== null) {
+        if (rate < range[0] || rate > range[1]) {
+          problems.push(themeId + '/' + t.id + ' 通过率 ' + rate.toFixed(1) + '% 不在目标区间 ['
+            + String(range[0]) + '%, ' + String(range[1]) + '%]');
+        }
       }
       if (m.fallbackWrites !== m.times - m.passes) {
         problems.push(themeId + '/' + t.id + ' 失败未写「改为付费」标记（'
@@ -519,7 +529,7 @@ function runTrialRate(args) {
       }
     }
   }
-  if (rows.length === 0) { problems.push('未找到任何骰子型试炼（`dice_is_at_least`）'); }
+  if (rows.length === 0) { problems.push('未找到任何试炼牌'); }
   const lines = [];
   lines.push('# 关隘试炼通过率专项报告（自动生成）');
   lines.push('');
@@ -528,20 +538,30 @@ function runTrialRate(args) {
   lines.push('> 走**生产同一条代码路径**（`resolveGate(state, seat, \'trial\')`），不另写模拟器副本。');
   lines.push('> **理论期望** = `(faces - amount + 1) / faces`（由主题包数据派生，不手抄）。');
   lines.push('');
-  lines.push('| 主题 | 试炼牌 | 关隘 | 判定 | 样本 | 通过次数 | 实测通过率 | 理论期望 | 偏差 | 失败改为付费 |');
+  lines.push('| 主题 | 试炼牌 | 关隘 | 判定 | 样本 | 通过次数 | 实测通过率 | 理论期望 / 目标区间 | 偏差 | 失败改为付费 |');
   lines.push('|---|---|---|---|---|---|---|---|---|---|');
   for (const r of rows) {
-    lines.push('| ' + r.themeId + ' | `' + r.id + '` | ' + String(r.gate) + ' | 骰 ≥ ' + String(r.amount)
-      + '/' + String(r.faces) + ' | ' + String(r.times) + ' | ' + String(r.passes) + ' | ' + r.rate.toFixed(1)
-      + '% | ' + r.theory.toFixed(1) + '% | ' + (r.dev >= 0 ? '+' : '') + r.dev.toFixed(1) + 'pp | '
-      + String(r.fallbackWrites) + ' |');
+    const judge = r.kind === 'dice_is_at_least'
+      ? '骰 ≥ ' + String(r.amount) + '/' + String(r.faces)
+      : '至少 ' + String(r.count ?? 2) + ' 张匹配牌';
+    const ref = r.theory !== null ? r.theory.toFixed(1) + '%'
+      : (r.range === null ? '—' : '[' + String(r.range[0]) + '%, ' + String(r.range[1]) + '%]');
+    const devTxt = r.dev === null ? '—' : (r.dev >= 0 ? '+' : '') + r.dev.toFixed(1) + 'pp';
+    lines.push('| ' + r.themeId + ' | `' + r.id + '` | ' + String(r.gate) + ' | ' + judge
+      + ' | ' + String(r.times) + ' | ' + String(r.passes) + ' | ' + r.rate.toFixed(1)
+      + '% | ' + ref + ' | ' + devTxt + ' | ' + String(r.fallbackWrites) + ' |');
   }
   lines.push('');
   writeFileSync(resolve(ROOT, 'docs/trial-pass-rate.md'), lines.join('\n') + '\n', 'utf8');
   console.log('报告 → docs/trial-pass-rate.md');
   for (const r of rows) {
-    console.log('  ' + r.themeId + '/' + r.id + ' 实测 ' + r.rate.toFixed(1) + '% vs 理论 '
-      + r.theory.toFixed(1) + '%（偏差 ' + r.dev.toFixed(1) + 'pp，样本 ' + String(r.times) + '）');
+    // ⚠️ B26：骰子型有理论期望；条件型按**目标区间**（单一事实源：engine/core/balance.ts）。
+    const ref = r.theory !== null
+      ? '理论 ' + r.theory.toFixed(1) + '%（偏差 ' + (r.dev ?? 0).toFixed(1) + 'pp）'
+      : (r.range === null ? '无目标区间'
+        : '目标区间 [' + String(r.range[0]) + '%, ' + String(r.range[1]) + '%]');
+    console.log('  ' + r.themeId + '/' + r.id + ' 实测 ' + r.rate.toFixed(1) + '% vs ' + ref
+      + '（样本 ' + String(r.times) + '）');
   }
   if (problems.length > 0) {
     console.error('FAIL  ' + problems.join('；'));

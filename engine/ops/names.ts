@@ -23,7 +23,7 @@ export const OP_NAME_LIST: readonly OpName[] = [
 ];
 
 export const PREDICATE_NAME_LIST: readonly PredicateName[] = [
-  'tile_kind', 'has_card', 'resource_at_least', 'hand_count', 'is_pending_cert', 'phase_is',
+  'tile_kind', 'has_card', 'has_card_count', 'resource_at_least', 'hand_count', 'is_pending_cert', 'phase_is',
   'players_alive', 'card_type_is', 'identity_is', 'faction_is', 'hp_at_least', 'flag_set',
   'last_dice_even', 'dice_is_at_least', 'card_color_is',
 ];

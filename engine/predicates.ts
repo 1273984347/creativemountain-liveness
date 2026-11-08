@@ -46,6 +46,14 @@ export const PREDICATES: PredicateHandlers = {
     return tile !== undefined && tile.kind === p.kind;
   },
   has_card: (ctx, p) => handOf(ctx, ctx.actor).some((c) => filterMatches(p.filter, c)),
+  /**
+   * 「手牌里至少 N 张匹配 filter 的牌」（B26）。
+   *
+   * ⚠️ 与 `has_card` 的差别：后者判「有没有」，本谓词判「**够不够多**」——
+   *   条件型试炼若只要求「有 1 张」，实测通过率 73%–100%（B24）⇒ 形同稳过。
+   */
+  has_card_count: (ctx, p) =>
+    handOf(ctx, ctx.actor).filter((c) => filterMatches(p.filter, c)).length >= p.count,
   resource_at_least: (ctx, p) => (ctx.state.players[ctx.actor]?.resource ?? 0) >= p.amount,
   hand_count: (ctx, p) => compare(handOf(ctx, ctx.actor).length, p.op, p.count),
   is_pending_cert: (ctx) => ctx.state.players[ctx.actor]?.pendingCert === true,

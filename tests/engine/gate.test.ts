@@ -14,7 +14,7 @@ import { installTheme } from '../../engine/core/setup.ts';
 import { autoResolveGate, pendingGate, resolveCompareGate, resolveGate } from '../../engine/core/gate.ts';
 import { performAction } from '../../engine/core/turn-runner.ts';
 import { candidatesOf } from '../../engine/core/legal.ts';
-import type { ThemePack } from '../../engine/types/theme.ts';
+import type { Card, ThemePack } from '../../engine/types/theme.ts';
 
 /** 6 号格 = 落雁关（标价 3，试炼池 t_sword / t_mirror）。 */
 const GATE_INDEX = 6;
@@ -37,6 +37,20 @@ function gateScene(resource = 10): State {
  */
 function onlyTrials(s: State, ids: readonly string[]): State {
   return { ...s, decks: { ...s.decks, trial: s.decks.trial.filter((c) => ids.includes(c.id)) } };
+}
+
+/**
+ * 给座 0 塞两张**身法牌** —— `t_oath` 的判定是「至少 2 张身法牌」（B26 改造后）。
+ *
+ * ⚠️ B26：试炼判定从「有 ≥1 张」升级为「至少 N 张」⇒ 依赖「某张牌必过/必败」的断言
+ *   必须**显式构造手牌**，否则随机 ⇒ flaky。
+ */
+function withMotionHand(s: State): State {
+  const probe: Card[] = [
+    { id: 'probe-m1', name: '探针身法一', type: 'motion', cost: 0, color: 'red', rank: 3, text: '', effects: [] },
+    { id: 'probe-m2', name: '探针身法二', type: 'motion', cost: 0, color: 'black', rank: 4, text: '', effects: [] },
+  ];
+  return { ...s, players: s.players.map((p) => (p.seat === 0 ? { ...p, hand: [...probe, ...p.hand] } : p)) };
 }
 
 test('B18：停在未通过的关隘 ⇒ 待过闸判定成立；通过后失效', () => {
@@ -71,7 +85,7 @@ test('B18：付费通道 —— 灵枢不足 ⇒ 拒绝且状态不变', () => {
 
 test('B18：试炼通道 —— 公开抽牌 + 执行效果树 + 记通过标记', () => {
   // ⚠️ B22：试炼已是**挑战型**（可能失败）⇒ 固定「只留一张必过的牌」保持确定性。
-  const s = onlyTrials(gateScene(10), ['t_oath']);
+  const s = withMotionHand(onlyTrials(gateScene(10), ['t_oath']));
   const r = resolveGate(s, 0, 'trial');
   assert.equal(r.ok, true, '试炼通道应通过：' + String(r.note));
   const p0 = r.state.players[0];
@@ -156,7 +170,8 @@ test('B19-b：试炼失败 ⇒ 本关改为付费（此后只剩付费通道，�
     ...s0,
     // 只留 t_toll ⇒ 抽取必中（避免随机性让断言不稳定）
     decks: { ...s0.decks, trial: s0.decks.trial.filter((c) => c.id === 't_toll') },
-    players: s0.players.map((p) => (p.seat === 0 ? { ...p, position: 30, resource: 0 } : p)),
+    // ⚠️ B26：t_toll 的判定是「至少 2 张守御+红牌」⇒ **清空手牌**才能确定它必败。
+    players: s0.players.map((p) => (p.seat === 0 ? { ...p, position: 30, resource: 0, hand: [] } : p)),
   };
   const r = resolveGate(scene, 0, 'trial');
   assert.equal(r.ok, true, '试炼通道应被受理：' + String(r.note));
@@ -180,8 +195,8 @@ test('B18：自动解算出口 —— 灵枢够就付费，不够走试炼', () 
   const rich = autoResolveGate(gateScene(10), 0);
   assert.equal(rich.players[0]?.flags[`gate_${String(GATE_INDEX)}`], true);
   assert.equal(rich.players[0]?.resource, 10 - GATE_FEE, '灵枢够 ⇒ 自动付费');
-  // ⚠️ B22：灵枢不足 ⇒ 自动走试炼；试炼已是挑战型 ⇒ 固定「只留一张必过的牌」（t_oath 需灵枢 ≥ 2）。
-  const poor = autoResolveGate(onlyTrials(gateScene(2), ['t_oath']), 0);
+  // ⚠️ B22：灵枢不足 ⇒ 自动走试炼；B26：试炼判定升级为「至少 2 张身法牌」⇒ 固定「只留 t_oath」并**显式构造手牌**。
+  const poor = autoResolveGate(withMotionHand(onlyTrials(gateScene(2), ['t_oath'])), 0);
   assert.equal(poor.players[0]?.flags[`gate_${String(GATE_INDEX)}`], true, '灵枢不足 ⇒ 自动走试炼');
   assert.equal(poor.players[0]?.resource, 2, '试炼通道不扣灵枢（灵枢 2 原样保留）');
 });

@@ -12,7 +12,7 @@ import { resolve } from 'node:path';
 import { createInitialState, type State } from '../../engine/core/state.ts';
 import { installTheme } from '../../engine/core/setup.ts';
 import { resolveGate } from '../../engine/core/gate.ts';
-import type { ThemePack } from '../../engine/types/theme.ts';
+import type { Card, ThemePack } from '../../engine/types/theme.ts';
 
 function themeOf(id: string): ThemePack {
   return JSON.parse(readFileSync(resolve('themes', id, 'theme.json'), 'utf8')) as ThemePack;
@@ -23,19 +23,19 @@ function themeOf(id: string): ThemePack {
  *
  * ⚠️ 用 **8 人局**（36 格 / 4 座关隘）⇒ 30 号关隘也在（4 人局只有 28 格 / 3 座）。
  */
-function trialScene(theme: ThemePack, trialId: string, gateIndex: number, seed: number, resource = 0): State {
+function trialScene(theme: ThemePack, trialId: string, gateIndex: number, seed: number, resource = 0, hand: readonly Card[] | null = null): State {
   const s0 = installTheme(createInitialState({ players: 8, seed, deckSize: theme.counts.deckTotal }), theme);
   return {
     ...s0,
     decks: { ...s0.decks, trial: s0.decks.trial.filter((c) => c.id === trialId) },
-    players: s0.players.map((p) => (p.seat === 0 ? { ...p, position: gateIndex, resource } : p)),
+    players: s0.players.map((p) => (p.seat === 0 ? { ...p, position: gateIndex, resource, hand: hand === null ? p.hand : [...hand] } : p)),
   };
 }
 
 test('B23：试炼日志带结构化字段（trialId / trialPassed）—— 通过率可不解析文案统计', () => {
   const theme = themeOf('xianxia2026');
-  // t_toll 的判定是「灵枢 ≥ 4」⇒ 灵枢 0 ⇒ 必失败
-  const r = resolveGate(trialScene(theme, 't_toll', 30, 7), 0, 'trial');
+  // ⚠️ B26：t_toll 的判定改为「至少 2 张守御+红牌」⇒ **清空手牌**才能确定它必失败
+  const r = resolveGate(trialScene(theme, 't_toll', 30, 7, 0, []), 0, 'trial');
   assert.equal(r.ok, true, '试炼通道应被受理：' + String(r.note));
   const entry = r.state.log.find((l) => l.kind === 'trial');
   assert.ok(entry !== undefined, '应有试炼日志条目');

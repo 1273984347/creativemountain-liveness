@@ -21,11 +21,11 @@ test('全部 58 个算子均已注册且有实现（B19-b 新增 gate_fallback_p
   assert.equal(OP_NAME_LIST.length, 58);
 });
 
-test('全部 15 个谓词均已注册且有实现', () => {
+test('全部 16 个谓词均已注册且有实现（B26 新增 has_card_count）', () => {
   for (const name of PREDICATE_NAME_LIST) {
     assert.equal(typeof PREDICATES[name], 'function', `谓词未注册：${name}`);
   }
-  assert.equal(PREDICATE_NAME_LIST.length, 15);
+  assert.equal(PREDICATE_NAME_LIST.length, 16);
 });
 
 test('全部 8 个 goal kind 均已注册且有实现', () => {

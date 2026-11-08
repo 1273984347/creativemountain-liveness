@@ -323,6 +323,11 @@ export function validateTheme(theme, schema) {
           err(`${path}（${pred.kind}）：amount 必须是非负整数`);
         }
         break;
+      case 'has_card_count':
+        if (!Number.isInteger(pred.count) || pred.count < 1) {
+          err(`${path}（has_card_count）：count 必须是正整数`);
+        }
+        break;
       case 'dice_is_at_least':
         if (!Number.isInteger(pred.amount) || pred.amount < 0) {
           err(`${path}（dice_is_at_least）：amount 必须是非负整数`);

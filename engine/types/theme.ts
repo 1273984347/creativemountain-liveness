@@ -179,6 +179,14 @@ export type TileKind = 'plain' | 'boon' | 'hazard' | 'rift' | 'gate' | 'junction
 export interface PredicateMap {
   tile_kind: { readonly kind: TileKind; readonly tileIndex?: number };
   has_card: { readonly filter: CardFilter };
+  /**
+   * 「手牌里**至少 N 张**匹配 filter 的牌」—— B26 新增。
+   *
+   * ⚠️ 为什么需要它：`has_card` 只判「有没有 ≥1 张」⇒ 条件型试炼的真实通过率高达 73%–100%
+   *   （B24 实测）⇒ 试炼通道几乎「稳过」⇒ 挑战性名存实亡；
+   *   本谓词让「要两张同色 / 两张同类」这类**可判定**的挑战得以表达。
+   */
+  has_card_count: { readonly filter: CardFilter; readonly count: number };
   resource_at_least: { readonly amount: number };
   hand_count: { readonly count: number; readonly op: CompareOp };
   is_pending_cert: Record<string, never>;
@@ -211,6 +219,7 @@ export interface PredicateMap {
 export type PredicateName =
   | 'tile_kind'
   | 'has_card'
+  | 'has_card_count'
   | 'resource_at_least'
   | 'hand_count'
   | 'is_pending_cert'

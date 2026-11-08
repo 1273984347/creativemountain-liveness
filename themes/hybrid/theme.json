@@ -1667,10 +1667,11 @@
         {
           "op": "conditional",
           "pred": {
-            "kind": "has_card",
+            "kind": "has_card_count",
             "filter": {
-              "type": "motion"
-            }
+              "color": "red"
+            },
+            "count": 2
           },
           "then": {
             "op": "draw_cards",
@@ -1689,10 +1690,11 @@
         {
           "op": "conditional",
           "pred": {
-            "kind": "has_card",
+            "kind": "has_card_count",
             "filter": {
-              "color": "red"
-            }
+              "color": "black"
+            },
+            "count": 2
           },
           "then": {
             "op": "draw_cards",
@@ -1711,8 +1713,11 @@
         {
           "op": "conditional",
           "pred": {
-            "kind": "resource_at_least",
-            "amount": 2
+            "kind": "has_card_count",
+            "filter": {
+              "type": "motion"
+            },
+            "count": 2
           },
           "then": {
             "op": "immunity",
@@ -1753,10 +1758,11 @@
         {
           "op": "conditional",
           "pred": {
-            "kind": "has_card",
+            "kind": "has_card_count",
             "filter": {
-              "type": "attack"
-            }
+              "type": "defense"
+            },
+            "count": 2
           },
           "then": {
             "op": "draw_cards",
@@ -1775,8 +1781,11 @@
         {
           "op": "conditional",
           "pred": {
-            "kind": "hp_at_least",
-            "amount": 5
+            "kind": "has_card_count",
+            "filter": {
+              "type": "utility"
+            },
+            "count": 2
           },
           "then": {
             "op": "heal",
@@ -1795,10 +1804,11 @@
         {
           "op": "conditional",
           "pred": {
-            "kind": "has_card",
+            "kind": "has_card_count",
             "filter": {
-              "color": "black"
-            }
+              "type": "utility"
+            },
+            "count": 2
           },
           "then": {
             "op": "shield",
@@ -1817,10 +1827,12 @@
         {
           "op": "conditional",
           "pred": {
-            "kind": "has_card",
+            "kind": "has_card_count",
             "filter": {
-              "type": "defense"
-            }
+              "type": "motion",
+              "color": "red"
+            },
+            "count": 2
           },
           "then": {
             "op": "immunity",
@@ -1840,10 +1852,12 @@
         {
           "op": "conditional",
           "pred": {
-            "kind": "has_card",
+            "kind": "has_card_count",
             "filter": {
-              "type": "utility"
-            }
+              "type": "utility",
+              "color": "black"
+            },
+            "count": 2
           },
           "then": {
             "op": "immunity",
@@ -1863,8 +1877,12 @@
         {
           "op": "conditional",
           "pred": {
-            "kind": "resource_at_least",
-            "amount": 3
+            "kind": "has_card_count",
+            "filter": {
+              "type": "attack",
+              "color": "black"
+            },
+            "count": 2
           },
           "then": {
             "op": "gain_resource",
@@ -1904,8 +1922,12 @@
         {
           "op": "conditional",
           "pred": {
-            "kind": "resource_at_least",
-            "amount": 4
+            "kind": "has_card_count",
+            "filter": {
+              "type": "defense",
+              "color": "red"
+            },
+            "count": 2
           },
           "then": {
             "op": "draw_cards",

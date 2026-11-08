@@ -19,6 +19,34 @@ export const POSITION_SPREAD_GATE_LIMIT = 11;
 /** 门禁口径：同上的最大 **RMS 偏离**上限（pp）—— RMS 用到全部位次 ⇒ 比极差稳健。基线 3.38pp。 */
 export const POSITION_RMS_GATE_LIMIT = 4.5;
 
+/**
+ * 关隘试炼的**目标通过率区间**（B26）—— 按牌 id 给出 `[下限, 上限]`（%）。
+ *
+ * ⚠️ 为什么要显式声明：`has_card` 只能判「有没有 ≥1 张」⇒ 条件型试炼的真实通过率高达 73%–100%
+ *   （B24 实测）⇒ 挑战性名存实亡；B26 引入 `has_card_count`（「至少 N 张」）后，每张牌都要
+ *   **落到一个有意义的区间**（按关隘难度递进）⇒ 这里就是那张表（**单一事实源**，
+ *   定向长跑与门禁 ⑪ 共用）。
+ * ⚠️ 口径：区间对**定向长跑**口径生效（固定 8 人局、座 0 站在该牌所在关隘、抽 400 次）。
+ */
+export const TRIAL_PASS_RANGES: Readonly<Record<string, readonly [number, number]>> = {
+  // 6 号关（最易）：单色两张 ⇒ 近乎稳过（区间上界留到 100）
+  t_mirror: [85, 100],
+  t_sword: [85, 100],
+  t_oath: [45, 70],
+  // 14 号关（t_wind 仍按解析理论期望 75% 判定）
+  t_wind: [65, 85],
+  t_sutra: [45, 70],
+  t_stone: [45, 70],
+  // 22 号关：单类型两张（≈55%）与「类型+颜色」两张（≈22%）
+  t_mantra: [45, 70],
+  t_silent: [15, 35],
+  t_vital: [15, 35],
+  // 30 号关（最难）：组合两张 ≈ 20%；t_star 按解析理论期望 45% 判定
+  t_star: [35, 55],
+  t_empty: [12, 32],
+  t_toll: [12, 32],
+};
+
 /** 位次胜率相对均匀分布的偏离统计量。 */
 export interface PositionSpread {
   readonly max: number;
