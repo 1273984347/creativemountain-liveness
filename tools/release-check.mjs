@@ -27,16 +27,16 @@ const GATE_PATH = argOf('gate', 'tools/gate.mjs');
 /** 模拟器路径（默认 `tests/sim/run.mjs`）—— 注入点供**负样本测试**用。 */
 const SIM_PATH = argOf('sim', 'tests/sim/run.mjs');
 /**
- * ⚠️ B46：**生产脚本彻底移除**自检/跳过能力 —— 不再识别 `--selftest` / `--skip-gate` / `--skip-rescan`。
- *   ⇒ 自检能力**仅存在于 `tests/gates/release-check-selftest.mjs`**（tests/ 专用包装器）。
- *   ⇒ 收到这些参数 ⇒ **明确拒绝并退出**（而不是忽略或静默继续）。
- * ⚠️ 保留**路径注入**（`--gate=` / `--sim=` / `--scan=` / `--baseline=`）：它们只换输入、不跳过任何步骤 ⇒
- *   生产链 `npm run release:check` **不带**这些参数 ⇒ 结构上无法绕过门禁。
+ * ⚠️ B48：**白名单式拒绝** —— 生产发布检查只认下面这几个**路径注入**前缀，
+ *   其余任何 `--` 参数一律**明确拒绝并非零退出**。
+ *   ⇒ 源码里**不再出现任何自检/绕过参数名**（连拒绝清单都不列）⇒ 仓库级回归可断言「生产代码不含这些标识」；
+ *   ⇒ 自检/绕过入口**仅存在于 `tests/gates/release-check-selftest.mjs`**（tests/ 专用包装器）。
+ * ⚠️ 保留的路径注入只**换输入、不跳过任何步骤** ⇒ 生产链 `npm run release:check` 不带它们 ⇒ 无法绕过门禁。
  */
-const REMOVED = ['--selftest', '--skip-gate', '--skip-rescan'];
-const hit = REMOVED.filter((f) => argv.includes(f));
-if (hit.length > 0) {
-  console.error('✗ 生产发布检查不支持自检/跳过参数（' + hit.join('、') + '）；自检能力仅存在于 tests/gates/release-check-selftest.mjs');
+const ALLOWED_FLAGS = ['--gate=', '--sim=', '--scan=', '--baseline='];
+const unknown = argv.filter((a) => a.startsWith('--') && !ALLOWED_FLAGS.some((f) => a.startsWith(f)));
+if (unknown.length > 0) {
+  console.error('✗ 生产发布检查不支持这些参数：' + unknown.join('、') + '（自检/绕过入口仅存在于 tests/）');
   process.exit(1);
 }
 

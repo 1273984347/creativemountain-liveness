@@ -43,6 +43,6 @@ test('B47：自检/绕过参数一律被拒绝（与任何环境变量无关）'
   ], { encoding: 'utf8', shell: false, cwd: ROOT });
   assert.notEqual(res.status, 0, '绕过开关必须被拒绝');
   const out = (res.stdout ?? '') + (res.stderr ?? '');
-  assert.match((res.stdout ?? '') + (res.stderr ?? ''), /不支持自检/, '应说明该参数已从生产脚本移除');
+  assert.match((res.stdout ?? '') + (res.stderr ?? ''), /不支持这些参数/, '应明确拒绝不支持的参数');
   assert.doesNotMatch(out, /已跳过（自检模式/, '不得静默跳过检查');
 });

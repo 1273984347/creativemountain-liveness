@@ -29,16 +29,16 @@ test('B46：生产脚本已彻底移除自检/跳过参数 ⇒ 传入即拒绝�
     ], { encoding: 'utf8', shell: false, cwd: ROOT, env: { ...process.env, CM_SELFTEST: '1' } });
     assert.notEqual(res.status, 0, flag + ' 必须被拒绝（生产不得有绕过入口）');
     const out = (res.stdout ?? '') + (res.stderr ?? '');
-    assert.match(out, /不支持自检\/跳过参数/, '应说明该参数已移除');
+    assert.match(out, /不支持这些参数/, '应明确拒绝不支持的参数');
   }
 });
 
 test('B46：生产脚本把 --selftest / --skip-* 列入**拒绝清单**（不再是有效参数）', () => {
   const src = readFileSync(RELEASE_CHECK, 'utf8');
-  assert.ok(src.includes("'--selftest'"), '--selftest 必须出现在生产脚本的拒绝清单里');
-  assert.ok(src.includes("'--skip-gate'"), '--skip-gate 必须出现在拒绝清单里');
-  assert.ok(src.includes("'--skip-rescan'"), '--skip-rescan 必须出现在拒绝清单里');
-  assert.match(src, /不支持自检/, '生产脚本应明确拒绝自检/跳过参数');
+  assert.ok(!src.includes('--selftest'), '生产脚本不得再出现自检参数名（B48 起改为白名单式拒绝）');
+  assert.ok(!src.includes('--selftest') && !src.includes('--skip-'), '生产脚本不得再出现自检/跳过参数名（B48 起白名单式拒绝）');
+  assert.ok(!src.includes('--selftest') && !src.includes('--skip-'), '生产脚本不得再出现自检/跳过参数名（B48 起白名单式拒绝）');
+  assert.match(src, /不支持这些参数/, '应明确拒绝不支持的参数');
   const wrapper = readFileSync(SELFTEST_WRAPPER, 'utf8');
   assert.match(wrapper, /compare-scan-baseline/, '自检编排落在 tests/ 包装器里');
 });
