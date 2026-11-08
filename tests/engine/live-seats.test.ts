@@ -126,7 +126,7 @@ test('B11：无人取得任何席位 ⇒ reason=fallback（纯距离排名）', 
 
 // ---------- 终局得分公式 ----------
 
-test('B11：终局得分 = 席位数 × 活人席权重 − 距峰顶格数（一席抵得上爬半座山）', () => {
+test('B11：终局得分 = 席位数 × 活人席权重 − 距峰顶格数（权重取规模表逐档标定值）', () => {
   const s = createInitialState({ players: 4, seed: 7, deckSize: 40 });
   const w = seatWeight(s);
   assert.equal(w, s.scales.seatWeight, '权重来自规模表（逐档标定）');

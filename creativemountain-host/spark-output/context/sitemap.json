@@ -1,0 +1,634 @@
+{
+  "skill": "sitemap",
+  "generated_at": "2026-11-07T18:57:37.921Z",
+  "project_name": "创界山·活人认证",
+  "platform": "multi",
+  "primary_navigation": [
+    {
+      "id": "host-board",
+      "client": "host",
+      "label": "山道",
+      "route": "/#board",
+      "icon_hint": "map",
+      "children": []
+    },
+    {
+      "id": "host-seats",
+      "client": "host",
+      "label": "席位",
+      "route": "/#seats",
+      "icon_hint": "users",
+      "children": []
+    },
+    {
+      "id": "host-council",
+      "client": "host",
+      "label": "山议",
+      "route": "/#council",
+      "icon_hint": "vote",
+      "children": []
+    },
+    {
+      "id": "host-cert",
+      "client": "host",
+      "label": "认证",
+      "route": "/#cert",
+      "icon_hint": "badge-check",
+      "children": []
+    },
+    {
+      "id": "host-settle",
+      "client": "host",
+      "label": "结算",
+      "route": "/#settle",
+      "icon_hint": "trophy",
+      "children": []
+    },
+    {
+      "id": "host-log",
+      "client": "host",
+      "label": "日志",
+      "route": "/#log",
+      "icon_hint": "scroll-text",
+      "children": []
+    },
+    {
+      "id": "phone-action",
+      "client": "phone",
+      "label": "行动",
+      "route": "/m/action",
+      "icon_hint": "layers",
+      "children": []
+    },
+    {
+      "id": "phone-cert",
+      "client": "phone",
+      "label": "认证",
+      "route": "/m/cert",
+      "icon_hint": "badge-check",
+      "children": []
+    },
+    {
+      "id": "phone-council",
+      "client": "phone",
+      "label": "山议",
+      "route": "/m/council",
+      "icon_hint": "vote",
+      "children": []
+    },
+    {
+      "id": "phone-me",
+      "client": "phone",
+      "label": "我的",
+      "route": "/m/me",
+      "icon_hint": "user",
+      "children": []
+    }
+  ],
+  "pages": [
+    {
+      "id": "page-host-board",
+      "route": "/#board",
+      "label": "山道版图",
+      "purpose": "全桌共享的山道格 / 玩家位置 / 峰顶待认证标记，铺垫与登顶的公共视觉锚点",
+      "parent": null,
+      "access": "public",
+      "client": "host",
+      "status": "existing",
+      "source_module": "web/ui/board.ts",
+      "related_stories": [
+        "story-2",
+        "story-4"
+      ],
+      "related_features": [
+        "交互设计"
+      ]
+    },
+    {
+      "id": "page-host-seats",
+      "route": "/#seats",
+      "label": "席位·活人席计分",
+      "purpose": "玩家公开状态（身份/阵营/体力/资源/位置/活人席）+ 实时计分，谁领先一目了然",
+      "parent": null,
+      "access": "public",
+      "client": "host",
+      "status": "existing",
+      "source_module": "web/ui/hand.ts(renderPlayers)+web/main.ts(status)",
+      "related_stories": [
+        "story-2",
+        "story-6"
+      ],
+      "related_features": [
+        "交互设计",
+        "情感化设计"
+      ]
+    },
+    {
+      "id": "page-host-council",
+      "route": "/#council",
+      "label": "山议票数公示",
+      "purpose": "山议匿名投票的公开票数 tally 与结算（不显示谁投谁）",
+      "parent": null,
+      "access": "public",
+      "client": "host",
+      "status": "existing",
+      "source_module": "web/ui/council.ts",
+      "related_stories": [
+        "story-2",
+        "story-3"
+      ],
+      "related_features": [
+        "交互设计"
+      ]
+    },
+    {
+      "id": "page-host-exile",
+      "route": "/#council/exile",
+      "label": "放逐公示",
+      "purpose": "山议放逐结果的专门公示屏（当前仅落在日志，无独立公示）",
+      "parent": "page-host-council",
+      "access": "public",
+      "client": "host",
+      "status": "gap",
+      "source_module": "（council resolve→log）",
+      "related_stories": [
+        "story-3"
+      ],
+      "related_features": [
+        "交互设计"
+      ]
+    },
+    {
+      "id": "page-host-cert",
+      "route": "/#cert",
+      "label": "认证面板·公开判定",
+      "purpose": "认证高潮的公共舞台：待认证者 / 题目公示 / 判定结果 / 主题认证题卡，全桌视线焦点",
+      "parent": null,
+      "access": "public",
+      "client": "host",
+      "status": "existing",
+      "source_module": "web/ui/cert.ts",
+      "related_stories": [
+        "story-4",
+        "story-5"
+      ],
+      "related_features": [
+        "情感化设计"
+      ]
+    },
+    {
+      "id": "page-host-cert-progress",
+      "route": "/#cert/progress",
+      "label": "签印门槛公示",
+      "purpose": "签印 got/need 进度 + 门槛 N 公示，让全桌看到认证还差几枚（密度张力来源）",
+      "parent": "page-host-cert",
+      "access": "public",
+      "client": "host",
+      "status": "existing",
+      "source_module": "web/ui/cert.ts+web/main.ts(status N=)",
+      "related_stories": [
+        "story-5"
+      ],
+      "related_features": [
+        "情感化设计"
+      ]
+    },
+    {
+      "id": "page-host-cert-witness",
+      "route": "/#cert/witness",
+      "label": "认证证人席",
+      "purpose": "出局者作为证人的公开席位公示（当前无证人席角色）",
+      "parent": "page-host-cert",
+      "access": "public",
+      "client": "host",
+      "status": "gap",
+      "source_module": "—",
+      "related_stories": [
+        "story-3"
+      ],
+      "related_features": [
+        "交互设计"
+      ]
+    },
+    {
+      "id": "page-host-cert-appeal",
+      "route": "/#cert/appeal",
+      "label": "复议公示",
+      "purpose": "第三方复议的投票 tally 与裁定公示（当前有申请复议但无第三方投票 UI）",
+      "parent": "page-host-cert",
+      "access": "public",
+      "client": "host",
+      "status": "gap",
+      "source_module": "（cert.ts onAppeal 存在，无第三方 tally）",
+      "related_stories": [
+        "story-3",
+        "story-5"
+      ],
+      "related_features": [
+        "情感化设计"
+      ]
+    },
+    {
+      "id": "page-host-settle",
+      "route": "/#settle",
+      "label": "结算面板",
+      "purpose": "终局结算的专门视图（当前仅状态栏一个结束 badge，无完整结算屏）",
+      "parent": null,
+      "access": "public",
+      "client": "host",
+      "status": "gap",
+      "source_module": "（web/main.ts status badge）",
+      "related_stories": [
+        "story-6"
+      ],
+      "related_features": [
+        "情感化设计"
+      ]
+    },
+    {
+      "id": "page-host-rank",
+      "route": "/#settle/rank",
+      "label": "排名公示·距峰顶格数",
+      "purpose": "排名 / 活人席权重 / 距峰顶格数公示 + 胜者高亮，保障「名场面即胜利」可读",
+      "parent": "page-host-settle",
+      "access": "public",
+      "client": "host",
+      "status": "gap",
+      "source_module": "—",
+      "related_stories": [
+        "story-6"
+      ],
+      "related_features": [
+        "情感化设计"
+      ]
+    },
+    {
+      "id": "page-host-log",
+      "route": "/#log",
+      "label": "日志",
+      "purpose": "公开事件 feed（最近 40 条），铺垫期桌上一直有动静",
+      "parent": null,
+      "access": "public",
+      "client": "host",
+      "status": "existing",
+      "source_module": "web/ui/log.ts",
+      "related_stories": [
+        "story-2"
+      ],
+      "related_features": [
+        "交互设计"
+      ]
+    },
+    {
+      "id": "page-host-tutorial",
+      "route": "/#tutorial",
+      "label": "首局教学页",
+      "purpose": "5 回合迷你流程演示弹窗，走真实引擎，3 分钟看懂一局（价值前置）",
+      "parent": null,
+      "access": "public",
+      "client": "host",
+      "status": "existing",
+      "source_module": "web/tutorial.ts+web/main.ts(showTutorial)",
+      "related_stories": [
+        "story-1"
+      ],
+      "related_features": [
+        "用户引导"
+      ]
+    },
+    {
+      "id": "page-host-setup",
+      "route": "/#setup",
+      "label": "牌局控制",
+      "purpose": "主机操作者控制：主题/人数/模式/新开/存档/读档/导出/导入/教学；多端下「操作者席切换」改为房间会话",
+      "parent": null,
+      "access": "role-restricted",
+      "client": "host",
+      "status": "refactor",
+      "source_module": "web/main.ts(renderToolbar)",
+      "related_stories": [
+        "story-1"
+      ],
+      "related_features": [
+        "用户引导"
+      ]
+    },
+    {
+      "id": "page-phone-join",
+      "route": "/m/join",
+      "label": "加入牌局",
+      "purpose": "手机扫码 / 房间码加入主屏会话并绑定座位（多端新增入口）",
+      "parent": null,
+      "access": "public",
+      "client": "phone",
+      "status": "gap",
+      "source_module": "—（多端新增）",
+      "related_stories": [
+        "story-1"
+      ],
+      "related_features": [
+        "用户引导"
+      ]
+    },
+    {
+      "id": "page-phone-action",
+      "route": "/m/action",
+      "label": "行动·手牌",
+      "purpose": "个人私密手牌 + 行棋/问天/行事/发动被动/对峙亮牌/选目标（热座公开手牌→手机私密）",
+      "parent": null,
+      "access": "authenticated",
+      "client": "phone",
+      "status": "refactor",
+      "source_module": "web/ui/hand.ts(renderHand)+web/main.ts(renderActions)",
+      "related_stories": [
+        "story-2"
+      ],
+      "related_features": [
+        "交互设计"
+      ]
+    },
+    {
+      "id": "page-phone-trial",
+      "route": "/m/action/trial",
+      "label": "关隘试炼面板",
+      "purpose": "落到关隘格时的试炼选择 Modal，并在首道关隘预热「认证」概念（当前有 gate 格无试炼 UI）",
+      "parent": "page-phone-action",
+      "access": "authenticated",
+      "client": "phone",
+      "status": "gap",
+      "source_module": "（board.ts gate 格存在，无试炼面板）",
+      "related_stories": [
+        "story-2",
+        "story-1"
+      ],
+      "related_features": [
+        "交互设计",
+        "用户引导"
+      ]
+    },
+    {
+      "id": "page-phone-cert",
+      "route": "/m/cert",
+      "label": "认证操作",
+      "purpose": "个人认证操作入口：签印 / 质疑 / 弃权 / 判定（三选一），与主屏公开判定同步",
+      "parent": null,
+      "access": "authenticated",
+      "client": "phone",
+      "status": "refactor",
+      "source_module": "web/ui/cert.ts",
+      "related_stories": [
+        "story-4",
+        "story-5"
+      ],
+      "related_features": [
+        "情感化设计"
+      ]
+    },
+    {
+      "id": "page-phone-sign",
+      "route": "/m/cert/sign",
+      "label": "签印面板",
+      "purpose": "个人签印按钮 + 进度，降门槛后每人都有参与理由（密度）",
+      "parent": "page-phone-cert",
+      "access": "authenticated",
+      "client": "phone",
+      "status": "refactor",
+      "source_module": "web/ui/cert.ts(onSign)",
+      "related_stories": [
+        "story-4",
+        "story-5"
+      ],
+      "related_features": [
+        "情感化设计"
+      ]
+    },
+    {
+      "id": "page-phone-challenge",
+      "route": "/m/cert/challenge",
+      "label": "质疑出题屏",
+      "purpose": "私密出 3 道「当场可验证」题并提交（热座公开出题→手机私密，制造惊喜）",
+      "parent": "page-phone-cert",
+      "access": "authenticated",
+      "client": "phone",
+      "status": "refactor",
+      "source_module": "web/ui/cert.ts(showQuestionForm)",
+      "related_stories": [
+        "story-4",
+        "story-5"
+      ],
+      "related_features": [
+        "情感化设计"
+      ]
+    },
+    {
+      "id": "page-phone-witness",
+      "route": "/m/cert/witness",
+      "label": "作证操作",
+      "purpose": "出局者以证人身份参与作证（当前无此角色）",
+      "parent": "page-phone-cert",
+      "access": "authenticated",
+      "client": "phone",
+      "status": "gap",
+      "source_module": "—",
+      "related_stories": [
+        "story-3"
+      ],
+      "related_features": [
+        "交互设计"
+      ]
+    },
+    {
+      "id": "page-phone-appeal",
+      "route": "/m/cert/appeal",
+      "label": "复议投票面板",
+      "purpose": "第三方复议投票（当前有申请复议但无第三方投票端）",
+      "parent": "page-phone-cert",
+      "access": "authenticated",
+      "client": "phone",
+      "status": "gap",
+      "source_module": "（cert.ts onAppeal 存在，无投票端）",
+      "related_stories": [
+        "story-3",
+        "story-5"
+      ],
+      "related_features": [
+        "情感化设计"
+      ]
+    },
+    {
+      "id": "page-phone-council",
+      "route": "/m/council",
+      "label": "山议投票",
+      "purpose": "个人匿名投票（票数汇总到主屏公示，投票人不可见）",
+      "parent": null,
+      "access": "authenticated",
+      "client": "phone",
+      "status": "refactor",
+      "source_module": "web/ui/council.ts(onVote)",
+      "related_stories": [
+        "story-2",
+        "story-3"
+      ],
+      "related_features": [
+        "交互设计"
+      ]
+    },
+    {
+      "id": "page-phone-me",
+      "route": "/m/me",
+      "label": "我的状态",
+      "purpose": "我的身份/资源/位置/活人席/状态（个人视角，非全桌公开操作者切换）",
+      "parent": null,
+      "access": "authenticated",
+      "client": "phone",
+      "status": "refactor",
+      "source_module": "web/ui/hand.ts(renderPlayers)",
+      "related_stories": [
+        "story-3"
+      ],
+      "related_features": [
+        "交互设计"
+      ]
+    },
+    {
+      "id": "page-phone-observer",
+      "route": "/m/me/observer",
+      "label": "旁观者面板",
+      "purpose": "出局后的参与兜底：作证/复议/围观判定，人还在局里（当前出局即无动作）",
+      "parent": "page-phone-me",
+      "access": "authenticated",
+      "client": "phone",
+      "status": "gap",
+      "source_module": "—",
+      "related_stories": [
+        "story-3"
+      ],
+      "related_features": [
+        "交互设计"
+      ]
+    },
+    {
+      "id": "page-phone-coach",
+      "route": "/m/me/coach",
+      "label": "规则渐进披露提示",
+      "purpose": "个人 coachmark / 渐进披露，边玩边学而非先啃规则书（当前仅一次性教学弹窗）",
+      "parent": "page-phone-me",
+      "access": "authenticated",
+      "client": "phone",
+      "status": "gap",
+      "source_module": "—",
+      "related_stories": [
+        "story-1"
+      ],
+      "related_features": [
+        "用户引导"
+      ]
+    }
+  ],
+  "key_flows": [
+    {
+      "name": "开局加入 Setup & Join",
+      "journey_stage": "stage1 开场",
+      "stories": [
+        "story-1"
+      ],
+      "page_sequence": [
+        "page-host-setup",
+        "page-host-tutorial",
+        "page-phone-join",
+        "page-phone-me"
+      ]
+    },
+    {
+      "name": "爬山铺垫 Climb",
+      "journey_stage": "stage2 流失风险①",
+      "stories": [
+        "story-2"
+      ],
+      "page_sequence": [
+        "page-phone-action",
+        "page-host-board",
+        "page-phone-trial",
+        "page-host-seats"
+      ]
+    },
+    {
+      "name": "山议放逐 Council & Exile",
+      "journey_stage": "stage2 出局",
+      "stories": [
+        "story-3",
+        "story-2"
+      ],
+      "page_sequence": [
+        "page-host-council",
+        "page-phone-council",
+        "page-host-exile",
+        "page-phone-observer"
+      ]
+    },
+    {
+      "name": "登顶认证高潮 Certification Climax",
+      "journey_stage": "stage4 满意峰值",
+      "stories": [
+        "story-4",
+        "story-5",
+        "story-3"
+      ],
+      "page_sequence": [
+        "page-host-board",
+        "page-host-cert",
+        "page-phone-challenge",
+        "page-phone-sign",
+        "page-phone-witness",
+        "page-host-cert-progress",
+        "page-phone-appeal",
+        "page-host-cert-appeal"
+      ]
+    },
+    {
+      "name": "终局结算 Settlement",
+      "journey_stage": "stage5 流失风险②",
+      "stories": [
+        "story-6"
+      ],
+      "page_sequence": [
+        "page-host-settle",
+        "page-host-rank",
+        "page-host-seats"
+      ]
+    }
+  ],
+  "metadata": {
+    "depth_max": 2,
+    "page_count": 25,
+    "host_page_count": 13,
+    "phone_page_count": 12,
+    "status_legend": {
+      "existing": "当前单文件实现已有",
+      "refactor": "已有但需为多端拆分/迁移",
+      "gap": "故事要求但当前缺失，调优新增"
+    },
+    "status_count": {
+      "existing": 7,
+      "gap": 11,
+      "refactor": 7
+    },
+    "screen_coverage": "19/19 触点屏已映射",
+    "platform_notes": "Web 主屏（共享公开状态轨，状态驱动面板栈，6 视图导航）+ 手机私牌端（每人私密手牌/出题/签印/投票/复议/旁观，4 TabBar）。access 为会话制（房间码加入绑定座位），非账号登录。热座「操作者席切换」在多端下由手机各自绑定座位取代。",
+    "sync_model": "⚠️ 多端实时同步层为新增需求（当前单文件离线、无外部请求）：host 持权威引擎状态广播→phone，phone 操作→host 结算。须保留现有引擎与九道门禁，仅拆分 UI。同步为局域网实时（非线上异步，符合 brief out_of_scope「不做线上异步验活人」）。技术可行性（WebSocket/WebRTC/本地房间服务）待验证。",
+    "client_split_principle": "公共/共享状态→host 主屏（全桌看）；私密/个人操作→phone 手机（手牌/出题/签印/投票）。一次认证高潮跨端协作：手机私密出题→主屏公示→手机签印作证→主屏判定。",
+    "hypothesis": true,
+    "hypothesis_note": "probe 0 真人数据。本 IA 为用户选定的目标多端架构（非现状逐字映射），页面 status 标注现状/缺口；体验类结构（认证聚焦、旁观者参与、渐进披露）待真人 playtest + 多端技术可行性验证。",
+    "new_infra": [
+      "房间会话 / 扫码加入 (page-phone-join)",
+      "host↔phone 实时同步层",
+      "结算面板/排名公示 (当前仅 badge)",
+      "放逐公示",
+      "认证证人席/作证",
+      "复议第三方投票",
+      "旁观者面板",
+      "关隘试炼面板",
+      "规则渐进披露"
+    ]
+  }
+}

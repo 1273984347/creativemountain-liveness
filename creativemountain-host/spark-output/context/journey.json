@@ -1,0 +1,280 @@
+{
+  "skill": "journey",
+  "generated_at": "2026-11-07T18:35:13.828Z",
+  "project_name": "创界山·活人认证",
+  "hypothesis": true,
+  "data_source_note": "Probe 尚无真人数据（0 人）。情感曲线/痛点/心声为 Frame 画像推演，待验证；quotes 留空不伪造。",
+  "persona": {
+    "name": "大林",
+    "description": "31 岁，朋友圈的「聚会局长」，常组织 6–8 人面对面聚会，要的是名场面与整活，策略是次要的",
+    "jtbd": "当组织 6–8 人聚会时，大林想制造一个全桌当场验明登顶者「是活人」的现场表演时刻，从而产出可反复回味的名场面；让朋友觉得他是最会整活的局长；感到全桌同频的嗨 / 避免冷场与闹完就忘"
+  },
+  "journey_type": "specific-flow",
+  "stage_count": 6,
+  "stages": [
+    {
+      "name": "开场暖局",
+      "emoji": "🎲",
+      "order": 1,
+      "user_goal": "搞懂怎么玩、拿到身份、快速进入状态",
+      "touchpoints": [
+        "身份/角色牌",
+        "灵枢资源 token",
+        "规则书 / 教学页",
+        "山道版图",
+        "数字辅助屏（可选）"
+      ],
+      "actions": [
+        "抽身份牌",
+        "领起始资源",
+        "听规则讲解",
+        "摆版图",
+        "确认首局模式"
+      ],
+      "thoughts": [
+        "这身份牌有意思，但规则好像有点多",
+        "希望能快点玩到精彩的"
+      ],
+      "emotion": "🙂",
+      "pain_level": 2,
+      "quotes": [],
+      "pain_points": [
+        "规则太重，开场讲解可能劝退整活型玩家"
+      ],
+      "opportunities": [
+        "渐进披露规则 + 首局教学演示（brief·用户引导）"
+      ]
+    },
+    {
+      "name": "策略铺垫·竞速",
+      "emoji": "⛰️",
+      "order": 2,
+      "user_goal": "爬山攒资源、争取登顶、不被放逐",
+      "touchpoints": [
+        "山道版图",
+        "关隘试炼卡",
+        "灵枢资源",
+        "山议投票",
+        "行动手牌",
+        "数字轨状态屏"
+      ],
+      "actions": [
+        "打行动卡爬山",
+        "过关隘试炼",
+        "攒灵枢",
+        "发起山议投票",
+        "放逐对手"
+      ],
+      "thoughts": [
+        "还要爬多久啊…",
+        "我先玩会儿手机",
+        "被放逐了我就干坐着？"
+      ],
+      "emotion": "😞",
+      "pain_level": 4,
+      "quotes": [],
+      "pain_points": [
+        "铺垫冗长，整活型玩家走神/掏手机（假设#1）",
+        "被放逐者出局干坐冷场",
+        "策略竞速对非极客负担重"
+      ],
+      "opportunities": [
+        "压缩前 60min 认知负担（brief·交互）",
+        "新手模式推迟放逐（brief·用户引导）",
+        "关隘试炼预热认证（brief·用户引导）"
+      ]
+    },
+    {
+      "name": "登顶触发",
+      "emoji": "🚩",
+      "order": 3,
+      "user_goal": "见证有人登顶、准备进入认证",
+      "touchpoints": [
+        "峰顶格",
+        "待认证标记",
+        "认证面板",
+        "全桌视线"
+      ],
+      "actions": [
+        "登顶宣告",
+        "进入待认证",
+        "锁定峰顶",
+        "转向答题者"
+      ],
+      "thoughts": [
+        "哦？有人登顶了，要开始了",
+        "终于到重头戏了"
+      ],
+      "emotion": "🙂",
+      "pain_level": 2,
+      "quotes": [],
+      "pain_points": [
+        "待认证锁定若不清楚，全桌困惑谁在认证"
+      ],
+      "opportunities": [
+        "待认证锁定防混淆（brief·交互）",
+        "认证面板一键操作（brief·交互）"
+      ]
+    },
+    {
+      "name": "现场认证高潮",
+      "emoji": "🎭",
+      "order": 4,
+      "user_goal": "验明登顶者「是活人」、产出全桌名场面",
+      "touchpoints": [
+        "认证面板/签印",
+        "质疑出题",
+        "答题者表演",
+        "证人作证",
+        "复议投票"
+      ],
+      "actions": [
+        "发起质疑出题",
+        "答题者现场表演",
+        "证人作证",
+        "签印/复议",
+        "全桌判定"
+      ],
+      "thoughts": [
+        "哈哈这也太整活了",
+        "全桌都在看他答题，太刺激了",
+        "这瞬间值了"
+      ],
+      "emotion": "😊",
+      "pain_level": 1,
+      "quotes": [],
+      "pain_points": [
+        "签印门槛 N=4 致多数人无成本签印，表演集中在 1–2 次质疑，密度不足"
+      ],
+      "opportunities": [
+        "降签印门槛提名场面密度（brief·情感化）",
+        "保留三方判定张力（brief·情感化）"
+      ]
+    },
+    {
+      "name": "终局结算",
+      "emoji": "🏮",
+      "order": 5,
+      "user_goal": "看谁赢、确认名场面有没有白费",
+      "touchpoints": [
+        "活人席计分",
+        "距峰顶格数",
+        "结算面板",
+        "排名公示"
+      ],
+      "actions": [
+        "计算席位数",
+        "比对距峰顶",
+        "公示排名",
+        "判定胜者"
+      ],
+      "thoughts": [
+        "等等，刚才最精彩的人怎么输了？",
+        "那我刚才表演图啥…",
+        "原来爬到哪也算分"
+      ],
+      "emotion": "😕",
+      "pain_level": 3,
+      "quotes": [],
+      "pain_points": [
+        "早期取席者需爬回 11+ 格才赢，名场面者可能输整局 ⇒ 白演了（假设#4）"
+      ],
+      "opportunities": [
+        "名场面即胜利叙事保障（brief·情感化）",
+        "席位权重平衡须过回归测试（brief·约束）"
+      ]
+    },
+    {
+      "name": "赛后回味",
+      "emoji": "🔁",
+      "order": 6,
+      "user_goal": "回味精彩瞬间、决定要不要再开",
+      "touchpoints": [
+        "复盘讨论",
+        "名场面回放（数字轨可选）",
+        "再开局按钮",
+        "分享/推荐"
+      ],
+      "actions": [
+        "复盘名场面",
+        "讨论谁最精彩",
+        "决定再开一局",
+        "推荐给朋友"
+      ],
+      "thoughts": [
+        "刚才那段我能笑一年",
+        "下次聚会再开一局",
+        "得安利给那谁"
+      ],
+      "emotion": "🙂",
+      "pain_level": 2,
+      "quotes": [],
+      "pain_points": [
+        "若名场面不够重，闹完就忘、无记忆点"
+      ],
+      "opportunities": [
+        "名场面回放沉淀记忆点（brief·情感化）",
+        "再开局引导促复玩（brief·情感化）"
+      ]
+    }
+  ],
+  "emotion_curve": [
+    {
+      "stage_order": 1,
+      "pain_level": 2
+    },
+    {
+      "stage_order": 2,
+      "pain_level": 4
+    },
+    {
+      "stage_order": 3,
+      "pain_level": 2
+    },
+    {
+      "stage_order": 4,
+      "pain_level": 1
+    },
+    {
+      "stage_order": 5,
+      "pain_level": 3
+    },
+    {
+      "stage_order": 6,
+      "pain_level": 2
+    }
+  ],
+  "key_moments": [
+    {
+      "stage_order": 2,
+      "type": "dropout-risk",
+      "description": "策略铺垫期冷场——关键假设#1：聚会整活型玩家可能熬不过 ~50min 竞速（待真人验证）"
+    },
+    {
+      "stage_order": 3,
+      "type": "recovery",
+      "description": "登顶把全桌注意力拉回，期待感回升"
+    },
+    {
+      "stage_order": 4,
+      "type": "moment-of-truth",
+      "description": "认证高潮是产品价值命题的成败时刻——名场面够重则整局值得"
+    },
+    {
+      "stage_order": 4,
+      "type": "delight",
+      "description": "现场认证名场面峰值，全桌同频（pain_level=1）"
+    },
+    {
+      "stage_order": 5,
+      "type": "dropout-risk",
+      "description": "终局落差——贡献名场面者若输掉整局则「白演了」（关键假设#4，待真人验证）"
+    },
+    {
+      "stage_order": 6,
+      "type": "recovery",
+      "description": "名场面够重 ⇒ 赛后回味 + 愿意再开一局"
+    }
+  ],
+  "journey_file": "spark-output/journey/创界山-活人认证.html"
+}

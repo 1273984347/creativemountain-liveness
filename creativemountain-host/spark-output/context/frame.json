@@ -1,0 +1,85 @@
+{
+  "skill": "frame",
+  "generated_at": "2026-11-07T10:45:00Z",
+  "project_name": "创界山·活人认证",
+  "persona": {
+    "name": "大林",
+    "description": "31 岁，朋友圈的「聚会局长」，常组织 6–8 人面对面聚会，要的是名场面与整活，策略是次要的",
+    "situation": "组织 6–8 人聚会，想制造一个让全桌笑到拍桌、事后反复回味的名场面",
+    "goal": "让登顶者被全桌当场验明「是活人」，产出人际表演与社交张力",
+    "workaround": "狼人杀/阿瓦隆（被首杀干坐、推理费脑）、剧本杀（本子一次就废、贵）、喝酒小游戏（闹完就忘、无记忆点）",
+    "frustrations": [
+      "现有玩法要么有人出局干坐冷场，要么名场面密度低、闹完就忘",
+      "策略桌游规则太重，没玩到高潮就先冷场",
+      "赢了最精彩瞬间的人却输掉整局，高潮意义被消解"
+    ],
+    "what_good_looks_like": "一局里有多个全桌注意力 100% 集中的现场表演时刻，且贡献名场面的人能赢"
+  },
+  "jtbd": {
+    "functional": "当组织 6–8 人聚会时，大林想制造一个全桌当场验明登顶者「是活人」的现场表演时刻，从而产出可反复回味的名场面",
+    "social": "让朋友觉得大林是「最会整活、最懂搞气氛」的聚会局长",
+    "emotional": "感到全桌同频的嗨与掌控 / 避免冷场、有人干坐、闹完就忘的失落",
+    "combined": "当组织 6–8 人聚会时，大林想制造一个全桌当场验明登顶者「是活人」的现场表演时刻，从而产出可反复回味的名场面；让朋友觉得他是最会整活的局长；感到全桌同频的嗨 / 避免冷场与闹完就忘"
+  },
+  "opportunities": [
+    { "title": "我没法在聚会里持续产出全桌同频的名场面（现有玩法密度低、闹完就忘）", "importance": "H", "satisfaction": "L", "priority": "高" },
+    { "title": "我希望整活高潮不被冗长规则铺垫拖冷（策略太重，没到高潮先冷场）", "importance": "H", "satisfaction": "L", "priority": "高" },
+    { "title": "我每次都得容忍有人被放逐后干坐冷场（狼人杀首杀痛点重演）", "importance": "H", "satisfaction": "L", "priority": "高" },
+    { "title": "我希望贡献名场面的人能赢，而不是赢了表演输整局", "importance": "M", "satisfaction": "L", "priority": "中" },
+    { "title": "我希望隔着屏幕也能验活人（数字轨异步玩时现场表演不成立）", "importance": "M", "satisfaction": "L", "priority": "中" }
+  ],
+  "competitive_landscape": [
+    { "product": "狼人杀 / 阿瓦隆", "bet_on": "隐藏身份推理社交", "got_right": "强社交张力与话题性", "gap_left": "被首杀者干坐冷场；推理费脑，非整活" },
+    { "product": "剧本杀", "bet_on": "沉浸式角色扮演名场面", "got_right": "名场面密度高、情感投入", "gap_left": "本子一次就废、贵、需主持人" },
+    { "product": "派对游戏（德国心脏病/犯人在跳舞）", "bet_on": "即时反应整活", "got_right": "全程高密度笑点、零冷场", "gap_left": "无策略深度、无「这局」叙事记忆点" },
+    { "product": "原版创界山（爱情公寓虚构）", "bet_on": "登顶即胜的竞速", "got_right": "IP 情怀与骰子指令趣味", "gap_left": "登顶即胜平淡收尾，无现场表演高潮" }
+  ],
+  "business_angle": {
+    "why_now": "AI 时代「证明你是活人」成为时代命题（CAPTCHA/图灵测试的反讽）；爱情公寓 IP 怀旧；桌游复兴",
+    "who_pays": "独立设计师作品集，无直接付费方；间接价值是声誉 / 求职 / 合作机会",
+    "monetization": "成本中心（portfolio centerpiece），非直接变现",
+    "strategic_intent": "growth"
+  },
+  "directions": [
+    {
+      "id": "A",
+      "one_liner": "保留完整策略桌游 + 认证高潮，但调优让高潮更密、铺垫更轻、名场面即胜利",
+      "addresses_opportunity": "1,2,4",
+      "user_value": "策略铺垫为高潮供弹药（资源/人缘/证据），名场面有重量；大林这伙熬得到高潮且高潮够密",
+      "business_value": "差异化最强（策略深度 × 现场表演的独特混合），作品集命题完整",
+      "riskiest_assumption": "大林这伙愿为 ~10min 高潮忍受 ~60min 策略铺垫"
+    },
+    {
+      "id": "B",
+      "one_liner": "转向派对快节奏：认证前置为主菜，策略压缩为调味",
+      "addresses_opportunity": "1,2,3",
+      "user_value": "全程整活、零冷场、低门槛",
+      "business_value": "受众更广但差异化弱（沦为又一款派对游戏）",
+      "riskiest_assumption": "砍掉策略后名场面仍有重量、不沦为闹完就忘"
+    },
+    {
+      "id": "C",
+      "one_liner": "双模式分叉：派对模式服务大林、标准模式服务极客，共用引擎",
+      "addresses_opportunity": "1,2,5",
+      "user_value": "各取所需",
+      "business_value": "覆盖广但范围翻倍",
+      "riskiest_assumption": "独立设计师资源撑得起两套平衡与门禁"
+    }
+  ],
+  "lean_direction": "A",
+  "critical_assumption": "大林这伙（聚会整活型）愿为 ~10 分钟现场认证高潮，忍受 ~60 分钟策略竞速铺垫——未验证，需 6 人真人局测试",
+  "pressure_test": {
+    "ran": true,
+    "verdict": "holds_with_conditions",
+    "conditions": [
+      "关键假设（60min 铺垫换 10min 高潮）未用真人验证，建议跑 6 人局或 /用户研究 3–5 人快速访谈",
+      "策略铺垫须保持轻量可熬（前 60min 不能冷场）",
+      "认证名场面密度须提升（门槛 N=4 导致多数人无成本签印，表演集中在 1–2 次质疑）",
+      "终局公式须保障「名场面即胜利」叙事（早期取席者需爬回 11+ 格才赢，否则高潮白演）"
+    ]
+  },
+  "hmw_cards": {
+    "ran": false,
+    "cards": []
+  }
+}
