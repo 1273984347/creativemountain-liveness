@@ -20,17 +20,19 @@ import { fallbackRanking, resolveVictory } from '../../engine/core/victory.ts';
 import { getLegalActions } from '../../engine/core/legal.ts';
 import { applyEffect } from '../../engine/ops/registry.ts';
 import { at } from './helpers.ts';
+import { mk, putPending } from './fixtures.ts';
 
-/** 造一个「N 人待认证」的局面。 */
-function pendingScene(playerCount: number, pendingSeats: number[] = [0]) {
-  const s = createInitialState({ players: playerCount as 3 | 4 | 5 | 6 | 7 | 8, seed: 7, deckSize: 40 });
-  const peak = s.board.peakIndex;
-  const players = s.players.map((p) =>
-    pendingSeats.includes(p.seat) ? { ...p, position: peak, pendingCert: true } : p,
-  );
-  // round: 1 = 「第 1 轮进行中」（0 表示第 1 轮尚未开始，见 B9 修正）
-  const next: State = { ...s, players, certification: { ...s.certification, round: 1, pending: pendingSeats } };
-  return next;
+/**
+ * 造一个「N 人待认证（第 1 轮进行中）」的局面。
+ *
+ * ⚠️ B15 收敛：原先这里**手拼** `certification: { ...s.certification, round: 1, pending }`
+ *   ＋直接置 `pendingCert`——正是 `tests/engine/fixtures.ts` 文件头明令禁止的写法
+ *   （跳过 `enterPendingCertification` 的山主 `certify_free_pass` 前置，也绕开
+ *   `advanceCertificationRound` 的 round-0「开启第 1 轮」语义）。
+ *   现在薄薄一层委托给共享 builder（真实引擎入口构造），**断言一字未改**。
+ */
+function pendingScene(playerCount: number, pendingSeats: number[] = [0]): State {
+  return putPending(mk(playerCount), pendingSeats);
 }
 
 // ---------- §5.2 门槛公式 ----------

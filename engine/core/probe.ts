@@ -52,7 +52,15 @@ export function isolatedState(state: State): State {
 /** 试跑使用的规则档位：标准档（新手档只改山议间隔，不影响动作可接受性）。 */
 const MODE: RuleMode = 'standard';
 
-/** 试跑结果：`reason` 为拒绝原因（接受时为引擎 note 或空串）。 */
+/**
+ * 试跑结果。
+ *
+ * `reason` **不是**「只有拒绝才有内容」的字段：拒绝时是拒因，**接受时同样可能非空**——
+ *   · 通道 ② 把引擎 `note` 原样带出（如「签印」「已申请复议（-2 灵枢）」）；
+ *   · 通道 ③ 的「结算时立起对峙」给的是**接受理由**（已接受，只是推进挂起）。
+ * ⇒ 判据**只有 `ok` 这一条**：消费方不得用 `reason === ''` 反推「被接受」，
+ *   也不得把非空 `reason` 当成失败（`legal.ts` 的试跑式枚举即按此口径写）。
+ */
 export interface ProbeResult {
   readonly ok: boolean;
   readonly reason: string;

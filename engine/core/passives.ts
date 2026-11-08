@@ -70,6 +70,20 @@ export function passiveOf(state: State, seat: number): PassiveSpec | undefined {
   return raw === undefined ? undefined : (raw as PassiveSpec);
 }
 
+/**
+ * 主动被动的**稳定标识**（未授予被动 ⇒ 空串）。
+ *
+ * ⚠️ `PassiveSpec = Effect` ⇒ 被动**没有 id 字段**，可辨识的只有 `op`。
+ *   `legal.ts` 与 `web/legal-gate.ts` 必须共用这个取法，不得各写一份——
+ *   两处各写就是「枚举给的 abilityId 与 UI 显示的 abilityId 分叉」的开始
+ *   （B15 已注册的三处镜像漂移同源）。
+ *   引擎侧 `performAbility` 从不读 `Action.abilityId`（发动哪个被动由 `flags.passive` 决定），
+ *   所以这个标识只服务于「对外一致」，不影响合法性判定。
+ */
+export function activeAbilityId(state: State, seat: number): string {
+  return passiveOf(state, seat)?.op ?? '';
+}
+
 /** 主动能力是否可发动。 */
 export interface AbilityAvailability {
   /** 是否可发动 */

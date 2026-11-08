@@ -8,6 +8,10 @@ import { startDuel } from '../../engine/core/duel.ts';
 import {
   appealedScene, challengedScene, councilScene, lockedScene, mk, pendingScene,
 } from './fixtures.ts';
+import { getLegalActions, actionWindowOpen, LEGAL_ACTION_CAP } from '../../engine/core/legal.ts';
+import { activeAbilityId } from '../../engine/core/passives.ts';
+import { cardNeedsTarget, targetCandidates } from '../../engine/core/targeting.ts';
+import { certifyAnswer } from '../../engine/core/certification.ts';
 import type { Action } from '../../engine/core/action.ts';
 import type { State } from '../../engine/core/state.ts';
 import type { Card } from '../../engine/types/theme.ts';
@@ -184,6 +188,13 @@ function targetCardScene(): State {
     text: '取证用：必须选目标的牌',
     effects: [{ op: 'discard_opponent', count: 1, target: 0 }],
   };
+  // ⚠️ 前提守卫（Task 4 评审遗留 ①）：下面「target 越界仍被接受」那行的牙齿**全靠这张牌
+  //   真的要选目标**。若主题/算子改动让它不再需要目标，`act` 分支会在「需要目标却没给」
+  //   处原样返回的判据就此消失，那行会在「引擎其实什么都没被检验」的情况下继续报 ok=true
+  //   ⇒ 取证行必须先把**自己的前提**钉住，而不是只钉结论。
+  assert.ok(cardNeedsTarget(card),
+    `targetCardScene 的前提：取证牌必须真的需要选择目标（cardNeedsTarget 为假 ⇒ `
+    + `「target 越界仍被接受」那行不再证明任何事，须换一张真需目标的牌）`);
   const s = mk();
   return { ...s, players: s.players.map((p) => (p.seat === 0 ? { ...p, hand: [card, ...p.hand] } : p)) };
 }
@@ -230,6 +241,11 @@ const PROBE_CASES: readonly ProbeCase[] = [
   //   `resolveTargetPick`）⇒ 一张真的要选目标的牌带着越界座位 99 照样出牌。
   //   （`card.cost` 同样既不校验也不扣，即 G-a 本体。）⇒ Task 9 README 的 G-a/G-b 证据行。
   { label: 'PLAY_CARD@target 越界（G-a 同族取证：act 分支不校验 target ⇒ 引擎放行）', scene: targetCardScene, action: { type: 'PLAY_CARD', actor: 0, cardId: TARGET_CARD_ID, target: 99 }, ok: true },
+  // ↑ 那行的**负对照**（Task 4 评审遗留 ①：Task 4 报告称已有此负对照，实测**没有**）：
+  //   同一张牌、同一个座位，只是**不给 target** ⇒ 引擎在 `act` 分支的
+  //   「需要目标而未选目标」处原样返回。没有这一行，「越界仍放行」就可能在
+  //   「这张牌压根不需要目标」的静默改动下继续报绿。
+  { label: 'PLAY_CARD@需目标的牌未给 target（上行的负对照：引擎此处确实会拒）', scene: targetCardScene, action: { type: 'PLAY_CARD', actor: 0, cardId: TARGET_CARD_ID }, ok: false, reasonRe: /原样返回/ },
   // ---- 通道 ②：{ok, state, note} 契约 ----
   { label: 'ABILITY@未授予被动', scene: mk, action: { type: 'ABILITY', actor: 0, abilityId: 'peek_deck' }, ok: false, reasonRe: /没有身份被动/ },
   { label: 'VOTE@山议未开', scene: mk, action: { type: 'VOTE', actor: 0, target: 1 }, ok: false, reasonRe: /山议未在进行中/ },
@@ -259,3 +275,148 @@ function firstCardId(): string {
   assert.ok(card !== undefined, 'mk() 必须发出起始手牌');
   return card.id;
 }
+
+// ============================ Task 5：五面试跑式枚举 ============================
+//
+// `getLegalActions` 的三段式：**候选粗筛 → rng 隔离试跑 → 判定收集**。
+// 覆盖五个决策面：行棋 / 问天 / 出牌(×目标) / 身份被动(×目标) / 山议投票 / 认证
+// （签印·质疑·弃权·复议·判定·复议票）。
+// ⚠️ `PASS` 与 `COMPARE` **不枚举**：前者 UI 无「结束手番」入口、后者入口待 B14
+//   —— 尽管 `probeAction` 对两者都能给答案（上面 Task 4 的表已钉住），
+//   枚举口径以「玩家现在真能提交什么」为准，不是「探针会不会说合法」。
+// ⚠️ 场景一律来自 fixtures；被动只改 `flags.passive`（不碰认证/山议字段）。
+
+/** 给某座位挂一个身份被动（`PassiveSpec = Effect`，主题包里就是这么写的）。 */
+function withPassive(s: State, seat: number, passive: Record<string, unknown>): State {
+  return {
+    ...s,
+    players: s.players.map((p) => (p.seat === seat ? { ...p, flags: { ...p.flags, passive } } : p)),
+  };
+}
+
+test('§7 行动阶段：枚举出行棋/问天/出牌，且不消耗随机源', () => {
+  const s = mk();
+  const before = s.rng.snapshot();
+  const types = new Set(getLegalActions(s, 0).map((a) => a.type));
+  assert.ok(types.has('MOVE'), '行棋面缺失');
+  assert.ok(types.has('ROLL_WHEEL'), '问天面缺失');
+  assert.ok(types.has('PLAY_CARD'), '有手牌 ⇒ 至少一张可打');
+  assert.equal(s.rng.snapshot(), before, '枚举不得消耗随机源');
+});
+
+test('§7 待认证锁定：行动阶段整体无动作（与 UI 禁用行动区一致）', () => {
+  for (const a of getLegalActions(lockedScene(), 0)) {
+    assert.equal(['MOVE', 'ROLL_WHEEL', 'PLAY_CARD', 'ABILITY'].includes(a.type), false, `泄漏 ${a.type}`);
+  }
+});
+
+test('§7 对峙未决 ⇒ 行动窗口关闭（DuelState 的 pickA/pickB 是可选字段，不写 undefined）', () => {
+  const s: State = { ...mk(), duel: { seatA: 0, seatB: 1 } };
+  assert.equal(actionWindowOpen(s, 0), false);
+  assert.equal(actionWindowOpen(mk(), 0), true);
+});
+
+test('§7 被动标识唯一来源 = activeAbilityId（PassiveSpec = Effect，没有 id 字段）', () => {
+  assert.equal(activeAbilityId(mk(), 0), '', '未授予被动 ⇒ 空串，不得凭空造 id');
+  const withOp = withPassive(mk(), 0, { op: 'peek_deck' });
+  assert.equal(activeAbilityId(withOp, 0), 'peek_deck');
+});
+
+test('§7 需目标的牌按候选目标展开，且不含无目标版本（引擎要求有目标才可出）', () => {
+  const base = mk();
+  const targeted: Card = {
+    id: 'test_targeted', name: '测试制敌', type: 'utility', cost: 0, color: 'red',
+    rank: 5, text: '弃掉目标 1 张牌。', effects: [{ op: 'discard_opponent', count: 1, target: 1 }],
+  };
+  assert.ok(cardNeedsTarget(targeted), '前提自查：这张牌必须真的需要选目标，否则下面的展开断言是空的');
+  const s: State = {
+    ...base,
+    players: base.players.map((p) => (p.seat === 0 ? { ...p, hand: [targeted, ...p.hand] } : p)),
+  };
+  const plays = getLegalActions(s, 0)
+    .filter((a): a is Extract<Action, { readonly type: 'PLAY_CARD' }> => a.type === 'PLAY_CARD')
+    .filter((a) => a.cardId === 'test_targeted');
+  assert.equal(plays.length, targetCandidates(s, 0).length, '每个存活对手一条');
+  assert.equal(plays.some((a) => a.target === undefined), false, '无目标版本必被引擎拒');
+});
+
+test('§7 身份被动面：needsTarget 的被动按候选目标展开，abilityId 取 activeAbilityId', () => {
+  const s = withPassive(mk(), 0, { op: 'transfer_resource', amount: 1 });
+  const abilities = getLegalActions(s, 0).filter((a) => a.type === 'ABILITY');
+  assert.equal(abilities.length, targetCandidates(s, 0).length, '窃火者：每个存活对手一条');
+  assert.equal(abilities.every((a) => a.target !== undefined), true, '需目标的被动不得给出无目标版本');
+  assert.deepEqual([...new Set(abilities.map((a) => a.abilityId))], ['transfer_resource'],
+    'abilityId 必须是 `activeAbilityId` 的取法（被动的 op）——写死别的名字或退回 identityId 都会在这里红');
+  // 常驻/自动型被动没有发动入口 ⇒ 该面为空（引擎 performAbility 也会拒）。
+  const passiveless = getLegalActions(mk(), 0).filter((a) => a.type === 'ABILITY');
+  assert.equal(passiveless.length, 0, 'mk() 未授予被动 ⇒ 身份被动面为空');
+  const autoType = withPassive(mk(), 0, { op: 'shield', amount: 1 });
+  assert.equal(getLegalActions(autoType, 0).some((a) => a.type === 'ABILITY'), false,
+    '自动/常驻型被动无需发动 ⇒ 不得枚举 ABILITY');
+});
+
+test('§7 认证段：签印/质疑/弃权在册，未质疑者无判定权、无人复议时无复议票', () => {
+  const types = new Set(getLegalActions(pendingScene(), 1).map((a) => a.type));
+  assert.ok(types.has('CERTIFY_SIGN'));
+  assert.ok(types.has('CERTIFY_CHALLENGE'));
+  assert.ok(types.has('CERTIFY_ABSTAIN'));
+  assert.equal(types.has('CERTIFY_ANSWER'), false, '未质疑 ⇒ 无判定权');
+  assert.equal(types.has('CERTIFY_APPEAL_VOTE'), false);
+  assert.equal(types.has('PASS'), false, 'UI 无「结束手番」入口 ⇒ 不枚举');
+  assert.equal(types.has('COMPARE'), false, '关隘未接线 ⇒ 不枚举');
+});
+
+test('§7 判定权只属于已质疑者，且判定去重由粗筛承担（certifyAnswer 无重复判定守卫）', () => {
+  const answered = getLegalActions(challengedScene(), 1).filter((a) => a.type === 'CERTIFY_ANSWER');
+  assert.equal(answered.length, 2, '判通过 / 判不通过 各一条');
+  const after = certifyAnswerRun(challengedScene());
+  assert.equal(getLegalActions(after, 1).some((a) => a.type === 'CERTIFY_ANSWER'), false, '已判定 ⇒ 不再返回判定动作');
+  assert.equal(getLegalActions(challengedScene(), 3).some((a) => a.type === 'CERTIFY_ANSWER'), false, '未质疑者无判定权');
+});
+
+test('§7 复议：本人可申请（target === actor），复议票只发给非当事人', () => {
+  const appeal = getLegalActions(pendingScene(), 0).filter((a) => a.type === 'CERTIFY_APPEAL');
+  assert.equal(appeal.length, 1, '只能对自己申请一次');
+  assert.deepEqual(appeal.map((a) => a.target), [0], 'target 必须是待认证者本人');
+  const voted = getLegalActions(appealedScene(), 3).filter((a) => a.type === 'CERTIFY_APPEAL_VOTE');
+  assert.equal(voted.length, 2, '推翻 / 维持 两条');
+  // 当事人（认证人与待认证者）都被引擎拒 ⇒ 枚举里不得出现复议票。
+  const appealed = appealedScene();
+  assert.equal(getLegalActions(appealed, 1).some((a) => a.type === 'CERTIFY_APPEAL_VOTE'), false, '认证人不得投复议票');
+  assert.equal(getLegalActions(appealed, 0).some((a) => a.type === 'CERTIFY_APPEAL_VOTE'), false, '待认证者本人不得投复议票');
+});
+
+test('§7 山议：投票动作覆盖除自己外的存活玩家', () => {
+  const s = councilScene();
+  const votes = getLegalActions(s, 0).filter((a) => a.type === 'VOTE');
+  assert.equal(votes.length, 3, '4 人局 ⇒ 3 个可投对象');
+  // 已投过票 ⇒ 不再返回（`castVote` 的「本轮已投过票」由粗筛的 votes[seat] 挡住）。
+  const votedOnce = { ...s, council: { ...s.council, votes: { ...s.council.votes, 0: 1 } } };
+  assert.equal(getLegalActions(votedOnce, 0).some((a) => a.type === 'VOTE'), false);
+});
+
+test('一致性-正向（常驻）：枚举出的每个动作必被引擎接受', () => {
+  const scenes = [mk(), mk(8, 23), lockedScene(), pendingScene(), challengedScene(), appealedScene(), councilScene()];
+  for (const s of scenes) {
+    const before = s.rng.snapshot();
+    for (let seat = 0; seat < s.players.length; seat += 1) {
+      for (const a of getLegalActions(s, seat)) {
+        const r = probeAction(s, a);
+        assert.equal(r.ok, true, `${a.type}@座${String(seat)} 应合法：${r.reason}`);
+      }
+    }
+    assert.equal(s.rng.snapshot(), before, '枚举+试跑整轮不得消耗原 state 的随机源');
+  }
+});
+
+test('§7 上限：枚举结果永不超过 LEGAL_ACTION_CAP', () => {
+  for (const s of [mk(8, 23), councilScene(8, 23), appealedScene(8, 23)]) {
+    for (let seat = 0; seat < s.players.length; seat += 1) {
+      assert.ok(getLegalActions(s, seat).length <= LEGAL_ACTION_CAP,
+        `座${String(seat)} 枚举 ${String(getLegalActions(s, seat).length)} 条 > ${LEGAL_ACTION_CAP}`);
+    }
+  }
+});
+
+/** 已判定过的局面（用真实入口推进，不手拼字段）。 */
+function certifyAnswerRun(s: State): State { return certifyAnswer(s, 1, 0, false).state; }
