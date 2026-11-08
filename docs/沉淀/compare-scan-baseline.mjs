@@ -19,24 +19,28 @@ const scanPath = resolve(process.cwd(), argOf('scan', 'docs/trial-reserve-scan.j
 /** 逐组比对的指标（全部原始统计量）。 */
 const KEYS = ['perK', 'failed', 'passedAfterFail', 'fallback', 'seats', 'rounds', 'anomalies'];
 
-/** 读 JSON；**文件缺失/不可解析** ⇒ 明确报错并 exit 1（而非抛未捕获异常）。 */
-function readJson(path) {
+/**
+ * 读 JSON；**文件缺失/不可解析** ⇒ 明确报错并 exit 1（而非抛未捕获异常）。
+ *
+ * ⚠️ B40：`label` 区分**基线快照**与**扫描产物** ⇒ 报错能直接指出是哪一个输入坏了。
+ */
+function readJson(path, label) {
   let raw;
   try {
     raw = readFileSync(path, 'utf8');
   } catch {
-    console.error('FAIL  扫描产物缺失或不可读：' + path);
+    console.error('FAIL  ' + label + '缺失或不可读：' + path);
     process.exit(1);
   }
   try {
     return JSON.parse(raw);
   } catch {
-    console.error('FAIL  扫描产物不是合法 JSON：' + path);
+    console.error('FAIL  ' + label + '不是合法 JSON：' + path);
     process.exit(1);
   }
 }
-const base = readJson(baselinePath);
-const scan = readJson(scanPath);
+const base = readJson(baselinePath, '基线快照');
+const scan = readJson(scanPath, '扫描产物');
 const keyOf = (g) => String(g.reserve) + '@' + String(g.seedBase);
 const mapOf = (doc) => new Map((doc.groups ?? []).map((g) => [keyOf(g), g]));
 const bm = mapOf(base);
