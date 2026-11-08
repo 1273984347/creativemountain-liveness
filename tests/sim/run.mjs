@@ -25,6 +25,7 @@ import { currentPlayer } from '../../engine/core/round.ts';
 import { performAbility } from '../../engine/core/abilities.ts';
 import { autoResolveDuel } from '../../engine/core/duel.ts';
 import { advanceAuto } from '../../engine/core/advance.ts';
+import { resolveGate } from '../../engine/core/gate.ts';
 import { castVote, resolveCouncil } from '../../engine/core/council.ts';
 import {
   certifySign, certifyChallenge, certifyAnswer, certifyAppeal, certifyAppealVote,
@@ -37,7 +38,7 @@ const THEME_IDS = ['xianxia2026', 'scifi-ai', 'hybrid', 'urban-psych'];
 
 /** 解析命令行参数。 */
 function parseArgs(argv) {
-  const out = { games: 1000, check: false, out: null, themes: THEME_IDS, players: SCALES.map((s) => s.players) };
+  const out = { games: 1000, check: false, out: null, themes: THEME_IDS, players: SCALES.map((s) => s.players), trialRate: false, trialTimes: 400 };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--games') { out.games = Number(argv[++i]); }
@@ -45,6 +46,9 @@ function parseArgs(argv) {
     else if (a === '--out') { out.out = argv[++i]; }
     else if (a === '--themes') { out.themes = argv[++i].split(','); }
     else if (a === '--players') { out.players = argv[++i].split(',').map(Number); }
+    // ⚠️ B23：骰子型试炼的**定向长跑**（通过率专项平衡指标）
+    else if (a === '--trial-rate') { out.trialRate = true; }
+    else if (a === '--trial-times') { out.trialTimes = Number(argv[++i]); }
   }
   return out;
 }
@@ -297,6 +301,10 @@ function playOne(theme, players, seed) {
     // B12：被动触发**统一从日志提取**（主动型 + 自动型同格式 `[被动:<op>]`）
     // B13：对峙次数（kind='duel' 的日志条数）—— 对峙可达性证据
     duelCount: s.log.filter((l) => l.kind === 'duel').length,
+    // B23：试炼事件（**结构化字段** ⇒ 不解析文案；`trialId` / `trialPassed` 由引擎写入）
+    trialEvents: s.log
+      .filter((l) => l.kind === 'trial' && typeof l.trialId === 'string')
+      .map((l) => ({ id: l.trialId, passed: l.trialPassed === true })),
     passiveOps: s.log.map((l) => {
       const m = /^\[被动:([a-z_]+)\]/.exec(l.message);
       return m === null ? null : m[1];
@@ -337,6 +345,10 @@ function summarize(cells) {
   let duelTotal = 0;
   let duelGames = 0;
   const certRounds = new Map();
+  // B23：关隘试炼统计（每张试炼牌 → 抽取次数 / 通过次数 / 触发过的局数）
+  const trialDraws = new Map();
+  const trialPasses = new Map();
+  const trialGames = new Map();
   let total = 0;
   // ⚠️ B11 席位制：结局语义随之改变 ——
   //   `seats` = 席位制结算（**主路径**，达到回合上限即按席位数排名）；
@@ -374,6 +386,15 @@ function summarize(cells) {
     const ops = c.passiveOps ?? [];
     for (const op of ops) { abilityOps.set(op, (abilityOps.get(op) ?? 0) + 1); }
     for (const op of new Set(ops)) { abilityGames.set(op, (abilityGames.get(op) ?? 0) + 1); }
+    // B23：试炼事件累加（抽取次数 / 通过次数 / 触发过的局数）
+    const evs = c.trialEvents ?? [];
+    for (const ev of evs) {
+      trialDraws.set(ev.id, (trialDraws.get(ev.id) ?? 0) + 1);
+      if (ev.passed) { trialPasses.set(ev.id, (trialPasses.get(ev.id) ?? 0) + 1); }
+    }
+    for (const id of new Set(evs.map((e) => e.id))) {
+      trialGames.set(id, (trialGames.get(id) ?? 0) + 1);
+    }
     if (c.firstPendingSeat >= 0) {
       chain.withPeak += 1;
       chain.peakRoundSum += c.firstPendingRound;
@@ -410,18 +431,142 @@ function summarize(cells) {
     avgRounds: total > 0 ? roundSum / total : 0,
     avgSeats: total > 0 ? seatTotalSum / total : 0,
     gamesWithoutSeat, seatDist, champSeatDist, abilityOps, abilityGames, duelTotal, duelGames,
+    trialDraws, trialPasses, trialGames,
     identityWin, factionWin, seatWin, posWin, certRounds, chain, soloSeatWin, soloPosWin, soloGames,
   };
 }
 
+/**
+ * 定向长跑：某张试炼牌的通过率（**走生产同一条代码路径** —— `resolveGate(state, seat, 'trial')`）。
+ *
+ * ⚠️ 为什么要定向：真实对局里试炼是**偶发事件**（要走到关隘格 + 选试炼通道）
+ *   ⇒ 局数不够时样本量不足以判通过率 ⇒ 用定向长跑把样本量拉满。
+ * ⚠️ 每次都用**全新局面**（试炼无论通过或失败都会写标记 ⇒ 同一局面不能复测）。
+ * ⚠️ 用 **8 人局**（36 格 / 4 座关隘）⇒ 30 号关隘也在（4 人局只有 28 格 / 3 座）。
+ */
+function measureTrial(theme, trialId, gateIndex, times) {
+  let passes = 0;
+  let fallbackWrites = 0;
+  let logMismatch = 0;
+  for (let i = 0; i < times; i++) {
+    // ⚠️ seed **必须含主题 id**：否则四套主题共用同一条随机轨迹（统计上不是 4 个独立样本）。
+    const themeSeed = [...theme.meta.id].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) % 100000, 0);
+    const base = createInitialState({ players: 8, seed: 90000 + i * 131 + themeSeed, deckSize: theme.counts.deckTotal });
+    const installed = installTheme(base, theme);
+    const s = {
+      ...installed,
+      decks: { ...installed.decks, trial: installed.decks.trial.filter((c) => c.id === trialId) },
+      players: installed.players.map((p) => (p.seat === 0 ? { ...p, position: gateIndex } : p)),
+    };
+    const r = resolveGate(s, 0, 'trial');
+    if (r.passed) { passes += 1; }
+    else if (r.state.players[0]?.flags['gate_pay_' + gateIndex] === true) { fallbackWrites += 1; }
+    // B23：**日志结构化字段必须与引擎判定一致**（否则平衡报告里的通过率与真实判定脱节）
+    const entry = r.state.log.find((l) => l.kind === 'trial');
+    if (entry === undefined || entry.trialId !== trialId || entry.trialPassed !== r.passed) {
+      logMismatch += 1;
+    }
+  }
+  return { passes, times, fallbackWrites, logMismatch };
+}
+
+/** 试炼牌 → 理论通过率（骰子型；由主题包数据派生，不手抄）。 */
+const trialTheory = new Map();
+/** 全部试炼牌 id（含真实对局里**一次都没被抽到**的牌 —— 报告要显式列出，否则「沉默」不可见）。 */
+const allTrialIds = new Set();
+
+/**
+ * 骰子型试炼的**通过率专项平衡**（B23；规格 §9.2）。
+ *
+ * 判据：① 每张骰子型试炼的实测通过率与**理论期望**（`(faces - amount + 1) / faces`）偏差 ≤ 10pp；
+ *   ② 失败时必须写「本关改为付费」标记（挑战型语义）；
+ *   ③ 每张牌必须被某座关隘引用（无死牌）。
+ */
+function runTrialRate(args) {
+  const rows = [];
+  const problems = [];
+  for (const themeId of args.themes) {
+    const theme = loadTheme(themeId);
+    const gates = theme.board.tiles.filter((t) => t.kind === 'gate');
+    for (const t of theme.trials ?? []) {
+      const pred = t.effects?.[0]?.pred;
+      if (pred?.kind !== 'dice_is_at_least') { continue; }
+      const gate = gates.find((g) => (g.gate?.trialIds ?? []).includes(t.id));
+      if (gate === undefined) { problems.push(themeId + '/' + t.id + ' 未被任何关隘引用（死牌）'); continue; }
+      const m = measureTrial(theme, t.id, gate.index, args.trialTimes);
+      const rate = (m.passes / m.times) * 100;
+      const faces = pred.faces ?? 20;
+      const amount = pred.amount ?? 0;
+      const theory = ((faces - amount + 1) / faces) * 100;
+      const dev = rate - theory;
+      rows.push({ themeId, id: t.id, gate: gate.index, amount, faces, theory, rate, dev, ...m });
+      if (Math.abs(dev) > 10) {
+        problems.push(themeId + '/' + t.id + ' 通过率 ' + rate.toFixed(1) + '% 偏离理论 '
+          + theory.toFixed(1) + '% 达 ' + dev.toFixed(1) + 'pp（> 10pp）');
+      }
+      if (m.fallbackWrites !== m.times - m.passes) {
+        problems.push(themeId + '/' + t.id + ' 失败未写「改为付费」标记（'
+          + m.fallbackWrites + '/' + String(m.times - m.passes) + '）');
+      }
+      if (m.logMismatch > 0) {
+        problems.push(themeId + '/' + t.id + ' 试炼日志结构化字段与引擎判定不一致（'
+          + m.logMismatch + ' 次）');
+      }
+    }
+  }
+  if (rows.length === 0) { problems.push('未找到任何骰子型试炼（`dice_is_at_least`）'); }
+  const lines = [];
+  lines.push('# 关隘试炼通过率专项报告（自动生成）');
+  lines.push('');
+  lines.push('> 由 `node tests/sim/run.mjs --trial-rate` 生成；断言口径见规格 §9.2（B23）。');
+  lines.push('> **定向长跑**：对每张骰子型试炼（`dice_is_at_least`）重复抽 ' + String(args.trialTimes) + ' 次，');
+  lines.push('> 走**生产同一条代码路径**（`resolveGate(state, seat, \'trial\')`），不另写模拟器副本。');
+  lines.push('> **理论期望** = `(faces - amount + 1) / faces`（由主题包数据派生，不手抄）。');
+  lines.push('');
+  lines.push('| 主题 | 试炼牌 | 关隘 | 判定 | 样本 | 通过次数 | 实测通过率 | 理论期望 | 偏差 | 失败改为付费 |');
+  lines.push('|---|---|---|---|---|---|---|---|---|---|');
+  for (const r of rows) {
+    lines.push('| ' + r.themeId + ' | `' + r.id + '` | ' + String(r.gate) + ' | 骰 ≥ ' + String(r.amount)
+      + '/' + String(r.faces) + ' | ' + String(r.times) + ' | ' + String(r.passes) + ' | ' + r.rate.toFixed(1)
+      + '% | ' + r.theory.toFixed(1) + '% | ' + (r.dev >= 0 ? '+' : '') + r.dev.toFixed(1) + 'pp | '
+      + String(r.fallbackWrites) + ' |');
+  }
+  lines.push('');
+  writeFileSync(resolve(ROOT, 'docs/trial-pass-rate.md'), lines.join('\n') + '\n', 'utf8');
+  console.log('报告 → docs/trial-pass-rate.md');
+  for (const r of rows) {
+    console.log('  ' + r.themeId + '/' + r.id + ' 实测 ' + r.rate.toFixed(1) + '% vs 理论 '
+      + r.theory.toFixed(1) + '%（偏差 ' + r.dev.toFixed(1) + 'pp，样本 ' + String(r.times) + '）');
+  }
+  if (problems.length > 0) {
+    console.error('FAIL  ' + problems.join('；'));
+    process.exit(1);
+  }
+  console.log('PASS  关隘试炼通过率专项平衡通过（偏差 ≤ 10pp · 失败必写「改为付费」）');
+}
 // ---------- 主流程 ----------
 const args = parseArgs(process.argv.slice(2));
+// ⚠️ B23：定向长跑模式（通过率专项平衡）—— 独立于全量模拟，提前分流。
+if (args.trialRate) {
+  runTrialRate(args);
+  process.exit(0);
+}
 const cells = [];
 const perTheme = new Map();
 /** 主题 × 人数 → 该档结果（缓存：报告的分组表格直接复用，避免重复模拟） */
 const perCell = new Map();
 for (const themeId of args.themes) {
   const theme = loadTheme(themeId);
+  // B23：理论期望（骰子型试炼）—— 由主题包数据派生，不手抄
+  for (const t of theme.trials ?? []) {
+    allTrialIds.add(t.id);
+    const pred = t.effects?.[0]?.pred;
+    if (pred?.kind === 'dice_is_at_least') {
+      const faces = pred.faces ?? 20;
+      const amount = pred.amount ?? 0;
+      trialTheory.set(t.id, ((faces - amount + 1) / faces) * 100);
+    }
+  }
   const themeCells = [];
   for (const players of args.players) {
     const rs = runCell(theme, players, args.games);
@@ -695,6 +840,33 @@ if (args.out !== null) {
   lines.push('| 对峙总次数 | ' + summary.duelTotal + ' |');
   lines.push('| 发生对峙的局数 | ' + summary.duelGames + ' / ' + summary.total + ' |');
   lines.push('| 每百局对峙次数 | ' + ((summary.duelTotal / Math.max(1, summary.total)) * 100).toFixed(2) + ' |');
+  lines.push('');
+  lines.push('## 关隘试炼统计（B23 通过率专项指标）');
+  lines.push('');
+  lines.push('> **口径**：日志中 `kind=trial` 的条目（结构化字段 `trialId` / `trialPassed`，**不解析文案**）。');
+  lines.push('> **抽取次数** = 试炼通道抽到该牌的次数；**通过率** = 通过次数 / 抽取次数。');
+  lines.push('> **理论期望** = `(faces - amount + 1) / faces`（骰子型试炼；由主题包数据派生）。');
+  lines.push('');
+  lines.push('> ⚠️ **样本量说明**：真实对局里试炼是**偶发事件**（AI 策略「灵枢够就付费」）⇒ 抽取次数很少 ⇒');
+  lines.push('> 本表只作**可达性证据**（哪张牌被真正抽到过、哪些牌一次都没出现），**不作硬阈值**；');
+  lines.push('> 精确判据见**定向长跑**（`node tests/sim/run.mjs --trial-rate` ⇒ 报告 `docs/trial-pass-rate.md`）。');
+  lines.push('');
+  lines.push('| 试炼牌 | 抽取次数 | 通过次数 | 通过率 | 触发过的局数 | 每千局抽取 | 理论期望 | 偏差 |');
+  lines.push('|---|---|---|---|---|---|---|---|');
+  for (const id of [...allTrialIds].sort()) {
+    const draws = summary.trialDraws.get(id) ?? 0;
+    const passes = summary.trialPasses.get(id) ?? 0;
+    const games = summary.trialGames.get(id) ?? 0;
+    const rate = draws > 0 ? (passes / draws) * 100 : 0;
+    const th = trialTheory.get(id);
+    const thTxt = th === undefined ? '—' : th.toFixed(1) + '%';
+    const dev = (th === undefined || draws === 0) ? '—'
+      : (rate - th >= 0 ? '+' : '') + (rate - th).toFixed(1) + 'pp';
+    const rateTxt = draws > 0 ? rate.toFixed(1) + '%' : '—';
+    const perK = summary.total > 0 ? (draws / summary.total) * 1000 : 0;
+    lines.push('| `' + id + '` | ' + draws + ' | ' + passes + ' | ' + rateTxt + ' | '
+      + games + ' | ' + perK.toFixed(3) + ' | ' + thTxt + ' | ' + dev + ' |');
+  }
   lines.push('');
   writeFileSync(resolve(ROOT, args.out), lines.join('\n') + '\n', 'utf8');
   console.log('报告 → ' + args.out);

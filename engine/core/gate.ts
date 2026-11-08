@@ -135,6 +135,9 @@ function trialChannel(state: State, actor: number, tile: Tile): GateResult {
         ? `关隘试炼：${trial.text}——未通过，本关改为付费`
         : `关隘试炼：${trial.text}`,
       diceRoll: face,
+      // ⚠️ B23：**结构化字段** ⇒ 平衡模拟可直接统计每张试炼牌的通过率（不必解析文案）。
+      trialId: trial.id,
+      trialPassed: !fallback,
     }],
   };
   if (fallback) {

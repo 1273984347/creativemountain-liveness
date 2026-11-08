@@ -102,7 +102,11 @@ export interface Player {
   readonly counters: Readonly<Record<string, number>>;
 }
 
-/** 日志条目。 */
+/**
+ * 日志条目。
+ *
+ * ⚠️ B23：此处原有**两份完全重复**的 `LogEntry` 声明（复制粘贴遗留，靠 TS 的声明合并侥幸无害）⇒ 本批合并为一份。
+ */
 export interface LogEntry {
   readonly round: number;
   readonly turnIndex: number;
@@ -111,17 +115,10 @@ export interface LogEntry {
   readonly message: string;
   /** 掷骰记录（`move_by_dice` 等需要记录骰值） */
   readonly diceRoll?: number;
-}
-
-/** 日志条目。 */
-export interface LogEntry {
-  readonly round: number;
-  readonly turnIndex: number;
-  readonly actor: number;
-  readonly kind: string;
-  readonly message: string;
-  /** 掷骰记录（`move_by_dice` 等需要记录骰值） */
-  readonly diceRoll?: number;
+  /** 试炼牌 id（`kind='trial'` 时给出）—— B23：让「每张试炼牌的通过率」可机器统计 */
+  readonly trialId?: string;
+  /** 试炼是否通过（`kind='trial'` 时给出）—— B23：失败 ⇒ 改为付费（`gate_fallback_pay`） */
+  readonly trialPassed?: boolean;
 }
 
 /** 各类牌堆（规格 §6.2）。 */

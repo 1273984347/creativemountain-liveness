@@ -26,6 +26,10 @@ const GATES = [
   //   单独跑本门禁时需先 `npm run build`（否则找不到 dist/创界山-活人认证.html）。
   //   负样本锚点：门 9 的「对峙在真实对局中发生过」断言（破坏引擎消费点 ⇒ 必红）。
   { name: '对峙浏览器端到端（tests/e2e/duel-e2e.mjs）', cmd: process.execPath, args: [resolve('tests', 'e2e', 'duel-e2e.mjs')] },
+  // ⚠️ 第 11 道门（B23）：关隘试炼**通过率专项平衡**。
+  //   骰子型试炼（`dice_is_at_least`）的实测通过率须与理论期望 `(faces-amount+1)/faces` 偏差 ≤ 10pp；
+  //   失败时必须写「本关改为付费」标记（挑战型语义）⇒ 挑战型试炼不会静默变成「永远通过」。
+  { name: '关隘试炼通过率专项平衡（tests/sim/run.mjs --trial-rate --check）', cmd: process.execPath, args: [resolve('tests', 'sim', 'run.mjs'), '--trial-rate', '--check'] },
 ];
 
 /**
