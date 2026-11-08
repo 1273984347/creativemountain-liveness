@@ -17,7 +17,7 @@ const RELEASE_CHECK = resolve(ROOT, 'tools', 'release-check.mjs');
 function check(scanPath: string): { status: number | null; out: string } {
   const res = spawnSync(process.execPath, [
     RELEASE_CHECK, '--skip-gate', '--skip-rescan', '--scan=' + scanPath, '--baseline=' + BASELINE,
-  ], { encoding: 'utf8', shell: false, cwd: ROOT });
+  ], { encoding: 'utf8', shell: false, cwd: ROOT, env: { ...process.env, CM_SELFTEST: '1' } });
   return { status: res.status, out: (res.stdout ?? '') + (res.stderr ?? '') };
 }
 
@@ -45,7 +45,7 @@ test('B43：扫描产物某组缺 reserve ⇒ 发布检查非零，并点名 res
     writeFileSync(bad, JSON.stringify(data, null, 2), 'utf8');
     const r = check(bad);
     assert.notEqual(r.status, 0, '产物缺 reserve 必须返回非零');
-    assert.match(r.out, /扫描产物结构字段缺失或非数值/, '应指明是扫描产物结构坏了');
+    assert.match(r.out, /groups\[0\]\.reserve/, '应点名具体结构字段');
     assert.match(r.out, /reserve/, '应点名具体字段');
   } finally {
     rmSync(dir, { recursive: true, force: true });

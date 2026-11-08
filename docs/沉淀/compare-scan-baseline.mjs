@@ -55,6 +55,8 @@ function assertStructure(doc, label) {
     console.error('FAIL  ' + label + '结构字段异常：groups 为空数组（没有任何分组）');
     process.exit(1);
   }
+  // ⚠️ B24：结构检查**必须前置** —— 分组键 `reserve@seedBase` 依赖 `reserve` 字段，
+  //   若产物缺 reserve ⇒ 键错位 ⇒ 只会报「缺少该组 / 多出该组」（看不出是结构坏了）。
   const bad = [];
   doc.groups.forEach((g, i) => {
     if (g === null || typeof g !== 'object') { bad.push('groups[' + String(i) + '] 不是对象'); return; }
@@ -91,8 +93,9 @@ const diffs = [];
 for (const [k, bg] of bm) {
   const sg = sm.get(k);
   if (sg === undefined) { diffs.push(k + '：新扫描缺少该组'); continue; }
-  // ⚠️ B41：**字段缺失 / 非数值必须显式判失败** —— 否则 `Math.abs(undefined - x)` = NaN，
+  // ⚠️ B41：字段缺失 / 非数值必须**显式判失败** —— 否则 `Math.abs(undefined - x)` = NaN，
   //   而 `NaN > 1e-9` 为 false ⇒ 半损坏（字段缺失）会**静默通过**。
+  //   （结构层已在前置 `assertStructure` 捕获 ⇒ 这里只做数值层，但保留兜底判断。）
   const missing = [];
   const mismatched = [];
   for (const f of KEYS) {

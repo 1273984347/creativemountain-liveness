@@ -17,7 +17,7 @@ const RELEASE_CHECK = resolve(ROOT, 'tools', 'release-check.mjs');
 function check(baselinePath: string): { status: number | null; out: string } {
   const res = spawnSync(process.execPath, [
     RELEASE_CHECK, '--skip-gate', '--skip-rescan', '--scan=docs/trial-reserve-scan.json', '--baseline=' + baselinePath,
-  ], { encoding: 'utf8', shell: false, cwd: ROOT });
+  ], { encoding: 'utf8', shell: false, cwd: ROOT, env: { ...process.env, CM_SELFTEST: '1' } });
   return { status: res.status, out: (res.stdout ?? '') + (res.stderr ?? '') };
 }
 

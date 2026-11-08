@@ -26,9 +26,20 @@ const BASELINE_PATH = argOf('baseline', 'docs/baselines/trial-reserve-scan-B34.j
 const GATE_PATH = argOf('gate', 'tools/gate.mjs');
 /** 模拟器路径（默认 `tests/sim/run.mjs`）—— 注入点供**负样本测试**用。 */
 const SIM_PATH = argOf('sim', 'tests/sim/run.mjs');
-/** ⚠️ 自检模式开关：仅供**负样本测试**用（跳过门禁 / 跳过重扫）⇒ 生产路径不可用。 */
-const skipGate = argv.includes('--skip-gate');
-const skipRescan = argv.includes('--skip-rescan');
+/**
+ * ⚠️ 自检模式开关：仅供**负样本测试**用（跳过门禁 / 跳过重扫）⇒ 生产路径不可用。
+ *
+ * ⚠️ B24 起**再收紧一层**：跳过开关只有�� `CM_SELFTEST=1` 时才生效；否则**直接拒绝执行**
+ *   （而不是静默继续）⇒ 误用/漏配环境变量 ⇒ 发布检查立刻失败，不会悄悄少跑检查。
+ */
+const SELFTEST = process.env.CM_SELFTEST === '1';
+const wantsSkip = argv.includes('--skip-gate') || argv.includes('--skip-rescan');
+if (wantsSkip && !SELFTEST) {
+  console.error('✗ 自检开关（--skip-gate / --skip-rescan）仅在 CM_SELFTEST=1 时可用 ⇒ 本次拒绝执行');
+  process.exit(1);
+}
+const skipGate = SELFTEST && argv.includes('--skip-gate');
+const skipRescan = SELFTEST && argv.includes('--skip-rescan');
 
 /**
  * 扫描参数 —— 必须与 **B34 基线**一致。
