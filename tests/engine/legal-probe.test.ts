@@ -3,17 +3,18 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { isolatedState, probeAction } from '../../engine/core/probe.ts';
 import { advanceTurn, performAction } from '../../engine/core/turn-runner.ts';
-import { currentPlayer } from '../../engine/core/round.ts';
-import { startDuel } from '../../engine/core/duel.ts';
+import { startDuel, submitDuelCard } from '../../engine/core/duel.ts';
+import { castVote } from '../../engine/core/council.ts';
+import { currentPlayer, isRoundEnd } from '../../engine/core/round.ts';
 import {
-  appealedScene, challengedScene, councilScene, lockedScene, mk, pendingScene,
+  appealedScene, challengedScene, councilScene, lockedScene, mk, pendingScene, putPending,
 } from './fixtures.ts';
 import {
   getLegalActions, getLegalActionStats, candidatesOf, actionWindowOpen, LEGAL_ACTION_CAP,
 } from '../../engine/core/legal.ts';
 import { activeAbilityId } from '../../engine/core/passives.ts';
 import { cardNeedsTarget, targetCandidates } from '../../engine/core/targeting.ts';
-import { certifyAnswer } from '../../engine/core/certification.ts';
+import { certifyAnswer, certifyAppeal, certifyChallenge, enterPendingCertification } from '../../engine/core/certification.ts';
 import type { Action } from '../../engine/core/action.ts';
 import type { State } from '../../engine/core/state.ts';
 import type { Card } from '../../engine/types/theme.ts';
@@ -313,7 +314,12 @@ test('§7 待认证锁定：行动阶段整体无动作（与 UI 禁用行动区
 });
 
 test('§7 对峙未决 ⇒ 行动窗口关闭（DuelState 的 pickA/pickB 是可选字段，不写 undefined）', () => {
-  const s: State = { ...mk(), duel: { seatA: 0, seatB: 1 } };
+  // 发现 5：窗口关闭必须在**真的开起来**的对峙上证明——原来这里手拼 `duel: { seatA, seatB }`，
+  //   拼出来的对象没经过 `startDuel` 的任一前置（含「任一方手牌为空 ⇒ 直接判负、duel 保持 null」），
+  //   等于在测一个引擎根本不会交出的形状。`startDuel` 早已 import，一行替换、语义不变。
+  const s = startDuel(mk(), 0, 1);
+  assert.ok(s.duel !== null, '前提自查：startDuel 必须真的立起未决对峙，否则「窗口关闭」测的是常规局面');
+  assert.equal(s.duel.pickA, undefined, '后置：pickA/pickB 是可选字段 ⇒ 未锁定时应为 undefined（不是显式 null）');
   assert.equal(actionWindowOpen(s, 0), false);
   assert.equal(actionWindowOpen(mk(), 0), true);
 });
@@ -393,12 +399,126 @@ test('§7 山议：投票动作覆盖除自己外的存活玩家', () => {
   const votes = getLegalActions(s, 0).filter((a) => a.type === 'VOTE');
   assert.equal(votes.length, 3, '4 人局 ⇒ 3 个可投对象');
   // 已投过票 ⇒ 不再返回（`castVote` 的「本轮已投过票」由粗筛的 votes[seat] 挡住）。
-  const votedOnce = { ...s, council: { ...s.council, votes: { ...s.council.votes, 0: 1 } } };
-  assert.equal(getLegalActions(votedOnce, 0).some((a) => a.type === 'VOTE'), false);
+  // ⚠️ 走真实入口，不手拼 `council.votes`（本批次刚把这种写法从 b3.test.ts 清出去）：
+  //   手拼出来的「已投票」不是引擎记账的那个形状，且绕过了 `castVote` 的全部前置。
+  const votedOnce = castVote(s, 0, 1);
+  assert.ok(votedOnce.ok, `前提自查：座 0 必须真的投出一票，否则「已投过票 ⇒ 不再返回」测的是没投过票的局面：${votedOnce.note ?? '（无 note）'}`);
+  assert.ok(votedOnce.state.council.votes[0] !== undefined, '前提自查：votes[0] 必须已落账');
+  assert.equal(votedOnce.state.council.resolved, false,
+    '前提自查：一票之后山议必须**仍未结算**——否则「没有 VOTE」是山议散会造成的，测不到 votes[seat] 那条粗筛判据');
+  assert.equal(getLegalActions(votedOnce.state, 0).some((a) => a.type === 'VOTE'), false);
+  // 粗筛侧也要单独钉：`castVote` 自己会拒「本轮已投过票」⇒ 只看枚举结果的话，
+  //   粗筛里那条 `votes[seat] !== undefined` 判据被删掉也照样绿（变异 M10 实测如此）。
+  //   它省的是试跑成本，不是正确性——但既然是登记过的判据，就用 `candidatesOf` 盯住它。
+  assert.equal(candidatesOf(votedOnce.state, 0).some((a) => a.type === 'VOTE'), false,
+    '粗筛侧：已投过票的座位不得再产出 VOTE 候选（这条盯的是 `councilCandidates`，不是试跑）');
 });
 
+// ============================ 发现 1：粗筛早退吞掉「引擎接受而候选缺失」的动作 ============================
+//
+// `一致性-正向` 只证明**反方向**（枚举出来的都被引擎接受），它**看不见**「粗筛窄于引擎」：
+// 少发一条候选不会让任何既有断言变红。下面两条钉的正是这个盲区，两条都复现评审给的可达路径，
+// 且都是「把 `certificationCandidates` 的 `pending.includes(seat)` 早退放回来 ⇒ 本条报红」的
+// 可失败钉（变异 M7：把早退放回来 ⇒ **两条同时**报红，各缺 2 条，实测见 task-5-report.md）。
+
+test('§7 认证段（发现 1·其一）：质疑后自己登顶的座位，复议与判定权并存', () => {
+  const s = challengedThenPendingScene();
+  const answers = getLegalActions(s, 2)
+    .filter((a): a is Extract<Action, { readonly type: 'CERTIFY_ANSWER' }> => a.type === 'CERTIFY_ANSWER')
+    .filter((a) => a.actor === 2);
+  assert.equal(answers.length, 2,
+    '座 2 已质疑座 0 且尚未判定 ⇒ 判通过/判不通过各一条；粗筛早退一回来这里就是 0 条');
+  assert.deepEqual([...new Set(answers.map((a) => a.target))], [0], '判定对象只能是那个待认证者（座 0）');
+  for (const a of answers) {
+    const r = probeAction(s, a);
+    assert.equal(r.ok, true, `枚举出来的判定动作必须被引擎接受：${r.reason}`);
+  }
+  // 待认证者本人的复议候选照旧在册（早退改掉的只是「return」，不是这条语义）。
+  const appeal = getLegalActions(s, 2).filter((a) => a.type === 'CERTIFY_APPEAL');
+  assert.equal(appeal.length, 1, '本人仍可申请复议一次');
+  assert.deepEqual(appeal.map((a) => a.target), [2], 'target 必须是本人');
+  // 但**不因此扩大**：待认证者不是认证人（`isCertifier`）⇒ 签印/质疑/弃权仍不得出现。
+  const certifierFace = getLegalActions(s, 2)
+    .filter((a) => a.type === 'CERTIFY_SIGN' || a.type === 'CERTIFY_CHALLENGE' || a.type === 'CERTIFY_ABSTAIN');
+  assert.equal(certifierFace.length, 0, '待认证者不是认证人 ⇒ 认证人三面仍为空');
+});
+
+test('§7 认证段（发现 1·其二）：同场另一名待认证者仍是复议第三方，必须拿到复议票', () => {
+  const s = coPendingAppealScene();
+  const votes = getLegalActions(s, 3)
+    .filter((a): a is Extract<Action, { readonly type: 'CERTIFY_APPEAL_VOTE' }> => a.type === 'CERTIFY_APPEAL_VOTE');
+  assert.equal(votes.length, 2, '推翻 / 维持 两条；粗筛早退一回来这里就是 0 条');
+  assert.deepEqual([...new Set(votes.map((a) => a.target))], [0], '复议票只对着已申请复议的那个待认证者');
+  for (const a of votes) {
+    const r = probeAction(s, a);
+    assert.equal(r.ok, true, `枚举出来的复议票必须被引擎接受：${r.reason}`);
+  }
+  // 当事人仍无票（引擎拒 ⇒ 不得出现在枚举里）。
+  assert.equal(getLegalActions(s, 0).some((a) => a.type === 'CERTIFY_APPEAL_VOTE'), false, '申请人本人无复议票');
+  assert.equal(getLegalActions(s, 1).some((a) => a.type === 'CERTIFY_APPEAL_VOTE'), false, '判定人无复议票');
+});
+
+/** 引擎 note 的可读兜底（note 是可选属性）。 */
+function noteOf(note: string | undefined): string { return note ?? '（引擎未给 note）'; }
+
+/**
+ * 「座 2 质疑座 0 之后自己登顶」的局面（发现 1·其一）。
+ *
+ * 全程真实引擎入口，与评审给的可达路径逐句对应：
+ *   `putPending(mk(5,7),[0])` → `certifyChallenge(·,2,0)` → 座 2 落到峰顶 → `enterPendingCertification(·,2)`
+ *   ⇒ `pending=[0,2]` 且 `challenged=[2]`。
+ * ⚠️ 「座 2 落到峰顶」在这里直接置 `position`（棋盘坐标，fixtures 允许的字段，`settleIntoDuelScene` 同例），
+ *   随后调的 `enterPendingCertification` 正是 `resolveTile` 的 `peak` 分支在真实手番末调的那一句；
+ *   走骰子到峰顶不可复现，而认证字段一个都不手拼。
+ */
+function challengedThenPendingScene(): State {
+  const first = putPending(mk(5, 7), [0]);
+  const challenged = certifyChallenge(first, 2, 0);
+  assert.ok(challenged.ok, 'challengedThenPendingScene：座 2 发起质疑必须成功：' + noteOf(challenged.note));
+  assert.ok(challenged.state.certification.challenged.includes(2),
+    'challengedThenPendingScene：局面名承诺「座 2 已质疑」⇒ challenged 必须含座 2');
+  const s = challenged.state;
+  const onPeak: State = { ...s, players: s.players.map((p) => (p.seat === 2 ? { ...p, position: s.board.peakIndex } : p)) };
+  const entered = enterPendingCertification(onPeak, 2);
+  assert.ok(entered.ok, 'challengedThenPendingScene：座 2 登顶进入待认证必须成功：' + noteOf(entered.note));
+  assert.deepEqual(entered.state.certification.pending, [0, 2], '后置：pending 必须是 [0,2]');
+  assert.deepEqual(entered.state.certification.challenged, [2], '后置：座 2 的判定权仍在 challenged 里');
+  assert.equal(entered.state.certification.judgments[2], undefined, '后置：座 2 尚未判定');
+  return entered.state;
+}
+
+/**
+ * 「座 0 被质疑判不通过并申请复议，座 3 随后也登顶」的局面（发现 1·其二）。
+ *
+ * ⇒ `pending=[0,3]`、`appealed=[0]`、`judgments={1:false}`。
+ * 引擎判据：`certifyAppealVote` 只排除**申请人**与**判定人**，而 `resolveAppeals` 把
+ * 「存活 − 判定人 − 待认证对象」全算作独立第三方 ⇒ 座 3（同为待认证者）的复议票是被接受的。
+ * ⚠️ 座 0 补到 5 灵枢是复议的成本（`certifyAppeal` 需 2），与 fixtures 的 `appealedScene` 同一手法。
+ */
+function coPendingAppealScene(): State {
+  const challenged = certifyChallenge(putPending(mk(5, 7), [0]), 1, 0);
+  assert.ok(challenged.ok, 'coPendingAppealScene：座 1 发起质疑必须成功：' + noteOf(challenged.note));
+  const answered = certifyAnswer(challenged.state, 1, 0, false);
+  assert.ok(answered.ok, 'coPendingAppealScene：判定必须落账：' + noteOf(answered.note));
+  assert.equal(answered.state.certification.judgments[1], false,
+    'coPendingAppealScene：局面名承诺「判不通过」⇒ judgments[1] 必须是 false');
+  const judged = answered.state;
+  const funded: State = { ...judged, players: judged.players.map((p) => (p.seat === 0 ? { ...p, resource: 5 } : p)) };
+  const appealed = certifyAppeal(funded, 0, 0);
+  assert.ok(appealed.ok, 'coPendingAppealScene：复议申请必须成功：' + noteOf(appealed.note));
+  assert.ok(appealed.state.certification.appealed.includes(0), 'coPendingAppealScene：appealed 必须含座 0');
+  const s = appealed.state;
+  const onPeak: State = { ...s, players: s.players.map((p) => (p.seat === 3 ? { ...p, position: s.board.peakIndex } : p)) };
+  const entered = enterPendingCertification(onPeak, 3);
+  assert.ok(entered.ok, 'coPendingAppealScene：座 3 登顶进入待认证必须成功：' + noteOf(entered.note));
+  assert.deepEqual(entered.state.certification.pending, [0, 3], '后置：pending 必须是 [0,3]');
+  assert.equal(entered.state.certification.appealVotes[3], undefined, '后置：座 3 尚未投过复议票');
+  return entered.state;
+}
+
 test('一致性-正向（常驻）：枚举出的每个动作必被引擎接受', () => {
-  const scenes = [mk(), mk(8, 23), lockedScene(), pendingScene(), challengedScene(), appealedScene(), councilScene()];
+  const scenes = [mk(), mk(8, 23), lockedScene(), pendingScene(), challengedScene(), appealedScene(), councilScene(),
+    challengedThenPendingScene(), coPendingAppealScene()];
   for (const s of scenes) {
     const before = s.rng.snapshot();
     for (let seat = 0; seat < s.players.length; seat += 1) {
@@ -411,17 +531,99 @@ test('一致性-正向（常驻）：枚举出的每个动作必被引擎接受'
   }
 });
 
-test('§7 上限：枚举结果永不超过 LEGAL_ACTION_CAP', () => {
-  for (const s of [mk(8, 23), councilScene(8, 23), appealedScene(8, 23)]) {
+test('§7 上限：枚举结果永不超过 LEGAL_ACTION_CAP（含**真的撞上限**的局面）', () => {
+  for (const s of [mk(8, 23), councilScene(8, 23), appealedScene(8, 23), wideHandScene(LEGAL_ACTION_CAP * 2, 8, 23)]) {
     for (let seat = 0; seat < s.players.length; seat += 1) {
-      assert.ok(getLegalActions(s, seat).length <= LEGAL_ACTION_CAP,
-        `座${String(seat)} 枚举 ${String(getLegalActions(s, seat).length)} 条 > ${LEGAL_ACTION_CAP}`);
+      const n = getLegalActions(s, seat).length;
+      assert.ok(n <= LEGAL_ACTION_CAP, `座${String(seat)} 枚举 ${String(n)} 条 > ${LEGAL_ACTION_CAP}`);
     }
   }
+  // 牙齿（发现 4）：本条原先只跑 8–13 条候选的局面 ⇒ `getLegalActions` 里那条上限 `break`
+  //   从不执行，「永不超过上限」退化成恒真。下面把「确实有一个局面撞在上限上」钉成断言：
+  //   删掉/写坏那条 break ⇒ 本条报红（变异实测见 task-5-report.md 的 M8）。
+  const hitting = wideHandScene(LEGAL_ACTION_CAP * 2);
+  assert.ok(candidatesOf(hitting, 0).length > LEGAL_ACTION_CAP,
+    '前提自查：宽手牌局面的候选确实超上限 ⇒ 截断分支真的被执行');
+  assert.equal(getLegalActions(hitting, 0).length, LEGAL_ACTION_CAP,
+    '上限测试必须有一个「枚举结果正好停在上限」的局面，否则整条测试没有可失败的形式');
 });
 
+// ============================ 发现 2：粗筛**故意**窄于引擎的四处（取证行）============================
+//
+// `一致性-正向` 钉的是「枚举 ⊆ 引擎接受」，而这四处是「引擎接受 ⊄ 枚举」——
+// 它们不是漏洞，是**登记过的口径**（UI 一致性 / 未接线 gap），`legal.ts` 的
+// `actionWindowOpen` 与 `candidatesOf` 注释各有一份完整清单。本条把四处都做成可执行证据，
+// 让 Task 9 的登记与 Task 15 的判读引用到**行**而不是引用到**注释**。
+// ⚠️ 本条**不改变任何行为**：四处都按现状钉住；若将来引擎/口径改动，本条报红逼着当场复核。
+
+test('§7 粗筛窄于引擎四处·其一（a：pendingCert ⇒ G-b 同族）：引擎放行出牌，枚举不发', () => {
+  const locked = lockedScene();
+  const card = locked.players[0]?.hand[0];
+  assert.ok(card !== undefined, '前提自查：锁定者必须有手牌');
+  const r = probeAction(locked, { type: 'PLAY_CARD', actor: 0, cardId: card.id });
+  assert.equal(r.ok, true, `引擎侧：` + '`performAction` 的 act 分支不查 pendingCert' + ` ⇒ 出牌被放行；实际拒因=${r.reason}`);
+  assert.equal(getLegalActions(locked, 0).some((a) => a.type === 'PLAY_CARD'), false,
+    '粗筛侧：pendingCert ⇒ 行动面整体关闭（与 UI 禁用行动区一致）⇒ 故意不发');
+});
+
+test('§7 粗筛窄于引擎四处·其二（b：duel !== null ⇒ 对峙 gap）：整表清零，而 submitDuelCard 是活的玩家入口', () => {
+  // 对峙用真实入口 startDuel 造（发现 5：不手拼 `duel` 字段）。
+  const d = startDuel(mk(4, 7), 0, 1);
+  assert.ok(d.duel !== null, '前提自查：startDuel 必须真的立起对峙');
+  for (let seat = 0; seat < d.players.length; seat += 1) {
+    assert.equal(candidatesOf(d, seat).length, 0, `座${String(seat)}：对峙未决 ⇒ 粗筛整表清零`);
+    assert.equal(getLegalActions(d, seat).length, 0, `座${String(seat)}：枚举因此为空集`);
+  }
+  const pick = d.players[0]?.hand[0];
+  assert.ok(pick !== undefined, '前提自查：对峙双方必须有牌可选');
+  const submitted = submitDuelCard(d, 0, pick.id);
+  assert.equal(submitted.ok, true,
+    `引擎侧：玩家此刻仍有可执行的入口 submitDuelCard（无对应 Action 成员 ⇒ 枚举永远给不出它）：${submitted.note}`);
+});
+
+test('§7 粗筛窄于引擎四处·其三（c：phase）：引擎从不读 phase ⇒ 山议里行棋仍被接受，枚举不发', () => {
+  const council = councilScene();
+  assert.equal(council.phase, '山议', '前提自查：本局面的阶段必须不是「行动」');
+  const r = probeAction(council, { type: 'MOVE', actor: 0, steps: 0 });
+  assert.equal(r.ok, true, `引擎侧：` + '`performAction` 全程不读 `state.phase`' + ` ⇒ 行棋被放行；实际拒因=${r.reason}`);
+  assert.equal(actionWindowOpen(council, 0), false, '粗筛侧：phase !== 行动 ⇒ 窗口关闭');
+  assert.equal(getLegalActions(council, 0).some((a) => a.type === 'MOVE'), false, '粗筛侧：不发 MOVE/ROLL_WHEEL/PLAY_CARD');
+});
+
+test('§7 粗筛窄于引擎四处·其四（d：isRoundEnd）：引擎从不看 turnIndex，枚举按 round 末关闭', () => {
+  const ended = roundEndScene();
+  assert.ok(isRoundEnd(ended), '前提自查：本局面必须真的处于 round 末（turnIndex >= 存活人数）');
+  assert.equal(ended.phase, '行动', '前提自查：阶段仍是行动 ⇒ 关掉窗口的只有 isRoundEnd 这一条判据');
+  assert.equal(ended.duel, null, '前提自查：没有对峙干扰这条判据');
+  assert.equal(actionWindowOpen(ended, 0), false);
+  const r = probeAction(ended, { type: 'MOVE', actor: 0, steps: 0 });
+  assert.equal(r.ok, true, `引擎侧：performAction 不看 turnIndex / 手番归属 ⇒ 行棋被放行；实际拒因=${r.reason}`);
+  assert.equal(getLegalActions(ended, 0).some((a) => a.type === 'MOVE'), false, '粗筛侧：round 已走完 ⇒ 不发');
+});
+
+/**
+ * 「本 round 已走完」的局面（发现 2 的 d 项取证）。
+ *
+ * `turnIndex` 置成存活人数就是 `advanceTurn` 内部 `nextTurn` 与 round 末处理**真实经过**的那一瞬
+ * （`isRoundEnd` 的判据在那一刻为真）；这里把它作为顶层标量直接置位取证——
+ * ⚠️ 与 fixtures 的禁令无关：`certification` / `council` / `duel` 三个字段组一个都没碰。
+ */
+function roundEndScene(): State {
+  const s = mk(4, 7);
+  const alive = s.players.filter((p) => p.alive).length;
+  return { ...s, turnIndex: alive };
+}
+
 /** 已判定过的局面（用真实入口推进，不手拼字段）。 */
-function certifyAnswerRun(s: State): State { return certifyAnswer(s, 1, 0, false).state; }
+function certifyAnswerRun(s: State): State {
+  const r = certifyAnswer(s, 1, 0, false);
+  // 发现 6：`.ok` 必须在**这里**断言。忽略它的话，一旦引擎前置变了，
+  // 红的是下游那句 `0 !== 2`（看不出「判定根本没落账」），排查方向整个跑偏。
+  assert.ok(r.ok, `certifyAnswerRun：判定必须落账，否则「已判定 ⇒ 不再返回判定动作」测的是个没判定的局面：${noteOf(r.note)}`);
+  assert.equal(r.state.certification.judgments[1], false,
+    'certifyAnswerRun：后置——judgments[1] 必须是 false（`.ok` 不等于「名字承诺的事发生了」）');
+  return r.state;
+}
 
 // ============================ Task 6：枚举统计（P3 token 预算读数的数据源）============================
 //
@@ -437,7 +639,35 @@ test('§7 统计：enumerated == 枚举长度，truncated 与候选数一致', (
     assert.equal(stats.truncated, stats.candidates > LEGAL_ACTION_CAP);
     // 同一个粗筛函数：候选数必须逐字等于 candidatesOf 的长度（另写一份粗筛 ⇒ 本条红）。
     assert.equal(stats.candidates, candidatesOf(s, 0).length);
+    // 发现 3：这几个局面都不超上限 ⇒ 不可能有候选因为上限而**没被试跑**。
+    assert.equal(stats.dropped, 0, '候选未超上限 ⇒ dropped 必须为 0');
   }
+});
+
+test('§7 统计：dropped 才是「真丢了候选」的信号——truncated 会在「候选超上限而接受数不足上限」时假阳性（发现 3）', () => {
+  const s = overCapCornerScene();
+  const stats = getLegalActionStats(s, 0);
+  // 前提自查：必须真的落在「候选 > 上限 ∧ 接受 < 上限」这个角落，否则整条用例测的是别的东西。
+  assert.ok(stats.candidates > LEGAL_ACTION_CAP,
+    `前提自查：候选须超上限，实际 candidates=${String(stats.candidates)}、上限=${LEGAL_ACTION_CAP}`);
+  assert.ok(stats.enumerated < LEGAL_ACTION_CAP,
+    `前提自查：接受数须低于上限（⇒ 那条 break 从未触发）；实际 enumerated=${String(stats.enumerated)}`);
+  assert.equal(stats.enumerated, getLegalActions(s, 0).length, '统计与枚举必须同一个数');
+  assert.equal(stats.truncated, true,
+    'brief 口径原样保留：truncated 就是 `candidates > LEGAL_ACTION_CAP`——这条正是假阳性的来源（不是要修的 bug，是要读对的字段）');
+  assert.equal(stats.dropped, 0,
+    'dropped =「因上限而**没被试跑**的候选条数」（被引擎拒的不算丢失，那是筛选）⇒ 本角落必须是 0。'
+    + 'P3/Task 15 那句「truncated = 0，否则下调 LEGAL_ACTION_CAP」只能读 dropped');
+  // 对照：真的被上限拦停时，剩下的候选一条都没试跑 ⇒ dropped == 超出部分。
+  const w = getLegalActionStats(wideHandScene(LEGAL_ACTION_CAP * 2), 0);
+  assert.equal(w.truncated, true, '对照局面：候选同样超上限');
+  assert.equal(w.enumerated, LEGAL_ACTION_CAP, '对照局面：接受数正好停在上限 ⇒ break 真的执行了');
+  assert.ok(w.dropped > 0, '对照局面必须真的丢候选，否则这条对照什么也没钉住');
+  assert.equal(w.dropped, w.candidates - LEGAL_ACTION_CAP,
+    '停在上限 ⇒ 未试跑的候选 == 超出上限的那部分（粗筛顺序稳定 ⇒ 可逐字核对）');
+  // ⚠️ 发现 7 的可失败形式：上面那句 `dropped === 0` 用「两趟粗筛」的写法算不出来——
+  //   分叉成 `candidates - enumerated` 的话，本角落会得到 7（= 被引擎拒的 7 条质疑），
+  //   于是「下调 LEGAL_ACTION_CAP」会被一条根本没发生的截断触发。
 });
 
 test('§7 统计：出牌候选多到超上限时，枚举是候选的**定长前缀**（不写死 64）', () => {
@@ -458,12 +688,9 @@ test('§7 统计：出牌候选多到超上限时，枚举是候选的**定长�
   assert.equal(narrow.enumerated, candidatesOf(mk(), 0).length, '常规局面：候选全被接受 ⇒ 枚举==候选');
 });
 
-/**
- * 手牌特别多（无效果、不需目标 ⇒ 每张都可打）的局面：把行动阶段候选推过 `LEGAL_ACTION_CAP`。
- * ⚠️ 只改 `hand`，不碰认证/山议字段（那些必须走 fixtures 的引擎入口）。
- */
-function wideHandScene(handSize: number): State {
-  const cards: Card[] = Array.from({ length: handSize }, (_, i) => ({
+/** 造 `size` 张「无效果、不需目标 ⇒ 每张都可打」的取证牌。 */
+function wideCards(size: number): Card[] {
+  return Array.from({ length: size }, (_, i) => ({
     id: `wide_card_${String(i)}`,
     name: `宽手牌${String(i)}`,
     type: 'utility' as const,
@@ -473,6 +700,33 @@ function wideHandScene(handSize: number): State {
     text: '取证用：无效果、不需目标',
     effects: [],
   }));
-  const s = mk();
+}
+
+/** 把座 0 的手牌整体换成 `wideCards(size)`——⚠️ 只改 `hand`，不碰认证/山议/对峙字段。 */
+function withWideHand(s: State, size: number): State {
+  const cards = wideCards(size);
   return { ...s, players: s.players.map((p) => (p.seat === 0 ? { ...p, hand: cards } : p)) };
+}
+
+/** 手牌特别多 ⇒ 行动阶段候选推过 `LEGAL_ACTION_CAP`（撞停在上限的那条 break 上）。 */
+function wideHandScene(handSize: number, players = 4, seed = 7): State {
+  return withWideHand(mk(players, seed), handSize);
+}
+
+/**
+ * 「候选超上限、接受数却不足上限」的角落局面（发现 3 取证）。
+ *
+ * 构造：8 人局 + 座 1–7 全部待认证（`putPending` 的真实引擎入口）+ 座 0 拿到 44 张可打的牌
+ *   + 座 0 灵枢清零。
+ * 数字（全部由 `LEGAL_ACTION_CAP` 表达，不写死）：
+ *   粗筛 = 2（行棋/问天）+ 44（出牌）+ 7×3（签印/质疑/弃权）= `CAP + 3` = 67；
+ *   `certifyChallenge` 要 1 灵枢（粗筛**不看**费用，G-a 同族）⇒ 那 7 条被引擎拒
+ *   ⇒ 接受 = 60 < `CAP` ⇒ `getLegalActions` 里那条 `break` 从不执行 ⇒ **没丢任何候选**，
+ *     而 `truncated` 按 brief 口径报真。
+ * ⚠️ 只改 `hand` 与座 0 的 `resource`（复议/质疑的成本），认证字段一律走引擎入口。
+ */
+function overCapCornerScene(): State {
+  const pendingSeats = [1, 2, 3, 4, 5, 6, 7];
+  const wide = withWideHand(putPending(mk(8, 23), pendingSeats), LEGAL_ACTION_CAP - 20);
+  return { ...wide, players: wide.players.map((p) => (p.seat === 0 ? { ...p, resource: 0 } : p)) };
 }
