@@ -47,6 +47,96 @@ export const TRIAL_PASS_RANGES: Readonly<Record<string, readonly [number, number
   t_toll: [12, 32],
 };
 
+/**
+ * ── 精确 t 分布统计（双侧 p = 0.05 临界值）────────────────────────────
+ *
+ * ⚠️ 为什么需要精确值（B32）：此前用「临界值表 + 取最近较小 df」⇒ **偏保守**（df 越大偏得越多），
+ *   且 df 被取整 ⇒ 丢掉 Welch–Satterthwaite 的自由度信息 ⇒ 判定口径不精确。
+ *   现改为**直接求 t 分布分位数**（Lanczos logΓ + 不完全 β 连分数 + 二分求根）⇒ 任意 df 皆精确。
+ */
+
+/**
+ * logΓ(z) —— **递推到 z ≥ 8 + Stirling 高阶修正**。
+ *
+ * ⚠️ B32 修正：Lanczos 实现一度让 CDF 越界（CDF(1, 18) = 1.21）⇒ 二分求根发散；
+ *   改用「递推 + Stirling（含 1/12z − 1/360z³ + 1/1260z⁵）」⇒ 精度 ~1e-12 且实现更简单。
+ */
+function logGamma(z: number): number {
+  let x = z;
+  let shift = 0;
+  while (x < 8) { shift += Math.log(x); x += 1; }
+  const inv = 1 / x;
+  const series = inv / 12 - (inv ** 3) / 360 + (inv ** 5) / 1260;
+  return (x - 0.5) * Math.log(x) - x + 0.5 * Math.log(2 * Math.PI) + series - shift;
+}
+
+/** 不完全 β 函数的连分数展开（Numerical Recipes 的 betacf）。 */
+function betaContinuedFraction(a: number, b: number, x: number): number {
+  const fpmin = 1e-30;
+  const qab = a + b;
+  const qap = a + 1;
+  const qam = a - 1;
+  let c = 1;
+  let d = 1 - (qab * x) / qap;
+  if (Math.abs(d) < fpmin) { d = fpmin; }
+  d = 1 / d;
+  let h = d;
+  for (let m = 1; m <= 300; m++) {
+    const m2 = 2 * m;
+    let aa = (m * (b - m) * x) / ((qam + m2) * (a + m2));
+    d = 1 + aa * d; if (Math.abs(d) < fpmin) { d = fpmin; }
+    c = 1 + aa / c; if (Math.abs(c) < fpmin) { c = fpmin; }
+    d = 1 / d;
+    h *= d * c;
+    aa = (-(a + m) * (qab + m) * x) / ((a + m2) * (qap + m2));
+    d = 1 + aa * d; if (Math.abs(d) < fpmin) { d = fpmin; }
+    c = 1 + aa / c; if (Math.abs(c) < fpmin) { c = fpmin; }
+    d = 1 / d;
+    const del = d * c;
+    h *= del;
+    // ⚠️ B32 修正：终止阈值取 1e-12（3e-16 远紧于连分数可达精度 ⇒ 不收敛 ⇒ 结果发散）。
+    if (Math.abs(del - 1) < 1e-12) { break; }
+  }
+  return h;
+}
+
+/** 正则化不完全 β 函数 I_x(a, b)。 */
+function betaRegularized(a: number, b: number, x: number): number {
+  if (x <= 0) { return 0; }
+  if (x >= 1) { return 1; }
+  const bt = Math.exp(logGamma(a + b) - logGamma(a) - logGamma(b)
+    + a * Math.log(x) + b * Math.log(1 - x));
+  if (x < (a + 1) / (a + b + 2)) {
+    return (bt * betaContinuedFraction(a, b, x)) / a;
+  }
+  // ⚠️ B32 修正：对称分支必须用 `I_{1-x}(b, a)` **自己的** beta 项 ——
+  //   误用 `I_x(a, b)` 的 beta 项会让 CDF 越界（CDF(1, 18) 曾算出 1.21）⇒ 二分求根发散。
+  //   递归调用最不易错：此时 1-x 更小 ⇒ 走上面的直接分支。
+  return 1 - betaRegularized(b, a, 1 - x);
+}
+
+/** t 分布累积分布函数（Student's t）。 */
+export function studentTCdf(t: number, df: number): number {
+  const x = df / (df + t * t);
+  const p = 0.5 * betaRegularized(df / 2, 0.5, x);
+  return t >= 0 ? 1 - p : p;
+}
+
+/**
+ * 双侧 p = 0.05 的 t 临界值（**精确求分位数**，不二分近似、不查表）。
+ *
+ * ⚠️ 用法：`|t| ≥ tCritical05(df)` ⇒ 拒绝原假设（p < 0.05）。
+ */
+export function tCritical05(df: number): number {
+  if (!(df > 0)) { throw new Error('df 必须为正'); }
+  let lo = 0;
+  let hi = 200;
+  for (let i = 0; i < 120; i++) {
+    const mid = (lo + hi) / 2;
+    if (studentTCdf(mid, df) < 0.975) { lo = mid; } else { hi = mid; }
+  }
+  return (lo + hi) / 2;
+}
 /** 位次胜率相对均匀分布的偏离统计量。 */
 export interface PositionSpread {
   readonly max: number;

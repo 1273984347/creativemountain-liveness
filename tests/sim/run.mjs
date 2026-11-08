@@ -26,7 +26,7 @@ import { performAbility } from '../../engine/core/abilities.ts';
 import { autoResolveDuel } from '../../engine/core/duel.ts';
 import { advanceAuto } from '../../engine/core/advance.ts';
 import { resolveGate } from '../../engine/core/gate.ts';
-import { computePositionSpread, POSITION_RMS_GATE_LIMIT, POSITION_SPREAD_GATE_LIMIT, TRIAL_PASS_RANGES } from '../../engine/core/balance.ts';
+import { computePositionSpread, POSITION_RMS_GATE_LIMIT, POSITION_SPREAD_GATE_LIMIT, TRIAL_PASS_RANGES, tCritical05 } from '../../engine/core/balance.ts';
 import { castVote, resolveCouncil } from '../../engine/core/council.ts';
 import {
   certifySign, certifyChallenge, certifyAnswer, certifyAppeal, certifyAppealVote,
@@ -762,11 +762,8 @@ function runGateReserveScan(args) {
         22: 2.074, 24: 2.064, 26: 2.056, 28: 2.048, 30: 2.042, 32: 2.037, 34: 2.032, 36: 2.028,
         38: 2.024, 40: 2.021, 50: 2.009, 60: 2.000, 100: 1.984, 120: 1.980,
       };
-      const tCrit05 = (df) => {
-        const usable = Object.keys(T_CRIT_05).map(Number).filter((k) => k <= df);
-        const k = usable.length === 0 ? 6 : Math.max(...usable);
-        return T_CRIT_05[k];
-      };
+      // ⚠️ B32：临界值改为**精确 t 分布分位数**（引擎侧 `tCritical05`）⇒ 表仅留作核对参考。
+      const tCrit05 = (df) => tCritical05(df);
       // ⚠️ B31：**Welch–Satterthwaite 自由度**（不等方差时的正规做法，不等于 nA+nB−2）。
       const welchDf = (a, b, k) => {
         const na = a.samples.length;
@@ -778,8 +775,9 @@ function runGateReserveScan(args) {
       };
       const wF = welch('fallback');
       const wS = welch('seats');
-      const dfF = Math.round(welchDf(t, base, 'fallback'));
-      const dfS = Math.round(welchDf(t, base, 'seats'));
+      // ⚠️ B32：df **不取整**（保留 Welch–Satterthwaite 的小数自由度）⇒ 临界值可精确求。
+      const dfF = welchDf(t, base, 'fallback');
+      const dfS = welchDf(t, base, 'seats');
       const cF = tCrit05(dfF);
       const cS = tCrit05(dfS);
       console.log('  余量 ' + String(t.reserve) + ' vs 2：'
