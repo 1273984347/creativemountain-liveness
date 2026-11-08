@@ -10,6 +10,11 @@
 
 **Spec:** `docs/superpowers/specs/2026-11-08-creativemountain-laya-sidecar-design.md`（主设计）+ `docs/superpowers/specs/2026-11-08-creativemountain-ai-prespike-overview.md`（总纲与红线）
 
+> **执行状态（2026-11-08）：Task 1–8 已完成并逐个审查通过（提交 `817a001` … `323e768`，十道门全绿）。Task 9–17 请改读
+> [`2026-11-08-creativemountain-laya-sidecar-continuation.md`](./2026-11-08-creativemountain-laya-sidecar-continuation.md)——
+> 执行过程中在本计划里发现的 9 处错误期望/过时口径（尤其 P3 该读 `dropped` 不是 `truncated`、`actionFromKey` 必须 try/catch、
+> sim 没有 `--seed`、封闭词表只按 ASCII 测试主题校准）已全部在续作计划里更正，本文件对应段落保留原样仅作历史记录。
+
 ## Global Constraints
 
 - 十道门**不得**调用模型：`tools/gate.mjs` 不新增任何需要 sidecar 的条目；无服务即 SKIP 且退出码 0。
