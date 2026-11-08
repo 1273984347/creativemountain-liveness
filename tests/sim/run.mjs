@@ -39,7 +39,7 @@ const THEME_IDS = ['xianxia2026', 'scifi-ai', 'hybrid', 'urban-psych'];
 
 /** 解析命令行参数。 */
 function parseArgs(argv) {
-  const out = { games: 1000, check: false, out: null, themes: THEME_IDS, players: SCALES.map((s) => s.players), trialRate: false, trialTimes: 400, seedBase: 1000, positionSpread: false, gateReserve: undefined, scanReserves: [] };
+  const out = { games: 1000, check: false, out: null, themes: THEME_IDS, players: SCALES.map((s) => s.players), trialRate: false, trialTimes: 400, seedBase: 1000, positionSpread: false, gateReserve: undefined, scanReserves: [], scanSeeds: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--games') { out.games = Number(argv[++i]); }
@@ -57,6 +57,8 @@ function parseArgs(argv) {
     // ⚠️ B27：余量阈值（`GATE_RESOURCE_RESERVE`）**可注入** ⇒ 扫描走生产同一条代码路径
     else if (a === '--gate-reserve') { out.gateReserve = Number(argv[++i]); }
     else if (a === '--scan-reserves') { out.scanReserves = argv[++i].split(',').map(Number); }
+    // ⚠️ B28：**多 seed 独立样本**（每个 seed 基值 = 一批独立样本 ⇒ 可估噪声与差异显著性）
+    else if (a === '--scan-seeds') { out.scanSeeds = argv[++i].split(',').map(Number); }
   }
   return out;
 }
@@ -685,25 +687,69 @@ function runPositionSpread(args) {
  * ⚠️ 走**生产同一条代码路径**（`advanceAuto` 的 `gateReserve` 注入）⇒ 不另写模拟器副本。
  */
 function runGateReserveScan(args) {
-  const games = args.games * args.players.length * args.themes.length;
-  console.log('余量阈值扫描（每档 ' + String(args.games) + ' 局 · 合计 ' + String(games) + ' 局）');
-  console.log('| 余量 | 试炼抽取 | 每千局 | 失败 | 失败后仍通过 | 被放行 | 兜底率 | 平均席位 | 平均回合 | 异常 |');
-  console.log('|---|---|---|---|---|---|---|---|---|---|');
+  const seeds = args.scanSeeds.length > 0 ? args.scanSeeds : [args.seedBase];
+  const perRun = args.games * args.players.length * args.themes.length;
+  console.log('余量阈值多 seed 复核（每组 ' + String(args.games) + ' 局/档位 · 合计 ' + String(perRun)
+    + ' 局/组 × ' + String(seeds.length) + ' 组独立样本）');
+  const table = [];
   for (const reserve of args.scanReserves) {
-    const cells = [];
-    for (const themeId of args.themes) {
-      const theme = loadTheme(themeId);
-      for (const players of args.players) {
-        cells.push(...runCell(theme, players, args.games, args.seedBase, reserve));
+    const samples = [];
+    for (const seedBase of seeds) {
+      const cells = [];
+      for (const themeId of args.themes) {
+        const theme = loadTheme(themeId);
+        for (const players of args.players) {
+          cells.push(...runCell(theme, players, args.games, seedBase, reserve));
+        }
       }
+      const st = summarize(cells);
+      const draws = [...st.trialDraws.values()].reduce((a, b) => a + b, 0);
+      samples.push({
+        seedBase,
+        perK: (draws / Math.max(1, st.total)) * 1000,
+        failed: st.trialFailed,
+        passedAfterFail: st.failButPassed,
+        fallback: st.noSeatFallbackRate * 100,
+        seats: st.avgSeats,
+        rounds: st.avgRounds,
+        anomalies: st.anomalies,
+      });
     }
-    const st = summarize(cells);
-    const draws = [...st.trialDraws.values()].reduce((a, b) => a + b, 0);
-    const perK = (draws / Math.max(1, st.total)) * 1000;
-    console.log('| ' + String(reserve) + ' | ' + String(draws) + ' | ' + perK.toFixed(1)
-      + ' | ' + String(st.trialFailed) + ' | ' + String(st.failButPassed) + ' | ' + String(st.failReleased)
-      + ' | ' + (st.noSeatFallbackRate * 100).toFixed(1) + '% | ' + st.avgSeats.toFixed(2)
-      + ' | ' + st.avgRounds.toFixed(1) + ' | ' + String(st.anomalies) + ' |');
+    table.push({ reserve, samples });
+  }
+  const mean = (t, k) => t.samples.reduce((a, s) => a + s[k], 0) / t.samples.length;
+  const sd = (t, k) => {
+    const v = t.samples.map((s) => s[k]);
+    const mu = v.reduce((a, b) => a + b, 0) / v.length;
+    return Math.sqrt(v.reduce((a, b) => a + (b - mu) * (b - mu), 0) / v.length);
+  };
+  console.log('| 余量 | 组数 | 每组局数 | 试炼/千局 | 失败 | 失败后仍通过 | 兜底率 | 平均席位 | 平均回合 | 异常 |');
+  console.log('|---|---|---|---|---|---|---|---|---|---|');
+  for (const t of table) {
+    console.log('| ' + String(t.reserve) + ' | ' + String(t.samples.length) + ' | ' + String(perRun)
+      + ' | ' + mean(t, 'perK').toFixed(1) + ' ± ' + sd(t, 'perK').toFixed(1)
+      + ' | ' + mean(t, 'failed').toFixed(0) + ' ± ' + sd(t, 'failed').toFixed(0)
+      + ' | ' + mean(t, 'passedAfterFail').toFixed(0) + ' ± ' + sd(t, 'passedAfterFail').toFixed(0)
+      + ' | ' + mean(t, 'fallback').toFixed(2) + '% ± ' + sd(t, 'fallback').toFixed(2) + 'pp'
+      + ' | ' + mean(t, 'seats').toFixed(3) + ' ± ' + sd(t, 'seats').toFixed(3)
+      + ' | ' + mean(t, 'rounds').toFixed(2) + ' ± ' + sd(t, 'rounds').toFixed(2)
+      + ' | ' + t.samples.reduce((a, s) => a + s.anomalies, 0) + ' |');
+  }
+  // ⚠️ B28：**差异 vs 噪声** —— 相邻取值的差异若落在 2σ 内 ⇒ 统计上**不可区分** ⇒ 取值选择稳健。
+  const base = table.find((t) => t.reserve === 2) ?? table[0];
+  if (base !== undefined) {
+    console.log('');
+    console.log('与余量 2 的差异 vs 噪声（|差异| ≤ 2σ ⇒ 不可区分）：');
+    for (const t of table) {
+      if (t === base) { continue; }
+      const dF = Math.abs(mean(t, 'fallback') - mean(base, 'fallback'));
+      const nF = Math.sqrt(sd(t, 'fallback') ** 2 + sd(base, 'fallback') ** 2);
+      const dS = Math.abs(mean(t, 'seats') - mean(base, 'seats'));
+      const nS = Math.sqrt(sd(t, 'seats') ** 2 + sd(base, 'seats') ** 2);
+      console.log('  余量 ' + String(t.reserve) + ' vs 2：兜底率差 ' + dF.toFixed(2) + 'pp（噪声 ' + nF.toFixed(2)
+        + 'pp ⇒ ' + (dF <= 2 * nF ? '不可区分' : '可区分') + '）· 平均席位差 ' + dS.toFixed(3) + '（噪声 '
+        + nS.toFixed(3) + ' ⇒ ' + (dS <= 2 * nS ? '不可区分' : '可区分') + '）');
+    }
   }
 }
 
