@@ -723,15 +723,17 @@ function runGateReserveScan(args) {
     const mu = v.reduce((a, b) => a + b, 0) / v.length;
     return Math.sqrt(v.reduce((a, b) => a + (b - mu) * (b - mu), 0) / v.length);
   };
-  console.log('| 余量 | 组数 | 每组局数 | 试炼/千局 | 失败 | 失败后仍通过 | 兜底率 | 平均席位 | 平均回合 | 异常 |');
+  // ⚠️ B30：**95% 置信区间**（均值 ± 1.96σ/√n）—— σ 越小 ⇒ CI 越窄 ⇒ 判定越锐。
+  const ci95 = (t, k) => 1.96 * sd(t, k) / Math.sqrt(t.samples.length);
+  console.log('| 余量 | 组数 | 每组局数 | 试炼/千局 | 失败 | 失败后仍通过 | 兜底率（均值±σ · 95%CI） | 平均席位（均值±σ · 95%CI） | 平均回合 | 异常 |');
   console.log('|---|---|---|---|---|---|---|---|---|---|');
   for (const t of table) {
     console.log('| ' + String(t.reserve) + ' | ' + String(t.samples.length) + ' | ' + String(perRun)
       + ' | ' + mean(t, 'perK').toFixed(1) + ' ± ' + sd(t, 'perK').toFixed(1)
       + ' | ' + mean(t, 'failed').toFixed(0) + ' ± ' + sd(t, 'failed').toFixed(0)
       + ' | ' + mean(t, 'passedAfterFail').toFixed(0) + ' ± ' + sd(t, 'passedAfterFail').toFixed(0)
-      + ' | ' + mean(t, 'fallback').toFixed(2) + '% ± ' + sd(t, 'fallback').toFixed(2) + 'pp'
-      + ' | ' + mean(t, 'seats').toFixed(3) + ' ± ' + sd(t, 'seats').toFixed(3)
+      + ' | ' + mean(t, 'fallback').toFixed(2) + '% ± ' + sd(t, 'fallback').toFixed(2) + 'pp ± ' + ci95(t, 'fallback').toFixed(2) + 'pp'
+      + ' | ' + mean(t, 'seats').toFixed(3) + ' ± ' + sd(t, 'seats').toFixed(3) + ' ± ' + ci95(t, 'seats').toFixed(3)
       + ' | ' + mean(t, 'rounds').toFixed(2) + ' ± ' + sd(t, 'rounds').toFixed(2)
       + ' | ' + t.samples.reduce((a, s) => a + s.anomalies, 0) + ' |');
   }
@@ -746,9 +748,21 @@ function runGateReserveScan(args) {
       const nF = Math.sqrt(sd(t, 'fallback') ** 2 + sd(base, 'fallback') ** 2);
       const dS = Math.abs(mean(t, 'seats') - mean(base, 'seats'));
       const nS = Math.sqrt(sd(t, 'seats') ** 2 + sd(base, 'seats') ** 2);
+      // ⚠️ B30：**Welch t 检验**（不假设等方差）⇒ 比「合并噪声 2σ」更规范地判显著性。
+      //   t = |均值差| / √(σA²/nA + σB²/nB)；df = nA + nB − 2 = 18（10 组/取值时）。
+      const welch = (k) => {
+        const na = t.samples.length;
+        const nb = base.samples.length;
+        const se = Math.sqrt(sd(t, k) ** 2 / na + sd(base, k) ** 2 / nb);
+        return { tv: se > 0 ? Math.abs(mean(t, k) - mean(base, k)) / se : 0, df: na + nb - 2 };
+      };
+      const wF = welch('fallback');
+      const wS = welch('seats');
       console.log('  余量 ' + String(t.reserve) + ' vs 2：兜底率差 ' + dF.toFixed(2) + 'pp（噪声 ' + nF.toFixed(2)
-        + 'pp ⇒ ' + (dF <= 2 * nF ? '不可区分' : '可区分') + '）· 平均席位差 ' + dS.toFixed(3) + '（噪声 '
-        + nS.toFixed(3) + ' ⇒ ' + (dS <= 2 * nS ? '不可区分' : '可区分') + '）');
+        + 'pp ⇒ ' + (dF <= 2 * nF ? '不可区分' : '可区分') + '；Welch t=' + wF.tv.toFixed(2)
+        + '（df=' + String(wF.df) + '，|t| ≥ 2.101 ⇒ p<0.05）· 平均席位差 ' + dS.toFixed(3) + '（噪声 '
+        + nS.toFixed(3) + ' ⇒ ' + (dS <= 2 * nS ? '不可区分' : '可区分') + '；Welch t=' + wS.tv.toFixed(2)
+        + '（df=' + String(wS.df) + '））');
     }
   }
 }
