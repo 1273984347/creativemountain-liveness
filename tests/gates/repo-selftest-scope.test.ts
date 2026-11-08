@@ -20,11 +20,16 @@ const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'print', 'coverage', 
 /** 跳过的大文件（>2MB 多半是二进制/字体）。 */
 const MAX_BYTES = 2 * 1024 * 1024;
 
-/** 路径是否在允许区：tests/** 或 docs/ 下的 .md（历史记录）。 */
+/**
+ * 路径是否在允许区：**tests/**（自检能力本就只属于测试侧）或 **docs/批次/**（历史记录）。
+ *
+ * ⚠️ B49：允许区**收紧**到「历史记录」⇒ 规格 / 沉淀索引 / README 等**活文档**里
+ *   也不得再出现这些标识（措辞改成中文描述，保留语义与条目编号）。
+ */
 function allowed(relPath: string): boolean {
   const parts = relPath.split(sep);
   if (parts[0] === 'tests') { return true; }
-  if (parts[0] === 'docs') { return relPath.endsWith('.md'); }
+  if (parts[0] === 'docs' && parts[1] === '批次') { return true; }
   return false;
 }
 
