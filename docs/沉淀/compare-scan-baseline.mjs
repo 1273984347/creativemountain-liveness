@@ -39,8 +39,36 @@ function readJson(path, label) {
     process.exit(1);
   }
 }
+/**
+ * **结构校验**（B42）：`groups` 必须是数组；每组必须有数值型 `reserve` / `seedBase` 与全部指标字段。
+ *
+ * ⚠️ 为什么单独一层：结构字段缺失时，旧的分组键会拼成 `reserve@undefined` ⇒ 只表现为
+ *   「缺少该组」⇒ 仍会红但**报错不精准**（看不出是结构坏了还是数据漂移）。
+ */
+function assertStructure(doc, label) {
+  if (!Array.isArray(doc.groups)) {
+    console.error('FAIL  ' + label + '结构字段缺失或类型错误：groups（应为数组）');
+    process.exit(1);
+  }
+  const bad = [];
+  doc.groups.forEach((g, i) => {
+    if (g === null || typeof g !== 'object') { bad.push('groups[' + String(i) + '] 不是对象'); return; }
+    for (const f of ['reserve', 'seedBase']) {
+      if (typeof g[f] !== 'number' || !Number.isFinite(g[f])) { bad.push('groups[' + String(i) + '].' + f); }
+    }
+    for (const f of KEYS) {
+      if (typeof g[f] !== 'number' || !Number.isFinite(g[f])) { bad.push('groups[' + String(i) + '].' + f); }
+    }
+  });
+  if (bad.length > 0) {
+    console.error('FAIL  ' + label + '结构字段缺失或非数值：' + bad.slice(0, 10).join('、'));
+    process.exit(1);
+  }
+}
 const base = readJson(baselinePath, '基线快照');
 const scan = readJson(scanPath, '扫描产物');
+assertStructure(base, '基线快照');
+assertStructure(scan, '扫描产物');
 const keyOf = (g) => String(g.reserve) + '@' + String(g.seedBase);
 const mapOf = (doc) => new Map((doc.groups ?? []).map((g) => [keyOf(g), g]));
 const bm = mapOf(base);
