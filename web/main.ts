@@ -10,8 +10,9 @@ import { certifySign, certifyChallenge, certifyAbstain, certifyAnswer, certifyAp
 import { stateToJson, stateFromJson } from '../engine/core/serialize.ts';
 import { installTheme } from '../engine/core/setup.ts';
 import type { Action } from '../engine/core/action.ts';
-import { uiAllows, uiBlockNotice, uiHasLegalTarget, pendingGateHere } from './legal-gate.ts';
+import { uiAllows, uiBlockNotice, uiHasLegalTarget, pendingGateHere, pendingBarrierHere } from './legal-gate.ts';
 import { resolveGate } from '../engine/core/gate.ts';
+import { resolveBarrier } from '../engine/core/barrier.ts';
 import { THEMES, themeById } from './theme.ts';
 import { el, button, section } from './ui/dom.ts';
 import { renderBoard } from './ui/board.ts';
@@ -312,6 +313,32 @@ function resolveGateChannel(channel: 'pay' | 'trial'): void {
 }
 
 /**
+ * 提交裂隙通道选择（规格 §3.4，B18-b）：**放印** / **不放**。
+ *
+ * ⚠️ 与关隘同款：发生在**结算阶段**（落到裂隙格后手番暂停），不是行动三选一的一部分。
+ */
+function resolveBarrierChannel(channel: 'place' | 'skip'): void {
+  const seat = ui.seat;
+  const action: Action = { type: 'BARRIER_RESOLVE', actor: seat, channel };
+  // 门禁:裂隙提交 —— 拒绝不沉默。
+  if (!uiAllows(ui.state, seat, action)) {
+    ui.notice = uiBlockNotice(ui.state, seat, action) ?? '当前无法在该裂隙格放置封路印。';
+    render();
+    return;
+  }
+  const r = resolveBarrier(ui.state, seat, channel);
+  if (!r.ok) {
+    ui.notice = '裂隙结算失败：' + r.note;
+    render();
+    return;
+  }
+  ui.state = r.state;
+  ui.notice = r.note ?? '';
+  ui.state = advanceTurn(ui.state, ui.mode);
+  render();
+}
+
+/**
  * B12：发动身份被动（规格 §4.1 主动型：匠师 / 观星者 / 窃火者 / 织梦者）。
  *
  * 发动**占用本回合的行动**（规格 §3.1 行动三选一）⇒ 成功后直接推进回合。
@@ -368,6 +395,14 @@ function renderActions(): HTMLElement {
     body.push(button('付费通过（' + String(gate.fee) + '）', () => { resolveGateChannel('pay'); }, !canPay));
     body.push(button('试炼闯关', () => { resolveGateChannel('trial'); }));
     return section('关隘', ...body);
+  }
+  // ⚠️ B18-b：停在**可放印的裂隙格** ⇒ 只显示裂隙面板（放印 / 不放）。
+  const barrier = pendingBarrierHere(ui.state, seat);
+  if (barrier !== null) {
+    body.push(el('div', { class: 'warn', text: '裂隙：可花 ' + String(barrier.cost) + ' ' + theme.glossary.resource + ' 在这一格放置「封路印」，让后来者必须判定。' }));
+    body.push(button('放置封路印（-' + String(barrier.cost) + '）', () => { resolveBarrierChannel('place'); }));
+    body.push(button('不放置，直接通过', () => { resolveBarrierChannel('skip'); }));
+    return section('裂隙', ...body);
   }
   // ⚠️ B13：对峙未结算 ⇒ **只显示对峙面板**（回合阻塞，行棋/问天/出牌都暂不可用）。
   const duel = ui.state.duel;

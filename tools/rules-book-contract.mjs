@@ -45,8 +45,8 @@ export const TERRAIN_CONTRACT = [
     term: 'rift',
     specName: '裂隙',
     section: '### {{rift}}',
-    // ⚠️ 「任何玩家」是 B17 裁定的判定口径（**含放置者本人**）—— 防止回退成「只有持有者判定」。
-    required: ['封路印', '2 {{resource}}', '停 1 回合', '任何玩家'],
+    // ⚠️ 「后来者」是 B18-b 更正后的口径（**放置者当次不受影响**）—— 钉住它，防止回退成「放置者也判定」。
+    required: ['封路印', '2 {{resource}}', '停 1 回合', '后来者'],
   },
   {
     term: 'gate',

@@ -96,18 +96,19 @@ test('防复活（B17 裁定）：规格 §3.4 险径行与规则书都不得再
   assert.doesNotMatch(narration(), /失去本回合剩余行动/, '规则书不得保留已删除的子句');
 });
 
-test('裂隙判定口径（B17 裁定）：小节与地形总表口径一致（都必须是「任何玩家」）', () => {
+test('裂隙判定口径（B18-b 更正）：小节与地形总表口径一致（都必须是「后来者」）', () => {
   // ⚠️ 只改小节不改总表 ⇒ 规则书**内部自相矛盾**（实测踩过），故两处都要钉。
   const n = narration();
   const row = n.split(/\r?\n/).find((l) => l.trim().startsWith('|') && l.includes('{{rift}}'));
   assert.ok(row !== undefined, '地形总表应有裂隙行');
-  assert.match(row, /任何玩家/, '地形总表的裂隙口径必须是「任何玩家」：' + row);
+  assert.match(row, /后来者/, '地形总表的裂隙口径必须是「后来者」：' + row);
   assert.doesNotMatch(row, /持有者经过时需判定/, '总表不得残留旧口径');
 });
 
-test('裂隙判定口径（B17 裁定）：该格任何玩家经过都需判定，含放置者本人', () => {
-  assert.match(narration(), /任何玩家.*经过该格都需判定/, '规则书应写明任何玩家经过都判定');
-  assert.match(narration(), /包括放置封路印的人本人/, '规则书应写明放置者本人同样要判定');
+test('裂隙判定口径（B18-b 更正）：后来者经过才判定，放置者当次不受影响', () => {
+  assert.match(narration(), /后来者.*经过该格都需判定/, '规则书应写明后来者经过需判定');
+  assert.match(narration(), /放置者当次不受影响/, '规则书应写明放置者当次不受影响');
+  assert.doesNotMatch(narration(), /包括放置封路印的人本人/, '不得残留 B17 的旧口径');
 });
 
 test('正样本（函数级）：当前规则书覆盖规格 §3.4 全部地形', () => {

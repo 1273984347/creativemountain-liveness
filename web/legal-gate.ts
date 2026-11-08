@@ -209,6 +209,11 @@ export function uiBlockNotice(state: State, seat: number, action: Action): strin
       }
       return null;
     }
+    case 'BARRIER_RESOLVE': {
+      const b = pendingBarrierHere(state, seat);
+      if (b === null) { return '你当前不在可放印的裂隙格上，无需选择。'; }
+      return null;
+    }
   }
 }
 
@@ -261,6 +266,21 @@ export function pendingGateHere(state: State, seat: number): { readonly fee: num
   return { fee: tile.gate?.fee ?? 0 };
 }
 
+/**
+ * 「停在**可放印的裂隙格**上」的判据（规格 §3.4，B18-b）。
+ *
+ * ⚠️ **本文件独立写一份**，不 import 引擎的 `pendingBarrier`（理由同 `pendingGateHere`）。
+ */
+export function pendingBarrierHere(state: State, seat: number): { readonly index: number; readonly cost: number } | null {
+  const me = state.players[seat];
+  if (me === undefined || !me.alive) { return null; }
+  const tile = state.board.tiles.find((t) => t.index === me.position);
+  if (tile === undefined || tile.kind !== 'rift') { return null; }
+  if (tile.barrier === true) { return null; }   // 已有印 ⇒ 直接判定，不给选择
+  if (me.resource < 2) { return null; }         // 放不起 ⇒ 不必打扰玩家
+  return { index: tile.index, cost: 2 };
+}
+
 export function uiCandidates(state: State, seat: number): Action[] {
   const me = state.players[seat];
   if (me === undefined || !me.alive) { return []; }
@@ -270,6 +290,10 @@ export function uiCandidates(state: State, seat: number): Action[] {
   if (pendingGateHere(state, seat) !== null) {
     out.push({ type: 'GATE_RESOLVE', actor: seat, channel: 'pay' });
     out.push({ type: 'GATE_RESOLVE', actor: seat, channel: 'trial' });
+  } else if (pendingBarrierHere(state, seat) !== null) {
+    // ⚠️ B18-b：裂隙面（放印 / 不放）。
+    out.push({ type: 'BARRIER_RESOLVE', actor: seat, channel: 'place' });
+    out.push({ type: 'BARRIER_RESOLVE', actor: seat, channel: 'skip' });
   } else if (actionWindow(state, seat)) {
     out.push({ type: 'MOVE', actor: seat, steps: 0 });
     out.push({ type: 'ROLL_WHEEL', actor: seat });

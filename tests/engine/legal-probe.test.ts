@@ -156,7 +156,7 @@ test('试跑：复议必须由待认证者本人发起（旧手写镜像方向�
     '待认证者本人（座 0 灵枢 5 >= 2）申请复议必须合法');
 });
 
-test('试跑：14 个动作类型逐一有明确判定，且每次试跑都不消耗原 state 的随机源', () => {
+test('试跑：15 个动作类型逐一有明确判定，且每次试跑都不消耗原 state 的随机源', () => {
   const covered = new Set<Action['type']>();
   for (const c of PROBE_CASES) {
     const s = c.scene();
@@ -173,8 +173,8 @@ test('试跑：14 个动作类型逐一有明确判定，且每次试跑都不�
     assert.equal(s.rng.snapshot(), before, `${c.label}：试跑不得消耗原 state 的随机源`);
     covered.add(c.action.type);
   }
-  assert.equal(covered.size, 14,
-    `必须覆盖 Action union 的全部 14 个成员（B18 新增 GATE_RESOLVE），实际 ${[...covered].sort().join(', ')}`);
+  assert.equal(covered.size, 15,
+    `必须覆盖 Action union 的全部 15 个成员（B18 新增 GATE_RESOLVE / BARRIER_RESOLVE），实际 ${[...covered].sort().join(', ')}`);
 });
 
 /** 全员出局的状态：`currentPlayer` 返回 -1 ⇒ `advanceTurn` 的 `seat < 0` 早退原样返回（只动 alive，不碰认证字段）。 */
@@ -283,6 +283,8 @@ const PROBE_CASES: readonly ProbeCase[] = [
   { label: 'COMPARE@关隘出牌比对未实现', scene: mk, action: { type: 'COMPARE', actor: 0, cardId: 'c_gate_trial', target: 1 }, ok: false, reasonRe: /B19/ },
   // ---- B18：关隘通道（GATE_RESOLVE）——不在关隘格上必拒 ----
   { label: 'GATE_RESOLVE@不在关隘格', scene: mk, action: { type: 'GATE_RESOLVE', actor: 0, channel: 'pay' }, ok: false, reasonRe: /关隘/ },
+  // ---- B18-b：裂隙通道（BARRIER_RESOLVE）——不在可放印的裂隙格上必拒 ----
+  { label: 'BARRIER_RESOLVE@不在裂隙格', scene: mk, action: { type: 'BARRIER_RESOLVE', actor: 0, channel: 'place' }, ok: false, reasonRe: /裂隙/ },
 ];
 
 /** 用例里要「打一张真的牌」⇒ 取初始手牌第一张（mk 的后置断言保证人人有牌）。 */

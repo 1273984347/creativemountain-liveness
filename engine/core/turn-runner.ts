@@ -11,6 +11,7 @@ import { nextTurn, advanceRound, currentPlayer, isRoundEnd } from './round.ts';
 import { cardNeedsTarget } from './targeting.ts';
 import { passiveOf } from './passives.ts';
 import { pendingGate } from './gate.ts';
+import { judgeBarrier, pendingBarrier } from './barrier.ts';
 import { startDuel } from './duel.ts';
 import { drawCards, discardDownToLimit } from './hand.ts';
 import { gainResource } from './resource.ts';
@@ -75,6 +76,23 @@ function resolveTile(state: State, seat: number): State {
         p.seat === seat ? { ...p, hp: Math.max(0, p.hp - 1) } : p,
       );
       next = { ...state, players, decks: { ...state.decks, deck: deckAfterFlip } };
+      break;
+    }
+    case 'rift': {
+      // ⚠️ B18-b：封路印所在的裂隙格，**任何玩家**经过都需判定（沿用险径判色）。
+      //   「无印」的裂隙格不在这里处理 —— 那里要等结算期的「放印 / 不放」二选一。
+      if (tile.barrier !== true) { break; }
+      const judged = judgeBarrier(state, seat);
+      next = judged.state;
+      next = {
+        ...next,
+        log: [...next.log, {
+          round: next.round, turnIndex: next.turnIndex, actor: seat, kind: 'barrier',
+          message: judged.blocked
+            ? '裂隙：撞上封路印 —— 黑牌，停 1 回合'
+            : '裂隙：撞上封路印 —— 红牌，通过',
+        }],
+      };
       break;
     }
     case 'peak': {
@@ -185,6 +203,8 @@ export function performAction(
   //   这是**引擎层**的正确性保证：UI 的候选限制只是辅助，绕过 UI 调引擎也必须被拒。
   //   （否则玩家可以在关隘格上反复行棋直到离开 ⇒ 关隘形同虚设。）
   if (pendingGate(state, seat) !== null) { return state; }
+  // ⚠️ B18-b：停在**可放印的裂隙格** ⇒ 同样只能选通道（放印 / 不放）。
+  if (pendingBarrier(state, seat) !== null) { return state; }
   let next = state;
   switch (action) {
     case 'move': {
@@ -392,6 +412,8 @@ export function advanceTurn(state: State, mode: RuleMode): State {
   // ⚠️ 检查必须在**块外**（每次 advanceTurn 都查）：若只放在首次结算的块内，
   //   第二次调用（turn.finished 已为 true）会跳过该块 ⇒ 关隘被无声跳过。
   if (pendingGate(next, seat) !== null) { return next; }
+  // ⚠️ B18-b：裂隙的「放印 / 不放」二选一同样阻塞推进。
+  if (pendingBarrier(next, seat) !== null) { return next; }
   next = nextTurn(next);
   if (!isRoundEnd(next)) {
     return next;

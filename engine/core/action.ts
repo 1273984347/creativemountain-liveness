@@ -11,6 +11,7 @@ export type ActionType =
   | 'ROLL_WHEEL'
   | 'COMPARE'
   | 'GATE_RESOLVE'
+  | 'BARRIER_RESOLVE'
   | 'PASS'
   | 'VOTE'
   | 'CERTIFY_SIGN'
@@ -42,6 +43,13 @@ export type Action =
    *   · `trial`：试炼通道，公开抽一张该关隘的试炼牌并执行其效果树（后果由主题包数据表达）。
    */
   | { readonly type: 'GATE_RESOLVE'; readonly actor: number; readonly channel: 'pay' | 'trial' }
+  /**
+   * 裂隙通道选择（规格 §3.4，B18-b）：落到**无印的裂隙格**时手番暂停，玩家二选一。
+   *
+   * ⚠️ `place` = 花 2 灵枢在**这一格**放置封路印（随后仍要面对自己的印）；
+   *   `skip` = 不放印，直接通过。
+   */
+  | { readonly type: 'BARRIER_RESOLVE'; readonly actor: number; readonly channel: 'place' | 'skip' }
   | { readonly type: 'PASS'; readonly actor: number }
   | { readonly type: 'VOTE'; readonly actor: number; readonly target: number }
   | { readonly type: 'CERTIFY_SIGN'; readonly actor: number; readonly target: number }

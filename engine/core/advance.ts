@@ -15,6 +15,7 @@ import type { RuleMode } from '../scales.ts';
 import { advanceTurn } from './turn-runner.ts';
 import { autoResolveDuel } from './duel.ts';
 import { autoResolveGate, pendingGate } from './gate.ts';
+import { autoResolveBarrier, pendingBarrier } from './barrier.ts';
 import { currentPlayer } from './round.ts';
 
 /**
@@ -34,6 +35,12 @@ export function advanceAuto(state: State, mode: RuleMode): State {
   const seat = currentPlayer(next);
   if (seat >= 0 && pendingGate(next, seat) !== null) {
     next = autoResolveGate(next, seat);
+    next = advanceTurn(next, mode);
+  }
+  // ---- 裂隙闭环（B18-b）----
+  const seat2 = currentPlayer(next);
+  if (seat2 >= 0 && pendingBarrier(next, seat2) !== null) {
+    next = autoResolveBarrier(next, seat2);
     next = advanceTurn(next, mode);
   }
   return next;

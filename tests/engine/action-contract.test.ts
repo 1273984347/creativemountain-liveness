@@ -4,10 +4,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 /** 契约表的 13 项（真值取自源码文本，与门 ③ 的 unionMembers 同法）。 */
-const MEMBERS = ['MOVE', 'PLAY_CARD', 'ABILITY', 'ROLL_WHEEL', 'COMPARE', 'GATE_RESOLVE', 'PASS', 'VOTE',
+const MEMBERS = ['MOVE', 'PLAY_CARD', 'ABILITY', 'ROLL_WHEEL', 'COMPARE', 'GATE_RESOLVE', 'BARRIER_RESOLVE', 'PASS', 'VOTE',
   'CERTIFY_SIGN', 'CERTIFY_CHALLENGE', 'CERTIFY_ABSTAIN', 'CERTIFY_APPEAL', 'CERTIFY_APPEAL_VOTE', 'CERTIFY_ANSWER'];
 
-test('§6.3 ActionType = 契约表 14 项（复议票入枚举、孤儿 CERTIFY_VALIDATE_QUESTION 移除、B18 关隘通道入枚举）', () => {
+test('§6.3 ActionType = 契约表 15 项（复议票入枚举、孤儿 CERTIFY_VALIDATE_QUESTION 移除、B18 关隘与裂隙通道入枚举）', () => {
   const src = readFileSync('engine/core/action.ts', 'utf8');
   const body = /export type ActionType =([\s\S]*?);/.exec(src)?.[1] ?? '';
   const found = [...body.matchAll(/'([A-Z_]+)'/g)].map((m) => String(m[1]));

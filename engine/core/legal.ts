@@ -27,6 +27,7 @@ import { abilityAvailability, activeAbilityId } from './passives.ts';
 import { hasUsedCertificationTurn, isCertifier } from './certification.ts';
 import { isRoundEnd } from './round.ts';
 import { pendingGate } from './gate.ts';
+import { pendingBarrier } from './barrier.ts';
 
 /** 行动阶段候选上限（官方 serve `MAX_CHOICE_OPTIONS=100`，留余量）。 */
 export const LEGAL_ACTION_CAP = 64;
@@ -71,6 +72,13 @@ function actionPhaseCandidates(state: State, seat: number): Action[] {
     return [
       { type: 'GATE_RESOLVE', actor: seat, channel: 'pay' },
       { type: 'GATE_RESOLVE', actor: seat, channel: 'trial' },
+    ];
+  }
+  // ⚠️ B18-b：停在**可放印的裂隙格** ⇒ 只发两条通道候选（放印 / 不放）。
+  if (pendingBarrier(state, seat) !== null) {
+    return [
+      { type: 'BARRIER_RESOLVE', actor: seat, channel: 'place' },
+      { type: 'BARRIER_RESOLVE', actor: seat, channel: 'skip' },
     ];
   }
   if (!actionWindowOpen(state, seat)) { return []; }

@@ -19,6 +19,8 @@ export function actionKey(a: Action): string {
     case 'COMPARE': return `gate:${a.cardId}->${a.target}`;
     // ⚠️ B18：关隘通道选择 —— 三段（`gate:resolve:<channel>`），与 COMPARE 的两段不冲突。
     case 'GATE_RESOLVE': return `gate:resolve:${a.channel}`;
+    // ⚠️ B18-b：裂隙通道 —— 三段（`barrier:resolve:<channel>`）。
+    case 'BARRIER_RESOLVE': return `barrier:resolve:${a.channel}`;
     case 'CERTIFY_SIGN': return `cert:sign:${a.target}`;
     case 'CERTIFY_CHALLENGE': return `cert:challenge:${a.target}`;
     case 'CERTIFY_ABSTAIN': return `cert:abstain:${a.target}`;
@@ -104,6 +106,12 @@ function decodeKey(key: string): Action {
       const [id, t] = idTarget(parts[1]);
       if (t === undefined) { throw new Error(`key 缺目标：${key}`); }
       return { type: 'COMPARE', actor: -1, cardId: id, target: num(t) };
+    }
+    case 'barrier': {
+      // ⚠️ B18-b：`barrier:resolve:<channel>`（三段）= 裂隙通道（放印 / 不放）。
+      const ch = need(parts[2]);
+      if (ch !== 'place' && ch !== 'skip') { throw new Error(`key 裂隙通道非法：${key}`); }
+      return { type: 'BARRIER_RESOLVE', actor: -1, channel: ch };
     }
     case 'cert': {
       const kind = need(parts[1]);

@@ -9,6 +9,7 @@ import { advanceTurn, performAction } from './turn-runner.ts';
 import { performAbility } from './abilities.ts';
 import { castVote } from './council.ts';
 import { resolveGate } from './gate.ts';
+import { resolveBarrier } from './barrier.ts';
 import {
   certifyAbstain, certifyAnswer, certifyAppeal, certifyAppealVote,
   certifyChallenge, certifySign,
@@ -132,6 +133,8 @@ export function probeAction(state: State, action: Action): ProbeResult {
     case 'COMPARE': return reject('关隘出牌比对通道已定案但未实现（B19）');
     // ⚠️ B18：关隘付费 / 试炼两条通道已接线（规格 §3.5 B18 定案）。
     case 'GATE_RESOLVE': { const r = resolveGate(s, action.actor, action.channel); return byFlag(r.ok, r.note, r.state, s); }
+    // ⚠️ B18-b：裂隙通道（放印 / 不放）。
+    case 'BARRIER_RESOLVE': { const r = resolveBarrier(s, action.actor, action.channel); return byFlag(r.ok, r.note, r.state, s); }
     case 'CERTIFY_SIGN': { const r = certifySign(s, action.actor, action.target); return byFlag(r.ok, r.note, r.state, s); }
     case 'CERTIFY_CHALLENGE': { const r = certifyChallenge(s, action.actor, action.target); return byFlag(r.ok, r.note, r.state, s); }
     case 'CERTIFY_ABSTAIN': { const r = certifyAbstain(s, action.actor, action.target); return byFlag(r.ok, r.note, r.state, s); }
