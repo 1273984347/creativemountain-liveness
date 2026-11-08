@@ -7,8 +7,7 @@
 import assert from 'node:assert/strict';
 
 import type { State } from '../../engine/core/state.ts';
-import { advanceTurn } from '../../engine/core/turn-runner.ts';
-import { autoResolveDuel } from '../../engine/core/duel.ts';
+import { advanceAuto } from '../../engine/core/advance.ts';
 import type { RuleMode } from '../../engine/scales.ts';
 
 /** 取数组第 i 项，越界时抛出可读错误。 */
@@ -19,16 +18,12 @@ export function at<T>(arr: readonly T[], i: number): T {
 }
 
 /**
- * 推进手番；若结算后进入**对峙** ⇒ 自动选牌并继续推进（B13）。
+ * 推进手番，并**自动解算阻塞**（对峙 + 关隘）。
  *
- * ⚠️ 为什么需要：对峙会**阻塞回合推进**（`advanceTurn` 在对峙未决时直接返回）
- *   ⇒ 任何自己驱动对局的调用方都必须处理对峙，否则对局会在第一次同格相遇时卡死。
+ * ⚠️ 委托给引擎层的统一出口 `advanceAuto`（`engine/core/advance.ts`）：
+ *   对峙（B13）与关隘（B18）都会**阻塞回合推进** ⇒ 各调用方自己复制闭环逻辑
+ *   迟早漏一处 ⇒ 机制静默失效（实测：模拟器让玩家免费穿过关隘）。
  */
 export function advanceWithDuel(state: State, mode: RuleMode): State {
-  let next = advanceTurn(state, mode);
-  if (next.duel !== null) {
-    next = autoResolveDuel(next);
-    next = advanceTurn(next, mode);
-  }
-  return next;
+  return advanceAuto(state, mode);
 }

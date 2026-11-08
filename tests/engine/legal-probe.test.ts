@@ -67,12 +67,12 @@ test('试跑：非法动作必被拒（通道 ① 引用相等 / 通道 ② ok=f
     '§5.1 待认证锁定 ⇒ performAction 的 move 分支 return state（引用相等）');
 });
 
-test('试跑：COMPARE 必拒且拒因点名 B14（关隘入口在全仓无调用点）', () => {
+test('试跑：COMPARE 必拒且拒因点名 B19（出牌比对通道已定案但未实现）', () => {
   const r = probeAction(mk(), { type: 'COMPARE', actor: 0, cardId: 'c', target: 1 });
   assert.equal(r.ok, false);
-  // 引擎事实：关隘两条通道 `payGate` / `drawTrial`（engine/core/gate.ts）**除自身定义外全仓零引用**，
-  // COMPARE 没有任何可试跑的入口 ⇒ 只能显式判拒，不能伪装成「引擎拒绝了」。
-  assert.match(r.reason, /B14/, '拒因必须点名 B14，让下游知道自己撞上的是未接线而非规则拒绝');
+  // 引擎事实：**B18 已把 COMPARE 定案为「关隘出牌比对通道」**（规格 §3.5 B18 定案 4），
+  // 但该通道的**实现**列为 B19 ⇒ 付费 / 试炼两条已接线、COMPARE 仍无可试跑入口。
+  assert.match(r.reason, /B19/, '拒因必须点名 B19，让下游知道自己撞上的是未实现而非规则拒绝');
 });
 
 test('试跑：PASS 判据＝引擎是否接受——mk() 上 PASS 合法（计划里那条拒因经实测不成立）', () => {
@@ -156,7 +156,7 @@ test('试跑：复议必须由待认证者本人发起（旧手写镜像方向�
     '待认证者本人（座 0 灵枢 5 >= 2）申请复议必须合法');
 });
 
-test('试跑：13 个动作类型逐一有明确判定，且每次试跑都不消耗原 state 的随机源', () => {
+test('试跑：14 个动作类型逐一有明确判定，且每次试跑都不消耗原 state 的随机源', () => {
   const covered = new Set<Action['type']>();
   for (const c of PROBE_CASES) {
     const s = c.scene();
@@ -173,8 +173,8 @@ test('试跑：13 个动作类型逐一有明确判定，且每次试跑都不�
     assert.equal(s.rng.snapshot(), before, `${c.label}：试跑不得消耗原 state 的随机源`);
     covered.add(c.action.type);
   }
-  assert.equal(covered.size, 13,
-    `必须覆盖 Action union 的全部 13 个成员，实际 ${[...covered].sort().join(', ')}`);
+  assert.equal(covered.size, 14,
+    `必须覆盖 Action union 的全部 14 个成员（B18 新增 GATE_RESOLVE），实际 ${[...covered].sort().join(', ')}`);
 });
 
 /** 全员出局的状态：`currentPlayer` 返回 -1 ⇒ `advanceTurn` 的 `seat < 0` 早退原样返回（只动 alive，不碰认证字段）。 */
@@ -280,7 +280,9 @@ const PROBE_CASES: readonly ProbeCase[] = [
   { label: 'PASS@结算才立对峙（引擎已接受，推进挂起待对峙结算）', scene: settleIntoDuelScene, action: { type: 'PASS', actor: 0 }, ok: true, reasonRe: /挂起/ },
   { label: 'PASS@无当前手番', scene: noActorScene, action: { type: 'PASS', actor: 0 }, ok: false, reasonRe: /手番未推进/ },
   // ---- 未接线：只能显式判拒 ----
-  { label: 'COMPARE@关隘未接线', scene: mk, action: { type: 'COMPARE', actor: 0, cardId: 'c_gate_trial', target: 1 }, ok: false, reasonRe: /B14/ },
+  { label: 'COMPARE@关隘出牌比对未实现', scene: mk, action: { type: 'COMPARE', actor: 0, cardId: 'c_gate_trial', target: 1 }, ok: false, reasonRe: /B19/ },
+  // ---- B18：关隘通道（GATE_RESOLVE）——不在关隘格上必拒 ----
+  { label: 'GATE_RESOLVE@不在关隘格', scene: mk, action: { type: 'GATE_RESOLVE', actor: 0, channel: 'pay' }, ok: false, reasonRe: /关隘/ },
 ];
 
 /** 用例里要「打一张真的牌」⇒ 取初始手牌第一张（mk 的后置断言保证人人有牌）。 */
@@ -295,7 +297,7 @@ function firstCardId(): string {
 // `getLegalActions` 的三段式：**候选粗筛 → rng 隔离试跑 → 判定收集**。
 // 覆盖五个决策面：行棋 / 问天 / 出牌(×目标) / 身份被动(×目标) / 山议投票 / 认证
 // （签印·质疑·弃权·复议·判定·复议票）。
-// ⚠️ `PASS` 与 `COMPARE` **不枚举**：前者 UI 无「结束手番」入口、后者入口待 B14
+// ⚠️ `PASS` 与 `COMPARE` **不枚举**：前者 UI 无「结束手番」入口、后者（关隘出牌比对）实现待 B19
 //   —— 尽管 `probeAction` 对两者都能给答案（上面 Task 4 的表已钉住），
 //   枚举口径以「玩家现在真能提交什么」为准，不是「探针会不会说合法」。
 // ⚠️ 场景一律来自 fixtures；被动只改 `flags.passive`（不碰认证/山议字段）。
@@ -1316,7 +1318,7 @@ const TEMPLATE_WORDS: readonly string[] = [
   'move', 'ask', 'pass', 'play', 'ability', 'vote', 'gate', 'cert',
   'sign', 'challenge', 'abstain', 'appeal', 'appealvote', 'answer', 'overturn', 'uphold', 'fail',
   // 语义模板里的固定词
-  '行棋', '掷骰前进', '问天', '掷指令骰', '结束手番', '过隘', '以试炼牌闯关', '入口待', 'B14', '出',
+  '行棋', '掷骰前进', '问天', '掷指令骰', '结束手番', '过隘', '以试炼牌闯关', '入口待', 'B19', '出',
   '发动被动', '山议投座', '给座', '签印', '质疑座', '对座', '弃权', '自己申请复议', '资源',
   '复议票', '判定座', '通过', '不通过',
   // 已知的身份被动 id（测试面出现的两个；新增被动会红，按提示补表即可）

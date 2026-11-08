@@ -10,6 +10,7 @@ export type ActionType =
   | 'ABILITY'
   | 'ROLL_WHEEL'
   | 'COMPARE'
+  | 'GATE_RESOLVE'
   | 'PASS'
   | 'VOTE'
   | 'CERTIFY_SIGN'
@@ -33,6 +34,14 @@ export type Action =
   | { readonly type: 'ABILITY'; readonly actor: number; readonly abilityId: string; readonly target?: number }
   | { readonly type: 'ROLL_WHEEL'; readonly actor: number }
   | { readonly type: 'COMPARE'; readonly actor: number; readonly cardId: string; readonly target: number }
+  /**
+   * 关隘通道选择（规格 §3.5，B18 定案）。
+   *
+   * ⚠️ 发生在**结算阶段**（到达关隘后手番暂停），**不是行动阶段** —— 行动三选一已被移动占用。
+   *   · `pay`：付费通道，付该格标价（3–5 灵枢）立即通过；灵枢不足 ⇒ 引擎拒绝。
+   *   · `trial`：试炼通道，公开抽一张该关隘的试炼牌并执行其效果树（后果由主题包数据表达）。
+   */
+  | { readonly type: 'GATE_RESOLVE'; readonly actor: number; readonly channel: 'pay' | 'trial' }
   | { readonly type: 'PASS'; readonly actor: number }
   | { readonly type: 'VOTE'; readonly actor: number; readonly target: number }
   | { readonly type: 'CERTIFY_SIGN'; readonly actor: number; readonly target: number }

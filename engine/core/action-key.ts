@@ -17,6 +17,8 @@ export function actionKey(a: Action): string {
     case 'ABILITY': return a.target === undefined ? `ability:${a.abilityId}` : `ability:${a.abilityId}->${a.target}`;
     case 'VOTE': return `vote:${a.target}`;
     case 'COMPARE': return `gate:${a.cardId}->${a.target}`;
+    // ⚠️ B18：关隘通道选择 —— 三段（`gate:resolve:<channel>`），与 COMPARE 的两段不冲突。
+    case 'GATE_RESOLVE': return `gate:resolve:${a.channel}`;
     case 'CERTIFY_SIGN': return `cert:sign:${a.target}`;
     case 'CERTIFY_CHALLENGE': return `cert:challenge:${a.target}`;
     case 'CERTIFY_ABSTAIN': return `cert:abstain:${a.target}`;
@@ -93,6 +95,12 @@ function decodeKey(key: string): Action {
         : { type: 'ABILITY', actor: -1, abilityId: id, target: num(t) };
     }
     case 'gate': {
+      // ⚠️ B18：`gate:resolve:<channel>`（三段）= 关隘通道选择；`gate:<id>-><seat>`（两段）= COMPARE。
+      if (parts[1] === 'resolve') {
+        const ch = need(parts[2]);
+        if (ch !== 'pay' && ch !== 'trial') { throw new Error(`key 关隘通道非法：${key}`); }
+        return { type: 'GATE_RESOLVE', actor: -1, channel: ch };
+      }
       const [id, t] = idTarget(parts[1]);
       if (t === undefined) { throw new Error(`key 缺目标：${key}`); }
       return { type: 'COMPARE', actor: -1, cardId: id, target: num(t) };

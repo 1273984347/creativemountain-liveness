@@ -10,7 +10,8 @@ import type { State } from '../engine/core/state.ts';
 import type { ThemePack } from '../engine/types/theme.ts';
 import { createInitialState } from '../engine/core/state.ts';
 import { installTheme } from '../engine/core/setup.ts';
-import { performAction, advanceTurn } from '../engine/core/turn-runner.ts';
+import { performAction } from '../engine/core/turn-runner.ts';
+import { advanceAuto } from '../engine/core/advance.ts';
 import { currentPlayer } from '../engine/core/round.ts';
 import { enterPendingCertification, certifySign } from '../engine/core/certification.ts';
 
@@ -58,7 +59,8 @@ export function runTutorial(theme: ThemePack, playerCount = 3): TutorialStep[] {
     const before = state.players[seat]?.position ?? 0;
     state = performAction(state, seat, 'move');
     const after = state.players[seat]?.position ?? before;
-    state = advanceTurn(state, 'newbie');
+    // ⚠️ B18：用引擎层统一出口（自动解算对峙 / 关隘阻塞）⇒ 教学演示不会卡在关隘。
+    state = advanceAuto(state, 'newbie');
     steps.push({
       title: '行动 ' + (i + 1) + ' / 5',
       detail: '座' + seat + ' 掷移动骰前进（必须走满，不能少走）：位置 ' + before + ' → ' + after + '。回合末结算裁牌与' + theme.glossary.resource + '收入。',

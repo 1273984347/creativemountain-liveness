@@ -26,6 +26,7 @@ import { cardNeedsTarget, targetCandidates } from './targeting.ts';
 import { abilityAvailability, activeAbilityId } from './passives.ts';
 import { hasUsedCertificationTurn, isCertifier } from './certification.ts';
 import { isRoundEnd } from './round.ts';
+import { pendingGate } from './gate.ts';
 
 /** 行动阶段候选上限（官方 serve `MAX_CHOICE_OPTIONS=100`，留余量）。 */
 export const LEGAL_ACTION_CAP = 64;
@@ -61,7 +62,18 @@ export function actionWindowOpen(state: State, seat: number): boolean {
 /** 行动阶段三面：行棋 / 问天 / 出牌(×目标) / 身份被动(×目标)。 */
 function actionPhaseCandidates(state: State, seat: number): Action[] {
   const p = state.players[seat];
-  if (p === undefined || !actionWindowOpen(state, seat)) { return []; }
+  if (p === undefined || !p.alive) { return []; }
+  // ⚠️ B18：停在**未通过的关隘** ⇒ 手番暂停，只能选通过通道（付费 / 试炼）。
+  //   否则玩家可以无视关隘继续行棋 —— 关隘形同虚设。
+  // ⚠️ 这一分支**不受行动窗口的其它判据约束**（含 isRoundEnd）：该手番已经行动过
+  //   （地形在手番末结算），若沿用行动窗口会把通道候选也一并关掉 ⇒ 关隘永远选不了。
+  if (pendingGate(state, seat) !== null) {
+    return [
+      { type: 'GATE_RESOLVE', actor: seat, channel: 'pay' },
+      { type: 'GATE_RESOLVE', actor: seat, channel: 'trial' },
+    ];
+  }
+  if (!actionWindowOpen(state, seat)) { return []; }
   const out: Action[] = [
     { type: 'MOVE', actor: seat, steps: 0 },   // 步数由骰子定，玩家不可选
     { type: 'ROLL_WHEEL', actor: seat },

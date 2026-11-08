@@ -10,7 +10,8 @@ import { certifySign, certifyChallenge, certifyAbstain, certifyAnswer, certifyAp
 import { stateToJson, stateFromJson } from '../engine/core/serialize.ts';
 import { installTheme } from '../engine/core/setup.ts';
 import type { Action } from '../engine/core/action.ts';
-import { uiAllows, uiBlockNotice, uiHasLegalTarget } from './legal-gate.ts';
+import { uiAllows, uiBlockNotice, uiHasLegalTarget, pendingGateHere } from './legal-gate.ts';
+import { resolveGate } from '../engine/core/gate.ts';
 import { THEMES, themeById } from './theme.ts';
 import { el, button, section } from './ui/dom.ts';
 import { renderBoard } from './ui/board.ts';
@@ -284,6 +285,33 @@ function onPickTarget(picked: number): void {
 }
 
 /**
+ * 提交关隘通道选择（规格 §3.5，B18）：**付费** / **试炼**。
+ *
+ * ⚠️ 通道选择发生在**结算阶段**（到达关隘后手番暂停）⇒ 不是行动三选一的一部分。
+ *   引擎层对其它行动有硬门禁（停在关隘上时一律拒绝），所以这里只有两条路可走。
+ */
+function resolveGateChannel(channel: 'pay' | 'trial'): void {
+  const seat = ui.seat;
+  const action: Action = { type: 'GATE_RESOLVE', actor: seat, channel };
+  // 门禁:关隘提交 —— 与出牌 / 被动同闸（拒绝不沉默：被闸挡下要把拒因写进 notice）。
+  if (!uiAllows(ui.state, seat, action)) {
+    ui.notice = uiBlockNotice(ui.state, seat, action) ?? '当前无法选择该通道。';
+    render();
+    return;
+  }
+  const r = resolveGate(ui.state, seat, channel);
+  if (!r.ok) {
+    ui.notice = '关隘结算失败：' + r.note;
+    render();
+    return;
+  }
+  ui.state = r.state;
+  ui.notice = r.note ?? '';
+  ui.state = advanceTurn(ui.state, ui.mode);
+  render();
+}
+
+/**
  * B12：发动身份被动（规格 §4.1 主动型：匠师 / 观星者 / 窃火者 / 织梦者）。
  *
  * 发动**占用本回合的行动**（规格 §3.1 行动三选一）⇒ 成功后直接推进回合。
@@ -327,6 +355,19 @@ function renderActions(): HTMLElement {
   if (player.pendingCert) {
     body.push(el('span', { class: 'warn', text: '待认证锁定：你已在峰顶，不能主动移动（只能被质疑后退）。' }));
     return section('行动', ...body);
+  }
+  // ⚠️ B18：停在**未通过的关隘** ⇒ **只显示关隘面板**（回合阻塞，行棋/问天/出牌都暂不可用）。
+  const gate = pendingGateHere(ui.state, seat);
+  if (gate !== null) {
+    const mine = player.resource;
+    const canPay = mine >= gate.fee;
+    body.push(el('div', { class: 'warn', text: '关隘：付费通过（' + String(gate.fee) + ' ' + theme.glossary.resource + '）或抽一张试炼牌通过。' }));
+    if (!canPay) {
+      body.push(el('div', { class: 'muted', text: '灵枢不足（需 ' + String(gate.fee) + '，现有 ' + String(mine) + '）——只能走试炼通道。' }));
+    }
+    body.push(button('付费通过（' + String(gate.fee) + '）', () => { resolveGateChannel('pay'); }, !canPay));
+    body.push(button('试炼闯关', () => { resolveGateChannel('trial'); }));
+    return section('关隘', ...body);
   }
   // ⚠️ B13：对峙未结算 ⇒ **只显示对峙面板**（回合阻塞，行棋/问天/出牌都暂不可用）。
   const duel = ui.state.duel;

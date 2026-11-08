@@ -199,7 +199,16 @@ export function uiBlockNotice(state: State, seat: number, action: Action): strin
     case 'PASS':
       return 'PASS（结束手番）在数字轨没有 UI 入口。';
     case 'COMPARE':
-      return '关隘比对（COMPARE）入口待 B14 接线。';
+      return '关隘比对（COMPARE）通道已定案（B18）但尚未实现，实现列为 B19。';
+    case 'GATE_RESOLVE': {
+      const gate = pendingGateHere(state, seat);
+      if (gate === null) { return '你当前不在未通过的关隘格上，无需选择通道。'; }
+      if (action.channel === 'pay') {
+        const mine = me?.resource ?? 0;
+        if (mine < gate.fee) { return `灵枢不足：关隘标价 ${gate.fee}，现有 ${mine}。`; }
+      }
+      return null;
+    }
   }
 }
 
@@ -237,12 +246,31 @@ export function uiHasLegalTarget(state: State, seat: number, shape: UiTargetedSh
  *   · 山议候选「未结算 ∧ 本人未投」；
  *   · 认证面在 `pending` 为空时整体不发，APPEAL_VOTE 也在此面内（同引擎）。
  */
+/**
+ * 「停在**未通过的关隘**上」的判据（规格 §3.5，B18）。
+ *
+ * ⚠️ **本文件独立写一份**，不 import 引擎的 `pendingGate` —— 本文件的全部价值就是
+ *   「与引擎枚举各自独立实现、再做集合相等比对」；借道引擎判据会让漂移守卫退化成恒等式。
+ */
+export function pendingGateHere(state: State, seat: number): { readonly fee: number } | null {
+  const me = state.players[seat];
+  if (me === undefined || !me.alive) { return null; }
+  const tile = state.board.tiles.find((t) => t.index === me.position);
+  if (tile === undefined || tile.kind !== 'gate') { return null; }
+  if (me.flags[`gate_${String(tile.index)}`] === true) { return null; }
+  return { fee: tile.gate?.fee ?? 0 };
+}
+
 export function uiCandidates(state: State, seat: number): Action[] {
   const me = state.players[seat];
   if (me === undefined || !me.alive) { return []; }
   const out: Action[] = [];
-  // ---- 行动面：行棋 / 问天 / 出牌(×目标) / 身份被动(×目标) ----
-  if (actionWindow(state, seat)) {
+  // ---- 关隘面（B18）：停在未通过的关隘 ⇒ 只发两条通道候选，**替代**行动面 ----
+  //   （与引擎 `actionPhaseCandidates` 同款结构：关隘面在行动窗口之外。）
+  if (pendingGateHere(state, seat) !== null) {
+    out.push({ type: 'GATE_RESOLVE', actor: seat, channel: 'pay' });
+    out.push({ type: 'GATE_RESOLVE', actor: seat, channel: 'trial' });
+  } else if (actionWindow(state, seat)) {
     out.push({ type: 'MOVE', actor: seat, steps: 0 });
     out.push({ type: 'ROLL_WHEEL', actor: seat });
     for (const card of me.hand) {

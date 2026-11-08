@@ -10,6 +10,7 @@ import { rollD20 } from './dice.ts';
 import { nextTurn, advanceRound, currentPlayer, isRoundEnd } from './round.ts';
 import { cardNeedsTarget } from './targeting.ts';
 import { passiveOf } from './passives.ts';
+import { pendingGate } from './gate.ts';
 import { startDuel } from './duel.ts';
 import { drawCards, discardDownToLimit } from './hand.ts';
 import { gainResource } from './resource.ts';
@@ -180,6 +181,10 @@ export function performAction(
 ): State {
   const player = state.players[seat];
   if (player === undefined) { return state; }
+  // ⚠️ B18：停在**未通过的关隘** ⇒ 只能选通过通道（付费 / 试炼），其它行动一律拒绝。
+  //   这是**引擎层**的正确性保证：UI 的候选限制只是辅助，绕过 UI 调引擎也必须被拒。
+  //   （否则玩家可以在关隘格上反复行棋直到离开 ⇒ 关隘形同虚设。）
+  if (pendingGate(state, seat) !== null) { return state; }
   let next = state;
   switch (action) {
     case 'move': {
@@ -382,6 +387,11 @@ export function advanceTurn(state: State, mode: RuleMode): State {
     // 结算后进入对峙 ⇒ **暂停推进**（等双方锁定亮牌后再来一次 advanceTurn）
     if (next.duel !== null) { return next; }
   }
+  // ⚠️ B18：停在**未通过的关隘** ⇒ **暂停推进**（等玩家选付费 / 试炼通道）。
+  //   与对峙同款：turn.finished 已置 ⇒ 再来一次 advanceTurn 不会重复结算地形。
+  // ⚠️ 检查必须在**块外**（每次 advanceTurn 都查）：若只放在首次结算的块内，
+  //   第二次调用（turn.finished 已为 true）会跳过该块 ⇒ 关隘被无声跳过。
+  if (pendingGate(next, seat) !== null) { return next; }
   next = nextTurn(next);
   if (!isRoundEnd(next)) {
     return next;
@@ -408,11 +418,13 @@ export function advanceTurn(state: State, mode: RuleMode): State {
   // ---- 回合末裁牌（规格 §3.1 步骤 4）----
   // 天机牌对**全场**生效 ⇒ 非当前行动者也会收到牌；
   // 手番末只裁当前玩家 ⇒ 别人会累积超限（实测：手牌 15 > 上限 6）。
-  // 故回合末再对所有存活玩家裁一次。
+  // 故回合末再对所有玩家裁一次。
+  // ⚠️ B18 修正：**含已出局玩家**。被放逐者只被置 `alive: false`、手牌不清（§5.6），
+  //   而此前这里只裁存活玩家 ⇒ 被放逐者的手牌**永远不会被裁** ⇒ 终局体检报
+  //   「手牌超上限」（实测 24000 局 4 条 ≈ 1/7000 局；关隘接线只是放大了触发概率）。
+  //   手牌上限是**通用规则**（谁的牌都不超过上限），与是否出局无关 ⇒ 全体裁。
   for (const p of next.players) {
-    if (p.alive) {
-      next = discardDownToLimit(next, p.seat);
-    }
+    next = discardDownToLimit(next, p.seat);
   }
   // ---- 公开亮牌离场（规格 §3.3：两张牌留在场上公开，直至本 round 结束）----
   next = { ...next, publicCards: [] };

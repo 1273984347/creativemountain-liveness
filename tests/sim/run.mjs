@@ -24,6 +24,7 @@ import {
 import { currentPlayer } from '../../engine/core/round.ts';
 import { performAbility } from '../../engine/core/abilities.ts';
 import { autoResolveDuel } from '../../engine/core/duel.ts';
+import { advanceAuto } from '../../engine/core/advance.ts';
 import { castVote, resolveCouncil } from '../../engine/core/council.ts';
 import {
   certifySign, certifyChallenge, certifyAnswer, certifyAppeal, certifyAppealVote,
@@ -199,12 +200,9 @@ function resolveDuelByAI(s) {
 
 /** 推进手番；若结算后进入对峙 ⇒ AI 选牌后继续推进（回合阻塞的闭环）。 */
 function advanceWithDuel(s, mode) {
-  let next = advanceTurn(s, mode);
-  if (next.duel !== null) {
-    next = resolveDuelByAI(next);
-    next = advanceTurn(next, mode);
-  }
-  return next;
+  // ⚠️ B18：委托引擎层统一出口（对峙 + 关隘闭环都在里面）——
+  //   没有关隘闭环时，AI 会在关隘格上反复行棋直到离开 ⇒ **免费穿过关隘**。
+  return advanceAuto(s, mode);
 }
 
 /** 跑一局，返回该局的统计与异常。 */
