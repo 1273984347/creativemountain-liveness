@@ -27,7 +27,7 @@ test('B39：门禁失败 ⇒ 发布检查非零，且不进入后续步骤', () 
     const fakeGate = failingScript(dir, 'fake-gate.mjs', 3);
     const res = spawnSync(process.execPath, [
       RELEASE_CHECK, '--gate=' + fakeGate, '--skip-rescan', '--scan=docs/trial-reserve-scan.json', '--baseline=' + BASELINE,
-    ], { encoding: 'utf8', shell: false, cwd: ROOT, env: { ...process.env, CM_SELFTEST: '1' } });
+    ], { encoding: 'utf8', shell: false, cwd: ROOT });
     assert.notEqual(res.status, 0, '门禁失败必须返回非零');
     const out = (res.stdout ?? '') + (res.stderr ?? '');
     assert.match(out, /发布前检查失败：门禁/, '应指明失败环节');
@@ -43,7 +43,7 @@ test('B39：重扫失败 ⇒ 发布检查非零，且不进入逐组比对', () 
     const fakeSim = failingScript(dir, 'fake-sim.mjs', 4);
     const res = spawnSync(process.execPath, [
       RELEASE_CHECK, '--skip-gate', '--sim=' + fakeSim, '--scan=docs/trial-reserve-scan.json', '--baseline=' + BASELINE,
-    ], { encoding: 'utf8', shell: false, cwd: ROOT, env: { ...process.env, CM_SELFTEST: '1' } });
+    ], { encoding: 'utf8', shell: false, cwd: ROOT });
     assert.notEqual(res.status, 0, '重扫失败必须返回非零');
     const out = (res.stdout ?? '') + (res.stderr ?? '');
     assert.match(out, /发布前检查失败：全量重扫/, '应指明失败环节');
@@ -59,7 +59,7 @@ test('B39：产物缺失 ⇒ 发布检查非零，且给出明确缺失提示', 
     const missing = join(dir, 'never-produced.json');
     const res = spawnSync(process.execPath, [
       RELEASE_CHECK, '--skip-gate', '--skip-rescan', '--scan=' + missing, '--baseline=' + BASELINE,
-    ], { encoding: 'utf8', shell: false, cwd: ROOT, env: { ...process.env, CM_SELFTEST: '1' } });
+    ], { encoding: 'utf8', shell: false, cwd: ROOT });
     assert.notEqual(res.status, 0, '产物缺失必须返回非零');
     const out = (res.stdout ?? '') + (res.stderr ?? '');
     assert.match(out, /扫描产物缺失或不可读/, '应给出明确的缺失提示');

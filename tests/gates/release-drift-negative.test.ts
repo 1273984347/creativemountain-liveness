@@ -31,7 +31,7 @@ test('B38：逐组比对在数据漂移时返回非零（漂移即失败）', ()
   const t = tamperedScan();
   try {
     const res = spawnSync(process.execPath, [COMPARE, '--scan=' + t.path, '--baseline=' + BASELINE],
-      { encoding: 'utf8', shell: false, cwd: ROOT, env: { ...process.env, CM_SELFTEST: '1' } });
+      { encoding: 'utf8', shell: false, cwd: ROOT });
     assert.notEqual(res.status, 0, '漂移时必须返回非零');
     const out = (res.stdout ?? '') + (res.stderr ?? '');
     assert.match(out, /FAIL/, '输出应说明失败');
@@ -46,7 +46,7 @@ test('B38：发布检查在漂移时返回非零（且不进入构建）', () =>
   try {
     const res = spawnSync(process.execPath, [
       RELEASE_CHECK, '--skip-gate', '--skip-rescan', '--scan=' + t.path, '--baseline=' + BASELINE,
-    ], { encoding: 'utf8', shell: false, cwd: ROOT, env: { ...process.env, CM_SELFTEST: '1' } });
+    ], { encoding: 'utf8', shell: false, cwd: ROOT });
     assert.notEqual(res.status, 0, '发布检查必须返回非零（阻断发布）');
     const out = (res.stdout ?? '') + (res.stderr ?? '');
     assert.match(out, /发布前检查失败/, '应指明失败环节');

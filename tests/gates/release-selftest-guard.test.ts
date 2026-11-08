@@ -1,6 +1,6 @@
 // 发布检查的**两条补充失败路径**（B44）：基线 groups 为空数组 / 自检绕过开关被拒绝。
 //
-// ⚠️ B24 起自检开关（`--skip-gate` / `--skip-rescan`）**仅在 `CM_SELFTEST=1` 时可用**；
+// ⚠️ B47 起：生产脚本**彻底不认识**任何自检/跳过参数 ⇒ 传入即拒绝（与环境变量无关）。
 //   否则发布检查**直接拒绝执行**（而不是静默继续）⇒ 误用/漏配环境变量 ⇒ 立刻失败。
 //
 // ⚠️ 负样本纪律：坏基线写在**隔离临时目录**；仓库侧全程只读。
@@ -28,7 +28,7 @@ test('B44：基线 groups 为空数组 ⇒ 发布检查非零，并明确说「�
     const res = spawnSync(process.execPath, [
       resolve(ROOT, 'tests', 'gates', 'release-check-selftest.mjs'),
       '--skip-gate', '--skip-rescan', '--scan=docs/trial-reserve-scan.json', '--baseline=' + bad,
-    ], { encoding: 'utf8', shell: false, cwd: ROOT, env: { ...process.env, CM_SELFTEST: '1' } });
+    ], { encoding: 'utf8', shell: false, cwd: ROOT });
     assert.notEqual(res.status, 0, '空基线必须返回非零');
     const out = (res.stdout ?? '') + (res.stderr ?? '');
     assert.match(out, /基线快照结构字段异常：groups 为空数组/, '应明确指出基线没有任何分组');
@@ -37,10 +37,10 @@ test('B44：基线 groups 为空数组 ⇒ 发布检查非零，并明确说「�
   }
 });
 
-test('B44：未设 CM_SELFTEST 时，自检绕过开关被拒绝（不静默继续）', () => {
+test('B47：自检/绕过参数一律被拒绝（与任何环境变量无关）', () => {
   const res = spawnSync(process.execPath, [
     RELEASE_CHECK, '--skip-gate', '--skip-rescan', '--scan=docs/trial-reserve-scan.json', '--baseline=' + BASELINE,
-  ], { encoding: 'utf8', shell: false, cwd: ROOT, env: { ...process.env, CM_SELFTEST: '0' } });
+  ], { encoding: 'utf8', shell: false, cwd: ROOT });
   assert.notEqual(res.status, 0, '绕过开关必须被拒绝');
   const out = (res.stdout ?? '') + (res.stderr ?? '');
   assert.match((res.stdout ?? '') + (res.stderr ?? ''), /不支持自检/, '应说明该参数已从生产脚本移除');

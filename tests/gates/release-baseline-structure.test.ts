@@ -19,7 +19,7 @@ const RELEASE_CHECK = resolve(ROOT, 'tests', 'gates', 'release-check-selftest.mj
 function check(baselinePath: string, scanPath: string): { status: number | null; out: string } {
   const res = spawnSync(process.execPath, [
     RELEASE_CHECK, '--skip-gate', '--skip-rescan', '--scan=' + scanPath, '--baseline=' + baselinePath,
-  ], { encoding: 'utf8', shell: false, cwd: ROOT, env: { ...process.env, CM_SELFTEST: '1' } });
+  ], { encoding: 'utf8', shell: false, cwd: ROOT });
   return { status: res.status, out: (res.stdout ?? '') + (res.stderr ?? '') };
 }
 
