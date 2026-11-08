@@ -706,6 +706,26 @@ export const OPS: OpHandlers = {
     return ok(withLog(state, ctx, 'place_barrier', `在第 ${p.tileIndex} 格放置封路印`));
   },
 
+  // ================= 关隘（试炼失败 → 本关改为付费）=================
+  /**
+   * 关隘试炼失败 ⇒ **本关改为付费**（规格 §3.5，B19-b）。
+   *
+   * ⚠️ 状态落在**使用者自己的 flags**（`gate_pay_<格号>`）—— 语义是「玩家 × 这座关隘」
+   *   ⇒ 无需改 Tile / IR 契约（§6.2、§6.7.1 都不动）。
+   *   ⚠️ `tileIndex` 缺省 = 使用者**当前所在格**：试炼牌可能被多座关隘引用，
+   *   写死格号会把主题包绑死在某一张棋盘上。
+   */
+  gate_fallback_pay: (ctx, p) => {
+    const pl = ctx.state.players[ctx.actor];
+    if (pl === undefined) { return fail(ctx.state, '玩家不存在'); }
+    const idx = p.tileIndex ?? pl.position;
+    const tile = ctx.state.board.tiles.find((x) => x.index === idx);
+    if (tile === undefined) { return fail(ctx.state, `无此格：${idx}`); }
+    if (tile.kind !== 'gate') { return fail(ctx.state, '当前不是关隘格'); }
+    const state = withPlayer(ctx.state, ctx.actor, { flags: { ...pl.flags, [`gate_pay_${idx}`]: true } });
+    return ok(withLog(state, ctx, 'gate_fallback_pay', `本关改为付费（${String(idx)} 号关隘）`));
+  },
+
   // ================= 判定与装备（3）=================
   modify_judgement: (ctx, p) => {
     const t = aliveTarget(ctx, p.target);

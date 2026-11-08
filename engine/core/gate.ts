@@ -68,7 +68,7 @@ export function drawTrial(state: State, actor: number, tile: Tile): GateResult {
   if (p === undefined) { return fail(state, false, '玩家不存在'); }
   const players = state.players.map((x) =>
     x.seat === actor
-      ? { ...x, flags: { ...x.flags, [`trial_${tile.index}`]: trial.id, [`gate_${tile.index}`]: true } }
+      ? { ...x, flags: { ...x.flags, [`trial_${tile.index}`]: trial.id } }
       : x,
   );
   const next: State = { ...state, players };
@@ -86,11 +86,17 @@ export function pendingGate(state: State, seat: number): Tile | null {
   const tile = state.board.tiles.find((t) => t.index === p.position);
   if (tile === undefined || tile.kind !== 'gate') { return null; }
   if (hasPassedGate(state, seat, tile.index)) { return null; }
+  // ⚠️ B19-b：已判「未通过并放行」⇒ 不再把玩家留在这座关隘上。
+  if (p.flags[`gate_fail_${tile.index}`] === true) { return null; }
   return tile;
 }
 
 /**
  * 试炼通道（规格 §3.5 B18 定案 2/3）：**公开抽牌 → 掷一次 20 面指令骰 → 执行效果树**。
+ *
+ * ⚠️ B19-b：**通过标记由本函数按结果写**（`drawTrial` 不再直接写 `gate_<index>`）——
+ *   因为试炼**可能失败**：效果树里若执行了 `gate_fallback_pay`（失败 ⇒ 本关改为付费），
+ *   则本次试炼**未通过** ⇒ 不能打通过标记。
  *
  * ⚠️ 试炼的**判定与后果完全由主题包数据表达**（`trials[].effects` + 谓词），
  *   引擎**不硬编码任何试炼文案**——引擎只负责掷骰（供 `dice_is_at_least` 取值）与执行效果树。
@@ -119,14 +125,23 @@ function trialChannel(state: State, actor: number, tile: Tile): GateResult {
   //   且只超 1 张牌 ⇒ 正是试炼牌「本关通过后抽 1 张」的效果。
   //   （与 `openHeaven` 的「天机牌发的牌立即裁」同款处理。）
   next = discardDownToLimit(next, actor);
+  // ⚠️ B19-b：**试炼失败判定** —— 效果树执行了 `gate_fallback_pay` ⇒ 本关改为付费。
+  const fallback = next.players[actor]?.flags[`gate_pay_${tile.index}`] === true;
   next = {
     ...next,
     log: [...next.log, {
       round: next.round, turnIndex: next.turnIndex, actor, kind: 'trial',
-      message: `关隘试炼：${trial.text}`, diceRoll: face,
+      message: fallback
+        ? `关隘试炼：${trial.text}——未通过，本关改为付费`
+        : `关隘试炼：${trial.text}`,
+      diceRoll: face,
     }],
   };
-  return { ok: true, state: next, passed: true, note: `试炼牌：${trial.text}` };
+  if (fallback) {
+    // 试炼未通过 ⇒ **不打通过标记**（玩家仍停在关隘，但此后只保留付费通道）。
+    return { ok: true, state: next, passed: false, note: '试炼未通过：本关改为付费' };
+  }
+  return passGate(next, actor, tile, `试炼通过：${trial.text}`);
 }
 
 /**
@@ -141,7 +156,20 @@ export function resolveGate(state: State, actor: number, channel: 'pay' | 'trial
   if (p === undefined) { return fail(state, false, '玩家不存在'); }
   const tile = pendingGate(state, actor);
   if (tile === null) { return fail(state, false, '当前不在未通过的关隘格上'); }
-  if (channel === 'pay') { return payGate(state, actor, tile); }
+  if (channel === 'pay') {
+    const fee = tile.gate?.fee ?? 0;
+    const mine = p.resource;
+    const fallback = p.flags[`gate_pay_${tile.index}`] === true;
+    if (mine < fee) {
+      if (!fallback) {
+        return fail(state, false, `灵枢不足：关隘标价 ${fee}，现有 ${mine}`);
+      }
+      // ⚠️ B19-b：本关**已改为付费**却仍付不起 ⇒ 判「未通过并放行」
+      //   （否则玩家会永远卡在这座关隘上 —— 无出路即死循环）。
+      return failGate(state, actor, tile, '本关已改为付费，但灵枢不足 ⇒ 判未通过');
+    }
+    return payGate(state, actor, tile);
+  }
   return trialChannel(state, actor, tile);
 }
 
@@ -210,6 +238,32 @@ export function resolveCompareGate(
     }],
   };
   return { ok: true, state: next, passed: false, note: '比牌未胜：退 1 格并被封口' };
+}
+
+/**
+ * 标记关隘已通过（写 `gate_<index>` 标记并留日志）。
+ */
+/**
+ * 判「未通过并放行」：退 1 格 + 被封口 + 写 `gate_fail_<index>` 标记
+ * （该标记让 `pendingGate` 不再把玩家留在这座关隘上 —— 否则没有出路 ⇒ 死循环）。
+ */
+function failGate(state: State, actor: number, tile: Tile, note: string): GateResult {
+  let next: State = {
+    ...state,
+    players: state.players.map((x) =>
+      x.seat === actor
+        ? { ...x, position: Math.max(1, x.position - 1), flags: { ...x.flags, [`gate_fail_${tile.index}`]: true } }
+        : x),
+  };
+  next = applyEffectToState({ state: next, actor }, { op: 'silence', amount: 1, target: actor });
+  next = {
+    ...next,
+    log: [...next.log, {
+      round: next.round, turnIndex: next.turnIndex, actor, kind: 'gate',
+      message: `关隘：${note}——退 1 格并被封口`,
+    }],
+  };
+  return { ok: true, state: next, passed: false, note };
 }
 
 /**

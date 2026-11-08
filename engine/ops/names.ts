@@ -19,7 +19,7 @@ export const OP_NAME_LIST: readonly OpName[] = [
   'certify_extra_signer', 'certify_free_pass', 'certify_extra_round', 'certify_forbid_challenge',
   'spirit_wheel',
   'sequence', 'conditional', 'count', 'random_from_deck',
-  'place_barrier', 'modify_judgement', 'create_card', 'equip_card',
+  'place_barrier', 'gate_fallback_pay', 'modify_judgement', 'create_card', 'equip_card',
 ];
 
 export const PREDICATE_NAME_LIST: readonly PredicateName[] = [

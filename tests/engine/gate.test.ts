@@ -13,6 +13,7 @@ import { createInitialState, type State } from '../../engine/core/state.ts';
 import { installTheme } from '../../engine/core/setup.ts';
 import { autoResolveGate, pendingGate, resolveCompareGate, resolveGate } from '../../engine/core/gate.ts';
 import { performAction } from '../../engine/core/turn-runner.ts';
+import { candidatesOf } from '../../engine/core/legal.ts';
 import type { ThemePack } from '../../engine/types/theme.ts';
 
 /** 6 号格 = 落雁关（标价 3，试炼池 t_sword / t_mirror）。 */
@@ -131,6 +132,36 @@ test('B19：出牌比对通道 —— 胜则通过、败则退 1 格并被封口
   const s3 = scene('red', 'black');
   const cardId = s3.players[0]?.hand[0]?.id ?? '';
   assert.equal(resolveCompareGate(s3, 0, cardId, 0).ok, false, '不能与自己比对');
+});
+
+test('B19-b：试炼失败 ⇒ 本关改为付费（此后只剩付费通道，付不起则判未通过放行）', () => {
+  // 场景：座 0 站在 22 号关隘（云梦渡，试炼池含 t_toll），灵枢 0 ⇒ 付费不可用 ⇒ 走试炼。
+  const theme = JSON.parse(readFileSync(resolve('themes/xianxia2026/theme.json'), 'utf8')) as ThemePack;
+  const s0 = installTheme(createInitialState({ players: 4, seed: 7, deckSize: 40 }), theme);
+  const toll = s0.decks.trial.find((c) => c.id === 't_toll');
+  assert.ok(toll !== undefined, '主题包应有 t_toll 试炼牌');
+  const scene: State = {
+    ...s0,
+    // 只留 t_toll ⇒ 抽取必中（避免随机性让断言不稳定）
+    decks: { ...s0.decks, trial: s0.decks.trial.filter((c) => c.id === 't_toll') },
+    players: s0.players.map((p) => (p.seat === 0 ? { ...p, position: 22, resource: 0 } : p)),
+  };
+  const r = resolveGate(scene, 0, 'trial');
+  assert.equal(r.ok, true, '试炼通道应被受理：' + String(r.note));
+  assert.equal(r.passed, false, '灵枢不足 ⇒ 试炼未通过');
+  assert.equal(r.state.players[0]?.flags['gate_pay_22'], true, '应标记「本关改为付费」');
+  assert.notEqual(r.state.players[0]?.flags['gate_22'], true, '未通过 ⇒ 不写通过标记');
+  // 仍停在关隘上，但**只剩付费通道**（粗筛只发 pay）。
+  assert.ok(pendingGate(r.state, 0) !== null, '未通过时玩家仍停在关隘');
+  const candidates = candidatesOf(r.state, 0).filter((a) => a.type === 'GATE_RESOLVE');
+  assert.deepEqual(candidates.map((a) => (a.type === 'GATE_RESOLVE' ? a.channel : '')), ['pay'],
+    '本关已改为付费 ⇒ 只应剩付费通道');
+  // 付费仍不足 ⇒ 判未通过并放行（不留死循环）。
+  const poor = resolveGate(r.state, 0, 'pay');
+  assert.equal(poor.ok, true);
+  assert.equal(poor.passed, false);
+  assert.equal(poor.state.players[0]?.flags['gate_fail_22'], true, '应写「未通过并放行」标记');
+  assert.equal(pendingGate(poor.state, 0), null, '放行后不再停在关隘');
 });
 
 test('B18：自动解算出口 —— 灵枢够就付费，不够走试炼', () => {

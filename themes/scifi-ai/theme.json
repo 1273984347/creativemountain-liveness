@@ -1433,7 +1433,7 @@
           "fee": 4,
           "trialIds": [
             "t_star",
-            "t_riddle"
+            "t_toll"
           ]
         }
       },
@@ -1695,12 +1695,14 @@
       ]
     },
     {
-      "id": "t_riddle",
-      "text": "回答在场任意一人的 1 个问题。",
+      "id": "t_toll",
+      "text": "出示 4 枚资源（不足则本关改为付费）。",
       "effects": [
         {
-          "op": "draw_cards",
-          "count": 1
+          "op": "conditional",
+          "pred": { "kind": "resource_at_least", "amount": 4 },
+          "then": { "op": "draw_cards", "count": 1 },
+          "else": { "op": "gate_fallback_pay" }
         }
       ]
     },

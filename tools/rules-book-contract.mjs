@@ -52,7 +52,8 @@ export const TERRAIN_CONTRACT = [
     term: 'gate',
     specName: '关隘',
     section: '### {{gate}}',
-    required: ['付费', '试炼', '试炼牌'],
+    // ⚠️ 「改为付费」是 B19-b 的试炼失败后果（规则书必须写明，否则玩家不知道有这条后果）。
+    required: ['付费', '试炼', '试炼牌', '改为付费'],
   },
   {
     term: 'peak',

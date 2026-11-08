@@ -14,11 +14,11 @@ const ctx = (state = createInitialState({ players: 3, seed: 1, deckSize: 40 }), 
 
 // ---------- 注册表完备性 ----------
 
-test('全部 57 个算子均已注册且有实现', () => {
+test('全部 58 个算子均已注册且有实现（B19-b 新增 gate_fallback_pay）', () => {
   for (const name of OP_NAME_LIST) {
     assert.equal(typeof OPS[name], 'function', `算子未注册：${name}`);
   }
-  assert.equal(OP_NAME_LIST.length, 57);
+  assert.equal(OP_NAME_LIST.length, 58);
 });
 
 test('全部 15 个谓词均已注册且有实现', () => {

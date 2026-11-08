@@ -69,6 +69,11 @@ function actionPhaseCandidates(state: State, seat: number): Action[] {
   // ⚠️ 这一分支**不受行动窗口的其它判据约束**（含 isRoundEnd）：该手番已经行动过
   //   （地形在手番末结算），若沿用行动窗口会把通道候选也一并关掉 ⇒ 关隘永远选不了。
   if (pendingGate(state, seat) !== null) {
+    // ⚠️ B19-b：本关**已改为付费**（试炼失败后）⇒ 只剩付费通道。
+    const idx = state.players[seat]?.position ?? 0;
+    if (state.players[seat]?.flags[`gate_pay_${idx}`] === true) {
+      return [{ type: 'GATE_RESOLVE', actor: seat, channel: 'pay' }];
+    }
     const out: Action[] = [
       { type: 'GATE_RESOLVE', actor: seat, channel: 'pay' },
       { type: 'GATE_RESOLVE', actor: seat, channel: 'trial' },

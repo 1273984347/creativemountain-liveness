@@ -89,6 +89,13 @@ export interface EffectMap {
   random_from_deck: { readonly count: number; readonly target?: number; readonly filter?: CardFilter };
   // ---- 棋盘 ----
   place_barrier: { readonly tileIndex: number };
+  /**
+   * 关隘试炼失败 ⇒ **本关改为付费**（规格 §3.5，B19-b）。
+   *
+   * ⚠️ `tileIndex` 缺省 = 使用者**当前所在格**（那座关隘）——
+   *   主题包的试炼牌可能被**多座关隘**引用，写死格号会绑死棋盘。
+   */
+  gate_fallback_pay: { readonly tileIndex?: number };
   // ---- 判定与装备 ----
   modify_judgement: { readonly target?: number };
   create_card: { readonly cardId: string; readonly target?: number };
@@ -151,6 +158,7 @@ export type OpName =
   | 'count'
   | 'random_from_deck'
   | 'place_barrier'
+  | 'gate_fallback_pay'
   | 'modify_judgement'
   | 'create_card'
   | 'equip_card';

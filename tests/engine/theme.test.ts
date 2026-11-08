@@ -17,8 +17,8 @@ const schema = deriveThemeSchema();
 
 // ---------- 派生器本身 ----------
 
-test('派生器从 theme.ts 解析出全部算子（57）与谓词（15）与 goal（8）', () => {
-  assert.equal(schema.opNames.length, 57);
+test('派生器从 theme.ts 解析出全部算子（58）与谓词（15）与 goal（8）', () => {
+  assert.equal(schema.opNames.length, 58);
   assert.equal(schema.predicateNames.length, 15);
   assert.equal(schema.goalKinds.length, 8);
   assert.equal(schema.cardTypes.length, 4);

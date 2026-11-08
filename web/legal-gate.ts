@@ -267,13 +267,17 @@ export function uiHasLegalTarget(state: State, seat: number, shape: UiTargetedSh
  * ⚠️ **本文件独立写一份**，不 import 引擎的 `pendingGate` —— 本文件的全部价值就是
  *   「与引擎枚举各自独立实现、再做集合相等比对」；借道引擎判据会让漂移守卫退化成恒等式。
  */
-export function pendingGateHere(state: State, seat: number): { readonly fee: number } | null {
+export function pendingGateHere(state: State, seat: number): { readonly fee: number; readonly payOnly: boolean } | null {
   const me = state.players[seat];
   if (me === undefined || !me.alive) { return null; }
   const tile = state.board.tiles.find((t) => t.index === me.position);
   if (tile === undefined || tile.kind !== 'gate') { return null; }
   if (me.flags[`gate_${String(tile.index)}`] === true) { return null; }
-  return { fee: tile.gate?.fee ?? 0 };
+  // ⚠️ B19-b：已判「未通过并放行」⇒ 不再把玩家留在这座关隘上。
+  if (me.flags[`gate_fail_${String(tile.index)}`] === true) { return null; }
+  // ⚠️ B19-b：本关已改为付费（试炼失败后）⇒ 只剩付费通道。
+  const payOnly = me.flags[`gate_pay_${String(tile.index)}`] === true;
+  return { fee: tile.gate?.fee ?? 0, payOnly };
 }
 
 /**
@@ -297,9 +301,13 @@ export function uiCandidates(state: State, seat: number): Action[] {
   const out: Action[] = [];
   // ---- 关隘面（B18）：停在未通过的关隘 ⇒ 只发两条通道候选，**替代**行动面 ----
   //   （与引擎 `actionPhaseCandidates` 同款结构：关隘面在行动窗口之外。）
-  if (pendingGateHere(state, seat) !== null) {
+  const gateFace = pendingGateHere(state, seat);
+  if (gateFace !== null) {
+    // ⚠️ B19-b：本关已改为付费 ⇒ 只发付费通道。
     out.push({ type: 'GATE_RESOLVE', actor: seat, channel: 'pay' });
-    out.push({ type: 'GATE_RESOLVE', actor: seat, channel: 'trial' });
+    if (!gateFace.payOnly) {
+      out.push({ type: 'GATE_RESOLVE', actor: seat, channel: 'trial' });
+    }
   } else if (pendingBarrierHere(state, seat) !== null) {
     // ⚠️ B18-b：裂隙面（放印 / 不放）。
     out.push({ type: 'BARRIER_RESOLVE', actor: seat, channel: 'place' });
