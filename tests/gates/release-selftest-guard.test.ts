@@ -43,6 +43,6 @@ test('B44：未设 CM_SELFTEST 时，自检绕过开关被拒绝（不静默继�
   ], { encoding: 'utf8', shell: false, cwd: ROOT, env: { ...process.env, CM_SELFTEST: '0' } });
   assert.notEqual(res.status, 0, '绕过开关必须被拒绝');
   const out = (res.stdout ?? '') + (res.stderr ?? '');
-  assert.match(out, /CM_SELFTEST=1/, '应说明绕过开关的启用条件');
+  assert.match((res.stdout ?? '') + (res.stderr ?? ''), /不支持自检/, '应说明该参数已从生产脚本移除');
   assert.doesNotMatch(out, /已跳过（自检模式/, '不得静默跳过检查');
 });

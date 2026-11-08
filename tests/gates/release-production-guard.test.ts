@@ -22,30 +22,23 @@ test('B45：生产的 release:check 不带 --selftest ⇒ 结构上无法绕过�
   assert.match(String(pkg.scripts.release ?? ''), /^npm run release:check &&/, 'release 必须先跑发布前检查');
 });
 
-test('B45：即便设了 CM_SELFTEST=1，生产脚本也拒绝跳过（无 --selftest）', () => {
-  const res = spawnSync(process.execPath, [
-    RELEASE_CHECK, '--skip-gate', '--skip-rescan', '--scan=docs/trial-reserve-scan.json',
-  ], { encoding: 'utf8', shell: false, cwd: ROOT, env: { ...process.env, CM_SELFTEST: '1' } });
-  assert.notEqual(res.status, 0, '生产脚本必须拒绝绕过');
-  const out = (res.stdout ?? '') + (res.stderr ?? '');
-  assert.match(out, /自检模式需同时满足/, '应说明双条件要求');
-  assert.doesNotMatch(out, /已跳过（自检模式/, '不得静默跳过');
+test('B46：生产脚本已彻底移除自检/跳过参数 ⇒ 传入即拒绝（非零）', () => {
+  for (const flag of ['--selftest', '--skip-gate', '--skip-rescan']) {
+    const res = spawnSync(process.execPath, [
+      RELEASE_CHECK, flag, '--scan=docs/trial-reserve-scan.json',
+    ], { encoding: 'utf8', shell: false, cwd: ROOT, env: { ...process.env, CM_SELFTEST: '1' } });
+    assert.notEqual(res.status, 0, flag + ' 必须被拒绝（生产不得有绕过入口）');
+    const out = (res.stdout ?? '') + (res.stderr ?? '');
+    assert.match(out, /不支持自检\/跳过参数/, '应说明该参数已移除');
+  }
 });
 
-test('B45：即便传了 --selftest，没有 CM_SELFTEST=1 也拒绝', () => {
-  const res = spawnSync(process.execPath, [
-    RELEASE_CHECK, '--selftest', '--skip-gate', '--skip-rescan', '--scan=docs/trial-reserve-scan.json',
-  ], { encoding: 'utf8', shell: false, cwd: ROOT, env: { ...process.env, CM_SELFTEST: '0' } });
-  assert.notEqual(res.status, 0, '缺少环境变量必须拒绝');
-  const out = (res.stdout ?? '') + (res.stderr ?? '');
-  assert.match(out, /自检模式需同时满足/, '应说明双条件要求');
-});
-
-test('B45：绕过入口集中在 tests/ 专用包装器（生产脚本无自检入口）', () => {
+test('B46：生产脚本把 --selftest / --skip-* 列入**拒绝清单**（不再是有效参数）', () => {
   const src = readFileSync(RELEASE_CHECK, 'utf8');
-  assert.ok(!/selftestMode\s*=\s*true/.test(src), '生产脚本不得内置无条件自检模式');
-  assert.ok(src.includes('--selftest'), '生产脚本须识别 --selftest 标记（与 CM_SELFTEST 组成双条件）');
+  assert.ok(src.includes("'--selftest'"), '--selftest 必须出现在生产脚本的拒绝清单里');
+  assert.ok(src.includes("'--skip-gate'"), '--skip-gate 必须出现在拒绝清单里');
+  assert.ok(src.includes("'--skip-rescan'"), '--skip-rescan 必须出现在拒绝清单里');
+  assert.match(src, /不支持自检/, '生产脚本应明确拒绝自检/跳过参数');
   const wrapper = readFileSync(SELFTEST_WRAPPER, 'utf8');
-  assert.match(wrapper, /CM_SELFTEST: '1'/, '包装器负责设置自检环境变量');
-  assert.match(wrapper, /'--selftest'/, '包装器负责传入自检标记');
+  assert.match(wrapper, /compare-scan-baseline/, '自检编排落在 tests/ 包装器里');
 });

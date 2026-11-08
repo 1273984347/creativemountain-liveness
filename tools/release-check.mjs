@@ -27,22 +27,18 @@ const GATE_PATH = argOf('gate', 'tools/gate.mjs');
 /** 模拟器路径（默认 `tests/sim/run.mjs`）—— 注入点供**负样本测试**用。 */
 const SIM_PATH = argOf('sim', 'tests/sim/run.mjs');
 /**
- * ⚠️ 自检模式开关：仅供**负样本测试**用（跳过门禁 / 跳过重扫）⇒ 生产路径不可用。
- *
- * ⚠️ B45：**双条件上锁** —— 跳过生效需**同时**满足：① `CM_SELFTEST=1` ② 显式传入 `--selftest`。
- *   ⇒ `npm run release:check`（**不带** `--selftest`）**结构上无法绕过门禁**：
- *   即使外部设了 `CM_SELFTEST=1`，也会被拒绝（而不是静默继续）。
- *   ⇒ 绕过入口统一收敛到 `tests/gates/release-check-selftest.mjs`（tests/ 专用包装器）。
+ * ⚠️ B46：**生产脚本彻底移除**自检/跳过能力 —— 不再识别 `--selftest` / `--skip-gate` / `--skip-rescan`。
+ *   ⇒ 自检能力**仅存在于 `tests/gates/release-check-selftest.mjs`**（tests/ 专用包装器）。
+ *   ⇒ 收到这些参数 ⇒ **明确拒绝并退出**（而不是忽略或静默继续）。
+ * ⚠️ 保留**路径注入**（`--gate=` / `--sim=` / `--scan=` / `--baseline=`）：它们只换输入、不跳过任何步骤 ⇒
+ *   生产链 `npm run release:check` **不带**这些参数 ⇒ 结构上无法绕过门禁。
  */
-const SELFTEST = process.env.CM_SELFTEST === '1';
-const wantsSkip = argv.includes('--skip-gate') || argv.includes('--skip-rescan');
-const selftestMode = SELFTEST && argv.includes('--selftest');
-if (wantsSkip && !selftestMode) {
-  console.error('✗ 自检模式需同时满足：CM_SELFTEST=1 且传入 --selftest（生产发布检查不得绕过门禁）');
+const REMOVED = ['--selftest', '--skip-gate', '--skip-rescan'];
+const hit = REMOVED.filter((f) => argv.includes(f));
+if (hit.length > 0) {
+  console.error('✗ 生产发布检查不支持自检/跳过参数（' + hit.join('、') + '）；自检能力仅存在于 tests/gates/release-check-selftest.mjs');
   process.exit(1);
 }
-const skipGate = selftestMode && argv.includes('--skip-gate');
-const skipRescan = selftestMode && argv.includes('--skip-rescan');
 
 /**
  * 扫描参数 —— 必须与 **B34 基线**一致。
@@ -69,16 +65,8 @@ function run(label, args) {
   }
 }
 
-if (skipGate) {
-  console.log('\n== 门禁：已跳过（自检模式，不得用于发布） ==');
-} else {
-  run('门禁（十三道）', [resolve(ROOT, GATE_PATH)]);
-}
-if (skipRescan) {
-  console.log('\n== 全量重扫：已跳过（自检模式，不得用于发布） ==');
-} else {
-  run('全量重扫（100 组 × 3000 局）', [resolve(ROOT, SIM_PATH), ...SCAN_ARGS]);
-}
+run('门禁（十三道）', [resolve(ROOT, GATE_PATH)]);
+run('全量重扫（100 组 × 3000 局）', [resolve(ROOT, SIM_PATH), ...SCAN_ARGS]);
 run('逐组比对（漂移即失败）', [
   resolve(ROOT, 'docs', '沉淀', 'compare-scan-baseline.mjs'),
   '--scan=' + SCAN_PATH,
