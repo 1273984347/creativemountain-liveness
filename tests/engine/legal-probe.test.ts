@@ -22,8 +22,10 @@ import {
 import { buildChoice, describeAction, describeState } from '../../tools/laya-probe/state-text.mjs';
 import { certClickableActions } from '../../web/ui/cert.ts';
 import {
-  certifyAnswer, certifyAppeal, certifyAppealVote, certifyChallenge, enterPendingCertification,
+  certifyAnswer, certifyAppeal, certifyAppealVote, certifyChallenge, certifySign,
+  certificationThreshold, enterPendingCertification,
 } from '../../engine/core/certification.ts';
+import { distanceToPeak } from '../../engine/core/victory.ts';
 import type { Action } from '../../engine/core/action.ts';
 import type { State } from '../../engine/core/state.ts';
 import type { Card } from '../../engine/types/theme.ts';
@@ -1208,27 +1210,40 @@ test('接线（R-1/R-2 常驻）：web/main.ts 的五处入口与 web/ui/cert.ts
 // 信息优势，P1/P2/P3/P6 的读数全部作废（读到的不是「玩家会怎么选」，而是「开了上帝视角会怎么选」）。
 //
 // 这条红线在本节做成**四层**可失败钉，缺一层都会留出一条静默的失守路径：
-//   ① 输出层：文本化结果（state 描述 + 题面 + criteria 的 key 与值）里不得出现禁止集任何字样
-//      —— 他人手牌 id/名、`state.decks.deck` 顺序、对峙双方的 `pickA`/`pickB`；
-//   ② 结构层：`tools/laya-probe/state-text.mjs` **去注释后的源码**里根本不存在对这些字段的访问。
+//   ① 输出层（**封闭词表**）：文本化结果（state 描述 + 题面 + criteria 的 key 与值）里
+//      每一段 token 都必须是公开白名单成员 —— 自己的牌 id/名、公开亮牌名、身份/阵营 id、
+//      数字、模板词。他人手牌 id/名、牌库顺序 id/名、对峙锁定牌 id 全都不在这张表里 ⇒ 自动判红；
+//      第二层再复验一次「禁止值整段等于一个 token」——两层判据不同，任何一边写坏都会红。
+//   ② 结构层：`tools/laya-probe/state-text.mjs` **去注释后的源码**里根本不存在对这些字段的访问，
+//      且访问**形状**也在白名单内（hand 按出现处逐处判、duel 按行判三种允许的形状、
+//      state 的下标只许那几处、不许起别名/解构/括号取法）。
 //      白名单必须是结构性的而不是事后过滤：事后 scrub 意味着私密信息已经在内存里被读出来过，
 //      而红线 3 要防的正是这一步；且过滤器只能按字段名过滤 ⇒「先读再洗」在源码上和
 //      「直接输出」是同一种形状（都得点名字段），故 ② 一并拦住这两种写法；
-//   ③ 牙齿：一个**故意泄漏**的朴素实现必须被同一套匹配器抓到，否则 ① 只是在测空气；
+//   ③ 牙齿：一个**故意泄漏**的朴素实现必须被同一套匹配器抓到（分隔符版**和粘连版**都要抓），
+//      否则 ① 只是在测空气；
 //   ④ 公开集完整性：只要求「不含禁止字样」的话，返回空串的实现满分通过而探针什么也拿不到
-//      ⇒ 白名单承诺的公开字段必须真的交出去（正向钉子）。
+//      ⇒ 白名单承诺的公开字段必须真的交出去（正向钉子）；本轮把设计 §4.5 欠的
+//      棋盘/地形、签印票数、复议票数、表头手番归属一并补齐。
 //
-// ⚠️ 与 brief 的两处偏离（都在报告里留证，两处都是**加强**而不是放宽）：
+// ⚠️ 与 brief 的三处偏离（都在报告里留证，三处都是**加强**而不是放宽）：
 //   · brief 用 `{ ...s, duel: { seatA: 0, seatB: 1, pickA: 'duel_secret_a', ... } }` 手拼对峙——
 //     那正是 Task 3 立的禁令（认证/山议/对峙一律走引擎入口），而且**该形状引擎永远不会产出**
 //     （`submitDuelCard` 在第二方锁定的一刻就 `settleDuel` 并把 `duel` 置 null），
 //     更要紧的是 `duel !== null ⇒ candidatesOf` 整表清零 ⇒ brief 那句
 //     `buildChoice(poisoned, 0).criteria` 恒为空对象，「题面侧不泄漏」这一半根本没在测东西。
 //     现在换成 `startDuel` + `submitDuelCard` 各锁一方的**两个**真实局面，
-//     pickA / pickB 两个字段各自都真的有可查的、互不相同的 id；
+//     pickA / pickB 两个字段各自都真的有可查的、互不相同的 id；再补一份
+//     **「对峙未决 + 认证进行中」**的局面（`duelWithCertificationScene`），把对峙期的候选侧真的跑一遍；
 //   · brief 用 `text.includes(leak)` 判泄漏。测试牌 id 是 `test_card_0..N`，`test_card_1` 是
 //     `test_card_10` 的**前缀** ⇒ 描述座 2（手牌 10–14）时，一个完全合规的实现会因为
-//     「座 0 的 id = test_card_1」被判红（假阳性），反过来也能为假阴性开路。改成整词匹配。
+//     「座 0 的 id = test_card_1」被判红（假阳性）。评审先改成「整词匹配（边界字符类）」，
+//     本轮修复再升级成**封闭词表**：边界字符类看不见 `你的手牌test_card_5test_card_9`
+//     这种粘连形状（两头邻居都是合法字符 ⇒ 两个私密同时隐形），词表法把它切成一段未知 token
+//     直接判红——牙齿用例把两份实现并排放着，谁也别想退回针子表；
+//   · brief 的 `describeAction(state, action)` 两参数签名收回为**三参数必填**（评审 6）：
+//     可选参数等于把「不许越权描述别人的动作」落在调用方纪律上，那等于没落；
+//     现在漏传在 TS 侧编译不过、在 JS 侧落进同一条越权抛错分支。
 
 /** 禁止集条目：`label` 说清属于哪一类私密信息，`value` 是不得出现在文本里的字样。 */
 interface ForbiddenEntry {
@@ -1245,23 +1260,120 @@ interface VisScene {
 }
 
 /**
- * 整词匹配的字符类：id 里可能出现的连续字符。
+ * **词表法**（评审 2：替换掉「针子 + 边界字符类」）。
  *
- * ⚠️ 刻意**不含** `-`：`actionKey` 的目标分隔符是 `->`，把 `-` 当字符合法字符的话，
- *   `play:c_fang->2` 里的 `c_fang` 会因为「后面还是字符合法字符」而判成没出现 ⇒ **漏判真泄漏**。
- *   含 `#` 是必需的：主题牌库补副本时 id 写成 `c_fang#dup1`（setup.ts 的 fillDeck），
- *   不含 `#` 就会让「文本里出现 `c_fang#dup1`」被判成「出现了另一张牌 `c_fang`」⇒ 假阳性。
+ * 判据从「禁止值有没有出现」换成「出现的每一段 token 是否都在**公开白名单**里」——封闭世界假设：
+ *   · token 字符 = id 允许字符（`0-9A-Za-z_#`）**加汉字**；其余（空格、`：`、`、`、`(`、`->`、`｜`）都是分隔符；
+ *   · 于是 `你的手牌test_card_5test_card_9` 这种**粘连**写法是一整段词表外 token ⇒ 必红。
+ *     旧针子法对它天生失明：`test_card_5` 的右邻是 `t`（合法字符）、`test_card_9` 的左邻是 `5`，
+ *     两头边界条件都不成立 ⇒ 两个私密都被判成「没出现」；而既有牙齿样本全是分隔符隔开的，所以测不到。
+ *   · 副产品：`#` 与 `-` 算不算词内字符的整套推理**整体退役**（不再需要按字符类猜边界）。
  */
-const TOKEN_CHARS = '0-9A-Za-z_#';
+const TOKEN_RUN = /[0-9A-Za-z_#\u4e00-\u9fff]+/g;
+
+/** 数字段替换用的哨兵：真实文本里不可能出现 NUL，故不会与任何 token 撞车。 */
+const NUM = '\u0000';
+
+function tokensOf(text: string): string[] {
+  return text.match(TOKEN_RUN) ?? [];
+}
+
+/** 「标签+数字」粘连形状归一：`距峰12` → `距峰`+哨兵，用来对照模板骨架白名单。 */
+function generalize(token: string): string {
+  return token.replace(/\d+/g, NUM);
+}
+
+/**
+ * **已退役**的旧匹配器（只留作对照，别再当守卫用）：整词 = 「前后都得是非 token 字符」。
+ * 保留它的唯一理由是把评审 2 的漏形钉成可执行事实——粘连写法它看不见，而词表层看得见。
+ */
+function legacyBoundaryHit(text: string, value: string): boolean {
+  if (value.length === 0) { return false; }
+  const cls = '0-9A-Za-z_#';
+  return new RegExp(`(?:^|[^${cls}])${escapeRegExp(value)}(?:$|[^${cls}])`).test(text);
+}
 
 function escapeRegExp(v: string): string {
   return v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/** 「文本里出现了这个 id / 这个名字吗」——**整词**匹配（理由见本节文件头第二处偏离）。 */
-function hasToken(text: string, value: string): boolean {
-  if (value.length === 0) { return false; }
-  return new RegExp(`(?:^|[^${TOKEN_CHARS}])${escapeRegExp(value)}(?:$|[^${TOKEN_CHARS}])`).test(text);
+/** 文本层模板里出现的**固定词**（整段出现，不含数字）。改文案必须同步这张表——有意的评审点。 */
+const TEMPLATE_WORDS: readonly string[] = [
+  // 题面与表头
+  '现在轮到该玩家行动', '应选哪个动作', '阶段', '本手行动', '轮到你了', '不是你的手番', '无人',
+  '天机', '行动', '山议', '认证', '终局',
+  // 手牌与棋盘
+  '你的手牌', '无', '红', '黑', '棋盘', '格', '峰顶', '第', '你在', '距峰顶', '地形', '山道起点',
+  // 座位画像的标签（值是公开 id，逐个进数据词表）
+  '身份', '阵营', '持印记', '待认证', '已出局',
+  // 流程面
+  '公开亮牌', '已签印', '已质疑', '签印进度', '已有', '门槛', '还差',
+  '复议中', '复议票', '第三方', '人', '已投', '未投', '推翻', '维持',
+  '山议进行中', '已投票座位',
+  // 对峙（评审 4：只报公开座位与规则本身，绝不报谁锁没锁）
+  '对峙进行中', 'vs', '双方各需锁定', '张暗牌', '揭晓前互不可见',
+  // 候选 key 的字面段（`actionKey` 的文法，设计 §4.4）
+  'move', 'ask', 'pass', 'play', 'ability', 'vote', 'gate', 'cert',
+  'sign', 'challenge', 'abstain', 'appeal', 'appealvote', 'answer', 'overturn', 'uphold', 'fail',
+  // 语义模板里的固定词
+  '行棋', '掷骰前进', '问天', '掷指令骰', '结束手番', '过隘', '以试炼牌闯关', '入口待', 'B14', '出',
+  '发动被动', '山议投座', '给座', '签印', '质疑座', '对座', '弃权', '自己申请复议', '资源',
+  '复议票', '判定座', '通过', '不通过',
+  // 已知的身份被动 id（测试面出现的两个；新增被动会红，按提示补表即可）
+  'transfer_resource', 'peek_deck',
+  // 地形 kind：`TileKind` 是主题契约里的**闭合枚举**（engine/types/theme.ts:168）⇒ 可以逐字列全
+  'plain', 'boon', 'hazard', 'rift', 'junction', 'peak',
+];
+
+/** 「标签 + 数字」粘连的模板骨架（数字已换成哨兵）。 */
+const TEMPLATE_SKELETONS: readonly string[] = [
+  `第${NUM}轮`, `第${NUM}手`, `座${NUM}`, `位${NUM}`, `距峰${NUM}`, `血${NUM}`, `资源${NUM}`,
+  `持牌${NUM}`, `装备${NUM}`, `席${NUM}`, `费${NUM}`,
+  // 动作语义里「座位号夹在中文字中间」的 shipped 措辞（评审 6 只要求改签名，没要求改文案 ⇒
+  //   文案保持原样，词表把这些粘连形状逐条列出来；新增候选文案必须同步补这里）
+  `给座${NUM}签印`, `质疑座${NUM}`, `对座${NUM}弃权`, `山议投座${NUM}`,
+  `座${NUM}推翻`, `座${NUM}维持`, `判定座${NUM}通过`, `判定座${NUM}不通过`,
+];
+
+/** 一个座位视角下的允许词表：静态模板 + 该视角下**确实公开**的数据。 */
+interface Vocabulary {
+  readonly exact: ReadonlySet<string>;
+  readonly skeletons: ReadonlySet<string>;
+}
+
+function vocabularyFor(state: State, seat: number): Vocabulary {
+  const exact = new Set<string>(TEMPLATE_WORDS);
+  for (const p of state.players) {
+    // 身份/阵营 id 全场公开（§4.1 明牌竞速）
+    exact.add(p.identityId);
+    exact.add(p.factionId);
+  }
+  for (const x of state.publicCards) {
+    exact.add(x.name); // 已揭晓的亮牌：名/色/点公开（§3.3），文本层不写 cardId
+  }
+  // ⚠️ 只有**决策座位自己**的手牌内容与 id 进词表（设计 §4.5：自己手牌对本人公开）。
+  for (const c of state.players[seat]?.hand ?? []) {
+    exact.add(c.id);
+    exact.add(c.name);
+  }
+  return { exact, skeletons: new Set(TEMPLATE_SKELETONS) };
+}
+
+/**
+ * 词表外的 token（=违规）。三层放行判据，任何一层命中即公开：
+ *   ① 逐字在词表里；② 纯数字（全场计数都是公开的）；③ 数字归一后是模板骨架。
+ * 反过来：**任何新增字段/新文案/新数据面都必须先出现在词表里**，否则这里就是红——
+ * 这正是「白名单是硬约束而不是约定」的可执行形式。
+ */
+function vocabularyViolations(text: string, vocab: Vocabulary): string[] {
+  const bad: string[] = [];
+  for (const run of tokensOf(text)) {
+    if (vocab.exact.has(run)) { continue; }
+    if (/^\d+$/.test(run)) { continue; }
+    if (vocab.skeletons.has(generalize(run))) { continue; }
+    bad.push(run);
+  }
+  return bad;
 }
 
 /** 文本化器交出去的全部文本：state 描述 + 题面指令 + criteria 的 key 与值（key 也扫，别只扫值）。 */
@@ -1325,12 +1437,44 @@ function naiveLeakyText(state: State): string {
     .filter((x) => x.length > 0).join(' | ');
 }
 
-/** 去掉注释后的源码——结构守卫只判**代码**，注释里点名禁止集字段是本仓库的写法（要说清防什么）。 */
+/**
+ * 去掉注释后的源码——结构守卫只判**代码**，注释里点名禁止集字段是本仓库的写法（要说清防什么）。
+ *
+ * ⚠️ **保守剥**（评审 7）：旧写法 `line.replace(/\/\/.*$/, '')` 会把字符串字面量里的 `//` 当成注释起点，
+ *   于是 `const s = "// 说明"; lines.push(state.duel.pickA)` 这一行被从 `//` 起**整段吃掉**——
+ *   守卫看到的是一行被抹平的代码，真违规反而变绿。**假绿比假红危险得多**，所以这里采取
+ *   「判不准就保留整行」的最保守形式：**只剥整行都是注释的行**（`//` / `/*` / `*` 起头），
+ *   行尾注释一律不剥（不写词法分析器就无法证明那个 `//` 不在字符串里）。
+ *   后果是可控的假红：把「点名禁止集字段」的注释单独成行写即可；本仓库既有风格本来就是这样。
+ *   （行首是 `*` 的行只可能是块注释的续行——乘法续行写成这样属于本仓库不存在的风格。）
+ */
 function stripJsComments(src: string): string {
-  return src.replace(/\/\*[\s\S]*?\*\//g, '')
-    .split('\n')
-    .map((line) => line.replace(/\/\/.*$/, ''))
-    .join('\n');
+  return src.split('\n').map((line) => {
+    const head = line.trimStart();
+    // 整行//注释：终点唯一（行尾），可以剥。
+    if (head.startsWith('//')) { return ''; }
+    // 块注释续行/收尾：只可能以 `*` 开头（本仓库不存在「行首 `*` 是乘法续行」那种写法）。
+    if (head.startsWith('*')) { return ''; }
+    if (head.startsWith('/*')) {
+      // 只有「整行就是一段完整块注释」才敢剥：中间还有 `*/` 的话其后就是真代码，
+      // 判不准 ⇒ 保留整行（宁可假红）。
+      const ends = head.endsWith('*/');
+      const uniqueClose = !head.slice(2, head.length - 2).includes('*/');
+      return ends && uniqueClose ? '' : line;
+    }
+    // 其余一切形状（含行尾注释、字符串/模板里的 `//`）：原样保留。
+    return line;
+  }).join('\n');
+}
+
+/**
+ * 把 `['foo']` / `["foo"]` / `` [`foo`] `` 归一成 `.foo`（评审 1）。
+ *
+ * 括号写法与点写法是同一件事的两种拼法：不先归一，`state['players'][1]['hand']` 就能绕过
+ * 所有按 `\.hand` / `state\.players[` 写的正则——**归一之后每条正则只写一份**。
+ */
+function normalizeBracketKeys(src: string): string {
+  return src.replace(/\[\s*['"`]([A-Za-z_][A-Za-z0-9_]*)['"`]\s*\]/g, '.$1');
 }
 
 /** 可见性探针牌：id 与名都是**唯一、不会与测试牌前缀撞车**的字样，专供禁止集取证。 */
@@ -1386,6 +1530,39 @@ function duelRevealedScene(): State {
   return r.state;
 }
 
+/** 对峙刚立起、**双方都还没锁**（与「一方已锁」配对：文本层不许把锁定进度写出来）。 */
+function duelOpenScene(): State {
+  const opened = startDuel(withProbeHands(mk(4, 7)), 0, 1);
+  assert.ok(opened.duel !== null, 'duelOpenScene：startDuel 必须真的立起未决对峙');
+  assert.equal(opened.duel.pickA, undefined, 'duelOpenScene：后置——双方都未锁定');
+  assert.equal(opened.duel.pickB, undefined, 'duelOpenScene：后置——双方都未锁定');
+  return opened;
+}
+
+/**
+ * 评审 4b：对峙未决 **且认证正在进行** 的局面。
+ *
+ * 为什么必须有这一份：`legal.ts:56` 的 `state.duel !== null` 把**行动窗口整体关掉**，
+ * 而 `mk` 系对峙场景里 `certification.pending === []`、`council.resolved === true` ⇒
+ * 三面全空 ⇒ 每个座位的 `buildChoice` 都交出 `criteria: {}`，「对峙期候选侧」这道面
+ * 从来没被执行过一次（泄漏测试在题面侧因此也只是在测空气）。
+ * 认证候选不看行动窗口（`certificationCandidates` 只查 pending / isCertifier），
+ * 于是这个局面对峙期照样有候选 ⇒ 文本层与预算/撞车钉子在对峙期真的被走一遍。
+ */
+function duelWithCertificationScene(): State {
+  const pending = withProbeHands(pendingScene(4, 7));
+  const opened = startDuel(pending, 1, 2);
+  assert.ok(opened.duel !== null, 'duelWithCertificationScene：startDuel 必须真的立起未决对峙');
+  const r = submitDuelCard(opened, 1, VIS_PROBE_B.id);
+  assert.ok(r.ok, 'duelWithCertificationScene：座 1 锁定亮牌必须成功：' + r.note);
+  assert.ok(r.state.duel !== null, 'duelWithCertificationScene：只锁一方 ⇒ 对峙仍未决');
+  assert.ok(r.state.certification.pending.includes(0),
+    'duelWithCertificationScene：后置——认证池必须仍在（否则候选侧依旧是空的，本场景就白造了）');
+  assert.ok(getLegalActions(r.state, 2).length > 0,
+    'duelWithCertificationScene：前置——对峙期认证人必须有候选，否则「对峙期候选侧」还是没被测到');
+  return r.state;
+}
+
 /** 取证局面集（全部引擎入口构造；只探针牌进手牌，认证/山议/对峙一律真实调用）。 */
 function visScenes(): VisScene[] {
   const passive = withPassive(mk(4, 7), 0, { op: 'transfer_resource', amount: 1 });
@@ -1406,10 +1583,12 @@ function visScenes(): VisScene[] {
     { label: '对峙·pickA 已锁', state: duelPickedAScene(), duelPicks: 1 },
     { label: '对峙·pickB 已锁', state: duelPickedBScene(), duelPicks: 1 },
     { label: '对峙·已揭晓（公开留场）', state: duelRevealedScene(), duelPicks: 0 },
+    // 评审 4b：对峙未决 + 认证进行中 ⇒ 对峙期也有候选，题面侧不再恒空
+    { label: '对峙 + 认证进行中', state: duelWithCertificationScene(), duelPicks: 1 },
   ];
 }
 
-test('可见性红线（常驻·输出层）：文本化结果不得出现禁止集任何一项', () => {
+test('可见性红线（常驻·输出层）：文本化结果只允许出现词表内的 token（封闭世界）', () => {
   for (const scene of visScenes()) {
     // 对峙锁定牌先按**字段→归属座位**独立核一遍（不借 forbiddenEntries 的过滤逻辑，免得自证）
     const duel = scene.state.duel;
@@ -1422,9 +1601,32 @@ test('可见性红线（常驻·输出层）：文本化结果不得出现禁止
         assert.ok(entries.some((e) => e.label === kind),
           `${scene.label}@座${String(seat)}：样本里缺「${kind}」⇒ 这一类断言没有可失败的形式`);
       }
-      const text = scannedText(scene.state, seat);
+      // 前提自查（词表法的唯一漏洞）：纯数字走「公开计数」这条放行通道，
+      // 所以禁止值**不许**是纯数字——今天四类样本全是 `test_card_N` / 中文名，成立；
+      // 哪天牌库改用数字 id，本条会先红，提示给数字 id 单开一张精确词表而不是放行。
       for (const entry of entries) {
-        assert.equal(hasToken(text, entry.value), false,
+        assert.equal(/^\d+$/.test(entry.value), false,
+          `${scene.label}@座${String(seat)}：禁止值「${entry.value}」是纯数字 ⇒ 会被「公开计数」通道放过，词表法须补精确匹配`);
+      }
+      // 前提自查（词表法唯一的宽松处之二）：数字归一后**恰好落进模板骨架**的禁止值必须没有
+      // （否则 `费123` 这类「长得像标签」的牌名会被骨架通道放过）。今天没有，将来出现就得收紧骨架。
+      const vocab = vocabularyFor(scene.state, seat);
+      for (const entry of entries) {
+        assert.equal(vocab.skeletons.has(generalize(entry.value)), false,
+          `${scene.label}@座${String(seat)}：禁止值「${entry.value}」数字归一后等于模板骨架 ⇒ 会被骨架通道放过，词表须收紧`);
+      }
+      const text = scannedText(scene.state, seat);
+      // 第一层（主判据，封闭世界）：每一段 token 都必须是词表成员。
+      const bad = vocabularyViolations(text, vocab);
+      assert.equal(bad.length, 0,
+        `词表外的 token（要么写了不该写的私密，要么新增了公开字段却没进白名单）：`
+        + `${Array.from(new Set(bad)).join(' | ')}\n（${scene.label}@座${String(seat)}）\n---\n${text}`);
+      // 第二层（针子的等价强化）：禁止值**整段等于一个 token** 时必红。
+      // ⚠️ 这里不再用「边界字符类」判整词（评审 2 的漏形就出在字符类上），改成与 token 逐字相等——
+      //   两层判据不同（一层看「这串是不是白名单成员」，一层看「这串是不是禁止值」），互为交叉验证。
+      const runs = tokensOf(text);
+      for (const entry of entries) {
+        assert.equal(runs.includes(entry.value), false,
           `泄漏（${scene.label}@座${String(seat)}）：${entry.label} = ${entry.value}\n---\n${text}`);
       }
     }
@@ -1440,13 +1642,13 @@ test('可见性红线（常驻·输出层）：文本化结果不得出现禁止
       if (seat === owner) { continue; }
       assert.ok(forbiddenEntries(scene, seat).some((e) => e.label === '对峙锁定牌' && e.value === pick),
         `对峙锁定牌样本缺失：座${String(seat)} 视角下 ${pick} 必须算私密`);
-      assert.equal(hasToken(scannedText(scene, seat), pick), false,
+      assert.equal(tokensOf(scannedText(scene, seat)).includes(pick), false,
         `泄漏：座${String(seat)} 的题面里出现了对峙锁定牌 ${pick}`);
     }
   }
 });
 
-test('可见性红线（常驻·牙齿）：同一套匹配器必须抓得住「把禁止字段直接写进文本」的朴素实现', () => {
+test('可见性红线（常驻·牙齿）：匹配器必须抓得住「把禁止字段直接写进文本」的朴素实现（含粘连形状）', () => {
   // 没有这一条，上面那条可能只是在测空气：匹配器写坏 / 样本取空 / 扫描文本漏了一段，都表现为「全绿」。
   const scenes: readonly (readonly [string, State])[] = [
     ['mk(4,7)', mk(4, 7)],
@@ -1456,10 +1658,14 @@ test('可见性红线（常驻·牙齿）：同一套匹配器必须抓得住「
   for (const [label, s] of scenes) {
     for (let seat = 0; seat < s.players.length; seat += 1) {
       const leaky = naiveLeakyText(s);
+      const runs = tokensOf(leaky);
       for (const entry of forbiddenEntries(s, seat)) {
-        assert.equal(hasToken(leaky, entry.value), true,
+        assert.equal(runs.includes(entry.value), true,
           `对照实现都没漏出来 ⇒ 匹配器失效（${label}@座${String(seat)}：${entry.label}=${entry.value}）`);
       }
+      // 词表层同样要在这份对照文本上判红（两层都得有牙，否则换层就换瞎）
+      assert.ok(vocabularyViolations(leaky, vocabularyFor(s, seat)).length > 0,
+        `词表层对对照实现无反应 ⇒ 白名单被写宽了（${label}@座${String(seat)}）`);
     }
   }
   // 对峙两个字段各有一条**互不相同**的真实 id 被抓住（brief 靠两个手拼常量做这件事，这里换成引擎产出的牌）
@@ -1468,36 +1674,103 @@ test('可见性红线（常驻·牙齿）：同一套匹配器必须抓得住「
   assert.ok(typeof pickA === 'string' && pickA.length > 0, '前提自查：pickA 场景必须真的锁了一张可查的牌');
   assert.ok(typeof pickB === 'string' && pickB.length > 0, '前提自查：pickB 场景必须真的锁了一张可查的牌');
   assert.notEqual(pickA, pickB, '两个 pick 的 id 必须互不相同，否则「两字段都不泄漏」只是一次检查');
-  assert.equal(hasToken(naiveLeakyText(duelPickedAScene()), pickA), true, 'pickA 必须能被对照实现抓出来');
-  assert.equal(hasToken(naiveLeakyText(duelPickedBScene()), pickB), true, 'pickB 必须能被对照实现抓出来');
-  // 前缀撞车这一类假阳性也要有正向钉子：test_card_1 不得被判成「出现在 test_card_10 里」
-  assert.equal(hasToken('play:test_card_10', 'test_card_1'), false, '整词边界：前缀不算出现');
-  assert.equal(hasToken('play:test_card_1->2', 'test_card_1'), true, '整词边界：真出现必须抓到');
+  assert.equal(tokensOf(naiveLeakyText(duelPickedAScene())).includes(pickA), true, 'pickA 必须能被对照实现抓出来');
+  assert.equal(tokensOf(naiveLeakyText(duelPickedBScene())).includes(pickB), true, 'pickB 必须能被对照实现抓出来');
+
+  // ---- 评审 2 的漏形：粘连（glued）泄漏，留成常驻牙齿，防止哪天又退回针子表 ----
+  const base = mk(4, 7);
+  const others = forbiddenEntries(base, 0).filter((e) => e.label === '他人手牌 id').map((e) => e.value);
+  assert.ok(others.length >= 2, '前提自查：粘连样本至少要有两条他人 id，实际 ' + String(others.length));
+  // ① 全粘连：`test_card_5test_card_9`——两头边界都是合法字符 ⇒ **旧针子法两个都看不见**
+  const glued = others.join('');
+  assert.equal(legacyBoundaryHit(glued, others[0] ?? ''), false,
+    '留档：旧「边界字符类」匹配器对粘连形状天生失明（这正是评审 2 要求换词表法的事实依据）');
+  assert.equal(legacyBoundaryHit(glued, others[others.length - 1] ?? ''), false, '同上：末段也看不见');
+  // ② 粘在模板词后面（最像「合规输出」的形状）：`你的手牌test_card_5test_card_9`
+  const gluedInTemplate = `你的手牌${glued}`;
+  assert.equal(legacyBoundaryHit(gluedInTemplate, others[0] ?? ''), false, '留档：旧匹配器同样看不见');
+  for (const text of [glued, gluedInTemplate]) {
+    assert.ok(vocabularyViolations(text, vocabularyFor(base, 0)).length > 0,
+      `词表层必须抓住粘连泄漏：${text}`);
+    assert.equal(tokensOf(text).some((t) => others.includes(t)), false,
+      '粘连后整段不再等于任何单条 id ⇒ 逐字 needle 相等判不出，**只有封闭词表能判**（这就是主判据换掉的理由）');
+  }
+  // 前缀撞车这一类假阳性也要有正向钉子（旧匹配器的另一颗牙，词表法下同一形状自动成立）
+  assert.equal(tokensOf('play:test_card_10').includes('test_card_1'), false, '整词边界：前缀不算出现');
+  assert.equal(tokensOf('play:test_card_1->2').includes('test_card_1'), true, '整词边界：真出现必须抓到');
 });
 
 test('可见性红线（常驻·结构层）：state-text.mjs 源码不得出现禁止集的字段访问（白名单靠不写，不靠过滤）', () => {
   const src = stripJsComments(readFileSync('tools/laya-probe/state-text.mjs', 'utf8'));
+  const code = normalizeBracketKeys(src);
   const forbidden: readonly (readonly [string, RegExp])[] = [
     ['duel.pickA（对峙锁定牌·移动方）', /\.pickA\b/],
     ['duel.pickB（对峙锁定牌·对手）', /\.pickB\b/],
-    ['state.duel（整个对峙对象）', /\bduel\b/],
     ['state.decks / decks.deck（牌库顺序）', /\bdecks?\b/],
-    ['字面座位下标取玩家（他人手牌的入口）', /state\.players\[\s*[\d-]/],
+    ['字面座位下标取玩家（他人手牌的入口）', /\bstate\.players\[\s*[-\d]/],
+    ['给 state 起别名（别名会让按标识符扫的守卫整体失明）', /(?:const|let|var)\s+\w+\s*=\s*state\s*[;]/],
+    ['从 state 解构字段（同上，且字段名不再出现在点式访问里）', /(?:const|let|var)\s*\{[^}]*\}\s*=\s*state\s*[;.]/],
+    ['从 state 的属性解构（`const { deck } = state.decks` 同族）', /(?:const|let|var)\s*\{[^}]*\}\s*=\s*state\.\w+/],
   ];
   for (const [label, re] of forbidden) {
-    assert.equal(re.test(src), false, `禁止集字段访问出现在代码里：${label}（事后过滤也算——过滤器同样要点名字段）`);
+    assert.equal(re.test(code), false, `禁止集字段访问出现在代码里：${label}（事后过滤也算——过滤器同样要点名字段）`);
   }
-  // `.hand` 是唯一合法的 hand 访问面，且只允许三种形状：持牌数（公开）、自己的手牌、actor 自己的手牌。
-  const handLines = src.split('\n').filter((line) => /\.hand\b/.test(line));
+  // 括号写法不许成为第二条通道：归一化之后仍然单独钉一次「源码里不许有 `obj['key']`」。
+  assert.equal(/\[\s*['"`][A-Za-z_]/.test(src), false,
+    '不得用 obj[\'key\'] 形式访问字段：点式访问才在白名单检查的控制范围内（要写就改回点式，让守卫看得见）');
+
+  // ———— duel：从「整词禁现」改成**行级形状白名单**（评审 4 要求把对峙写成公开事实）————
+  // 旧口径是 `\bduel\b` 一律不许出现，那等于把**公开**的 seatA/seatB 也一起禁了；
+  // 新口径更紧也更准：提到 duel 的每一行都必须是那三种形状之一，其余（起别名、解构、比 pick）全红，
+  // 而 `.pickA` / `.pickB` 由上面 forbidden 表在全源码范围内独立钉死（两道判据不互相让步）。
+  const duelLines = code.split('\n').filter((line) => /\bduel\b/.test(line));
+  const duelAllowed: readonly RegExp[] = [
+    /state\.duel !== null/,   // 只判「有没有对峙」——行动窗口口径
+    /state\.duel\.seatA/,     // 公开：移动方座位
+    /state\.duel\.seatB/,     // 公开：对手座位
+  ];
+  for (const line of duelLines) {
+    assert.ok(duelAllowed.some((re) => re.test(line)), `非白名单的 duel 访问：${line.trim()}`);
+  }
+
+  // ———— hand：从**行级**白名单升到**出现级**（评审 1）————
+  // 行级白名单的漏洞：一行里只要出现过一次合规形状（`.hand.length`），同一行的
+  // `p.hand.map((x) => x.id)` 就一起被放行（变异 M8 实证：泄漏 id 而两层守卫全绿）。
+  const handLines = code.split('\n').filter((line) => /\bhand\b/.test(line));
   assert.ok(handLines.length >= 3,
-    `前提自查：文本化器必须真的访问过 .hand（公开集里有「持牌数」与「自己手牌」两处），实际 ${String(handLines.length)} 行 ⇒ 0 行说明实现被整体摘掉了`);
-  const allowed: readonly RegExp[] = [/\.hand\.length/, /\bme\.hand\b/, /actorPlayer\.hand\.find/];
-  for (const line of handLines) {
-    assert.ok(allowed.some((re) => re.test(line)), `非白名单的 .hand 访问：${line.trim()}`);
+    `前提自查：文本化器必须真的访问过 hand（公开集里有「持牌数」与「自己手牌」两处），实际 ${String(handLines.length)} 行 ⇒ 0 行说明实现被整体摘掉了`);
+  const allowed: readonly RegExp[] = [/\.hand\.length/g, /\bme\.hand\b/g, /actorPlayer\.hand\.find/g];
+  let handFree = code;
+  for (const re of allowed) {
+    handFree = handFree.replace(re, ' ');
   }
-  // 上面那两个被放行的变量必须**逐字**绑定到「自己」，否则放行 `me.hand` 等于放行任意手牌。
-  assert.match(src, /const me = state\.players\[seat\];/, 'me 必须是**决策座位自己**（state.players[seat]）');
-  assert.match(src, /const actorPlayer = state\.players\[action\.actor\];/, 'actorPlayer 必须是**动作归属座位**（state.players[action.actor]）');
+  const residue = handFree.split('\n').filter((line) => /\bhand\b/.test(line));
+  assert.equal(residue.length, 0,
+    '非白名单的 hand 访问（解构 `const { hand } = p`、括号写法、`.hand.map` 取 id 全在内）：\n'
+    + residue.map((x) => '  ' + x.trim()).join('\n'));
+
+  // ———— state 的下标形式白名单（评审 1 的后半：括号取法）————
+  const indexExpressions = code.match(/\b[A-Za-z_$][\w$]*(?:\.[\w$]+)*(?:\?\.)?\[[^\]]*\]/g) ?? [];
+  assert.ok(indexExpressions.length >= 4,
+    `前提自查：文本化器必须存在若干下标访问供本层检查，实际只抽到 ${String(indexExpressions.length)} 处 ⇒ 抽取正则失效，本层已空转`);
+  const indexAllowed: readonly RegExp[] = [
+    /^state\.players\[seat\]$/,                 // 决策座位自己
+    /^state\.players\[action\.actor\]$/,        // 动作归属座位
+    /^state\.liveSeats\[[\w.]+\]$/,             // 活人席（公开）
+    /^state\.turnOrder\[state\.turnIndex\]$/,   // 本手行动座（公开，评审 5）
+    /^c\.judgments\[[\w.]+\]$/,                 // 判定结果（公开）
+    /^c\.appealVotes\[[\w.]+\]$/,               // 复议票（公开，评审 3）
+    /^criteria\[key\]$/,                        // 题面候选表本身
+  ];
+  for (const exp of indexExpressions) {
+    assert.ok(indexAllowed.some((re) => re.test(exp)),
+      `非白名单的 state 下标形式：${exp}（他人手牌的入口正是「换个下标写法」这一步）`);
+  }
+
+  // 上面那几个被放行的变量必须**逐字**绑定到「自己」，否则放行 `me.hand` 等于放行任意手牌。
+  assert.match(code, /const me = state\.players\[seat\];/, 'me 必须是**决策座位自己**（state.players[seat]）');
+  assert.match(code, /const actorPlayer = state\.players\[action\.actor\];/, 'actorPlayer 必须是**动作归属座位**（state.players[action.actor]）');
+  assert.match(code, /const c = state\.certification;/, 'c 必须是认证池（`c.judgments`/`c.appealVotes` 的放行全靠这条绑定）');
 });
 
 test('可见性红线（常驻·公开集完整性）：白名单字段必须真的交出去（返回空串的实现不得蒙过泄漏测试）', () => {
@@ -1509,7 +1782,11 @@ test('可见性红线（常驻·公开集完整性）：白名单字段必须真
       `资源${String(p.resource)}`, `持牌${String(p.hand.length)}`, `装备${String(p.equipment.length)}`, `席`]) {
       assert.ok(text.includes(needle), `公开画像缺字段「${needle}」（座${String(p.seat)}）：${text}`);
     }
-    assert.ok(text.includes(`身份${p.identityId}`), `身份是公开信息（§4.1 明牌竞速），必须出现：座${String(p.seat)}`);
+    assert.ok(text.includes(`身份 ${p.identityId}`), `身份是公开信息（§4.1 明牌竞速），必须出现：座${String(p.seat)}`);
+    assert.ok(text.includes(`阵营 ${p.factionId}`), `阵营是公开信息，必须出现：座${String(p.seat)}`);
+    // 评审 3：距峰顶是 MOVE 的决策要害（峰在哪、还有几格，人类玩家看得见，模型过去拿不到）
+    assert.ok(text.includes(`距峰${distanceToPeak(plain, p.seat)}`),
+      `每座都要给出距峰顶格数（座${String(p.seat)}）：${text}`);
   }
   const ownFirst = plain.players[0]?.hand[0]?.name ?? '@@空样本@@';
   assert.ok(text.includes(ownFirst), `自己的手牌必须出现，否则模型连能打什么都不知道：${text}`);
@@ -1523,6 +1800,65 @@ test('可见性红线（常驻·公开集完整性）：白名单字段必须真
   assert.match(revealed, /公开亮牌：/, '已揭晓的亮牌是公开信息（§3.3：留在场上公开，round 末清空）');
   assert.ok(revealed.includes(VIS_PROBE_A.name) && revealed.includes(VIS_PROBE_B.name),
     `公开留场的两张牌都要写出来：${revealed}`);
+
+  // ---- 评审 3 之一：棋盘格位**与地形**（设计 §4.5 公开集，过去只给了 `位N`）----
+  const board = plain.board;
+  assert.ok(text.includes(`棋盘 ${String(board.length)} 格`), `棋盘长度必须给出：${text}`);
+  assert.ok(text.includes(`峰顶 第 ${String(board.peakIndex)} 格`), `峰顶格位必须给出：${text}`);
+  assert.ok(text.includes(`你在 第 ${String(plain.players[0]?.position ?? -1)} 格`), '决策座位所在格必须给出：' + text);
+  assert.ok(text.includes('地形 山道起点'),
+    `座 0 起点在第 0 格（未上山）⇒ 地形必须是「山道起点」而不是硬塞一个 kind：${text}`);
+  const onBoard: State = { ...plain, players: plain.players.map((p) => (p.seat === 0 ? { ...p, position: 1 } : p)) };
+  const plainTileText = describeState(onBoard, 0);
+  assert.ok(plainTileText.includes('地形 plain'), `当前格地形（kind，闭合枚举）必须给出：${plainTileText}`);
+  const onPeak = describeState(pendingScene(4, 7), 0);
+  assert.ok(onPeak.includes('地形 peak'), `登顶者的当前格必须是 peak：${onPeak}`);
+  assert.ok(onPeak.includes('距峰顶 0 格'), `登顶者的距峰顶必须是 0：${onPeak}`);
+
+  // ---- 评审 3 之二：认证 pending 的**票数**（签印进度）——签印人必须知道差几票才过 ----
+  const signed = certifySign(pendingScene(4, 7), 1, 0);
+  assert.ok(signed.ok, '前提自查：签印必须落账：' + noteOf(signed.note));
+  assert.equal(signed.state.certification.signatures[0], 1, '前提自查：signatures[0] 必须已经是 1');
+  const need = certificationThreshold(signed.state, 0);
+  const progress = describeState(signed.state, 2);
+  assert.match(progress, /签印进度/, '签印进度是公开票数（§5.2），必须给出：' + progress);
+  assert.ok(progress.includes('已有 1'), `已签印数必须给出：${progress}`);
+  assert.ok(progress.includes(`门槛 ${String(need)}`), `门槛（§5.2 公式，公开）必须给出：${progress}`);
+  assert.ok(progress.includes(`还差 ${String(Math.max(0, need - 1))}`),
+    `「还差几票」是签印/质疑的决策要害，必须由公开字段算出来：${progress}`);
+
+  // ---- 评审 3 之三：复议票数 ----
+  const appealed = appealedScene(5, 7);
+  const appealVote = certifyAppealVote(appealed, 2, 0, true);
+  assert.ok(appealVote.ok, '前提自查：复议票必须落账：' + noteOf(appealVote.note));
+  const appealText = describeState(appealVote.state, 3);
+  assert.match(appealText, /复议中/, '已申请复议的座位是公开信息：' + appealText);
+  assert.ok(appealText.includes('推翻 1') && appealText.includes('维持 0'), `复议票计数必须给出：${appealText}`);
+  assert.ok(appealText.includes('第三方 3 人'), `独立第三方人数（§5.3.2 多数决的分母）必须给出：${appealText}`);
+
+  // ---- 评审 5：表头要说清「本手是谁」「是不是你的回合」；空标签不许留尾巴 ----
+  const turnSeat = plain.turnOrder[plain.turnIndex];
+  assert.ok(text.includes(`本手行动：座${String(turnSeat)}`), `表头必须点名本手行动座：${text}`);
+  assert.ok(text.includes(turnSeat === 0 ? '轮到你了' : '不是你的手番'), '表头必须说明读者是不是当前手番：' + text);
+  const otherSeat = describeState(plain, (turnSeat === 0 ? 1 : 0) as number);
+  assert.ok(otherSeat.includes('不是你的手番'), '非当前手番的座位必须被告知「现在不用你行动」：' + otherSeat);
+
+  for (const scene of visScenes()) {
+    for (let seat = 0; seat < scene.state.players.length; seat += 1) {
+      for (const line of describeState(scene.state, seat).split('\n')) {
+        assert.equal(/[：:]\s*$/.test(line), false,
+          `空标签尾巴（「你的手牌：」/「已投票座位：」这类没有内容的行）：${scene.label}@座${String(seat)}：${line}`);
+      }
+    }
+  }
+  const emptyHand: State = {
+    ...mk(4, 7),
+    players: mk(4, 7).players.map((p) => (p.seat === 0 ? { ...p, hand: [] } : p)),
+  };
+  const emptyText = describeState(emptyHand, 0);
+  assert.match(emptyText, /你的手牌：无/, '空手牌要写成「无」，不能留一个空的「你的手牌：」：' + emptyText);
+  const noVotes = describeState(councilScene(4, 7), 0);
+  assert.match(noVotes, /已投票座位：无/, '山议刚开、一张票都没有时要写成「无」：' + noVotes);
 });
 
 test('describeAction 归属守卫（常驻）：只描述 actor 自己的牌，越权座位一律抛错', () => {
@@ -1534,8 +1870,12 @@ test('describeAction 归属守卫（常驻）：只描述 actor 自己的牌，�
   // 这不是假设：`criteria` 的文本是模型**唯一**能看到动作语义的地方，
   // 一次 actor 写错就等于把他人私牌名印在题面上（红线 3），而事后没人能从文本反推它是越权来的。
   assert.throws(() => describeAction(s, wrongSeat, 0), /归属/, '传了决策座位 ⇒ actor 不符必须拒');
-  assert.match(describeAction(s, wrongSeat), new RegExp(escapeRegExp(other.name)),
-    '不传座位时按**文档化行为**只渲染 actor 自己的手牌（调用方越权由上一条的抛错拦住）');
+  // 评审 6：第三参数改成**必填**。过去它是可选的、不传就「按 actor 自己的视角渲染」，
+  // 等于把越权拦截的责任交给调用方纪律；现在 TS 侧漏传直接编译不过，JS 侧漏传也落进同一条越权分支。
+  assert.throws(() => describeAction(s, wrongSeat, undefined as unknown as number), /归属/,
+    '运行时漏传 seat ⇒ 必须抛错（不再存在「按 actor 渲染」这条无人看守的通道）');
+  assert.match(describeAction(s, wrongSeat, 1), new RegExp(escapeRegExp(other.name)),
+    'actor === seat 时按 actor 自己的手牌渲染（座 1 看自己的牌属于白名单，设计 §4.5）');
   // 手牌里没有的牌 ⇒ 抛错，不得渲染成 `undefined`（brief 的实现会在 card 缺失时 TypeError 或拼出 'undefined'）
   assert.throws(() => describeAction(s, { type: 'PLAY_CARD', actor: 0, cardId: 'no_such_card' }, 0), /手牌/);
   assert.throws(() => describeAction(s, { type: 'MOVE', actor: 99, steps: 0 } as Action, 99), /座/, 'actor 越界也要说清楚');
@@ -1609,4 +1949,83 @@ test('buildChoice：criteria 的 key 撞车必须抛错（撞车＝题面静默�
     const keys = getLegalActions(scene.state, 0).map(actionKey);
     assert.equal(new Set(keys).size, keys.length, `${scene.label}：座 0 的候选 key 必须互不相同`);
   }
+});
+
+test('对峙期（常驻·评审 4）：题面为空时要把对峙写成公开事实，并给出可分桶的 noLegalActions 标记', () => {
+  // 引擎事实（`engine/core/legal.ts` 的 `actionWindowOpen`）：`state.duel !== null` ⇒ 行动窗口整体关闭。
+  // 于是 `mk` 系对峙场景里三面全空（`certification.pending === []`、`council.resolved === true`）⇒
+  // `getLegalActions` 对每个座位都返回 `[]`、`buildChoice` 交出空 criteria。
+  // 本条钉三件事：(a) 空候选必须**可分桶**（Task 15 不得读成「模型拒答」）；
+  //              (b) 文本层必须把「谁在跟谁对峙」写出来（人类玩家看得见的事实）；
+  //              (c) 锁定进度本身**不许**从文本里反推出来（那是 DuelState 的私密）。
+  const open = duelOpenScene();
+  const picked = duelPickedAScene();
+  for (const s of [open, picked]) {
+    const duel = s.duel;
+    assert.ok(duel !== null, '前提自查：两个对峙场景都必须仍未决');
+    for (let seat = 0; seat < s.players.length; seat += 1) {
+      const text = describeState(s, seat);
+      assert.ok(text.includes(`对峙进行中：座${String(duel.seatA)} vs 座${String(duel.seatB)}`),
+        `对峙必须写成公开事实（座${String(seat)} 视角）：${text}`);
+      const choice = buildChoice(s, seat);
+      assert.equal(Object.keys(choice.criteria).length, 0,
+        `引擎口径：对峙未决 ⇒ 行动窗口关闭 ⇒ 座${String(seat)} 无候选（G-f：锁牌没有 Action 成员）`);
+      assert.equal(choice.noLegalActions, true,
+        '空候选必须带可分桶标记，否则 Task 15 的 P1/P2 会把「枚举给不出动作」读成「模型拒答」');
+    }
+  }
+  // (c) 锁定进度不可反推：文本在「有人锁定」前后必须**逐字相同**，**包括参与者本人**那一侧。
+  //     成立的前提是引擎事实：`submitDuelCard` 只往 `duel` 里写 pickA/pickB，锁定**不等于**移出手牌
+  //     （移出手牌要等 `settleDuel`）⇒ 持牌条数也不变。文本层一旦写出 pickA/pickB 的存在性
+  //     （哪怕只是一个「移动方已锁牌」的标记），这条当场红。
+  for (let seat = 0; seat < open.players.length; seat += 1) {
+    assert.equal(describeState(open, seat), describeState(picked, seat),
+      `座${String(seat)} 的文本不许泄露「有没有人已锁牌」（锁牌进度本身是 DuelState 的私密面）`);
+  }
+  // 已揭晓的场景反过来：duel 归 null ⇒ 不许再出现「对峙进行中」，而两张牌必须进公开亮牌。
+  const revealed = duelRevealedScene();
+  const revealedText = describeState(revealed, 2);
+  assert.equal(revealedText.includes('对峙进行中'), false, `结算完了还写着对峙进行中 = 说谎：${revealedText}`);
+  assert.match(revealedText, /公开亮牌：/, '结算后的两张牌必须走公开留场那条通道交出去');
+
+  // 评审 4b：对峙未决 **且** 认证进行中 ⇒ 候选侧在对峙期真的被执行（过去这道面从来没被跑到过）。
+  const both = duelWithCertificationScene();
+  assert.ok(both.duel !== null, '前提自查：对峙必须仍未决');
+  assert.ok(both.certification.pending.length > 0, '前提自查：认证池必须仍在');
+  const certifier = 2;
+  const bothChoice = buildChoice(both, certifier);
+  assert.ok(Object.keys(bothChoice.criteria).length > 0,
+    `对峙期认证人必须有候选（否则本条又退化成在测空气）：${JSON.stringify(bothChoice)}`);
+  assert.equal(bothChoice.noLegalActions, false, '有候选时标记必须是 false（两种空/非空不得混桶）');
+  assert.equal(bothChoice.criteria['cert:sign:0'], '给座0签印', '对峙期的候选语义与常规期同形');
+  // 文本层此时既说「对峙进行中」又说认证进度——两件事都在明面上，读者不会把空/非空候选误读。
+  const bothText = describeState(both, certifier);
+  assert.ok(bothText.includes('对峙进行中') && bothText.includes('签印进度'), `对峙 + 认证必须同时可见：${bothText}`);
+  // 私密侧照常：已锁定的那张暗牌 id 不许出现在任何一个座位的题面里（与 ① 同一判据，这里单点复验）。
+  const locked = both.duel.pickA ?? both.duel.pickB ?? '';
+  assert.ok(locked.length > 0, '前提自查：必须已有一方锁定');
+  for (let seat = 0; seat < both.players.length; seat += 1) {
+    assert.equal(tokensOf(scannedText(both, seat)).includes(locked), false,
+      `对峙期候选侧被测到的同时，座${String(seat)} 的题面仍不得出现锁定牌 ${locked}`);
+  }
+});
+
+test('结构守卫的注释剥离（常驻·评审 7）：判不准就保留整行——宁可假红，不可假绿', () => {
+  // 旧实现是 `line.replace(/\/\/.*$/, '')`：字符串字面量里的 `//` 会被当成注释起点，
+  // 把**同一行后面的真代码**一起吃掉 ⇒ 违规行被抹平、守卫变绿（假绿，正是最不能要的方向）。
+  assert.equal(stripJsComments('// duel.pickA 只在注释里点名').includes('pickA'), false, '纯注释行应当剥掉');
+  assert.equal(stripJsComments('   * 块注释续行里的 duel.pickB 也算注释').includes('pickB'), false, '块注释续行应当剥掉');
+  assert.equal(stripJsComments('/** 单行块注释：duel.pickA */').includes('pickA'), false, '整行块注释应当剥掉');
+  assert.equal(stripJsComments('const leak = "// duel.pickA 藏在字符串里";').includes('pickA'), true,
+    '字符串里的 `//` 不许当成注释：同一行剩下的真代码必须仍然在待扫描文本里');
+  assert.equal(stripJsComments('const a = 1; // 行尾注释点名 duel.pickB').includes('pickB'), true,
+    '行尾注释**不剥**（无法在不写词法分析器的前提下证明它不在串里）⇒ 宁可假红，把注释单独成行');
+  assert.equal(stripJsComments('const t = `a//duel.pickB`;').includes('pickB'), true, '模板串内的 `//` 同样不是注释');
+  assert.equal(stripJsComments('const m = "第一行"\n  + "//"\n  + state.decks;').includes('decks'), true,
+    '跨行拼接里出现的 `//` 不许把后面的真代码吞掉');
+  // 结构性证明：这条保守性直接决定「把违规写在可疑行上」的变异会不会溜过去。
+  assert.ok(stripJsComments('x = "//"; y = state.decks;').includes('decks'),
+    '被可疑引号保护的行必须把 `state.decks` 留在文本里（否则结构守卫能被一行字符串绕过）');
+  assert.equal(stripJsComments('x = 1;\n// state.decks 在下一行的注释里').includes('decks'), false,
+    '反向钉子：保守不等于「什么都不剥」——纯注释行仍然必须剥掉，否则本仓库的注释写法会全红');
 });
