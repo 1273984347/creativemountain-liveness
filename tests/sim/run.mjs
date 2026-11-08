@@ -39,7 +39,7 @@ const THEME_IDS = ['xianxia2026', 'scifi-ai', 'hybrid', 'urban-psych'];
 
 /** 解析命令行参数。 */
 function parseArgs(argv) {
-  const out = { games: 1000, check: false, out: null, themes: THEME_IDS, players: SCALES.map((s) => s.players), trialRate: false, trialTimes: 400, seedBase: 1000, positionSpread: false };
+  const out = { games: 1000, check: false, out: null, themes: THEME_IDS, players: SCALES.map((s) => s.players), trialRate: false, trialTimes: 400, seedBase: 1000, positionSpread: false, gateReserve: undefined, scanReserves: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--games') { out.games = Number(argv[++i]); }
@@ -54,6 +54,9 @@ function parseArgs(argv) {
     else if (a === '--seed-base') { out.seedBase = Number(argv[++i]); }
     // ⚠️ B25：位次胜率极差专项（§9.2 验收口径）
     else if (a === '--position-spread') { out.positionSpread = true; }
+    // ⚠️ B27：余量阈值（`GATE_RESOURCE_RESERVE`）**可注入** ⇒ 扫描走生产同一条代码路径
+    else if (a === '--gate-reserve') { out.gateReserve = Number(argv[++i]); }
+    else if (a === '--scan-reserves') { out.scanReserves = argv[++i].split(',').map(Number); }
   }
   return out;
 }
@@ -218,14 +221,14 @@ function resolveDuelByAI(s) {
 }
 
 /** 推进手番；若结算后进入对峙 ⇒ AI 选牌后继续推进（回合阻塞的闭环）。 */
-function advanceWithDuel(s, mode) {
+function advanceWithDuel(s, mode, opts) {
   // ⚠️ B18：委托引擎层统一出口（对峙 + 关隘闭环都在里面）——
   //   没有关隘闭环时，AI 会在关隘格上反复行棋直到离开 ⇒ **免费穿过关隘**。
-  return advanceAuto(s, mode);
+  return advanceAuto(s, mode, opts);
 }
 
 /** 跑一局，返回该局的统计与异常。 */
-function playOne(theme, players, seed) {
+function playOne(theme, players, seed, gateReserve) {
   const base = createInitialState({ players, seed, deckSize: theme.counts.deckTotal });
   let s = installTheme(base, theme);
   const anomalies = [];
@@ -251,7 +254,7 @@ function playOne(theme, players, seed) {
         const target = pickTarget(s, seat);
         s = performAction(s, seat, 'act', target === undefined ? { cardId: card.id } : { cardId: card.id, target });
       }
-      s = advanceWithDuel(s, 'standard');
+      s = advanceWithDuel(s, 'standard', { gateReserve });
       continue;
     }
     const roll = s.rng.next();
@@ -278,7 +281,7 @@ function playOne(theme, players, seed) {
         s = performAction(s, seat, 'act', target === undefined ? { cardId: card.id } : { cardId: card.id, target });
       }
     }
-    s = advanceWithDuel(s, 'standard');
+    s = advanceWithDuel(s, 'standard', { gateReserve });
     if (firstPendingSeat < 0 && s.certification.pending.length > 0) {
       firstPendingSeat = s.certification.pending[0] ?? -1;
       firstPendingRound = s.round;
@@ -303,6 +306,19 @@ function playOne(theme, players, seed) {
     liveSeats: { ...s.liveSeats },
     seatTotal: Object.values(s.liveSeats).reduce((a, b) => a + b, 0),
     abilityOps,
+    // B27：**试炼失败后的归宿**（局末从玩家 flags 推导 —— 失败必写 `gate_pay_<N>`，
+    //   最终通过 ⇒ `gate_<N>`（掏空余量仍过关），被放行 ⇒ `gate_fail_<N>`）。
+    trialFailOutcomes: s.players.map((p) => {
+      const o = { failed: false, passedAfterFail: false, releasedAfterFail: false };
+      for (const k of Object.keys(p.flags)) {
+        if (!k.startsWith('gate_pay_')) { continue; }
+        o.failed = true;
+        const idx = k.slice('gate_pay_'.length);
+        if (p.flags['gate_' + idx] === true) { o.passedAfterFail = true; }
+        if (p.flags['gate_fail_' + idx] === true) { o.releasedAfterFail = true; }
+      }
+      return o;
+    }),
     // B12：被动触发**统一从日志提取**（主动型 + 自动型同格式 `[被动:<op>]`）
     // B13：对峙次数（kind='duel' 的日志条数）—— 对峙可达性证据
     duelCount: s.log.filter((l) => l.kind === 'duel').length,
@@ -324,12 +340,12 @@ function playOne(theme, players, seed) {
  * ⚠️ seed **必须含主题 id**：否则四套主题共用同一条随机轨迹 ⇒ 统计上是
  *   「同一条轨迹的 4 份拷贝」，不是 4 个独立样本（实测四套主题数据完全相同）。
  */
-function runCell(theme, players, games, seedBase) {
+function runCell(theme, players, games, seedBase, gateReserve) {
   const results = [];
   const themeSeed = [...theme.meta.id].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) % 100000, 0);
   for (let g = 0; g < games; g++) {
     const seed = seedBase + g * 97 + players * 13 + themeSeed;
-    results.push(playOne(theme, players, seed));
+    results.push(playOne(theme, players, seed, gateReserve));
   }
   return results;
 }
@@ -354,6 +370,10 @@ function summarize(cells) {
   const trialDraws = new Map();
   const trialPasses = new Map();
   const trialGames = new Map();
+  // B27：试炼失败后果（失败 / 失败后仍通过（掏空余量）/ 失败后被放行）
+  let trialFailed = 0;
+  let failButPassed = 0;
+  let failReleased = 0;
   let total = 0;
   // ⚠️ B11 席位制：结局语义随之改变 ——
   //   `seats` = 席位制结算（**主路径**，达到回合上限即按席位数排名）；
@@ -400,6 +420,11 @@ function summarize(cells) {
     for (const id of new Set(evs.map((e) => e.id))) {
       trialGames.set(id, (trialGames.get(id) ?? 0) + 1);
     }
+    for (const o of c.trialFailOutcomes ?? []) {
+      if (o.failed) { trialFailed += 1; }
+      if (o.passedAfterFail) { failButPassed += 1; }
+      if (o.releasedAfterFail) { failReleased += 1; }
+    }
     if (c.firstPendingSeat >= 0) {
       chain.withPeak += 1;
       chain.peakRoundSum += c.firstPendingRound;
@@ -436,7 +461,7 @@ function summarize(cells) {
     avgRounds: total > 0 ? roundSum / total : 0,
     avgSeats: total > 0 ? seatTotalSum / total : 0,
     gamesWithoutSeat, seatDist, champSeatDist, abilityOps, abilityGames, duelTotal, duelGames,
-    trialDraws, trialPasses, trialGames,
+    trialDraws, trialPasses, trialGames, trialFailed, failButPassed, failReleased,
     identityWin, factionWin, seatWin, posWin, certRounds, chain, soloSeatWin, soloPosWin, soloGames,
   };
 }
@@ -605,7 +630,7 @@ function runPositionSpread(args) {
   for (const themeId of args.themes) {
     const theme = loadTheme(themeId);
     for (const players of args.players) {
-      perCell.set(themeId + ':' + players, runCell(theme, players, args.games, args.seedBase));
+      perCell.set(themeId + ':' + players, runCell(theme, players, args.games, args.seedBase, args.gateReserve));
     }
   }
   const rows = [];
@@ -653,6 +678,35 @@ function runPositionSpread(args) {
   return { rows, worst };
 }
 
+/**
+ * **余量阈值扫描**（B27）：对若干 `GATE_RESOURCE_RESERVE` 取值各跑一遍全量模拟 ⇒
+ * 打印关键指标（试炼使用率 / 失败后果 / 兜底率 / 平均席位 / 回合 / 异常）⇒ 用来**校准**阈值。
+ *
+ * ⚠️ 走**生产同一条代码路径**（`advanceAuto` 的 `gateReserve` 注入）⇒ 不另写模拟器副本。
+ */
+function runGateReserveScan(args) {
+  const games = args.games * args.players.length * args.themes.length;
+  console.log('余量阈值扫描（每档 ' + String(args.games) + ' 局 · 合计 ' + String(games) + ' 局）');
+  console.log('| 余量 | 试炼抽取 | 每千局 | 失败 | 失败后仍通过 | 被放行 | 兜底率 | 平均席位 | 平均回合 | 异常 |');
+  console.log('|---|---|---|---|---|---|---|---|---|---|');
+  for (const reserve of args.scanReserves) {
+    const cells = [];
+    for (const themeId of args.themes) {
+      const theme = loadTheme(themeId);
+      for (const players of args.players) {
+        cells.push(...runCell(theme, players, args.games, args.seedBase, reserve));
+      }
+    }
+    const st = summarize(cells);
+    const draws = [...st.trialDraws.values()].reduce((a, b) => a + b, 0);
+    const perK = (draws / Math.max(1, st.total)) * 1000;
+    console.log('| ' + String(reserve) + ' | ' + String(draws) + ' | ' + perK.toFixed(1)
+      + ' | ' + String(st.trialFailed) + ' | ' + String(st.failButPassed) + ' | ' + String(st.failReleased)
+      + ' | ' + (st.noSeatFallbackRate * 100).toFixed(1) + '% | ' + st.avgSeats.toFixed(2)
+      + ' | ' + st.avgRounds.toFixed(1) + ' | ' + String(st.anomalies) + ' |');
+  }
+}
+
 // ---------- 主流程 ----------
 const args = parseArgs(process.argv.slice(2));
 // ⚠️ B23：定向长跑模式（通过率专项平衡）—— 独立于全量模拟，提前分流。
@@ -663,6 +717,11 @@ if (args.trialRate) {
 // ⚠️ B25：位次胜率极差专项（§9.2）—— 独立于全量模拟，提前分流。
 if (args.positionSpread) {
   runPositionSpread(args);
+  process.exit(0);
+}
+// ⚠️ B27：余量阈值扫描 —— 独立于全量模拟，提前分流。
+if (args.scanReserves.length > 0) {
+  runGateReserveScan(args);
   process.exit(0);
 }
 const cells = [];
@@ -683,7 +742,7 @@ for (const themeId of args.themes) {
   }
   const themeCells = [];
   for (const players of args.players) {
-    const rs = runCell(theme, players, args.games, args.seedBase);
+    const rs = runCell(theme, players, args.games, args.seedBase, args.gateReserve);
     perCell.set(themeId + ':' + players, rs);
     themeCells.push(...rs);
     cells.push(...rs);
@@ -902,6 +961,17 @@ if (args.out !== null) {
     }
     lines.push('');
   }
+  lines.push('### 试炼失败的后果（B27）');
+  lines.push('');
+  lines.push('> **口径**：玩家 flags —— 试炼失败 ⇒ 写 `gate_pay_<N>`（本关改为付费）；其后**最终通过** ⇒ `gate_<N>`（**掏空余量仍过关**）；**被放行** ⇒ `gate_fail_<N>`。');
+  lines.push('> 这是余量规则的**真实代价**：为保留余量而试炼，失败后往往照样要付费 ⇒ 余量归零。');
+  lines.push('');
+  lines.push('| 指标 | 数值 |');
+  lines.push('|---|---|');
+  lines.push('| 试炼失败次数 | ' + String(summary.trialFailed) + ' |');
+  lines.push('| 失败后仍通过（掏空余量） | ' + String(summary.failButPassed) + ' |');
+  lines.push('| 失败后被放行 | ' + String(summary.failReleased) + ' |');
+  lines.push('');
   lines.push('## 位次胜率极差（§9.2 验收口径）');
   lines.push('');
   lines.push('> **口径**：**独赢局**口径下按人数档分组的位次胜率极差（max−min，pp）。');
@@ -1025,6 +1095,10 @@ if (args.check) {
     problems.push('未找到任何试炼牌（主题包数据异常）');
   } else if (unseen.length > 0) {
     problems.push('以下试炼牌在真实对局中一次都没被抽到：' + unseen.join('、'));
+  }
+  // ⚠️ B27：**挑战型必须真的会失败** —— 试炼若从无失败 ⇒ 已退化为「永远通过」（B26 的老问题复发）。
+  if (summary.trialFailed <= 0) {
+    problems.push('试炼在真实对局中从未失败（挑战型可能已退化为「永远通过」）');
   }
   if (problems.length > 0) {
     console.error('FAIL  ' + problems.join('；'));

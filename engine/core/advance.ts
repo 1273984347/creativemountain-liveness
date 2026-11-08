@@ -24,7 +24,11 @@ import { currentPlayer } from './round.ts';
  * ⚠️ **人类玩家不该用这个**：关隘的通道选择是玩家决策（UI 应给按钮），
  *   本函数替玩家选了「灵枢够就付费、否则走试炼」。
  */
-export function advanceAuto(state: State, mode: RuleMode): State {
+/**
+ * @param opts 可选覆盖：`gateReserve` = 关隘付费的余量门槛（默认 `GATE_RESOURCE_RESERVE`）。
+ *   ⚠️ 可注入 ⇒ 余量阈值的**多值扫描**能走生产同一条代码路径（不另写模拟器副本）。
+ */
+export function advanceAuto(state: State, mode: RuleMode, opts?: { readonly gateReserve?: number }): State {
   let next = advanceTurn(state, mode);
   // ---- 对峙闭环（B13）----
   if (next.duel !== null) {
@@ -58,7 +62,7 @@ export function advanceAuto(state: State, mode: RuleMode): State {
   // ---- 关隘付费 / 试炼通道（付费优先：灵枢够就付费，否则试炼）----
   const seatPay = currentPlayer(next);
   if (seatPay >= 0 && pendingGate(next, seatPay) !== null) {
-    next = autoResolveGate(next, seatPay);
+    next = autoResolveGate(next, seatPay, opts?.gateReserve);
     next = advanceTurn(next, mode);
   }
   // ---- 裂隙闭环（B18-b）----

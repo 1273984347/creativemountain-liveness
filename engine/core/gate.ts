@@ -19,6 +19,11 @@ import { applyEffectToState } from '../ops/registry.ts';
  *   （实测 24000 局仅 **9 次**，12 张试炼牌里 6 张一次都没出现）⇒ 试炼机制形同虚设。
  * ⚠️ 余量规则的**真实含义**：试炼失败 ⇒ 本关改为付费 ⇒ 最终仍要付费；
  *   余量不是「省下来」，而是「**先博一把**」——试炼通过还有额外收益（主题包 then 分支）。
+ *   B27 实测：试炼失败中 **99.9%** 属「掏空余量仍过关」⇒ 余量规则在**试炼路径上并不保余量**。
+ *
+ * ⚠️ **取值 2 的选取依据**（B27 扫描，6000 局/档位，走生产同一条代码路径）：
+ *   余量 0 ⇒ 试炼几乎消失（每千局 0.3 次 ⇒ 机制隐形）；余量 4 ⇒ 兜底率升到 7.9%、平均席位降到 1.41（平衡劣化）；
+ *   余量 2 ⇒ 试炼每千局 931 次（机制真实在用）、兜底率 7.1%、平均席位 1.45 ⇒ **取 2**。
  */
 export const GATE_RESOURCE_RESERVE = 2;
 
@@ -323,7 +328,10 @@ function passGate(state: State, actor: number, tile: Tile, note: string): GateRe
  *
  * 策略：**灵枢够就付费，否则走试炼**（与玩家策略同款）。
  */
-export function autoResolveGate(state: State, seat: number): State {
+/**
+ * @param reserve 余量门槛（默认 `GATE_RESOURCE_RESERVE`）—— 可注入 ⇒ 余量阈值扫描走**同一条生产路径**。
+ */
+export function autoResolveGate(state: State, seat: number, reserve = GATE_RESOURCE_RESERVE): State {
   const tile = pendingGate(state, seat);
   if (tile === null) { return state; }
   const p = state.players[seat];
@@ -334,7 +342,7 @@ export function autoResolveGate(state: State, seat: number): State {
   // ⚠️ B24：**付费后仍要留有余量**才付费 ⇒ 否则走试炼（博一把：通过有额外收益，失败则改为付费）。
   //   fallback 分支仍必须走 pay（否则又回到 B22 的死循环）。
   const channel = fallback ? 'pay'
-    : (canPayGateWithReserve(p?.resource ?? 0, fee) ? 'pay' : 'trial');
+    : (canPayGateWithReserve(p?.resource ?? 0, fee, reserve) ? 'pay' : 'trial');
   const r = resolveGate(state, seat, channel);
   return r.ok ? r.state : state;
 }
