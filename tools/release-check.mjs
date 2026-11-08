@@ -22,6 +22,10 @@ const argOf = (name, dflt) => {
 const SCAN_PATH = argOf('scan', 'docs/trial-reserve-scan.json');
 /** 基线快照路径（默认入库快照）。 */
 const BASELINE_PATH = argOf('baseline', 'docs/baselines/trial-reserve-scan-B34.json');
+/** 门禁脚本路径（默认 `tools/gate.mjs`）—— 注入点供**负样本测试**用。 */
+const GATE_PATH = argOf('gate', 'tools/gate.mjs');
+/** 模拟器路径（默认 `tests/sim/run.mjs`）—— 注入点供**负样本测试**用。 */
+const SIM_PATH = argOf('sim', 'tests/sim/run.mjs');
 /** ⚠️ 自检模式开关：仅供**负样本测试**用（跳过门禁 / 跳过重扫）⇒ 生产路径不可用。 */
 const skipGate = argv.includes('--skip-gate');
 const skipRescan = argv.includes('--skip-rescan');
@@ -54,12 +58,12 @@ function run(label, args) {
 if (skipGate) {
   console.log('\n== 门禁：已跳过（自检模式，不得用于发布） ==');
 } else {
-  run('门禁（十三道）', [resolve(ROOT, 'tools', 'gate.mjs')]);
+  run('门禁（十三道）', [resolve(ROOT, GATE_PATH)]);
 }
 if (skipRescan) {
   console.log('\n== 全量重扫：已跳过（自检模式，不得用于发布） ==');
 } else {
-  run('全量重扫（100 组 × 3000 局）', [resolve(ROOT, 'tests', 'sim', 'run.mjs'), ...SCAN_ARGS]);
+  run('全量重扫（100 组 × 3000 局）', [resolve(ROOT, SIM_PATH), ...SCAN_ARGS]);
 }
 run('逐组比对（漂移即失败）', [
   resolve(ROOT, 'docs', '沉淀', 'compare-scan-baseline.mjs'),

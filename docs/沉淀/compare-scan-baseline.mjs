@@ -19,8 +19,24 @@ const scanPath = resolve(process.cwd(), argOf('scan', 'docs/trial-reserve-scan.j
 /** 逐组比对的指标（全部原始统计量）。 */
 const KEYS = ['perK', 'failed', 'passedAfterFail', 'fallback', 'seats', 'rounds', 'anomalies'];
 
-const base = JSON.parse(readFileSync(baselinePath, 'utf8'));
-const scan = JSON.parse(readFileSync(scanPath, 'utf8'));
+/** 读 JSON；**文件缺失/不可解析** ⇒ 明确报错并 exit 1（而非抛未捕获异常）。 */
+function readJson(path) {
+  let raw;
+  try {
+    raw = readFileSync(path, 'utf8');
+  } catch {
+    console.error('FAIL  扫描产物缺失或不可读：' + path);
+    process.exit(1);
+  }
+  try {
+    return JSON.parse(raw);
+  } catch {
+    console.error('FAIL  扫描产物不是合法 JSON：' + path);
+    process.exit(1);
+  }
+}
+const base = readJson(baselinePath);
+const scan = readJson(scanPath);
 const keyOf = (g) => String(g.reserve) + '@' + String(g.seedBase);
 const mapOf = (doc) => new Map((doc.groups ?? []).map((g) => [keyOf(g), g]));
 const bm = mapOf(base);
