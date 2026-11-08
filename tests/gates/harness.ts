@@ -68,7 +68,13 @@ export function runTscIn(tsconfigPath: string): GateRun {
   return runNode([resolve('node_modules', 'typescript', 'bin', 'tsc'), '--noEmit', '--project', tsconfigPath]);
 }
 
-/** 测试门禁：node --test <glob>（glob 交由 node 自己展开，不经 shell）。 */
-export function runNodeTest(glob: string): GateRun {
-  return runNode(['--test', glob]);
+/**
+ * 测试门禁：node --test <glob...>（glob 交由 node 自己展开，不经 shell）。
+ *
+ * ⚠️ 支持**多个**位置参数：负样本有时需要「既有目录 + 一个显式探针文件」一起跑
+ *   （探针不在 glob 覆盖范围内时，只能显式点名）。
+ */
+export function runNodeTest(glob: string | readonly string[]): GateRun {
+  const globs = typeof glob === 'string' ? [glob] : glob;
+  return runNode(['--test', ...globs]);
 }

@@ -12,8 +12,17 @@ import { resolve } from 'node:path';
 
 import { runTscIn, runNodeTest } from './harness.ts';
 
-/** 测试探针文件（同上，禁用 `_` 前缀）。 */
-const TEST_PROBE = resolve(process.cwd(), 'tests', 'engine', 'negprobe.test.ts');
+/**
+ * 测试探针文件 —— 放在工程根的 `.probe/` 下，**不在 `tests/` 内**。
+ *
+ * ⚠️ 为什么不在 `tests/` 内：门禁②的 glob 会扫到 `tests/` 下所有 `*.test.ts` 文件 ⇒
+ *   探针若落在 `tests/` 下，**并行跑的另一个 test runner 会扫到它**
+ *   ⇒ 那个「故意失败」的探针会让别人的门禁瞬时假红。
+ *   （实测：本批的独立盲审与门禁并发时撞上过一次全量测试假红。）
+ *   ⇒ 探针与隔离目录都移到 `.probe/` ⇒ glob 扫不到 ⇒ 并行安全。
+ */
+const PROBE_DIR = resolve(process.cwd(), '.probe');
+const TEST_PROBE = resolve(PROBE_DIR, 'negprobe.ts');
 /** 只跑 engine 目录，避免自检用例递归触发自身。 */
 const ENGINE_GLOB = 'tests/engine/**/*.test.ts';
 
@@ -78,22 +87,24 @@ test('负样本：类型门禁对类型错误判红，恢复后判绿', { concur
 test('负样本：测试门禁对失败用例判红，恢复后判绿', { concurrency: false }, () => {
   cleanup(TEST_PROBE);
   try {
+    mkdirSync(PROBE_DIR, { recursive: true });
     writeFileSync(
       TEST_PROBE,
       "import { test } from 'node:test';\nimport assert from 'node:assert/strict';\n" +
         "test('故意失败的负样本', () => { assert.equal(1, 2); });\n",
       'utf8'
     );
-    const broken = runNodeTest(ENGINE_GLOB);
+    // ⚠️ 探针**显式点名**（它不在任何 glob 覆盖范围内）⇒ 既有 engine 用例 + 探针一起跑。
+    const broken = runNodeTest([ENGINE_GLOB, TEST_PROBE]);
     assert.notEqual(broken.code, 0, '注入失败用例后测试门禁必须判红');
 
     // ⚠️ 恢复后的断言用**自包含的临时用例目录**，不依赖全局 engine 绿灯——
     // 否则并行开发中的中间态失败会让本负样本假红（门禁自证不该依赖被检对象的状态）。
     cleanup(TEST_PROBE);
-    const isolated = resolve(process.cwd(), 'tests', 'gates', '__isolated');
+    const isolated = resolve(PROBE_DIR, 'isolated');
     mkdirSync(isolated, { recursive: true });
     try {
-      const isolatedGlob = 'tests/gates/__isolated/**/*.test.ts';
+      const isolatedGlob = '.probe/isolated/**/*.test.ts';
       const restored = runNodeTest(isolatedGlob);
       assert.equal(restored.code, 0, '移除失败用例后测试门禁必须判绿');
     } finally {

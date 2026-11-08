@@ -13,3 +13,6 @@ docs/trial-reserve-scan.json
 engine/negprobe.ts
 tests/engine/negprobe.test.ts
 tests/gates/__isolated_tsc/
+
+# 门禁自检的探针与隔离目录（B51：移出 tests/ ⇒ 不被门禁②的 glob 扫到 ⇒ 并行假红）
+.probe/

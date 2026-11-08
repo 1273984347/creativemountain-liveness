@@ -67,8 +67,10 @@ test('B51：扫描盲区守卫 —— 跳过目录内的已入库文件必须登
     t.skip('无 git 元数据（隔离副本）⇒ 无法判定「已入库」集合 ⇒ 本守卫不执行（跳过状态可见，非静默通过）');
     return;
   }
+  // ⚠️ 跳过规则在**任意深度**都生效（扫描器遇到任意层级的跳过目录名就跳过）
+  //   ⇒ 守卫必须按**每一段**判定，只看顶层会漏掉嵌套位置（如 docs/批次/x/print/…）。
   const inSkip = trackedFiles(ROOT)
-    .filter((rel) => SKIP_DIRS.has(rel.split('/')[0] ?? ''))
+    .filter((rel) => rel.split('/').some((seg) => SKIP_DIRS.has(seg)))
     .sort();
   assert.deepEqual(
     inSkip,
