@@ -296,7 +296,10 @@ export function autoResolveGate(state: State, seat: number): State {
   if (tile === null) { return state; }
   const p = state.players[seat];
   const fee = tile.gate?.fee ?? 0;
-  const channel = p !== undefined && p.resource >= fee ? 'pay' : 'trial';
+  // ⚠️ B22：**已转为付费**（试炼失败后）⇒ 只能走付费通道；付不起时 resolveGate('pay')
+  //   会判「未通过并放行」⇒ 否则 AI 会反复试炼同一张失败牌 ⇒ **死循环**（实测：超 584 步）。
+  const fallback = p !== undefined && p.flags[`gate_pay_${tile.index}`] === true;
+  const channel = (p !== undefined && p.resource >= fee) || fallback ? 'pay' : 'trial';
   const r = resolveGate(state, seat, channel);
   return r.ok ? r.state : state;
 }

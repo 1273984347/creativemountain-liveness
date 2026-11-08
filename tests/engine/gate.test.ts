@@ -30,6 +30,15 @@ function gateScene(resource = 10): State {
   };
 }
 
+/**
+ * 只保留指定试炼牌 ⇒ 让「抽哪张」变成确定。
+ *
+ * ⚠️ B22 起试炼是**挑战型**（可能失败）⇒ 涉及抽牌结果的断言必须固定牌堆，否则随机 ⇒  flaky。
+ */
+function onlyTrials(s: State, ids: readonly string[]): State {
+  return { ...s, decks: { ...s.decks, trial: s.decks.trial.filter((c) => ids.includes(c.id)) } };
+}
+
 test('B18：停在未通过的关隘 ⇒ 待过闸判定成立；通过后失效', () => {
   const s = gateScene();
   const tile = pendingGate(s, 0);
@@ -61,7 +70,8 @@ test('B18：付费通道 —— 灵枢不足 ⇒ 拒绝且状态不变', () => {
 });
 
 test('B18：试炼通道 —— 公开抽牌 + 执行效果树 + 记通过标记', () => {
-  const s = gateScene(1);
+  // ⚠️ B22：试炼已是**挑战型**（可能失败）⇒ 固定「只留一张必过的牌」保持确定性。
+  const s = onlyTrials(gateScene(10), ['t_oath']);
   const r = resolveGate(s, 0, 'trial');
   assert.equal(r.ok, true, '试炼通道应通过：' + String(r.note));
   const p0 = r.state.players[0];
@@ -135,22 +145,24 @@ test('B19：出牌比对通道 —— 胜则通过、败则退 1 格并被封口
 });
 
 test('B19-b：试炼失败 ⇒ 本关改为付费（此后只剩付费通道，付不起则判未通过放行）', () => {
-  // 场景：座 0 站在 22 号关隘（云梦渡，试炼池含 t_toll），灵枢 0 ⇒ 付费不可用 ⇒ 走试炼。
+  // 场景：座 0 站在 30 号关隘（B22 后 t_toll 在其试炼池）。
+  // ⚠️ 只有 **7–8 人局**才是 36 格 / 4 座关隘（规模表 §8 gateCount=4）⇒ 本场景用 8 人局；
+  //   4 人局只有 28 格 / 3 座关隘，30 号格会被 fitBoard **降级为普通格** ⇒ 根本不是关隘。，灵枢 0 ⇒ 付费不可用 ⇒ 走试炼。
   const theme = JSON.parse(readFileSync(resolve('themes/xianxia2026/theme.json'), 'utf8')) as ThemePack;
-  const s0 = installTheme(createInitialState({ players: 4, seed: 7, deckSize: 40 }), theme);
+  const s0 = installTheme(createInitialState({ players: 8, seed: 7, deckSize: 40 }), theme);
   const toll = s0.decks.trial.find((c) => c.id === 't_toll');
   assert.ok(toll !== undefined, '主题包应有 t_toll 试炼牌');
   const scene: State = {
     ...s0,
     // 只留 t_toll ⇒ 抽取必中（避免随机性让断言不稳定）
     decks: { ...s0.decks, trial: s0.decks.trial.filter((c) => c.id === 't_toll') },
-    players: s0.players.map((p) => (p.seat === 0 ? { ...p, position: 22, resource: 0 } : p)),
+    players: s0.players.map((p) => (p.seat === 0 ? { ...p, position: 30, resource: 0 } : p)),
   };
   const r = resolveGate(scene, 0, 'trial');
   assert.equal(r.ok, true, '试炼通道应被受理：' + String(r.note));
   assert.equal(r.passed, false, '灵枢不足 ⇒ 试炼未通过');
-  assert.equal(r.state.players[0]?.flags['gate_pay_22'], true, '应标记「本关改为付费」');
-  assert.notEqual(r.state.players[0]?.flags['gate_22'], true, '未通过 ⇒ 不写通过标记');
+  assert.equal(r.state.players[0]?.flags['gate_pay_30'], true, '应标记「本关改为付费」');
+  assert.notEqual(r.state.players[0]?.flags['gate_30'], true, '未通过 ⇒ 不写通过标记');
   // 仍停在关隘上，但**只剩付费通道**（粗筛只发 pay）。
   assert.ok(pendingGate(r.state, 0) !== null, '未通过时玩家仍停在关隘');
   const candidates = candidatesOf(r.state, 0).filter((a) => a.type === 'GATE_RESOLVE');
@@ -160,7 +172,7 @@ test('B19-b：试炼失败 ⇒ 本关改为付费（此后只剩付费通道，�
   const poor = resolveGate(r.state, 0, 'pay');
   assert.equal(poor.ok, true);
   assert.equal(poor.passed, false);
-  assert.equal(poor.state.players[0]?.flags['gate_fail_22'], true, '应写「未通过并放行」标记');
+  assert.equal(poor.state.players[0]?.flags['gate_fail_30'], true, '应写「未通过并放行」标记');
   assert.equal(pendingGate(poor.state, 0), null, '放行后不再停在关隘');
 });
 
@@ -168,7 +180,8 @@ test('B18：自动解算出口 —— 灵枢够就付费，不够走试炼', () 
   const rich = autoResolveGate(gateScene(10), 0);
   assert.equal(rich.players[0]?.flags[`gate_${String(GATE_INDEX)}`], true);
   assert.equal(rich.players[0]?.resource, 10 - GATE_FEE, '灵枢够 ⇒ 自动付费');
-  const poor = autoResolveGate(gateScene(0), 0);
+  // ⚠️ B22：灵枢不足 ⇒ 自动走试炼；试炼已是挑战型 ⇒ 固定「只留一张必过的牌」（t_oath 需灵枢 ≥ 2）。
+  const poor = autoResolveGate(onlyTrials(gateScene(2), ['t_oath']), 0);
   assert.equal(poor.players[0]?.flags[`gate_${String(GATE_INDEX)}`], true, '灵枢不足 ⇒ 自动走试炼');
-  assert.equal(poor.players[0]?.resource, 0, '试炼通道不扣灵枢');
+  assert.equal(poor.players[0]?.resource, 2, '试炼通道不扣灵枢（灵枢 2 原样保留）');
 });

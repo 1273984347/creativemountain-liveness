@@ -1283,10 +1283,7 @@
         "name": "落雁关",
         "gate": {
           "fee": 3,
-          "trialIds": [
-            "t_sword",
-            "t_mirror"
-          ]
+          "trialIds": ["t_mirror", "t_sword", "t_oath"]
         }
       },
       {
@@ -1342,7 +1339,7 @@
         "index": 14,
         "kind": "gate",
         "name": "朝元关",
-        "gate": { "fee": 4, "trialIds": ["t_star", "t_toll"] }
+        "gate": { "fee": 4, "trialIds": ["t_wind", "t_sutra", "t_stone"] }
       },
       {
         "index": 15,
@@ -1385,10 +1382,7 @@
         "name": "云梦渡",
         "gate": {
           "fee": 4,
-          "trialIds": [
-            "t_star",
-            "t_toll"
-          ]
+          "trialIds": ["t_mantra", "t_silent", "t_vital"]
         }
       },
       {
@@ -1426,7 +1420,7 @@
         "index": 30,
         "kind": "gate",
         "name": "镇岳关",
-        "gate": { "fee": 5, "trialIds": ["t_star", "t_toll"] }
+        "gate": { "fee": 5, "trialIds": ["t_empty", "t_star", "t_toll"] }
       },
       { "index": 31, "kind": "plain", "name": "第 31 段" },
       { "index": 32, "kind": "plain", "name": "第 32 段" },
@@ -1545,8 +1539,30 @@
   ],
   "trials": [
     {
+      "id": "t_mirror",
+      "text": "展示任意 1 张手牌（手里要有移动牌）。",
+      "effects": [
+        {
+          "op": "conditional",
+          "pred": {
+            "kind": "has_card",
+            "filter": {
+              "type": "motion"
+            }
+          },
+          "then": {
+            "op": "draw_cards",
+            "count": 1
+          },
+          "else": {
+            "op": "gate_fallback_pay"
+          }
+        }
+      ]
+    },
+    {
       "id": "t_sword",
-      "text": "展示 2 张同色手牌（红或黑皆可）。",
+      "text": "展示 2 张同色手牌（手里要有红牌）。",
       "effects": [
         {
           "op": "conditional",
@@ -1561,19 +1577,180 @@
             "count": 1
           },
           "else": {
-            "op": "draw_cards",
-            "count": 1
+            "op": "gate_fallback_pay"
           }
         }
       ]
     },
     {
-      "id": "t_mirror",
-      "text": "展示任意 1 张手牌并说明其用途。",
+      "id": "t_oath",
+      "text": "立誓：本关通过后免疫封口 1 回合（身上至少 2 枚灵枢）。",
       "effects": [
         {
-          "op": "draw_cards",
-          "count": 1
+          "op": "conditional",
+          "pred": {
+            "kind": "resource_at_least",
+            "amount": 2
+          },
+          "then": {
+            "op": "immunity",
+            "status": "silence",
+            "amount": 1
+          },
+          "else": {
+            "op": "gate_fallback_pay"
+          }
+        }
+      ]
+    },
+    {
+      "id": "t_wind",
+      "text": "顺风：掷指令骰 ≥ 6，本关通过后额外获得 1 枚灵枢。",
+      "effects": [
+        {
+          "op": "conditional",
+          "pred": {
+            "kind": "dice_is_at_least",
+            "amount": 6,
+            "faces": 20
+          },
+          "then": {
+            "op": "gain_resource",
+            "amount": 1
+          },
+          "else": {
+            "op": "gate_fallback_pay"
+          }
+        }
+      ]
+    },
+    {
+      "id": "t_sutra",
+      "text": "抄经：本关通过后抽 1 张牌（手里要有攻击牌）。",
+      "effects": [
+        {
+          "op": "conditional",
+          "pred": {
+            "kind": "has_card",
+            "filter": {
+              "type": "attack"
+            }
+          },
+          "then": {
+            "op": "draw_cards",
+            "count": 1
+          },
+          "else": {
+            "op": "gate_fallback_pay"
+          }
+        }
+      ]
+    },
+    {
+      "id": "t_stone",
+      "text": "养石：本关通过后恢复 1 点体力（体力不低于 5）。",
+      "effects": [
+        {
+          "op": "conditional",
+          "pred": {
+            "kind": "hp_at_least",
+            "amount": 5
+          },
+          "then": {
+            "op": "heal",
+            "amount": 1
+          },
+          "else": {
+            "op": "gate_fallback_pay"
+          }
+        }
+      ]
+    },
+    {
+      "id": "t_mantra",
+      "text": "持咒：本关通过后获得 1 点护盾（手里要有黑牌）。",
+      "effects": [
+        {
+          "op": "conditional",
+          "pred": {
+            "kind": "has_card",
+            "filter": {
+              "color": "black"
+            }
+          },
+          "then": {
+            "op": "shield",
+            "amount": 1
+          },
+          "else": {
+            "op": "gate_fallback_pay"
+          }
+        }
+      ]
+    },
+    {
+      "id": "t_silent",
+      "text": "缄默：本关通过后免疫减速 1 回合（手里要有防御牌）。",
+      "effects": [
+        {
+          "op": "conditional",
+          "pred": {
+            "kind": "has_card",
+            "filter": {
+              "type": "defense"
+            }
+          },
+          "then": {
+            "op": "immunity",
+            "status": "slow",
+            "amount": 1
+          },
+          "else": {
+            "op": "gate_fallback_pay"
+          }
+        }
+      ]
+    },
+    {
+      "id": "t_vital",
+      "text": "固元：本关通过后免疫中毒 1 回合（手里要有功能牌）。",
+      "effects": [
+        {
+          "op": "conditional",
+          "pred": {
+            "kind": "has_card",
+            "filter": {
+              "type": "utility"
+            }
+          },
+          "then": {
+            "op": "immunity",
+            "status": "poison",
+            "amount": 1
+          },
+          "else": {
+            "op": "gate_fallback_pay"
+          }
+        }
+      ]
+    },
+    {
+      "id": "t_empty",
+      "text": "空过：身上至少 3 枚灵枢才能过关——通过后额外获得 1 枚灵枢。",
+      "effects": [
+        {
+          "op": "conditional",
+          "pred": {
+            "kind": "resource_at_least",
+            "amount": 3
+          },
+          "then": {
+            "op": "gain_resource",
+            "amount": 1
+          },
+          "else": {
+            "op": "gate_fallback_pay"
+          }
         }
       ]
     },
@@ -1593,8 +1770,7 @@
             "amount": 1
           },
           "else": {
-            "op": "silence",
-            "amount": 1
+            "op": "gate_fallback_pay"
           }
         }
       ]
@@ -1605,92 +1781,17 @@
       "effects": [
         {
           "op": "conditional",
-          "pred": { "kind": "resource_at_least", "amount": 4 },
-          "then": { "op": "draw_cards", "count": 1 },
-          "else": { "op": "gate_fallback_pay" }
-        }
-      ]
-    },
-    {
-      "id": "t_wind",
-      "text": "本关通过后额外获得 1 枚灵枢。",
-      "effects": [
-        {
-          "op": "gain_resource",
-          "amount": 1
-        }
-      ]
-    },
-    {
-      "id": "t_stone",
-      "text": "本关通过后恢复 1 点体力。",
-      "effects": [
-        {
-          "op": "heal",
-          "amount": 1
-        }
-      ]
-    },
-    {
-      "id": "t_sutra",
-      "text": "本关通过后抽 1 张牌。",
-      "effects": [
-        {
-          "op": "draw_cards",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "id": "t_mantra",
-      "text": "本关通过后获得 1 点护盾。",
-      "effects": [
-        {
-          "op": "shield",
-          "amount": 1
-        }
-      ]
-    },
-    {
-      "id": "t_oath",
-      "text": "本关通过后免疫封口 1 回合。",
-      "effects": [
-        {
-          "op": "immunity",
-          "status": "silence",
-          "amount": 1
-        }
-      ]
-    },
-    {
-      "id": "t_silent",
-      "text": "本关通过后免疫减速 1 回合。",
-      "effects": [
-        {
-          "op": "immunity",
-          "status": "slow",
-          "amount": 1
-        }
-      ]
-    },
-    {
-      "id": "t_vital",
-      "text": "本关通过后免疫中毒 1 回合。",
-      "effects": [
-        {
-          "op": "immunity",
-          "status": "poison",
-          "amount": 1
-        }
-      ]
-    },
-    {
-      "id": "t_empty",
-      "text": "本关通过后什么也不发生——但你还在。",
-      "effects": [
-        {
-          "op": "gain_resource",
-          "amount": 1
+          "pred": {
+            "kind": "resource_at_least",
+            "amount": 4
+          },
+          "then": {
+            "op": "draw_cards",
+            "count": 1
+          },
+          "else": {
+            "op": "gate_fallback_pay"
+          }
         }
       ]
     }
