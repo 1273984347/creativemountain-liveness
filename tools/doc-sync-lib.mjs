@@ -428,3 +428,9 @@ export function checkExemptSyntax(spec) {
     detail: bad.join('; '),
   };
 }
+
+// ---------- C10 规则书地形覆盖（B16）----------
+//
+// 实现放在 `tools/rules-book-contract.mjs`（地形契约的**单一事实源**），
+// 这里只做 re-export，保持「逻辑在 doc-sync-lib，便于被测试直接 import」的既有约定。
+export { checkRulesBookTerrain } from './rules-book-contract.mjs';

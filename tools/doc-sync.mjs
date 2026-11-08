@@ -5,13 +5,13 @@
 //
 // 逻辑在 doc-sync-lib.mjs（本文件只负责装配与报告，便于被测试直接 import）。
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import {
   readSpec, unionMembers, checkFieldNames, checkScaleValues, checkOps,
   checkPredicates, checkGoals, checkExemptSyntax, checkDuplicateRows, checkCoverageBoundaries,
-  checkStateContract,
+  checkStateContract, checkRulesBookTerrain,
 } from './doc-sync-lib.mjs';
 import { COVERAGE_BOUNDARIES } from './coverage-boundaries.mjs';
 import { STATE_FIELD_NAMES } from '../engine/core/state-fields.mjs';
@@ -24,6 +24,10 @@ const NON_OPS = new Set([...PREDICATE_NAMES, ...GOAL_KINDS]);
 
 const spec = readSpec();
 
+// 规则书叙述模板（**入库源**，渲染前的带占位符版本）—— C10 的校验对象。
+const narrationPath = resolve('print', '规则书叙述.md');
+const narration = existsSync(narrationPath) ? readFileSync(narrationPath, 'utf8') : '';
+
 const checks = [
   checkFieldNames(spec),
   checkScaleValues(spec),
@@ -34,6 +38,7 @@ const checks = [
   checkDuplicateRows(spec),
   checkCoverageBoundaries(spec, COVERAGE_BOUNDARIES.map((b) => b.id)),
   checkStateContract(spec, STATE_FIELD_NAMES),
+  checkRulesBookTerrain(spec, narration),
 ];
 
 const failed = checks.filter((c) => !c.ok);

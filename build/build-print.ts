@@ -17,6 +17,9 @@ import { tmpdir } from 'node:os';
 import { boardSvg, cardRowSvg, cardSvg, certCardSvg, chipSvg, factionSvg, heavenSvg, identitySvg, trialSvg, term } from './print-parts.ts';
 import { cardsTable, factionsTable, identitiesTable, instructionTable, scalesTable } from './print-rules.ts';
 import { esc } from './print-templates.ts';
+// 叙述渲染已抽到独立模块（B16）—— 支持三级小节 / 表格 / 行内粗体，且可被测试直接 import。
+import { narrationHtml } from './narration.ts';
+export { narrationHtml };
 import type { IrDocument } from '../engine/types/ir.ts';
 
 const ROOT = process.cwd();
@@ -61,6 +64,12 @@ export function renderNarration(template: string, ir: IrDocument): string {
     peak: g.peak ?? '峰顶',
     path: g.path ?? '山道',
     player: g.player ?? '玩家',
+    // 地形术语（B16 规则书地形章需要）—— 缺键回退通用词。
+    plain: g.plain ?? '平原',
+    boon: g.boon ?? '福地',
+    hazard: g.hazard ?? '险径',
+    rift: g.rift ?? '裂隙',
+    branch: g.branch ?? '支路',
   };
   let out = template;
   for (const [k, v] of Object.entries(map)) {
@@ -123,6 +132,7 @@ body { margin:0; font-family: 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif;
 .cover p { font-size:10pt; color:#6a5f52; max-width:120mm; line-height:1.8; text-align:center; }
 h2.ch { font-size:14pt; color:#8a6420; margin:8mm 0 3mm; border-bottom:1px solid #c9b89c; padding-bottom:1.5mm; }
 h3.ch { font-size:11pt; color:#3a322a; margin:5mm 0 2mm; }
+h4.ch { font-size:9.5pt; color:#5a4a3a; margin:4mm 0 1.5mm; }
 p { font-size:9.5pt; line-height:1.75; margin:2mm 0; }
 ol, ul { font-size:9.5pt; line-height:1.75; margin:2mm 0 2mm 6mm; padding:0; }
 table.grid { width:100%; border-collapse:collapse; font-size:8pt; margin:3mm 0; }
@@ -134,38 +144,6 @@ table.grid.compact th, table.grid.compact td { padding:1mm 1.5mm; }
 .cards svg { display:block; }
 .note { font-size:8pt; color:#8a7c6a; margin:2mm 0; }
 `;
-/** 把叙述 markdown 转成 HTML（极简：标题 / 列表 / 段落）。 */
-export function narrationHtml(md: string): string {
-  const out: string[] = [];
-  const lines = md.split(/\r?\n/);
-  let inList = false;
-  const closeList = (): void => {
-    if (inList) { out.push('</ul>'); inList = false; }
-  };
-  for (const raw of lines) {
-    const line = raw.trimEnd();
-    if (line.startsWith('# ')) {
-      closeList();
-      out.push('<h2 class="ch">' + esc(line.slice(2)) + '</h2>');
-    } else if (line.startsWith('## ')) {
-      closeList();
-      out.push('<h3 class="ch">' + esc(line.slice(3)) + '</h3>');
-    } else if (line.startsWith('- ')) {
-      if (!inList) { out.push('<ul>'); inList = true; }
-      out.push('<li>' + esc(line.slice(2)) + '</li>');
-    } else if (/^\d+\. /.test(line)) {
-      if (!inList) { out.push('<ul>'); inList = true; }
-      out.push('<li>' + esc(line.replace(/^\d+\. /, '')) + '</li>');
-    } else if (line.length === 0) {
-      closeList();
-    } else {
-      closeList();
-      out.push('<p>' + esc(line) + '</p>');
-    }
-  }
-  closeList();
-  return out.join('\n');
-}
 
 /** 生成规则书 HTML。 */
 export function rulesHtml(ir: IrDocument, narration: string): string {

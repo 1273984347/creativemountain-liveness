@@ -11,48 +11,35 @@
 //
 // 用法：node docs/沉淀/clean-room-gate-check.mjs
 
-import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
-import { dirname, resolve } from 'node:path';
+import { resolve } from 'node:path';
+
+import { copyTracked } from '../../tools/repo-copy.mjs';
 
 const ROOT = process.cwd();
 
 /**
- * 复制清单 = **版本库跟踪的文件**（`git ls-files`）+ 本轮新增但尚未入库的文件。
+ * 复制清单 = **工作树快照**（已入库 + 未跟踪但未忽略，见 `tools/repo-copy.mjs`）。
  *
  * 为什么不用手抄目录名：
- *   · 手抄目录会把**未跟踪的并行会话产物**（如 `spark-output/`、他人未提交的文档）带进副本
- *     ⇒ 副本不再是「干净 clone」语义；
- *   · `git ls-files` 天然只含入库文件，按文件复制还能保持相对路径；
- *   · 未跟踪但**本轮新增**的文件走 EXTRA 白名单
- *     —— 避免「必须先提交才能自检」的循环依赖。
+ *   · 手抄目录会把 `.gitignore` 忽略的**生成物**（`dist/`、`print/<theme>/`）一起带进副本
+ *     ⇒ 副本不再验证「无产物时能否自举」；
+ *   · 按文件复制能保持相对路径，且**排除 .gitignore 项**。
+ *
+ * ⚠️ 未跟踪文件**要带上**：本批新建的模块（如 `tools/rules-book-contract.mjs`）尚未入库，
+ *   只取已入库文件会让副本因「模块找不到」而假红。
+ *
+ * ⚠️ 复制逻辑与隔离副本测试共用 `tools/repo-copy.mjs`（单一事实源）。
  */
-const EXTRA_FILES = ['docs/沉淀/README.md', 'docs/沉淀/clean-room-gate-check.mjs'];
-// ⚠️ 必须排除：它在副本里会**再复制一份副本**（它复制的是 process.cwd()，即副本自己）
+// ⚠️ 必须排除：它们在副本里会**再复制一份副本**（它们复制的是 process.cwd()，即副本自己）
 //   ⇒ 若不排除，副本的门 ② 会无限套娃。
-const EXCLUDE = ['tests/gates/duel-negative.test.ts'];
-
-/** 列出版本库跟踪的文件（相对路径，/ 分隔）。 */
-function trackedFiles() {
-  const r = spawnSync('git', ['ls-files'], {
-    cwd: ROOT, encoding: 'utf8', shell: false, maxBuffer: 64 * 1024 * 1024,
-  });
-  if (r.status !== 0) { throw new Error('git ls-files 失败：' + (r.stderr ?? '')); }
-  return r.stdout.split(/\r?\n/).filter((l) => l.length > 0);
-}
+const EXCLUDE = ['tests/gates/duel-negative.test.ts', 'tests/build/rules-book.test.ts'];
 
 const dir = mkdtempSync(resolve(tmpdir(), 'cm-clean-'));
 try {
-  const files = [...trackedFiles(), ...EXTRA_FILES];
-  for (const rel of files) {
-    if (EXCLUDE.includes(rel)) { continue; }
-    const src = resolve(ROOT, rel);
-    if (!existsSync(src)) { continue; } // 索引里存在但工作树已删（不应发生）
-    const dst = resolve(dir, rel);
-    mkdirSync(dirname(dst), { recursive: true });
-    cpSync(src, dst);
-  }
+  copyTracked(ROOT, dir, { exclude: EXCLUDE });
   // node_modules 用**链接**而非复制（几百 MB，且内容只读）
   // ⚠️ 副本**刻意不带 dist / print 产物** ⇒ 验证门禁能在「全新 clone」状态下自举全绿。
   symlinkSync(resolve(ROOT, 'node_modules'), resolve(dir, 'node_modules'), 'junction');
