@@ -30,6 +30,10 @@ const GATES = [
   //   骰子型试炼（`dice_is_at_least`）的实测通过率须与理论期望 `(faces-amount+1)/faces` 偏差 ≤ 10pp；
   //   失败时必须写「本关改为付费」标记（挑战型语义）⇒ 挑战型试炼不会静默变成「永远通过」。
   { name: '关隘试炼通过率专项平衡（tests/sim/run.mjs --trial-rate --check）', cmd: process.execPath, args: [resolve('tests', 'sim', 'run.mjs'), '--trial-rate', '--check'] },
+  // ⚠️ 第 12 道门（B25）：位次胜率极差**回归锁**（先手优势的直接度量）。
+  //   **固定 seed + 固定局数** ⇒ 同 seed 同结果 ⇒ 确定性、零 flake；
+  //   阈值取该固定 seed 的基线 + 余量（基线：最大极差 8.6pp · 最大 RMS 3.38pp）。
+  { name: '位次胜率极差回归锁（tests/sim/run.mjs --position-spread --check）', cmd: process.execPath, args: [resolve('tests', 'sim', 'run.mjs'), '--position-spread', '--games', '100', '--check'] },
 ];
 
 /**

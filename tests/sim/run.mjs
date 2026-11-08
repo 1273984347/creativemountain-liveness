@@ -26,6 +26,7 @@ import { performAbility } from '../../engine/core/abilities.ts';
 import { autoResolveDuel } from '../../engine/core/duel.ts';
 import { advanceAuto } from '../../engine/core/advance.ts';
 import { resolveGate } from '../../engine/core/gate.ts';
+import { computePositionSpread, POSITION_RMS_GATE_LIMIT, POSITION_SPREAD_GATE_LIMIT } from '../../engine/core/balance.ts';
 import { castVote, resolveCouncil } from '../../engine/core/council.ts';
 import {
   certifySign, certifyChallenge, certifyAnswer, certifyAppeal, certifyAppealVote,
@@ -38,7 +39,7 @@ const THEME_IDS = ['xianxia2026', 'scifi-ai', 'hybrid', 'urban-psych'];
 
 /** 解析命令行参数。 */
 function parseArgs(argv) {
-  const out = { games: 1000, check: false, out: null, themes: THEME_IDS, players: SCALES.map((s) => s.players), trialRate: false, trialTimes: 400 };
+  const out = { games: 1000, check: false, out: null, themes: THEME_IDS, players: SCALES.map((s) => s.players), trialRate: false, trialTimes: 400, seedBase: 1000, positionSpread: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--games') { out.games = Number(argv[++i]); }
@@ -49,6 +50,10 @@ function parseArgs(argv) {
     // ⚠️ B23：骰子型试炼的**定向长跑**（通过率专项平衡指标）
     else if (a === '--trial-rate') { out.trialRate = true; }
     else if (a === '--trial-times') { out.trialTimes = Number(argv[++i]); }
+    // ⚠️ B25：**seed 基值**（换基值 = 换一批独立样本 ⇒ 用于估计位次极差的**噪声区间**）
+    else if (a === '--seed-base') { out.seedBase = Number(argv[++i]); }
+    // ⚠️ B25：位次胜率极差专项（§9.2 验收口径）
+    else if (a === '--position-spread') { out.positionSpread = true; }
   }
   return out;
 }
@@ -319,11 +324,11 @@ function playOne(theme, players, seed) {
  * ⚠️ seed **必须含主题 id**：否则四套主题共用同一条随机轨迹 ⇒ 统计上是
  *   「同一条轨迹的 4 份拷贝」，不是 4 个独立样本（实测四套主题数据完全相同）。
  */
-function runCell(theme, players, games) {
+function runCell(theme, players, games, seedBase) {
   const results = [];
   const themeSeed = [...theme.meta.id].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) % 100000, 0);
   for (let g = 0; g < games; g++) {
-    const seed = 1000 + g * 97 + players * 13 + themeSeed;
+    const seed = seedBase + g * 97 + players * 13 + themeSeed;
     results.push(playOne(theme, players, seed));
   }
   return results;
@@ -544,11 +549,100 @@ function runTrialRate(args) {
   }
   console.log('PASS  关隘试炼通过率专项平衡通过（偏差 ≤ 10pp · 失败必写「改为付费」）');
 }
+/**
+ * 位次胜率极差（规格 §9.2）：按人数档分组，每档 = **独赢局**口径的位次胜率 max−min（pp）。
+ *
+ * ⚠️ 为什么用**独赢局**口径：总胜场口径把「并列封顶」计给每个并列者 ⇒ 扭曲位次胜率。
+ * ⚠️ 为什么**按人数档分组**：不同人数的位次个数不同 ⇒ 极差不可跨档直接比（8 人局极差天然更大）。
+ */
+function positionSpread(cells, players) {
+  const st = summarize(cells);
+  const posTotal = [...st.soloPosWin.values()].reduce((a, b) => a + b, 0);
+  if (posTotal === 0) { return null; }
+  const even = 100 / players;
+  const devs = [];
+  for (let pos = 0; pos < players; pos++) {
+    const w = st.soloPosWin.get(pos) ?? 0;
+    devs.push((w / posTotal) * 100 - even);
+  }
+  // ⚠️ B25：统计量（RMS 偏离 / 极差 / 严格单调）由**引擎侧纯函数**算出（单一事实源，
+  //   平衡报告、门禁判定、单测共用同一份实现）。
+  const stats = computePositionSpread(devs);
+  return {
+    players, soloGames: st.soloGames, total: st.total, posTotal,
+    max: stats.max, min: stats.min, spread: stats.spread, rms: stats.rms, monotone: stats.monotone,
+  };
+}
+
+/**
+ * 位次胜率极差专项（§9.2）：跑一批模拟 ⇒ 按人数档算极差 ⇒ 打印。
+ *
+ * ⚠️ `--seed-base` 换基值 = 换一批**独立样本** ⇒ 重复跑若干次即可估计极差的**噪声区间**
+ *   （B25 校准阈值的依据：阈值必须高于噪声下界，否则「改前就红」）。
+ */
+function runPositionSpread(args) {
+  const perCell = new Map();
+  for (const themeId of args.themes) {
+    const theme = loadTheme(themeId);
+    for (const players of args.players) {
+      perCell.set(themeId + ':' + players, runCell(theme, players, args.games, args.seedBase));
+    }
+  }
+  const rows = [];
+  for (const players of args.players) {
+    const merged = [];
+    for (const themeId of args.themes) {
+      merged.push(...(perCell.get(themeId + ':' + players) ?? []));
+    }
+    const sp = positionSpread(merged, players);
+    if (sp !== null) { rows.push(sp); }
+  }
+  const worst = rows.reduce((m, r) => Math.max(m, r.spread), 0);
+  console.log('位次胜率极差（独赢局口径 · seedBase=' + String(args.seedBase)
+    + ' · 每档 ' + String(args.games) + ' 局 · 合计 '
+    + String(args.games * args.players.length * args.themes.length) + ' 局）');
+  for (const r of rows) {
+    console.log('  ' + String(r.players) + ' 人局：' + r.min.toFixed(1) + 'pp ~ ' + r.max.toFixed(1)
+      + 'pp ⇒ 极差 ' + r.spread.toFixed(1) + 'pp · RMS ' + r.rms.toFixed(2) + 'pp'
+      + (r.monotone ? ' · **严格单调**' : '') + '（独赢局 ' + String(r.soloGames)
+      + '/' + String(r.total) + '）');
+  }
+  const worstRms = rows.reduce((m, r) => Math.max(m, r.rms), 0);
+  const monoRows = rows.filter((r) => r.monotone);
+  console.log('  最大极差 = ' + worst.toFixed(1) + 'pp · 最大 RMS = ' + worstRms.toFixed(2) + 'pp'
+    + ' · 严格单调档位 = ' + (monoRows.length === 0 ? '无' : monoRows.map((r) => String(r.players) + ' 人').join('、')));
+  if (args.check) {
+    // ⚠️ B25：**确定性回归锁** —— 固定 seed ⇒ 同结果 ⇒ 零 flake；
+    //   阈值取该固定 seed 的基线 + 余量（基线：极差 8.6pp · RMS 3.38pp）。
+    const problems = [];
+    if (worst > POSITION_SPREAD_GATE_LIMIT) {
+      problems.push('位次胜率最大极差 ' + worst.toFixed(1) + 'pp 超门禁口径 '
+        + String(POSITION_SPREAD_GATE_LIMIT) + 'pp');
+    }
+    if (worstRms > POSITION_RMS_GATE_LIMIT) {
+      problems.push('位次胜率最大 RMS 偏离 ' + worstRms.toFixed(2) + 'pp 超门禁口径 '
+        + String(POSITION_RMS_GATE_LIMIT) + 'pp');
+    }
+    if (problems.length > 0) {
+      console.error('FAIL  ' + problems.join('；'));
+      process.exit(1);
+    }
+    console.log('PASS  位次胜率极差在门禁口径内（极差 ≤ ' + String(POSITION_SPREAD_GATE_LIMIT)
+      + 'pp · RMS ≤ ' + String(POSITION_RMS_GATE_LIMIT) + 'pp）');
+  }
+  return { rows, worst };
+}
+
 // ---------- 主流程 ----------
 const args = parseArgs(process.argv.slice(2));
 // ⚠️ B23：定向长跑模式（通过率专项平衡）—— 独立于全量模拟，提前分流。
 if (args.trialRate) {
   runTrialRate(args);
+  process.exit(0);
+}
+// ⚠️ B25：位次胜率极差专项（§9.2）—— 独立于全量模拟，提前分流。
+if (args.positionSpread) {
+  runPositionSpread(args);
   process.exit(0);
 }
 const cells = [];
@@ -569,7 +663,7 @@ for (const themeId of args.themes) {
   }
   const themeCells = [];
   for (const players of args.players) {
-    const rs = runCell(theme, players, args.games);
+    const rs = runCell(theme, players, args.games, args.seedBase);
     perCell.set(themeId + ':' + players, rs);
     themeCells.push(...rs);
     cells.push(...rs);
@@ -788,6 +882,26 @@ if (args.out !== null) {
     }
     lines.push('');
   }
+  lines.push('## 位次胜率极差（§9.2 验收口径）');
+  lines.push('');
+  lines.push('> **口径**：**独赢局**口径下按人数档分组的位次胜率极差（max−min，pp）。');
+  lines.push('> **为什么单列**：先手优势是**位次**的直接度量；座位胜率会被身份等因素稀释 ⇒ 不可用它代理。');
+  lines.push('> **为什么按人数档分组**：不同人数的位次个数不同 ⇒ 极差不可跨档直接比（8 人局天然更大）。');
+  lines.push('');
+  lines.push('| 人数档 | 独赢局 / 总局数 | 最小偏离 | 最大偏离 | 极差 | RMS 偏离 | 严格单调 |');
+  lines.push('|---|---|---|---|---|---|---|');
+  for (const players of args.players) {
+    const merged = [];
+    for (const themeId of args.themes) {
+      merged.push(...(perCell.get(themeId + ':' + players) ?? []));
+    }
+    const sp = positionSpread(merged, players);
+    if (sp === null) { continue; }
+    lines.push('| ' + String(players) + ' 人 | ' + String(sp.soloGames) + ' / ' + String(sp.total)
+      + ' | ' + sp.min.toFixed(1) + 'pp | ' + sp.max.toFixed(1) + 'pp | **' + sp.spread.toFixed(1)
+      + 'pp** | ' + sp.rms.toFixed(2) + 'pp | ' + (sp.monotone ? '是' : '否') + ' |');
+  }
+  lines.push('');
   lines.push('## 活人席分布（B11 计分制）');
   lines.push('');
   lines.push('> **口径**：每局发放的活人席总数（认证通过一次 = 1 席，可重复获取；封顶后回到山道起点）。');

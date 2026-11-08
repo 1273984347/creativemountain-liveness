@@ -12,14 +12,19 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+import { POSITION_SPREAD_LIMIT } from '../../engine/core/balance.ts';
+
 const ROOT = process.cwd();
 const argv = process.argv.slice(2);
 const strict = argv.includes('--strict');
 const file = argv.find((a) => !a.startsWith('--')) ?? 'docs/balance-report.md';
 const lines = readFileSync(resolve(ROOT, file), 'utf8').split(/\r?\n/);
 
-/** 规格 §9.2 的位次胜率极差口径。 */
-const LIMIT = 4;
+/** 规格 §9.2 的位次胜率极差口径（B25 校准；阈值取自引擎单一事实源）。 */
+const LIMIT = POSITION_SPREAD_LIMIT;
+
+/** ⚠️ 只认「仅单人获胜局」小节的位次表 —— 那才是 §9.2 的口径（总胜场口径会把并列封顶计给每个并列者）。 */
+const SECTION = '仅单人获胜局';
 
 const groups = [];
 let section = '';
@@ -34,7 +39,7 @@ for (let i = 0; i < lines.length; i++) {
     if (m !== null) { vals.push(Number(m[1])); }
     j++;
   }
-  if (vals.length > 0) {
+  if (vals.length > 0 && section.includes(SECTION)) {
     groups.push({
       section,
       line: i + 1,
