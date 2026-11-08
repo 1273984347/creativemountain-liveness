@@ -10,7 +10,13 @@ import { resolve } from 'node:path';
 
 import { tCritical05 } from '../../engine/core/balance.ts';
 
-const SCAN = resolve(process.cwd(), 'docs', 'trial-reserve-scan.json');
+// ⚠️ B35：默认读**入库的基线快照**（B34 扫描结果）⇒ 门禁不依赖任何生成物；
+//   另可用 `--scan=<path>` 指向**按需生成**的新扫描产物（重扫后与基线对照）。
+const argv = process.argv.slice(2);
+const scanArg = argv.find((a) => a.startsWith('--scan='));
+const SCAN = scanArg === undefined
+  ? resolve(process.cwd(), 'docs', 'baselines', 'trial-reserve-scan-B34.json')
+  : resolve(process.cwd(), scanArg.slice('--scan='.length));
 const raw = JSON.parse(readFileSync(SCAN, 'utf8'));
 const groups = raw.groups ?? [];
 
@@ -39,8 +45,8 @@ function welch(a, b) {
   return { t: Math.abs(a.mean - b.mean) / se, df };
 }
 
-console.log('余量判定离线回归（原始统计量 · 精确 t 临界值 · B34）：');
-console.log('数据源：docs/trial-reserve-scan.json（' + String(groups.length) + ' 个分组，每组 ' + String(raw.gamesPerGroup) + ' 局）');
+console.log('余量判定离线回归（原始统计量 · 精确 t 临界值 · B35 · 基线快照）：');
+console.log('数据源：' + SCAN + '（' + String(groups.length) + ' 个分组，每组 ' + String(raw.gamesPerGroup) + ' 局）');
 console.log('| 指标 | 均值差 | Welch t | df | 精确临界值 | 判定 | 与 B31 发布值之差 |');
 console.log('|---|---|---|---|---|---|---|');
 const problems = [];

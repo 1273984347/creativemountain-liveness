@@ -6,6 +6,9 @@ print/*
 *.log
 .tmp_*.md
 
+# 余量扫描的**按需生成**产物（B35）——不入库 ⇒ 可复现基线改用 docs/baselines/ 下的快照
+docs/trial-reserve-scan.json
+
 # 负样本探针（门禁自检临时文件，测试结束自动清理）
 engine/negprobe.ts
 tests/engine/negprobe.test.ts
