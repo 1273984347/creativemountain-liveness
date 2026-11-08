@@ -20,6 +20,8 @@ import { esc } from './print-templates.ts';
 // 叙述渲染已抽到独立模块（B16）—— 支持三级小节 / 表格 / 行内粗体，且可被测试直接 import。
 import { narrationHtml } from './narration.ts';
 export { narrationHtml };
+// 棋盘按人数多版（V1.1）：与数字轨共用同一份 fitBoard ⇒ 实体件与对局必然一致。
+import { BOARD_VERSIONS, fitBoard } from '../engine/core/board-fit.ts';
 import type { IrDocument } from '../engine/types/ir.ts';
 
 const ROOT = process.cwd();
@@ -85,8 +87,10 @@ export function exportSvgs(ir: IrDocument): string[] {
     writeFileSync(resolve(SVG_DIR, name), svg, 'utf8');
     written.push('svg/' + name);
   };
-  // 棋盘
-  put('棋盘-A2.svg', boardSvg(ir.board, ir));
+  // 棋盘：**按人数多版**（V1.1）—— 每版一张 A2，文件名带格数与适用人数。
+  for (const v of BOARD_VERSIONS) {
+    put('棋盘-A2-' + String(v.length) + '格-' + v.players.join('人') + '.svg', boardSvg(fitBoard(ir.board, v.length), ir));
+  }
   // 卡牌：每张一个 SVG（可编辑）
   ir.cards.forEach((c, i) => {
     put('卡牌-' + String(i + 1).padStart(2, '0') + '-' + c.id + '.svg', cardSvg(c));
@@ -186,10 +190,13 @@ export function rulesHtml(ir: IrDocument, narration: string): string {
 /** 实体件打印页：棋盘 + 卡牌 + 身份牌 + 阵营牌 + 认证题卡。 */
 export function partsHtml(ir: IrDocument): string {
   const body: string[] = [];
-  // 棋盘：A2 幅面（单独一页，用自定义 @page 无法覆盖，改用大尺寸 CSS）
-  body.push('<div class="sheet board-sheet">');
-  body.push('<div style="width:420mm;height:594mm;margin:0 auto;">' + boardSvg(ir.board, ir) + '</div>');
-  body.push('</div>');
+  // 棋盘：**按人数多版**（V1.1）—— 每版一页 A2，页首标明适用人数与格数。
+  for (const v of BOARD_VERSIONS) {
+    body.push('<div class="sheet board-sheet">');
+    body.push('<h2 class="ch">' + esc(ir.meta.name) + ' 棋盘 · ' + v.players.join(' / ') + ' 人（' + String(v.length) + ' 格）</h2>');
+    body.push('<div style="width:420mm;height:594mm;margin:0 auto;">' + boardSvg(fitBoard(ir.board, v.length), ir) + '</div>');
+    body.push('</div>');
+  }
   // 卡牌
   body.push('<div class="sheet">');
   body.push('<h2 class="ch">' + esc(ir.meta.deckName) + '（63×88mm + 3mm 出血 · 3mm 圆角）</h2>');
