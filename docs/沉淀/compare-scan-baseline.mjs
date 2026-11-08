@@ -58,11 +58,24 @@ const diffs = [];
 for (const [k, bg] of bm) {
   const sg = sm.get(k);
   if (sg === undefined) { diffs.push(k + '：新扫描缺少该组'); continue; }
-  const bad = KEYS.filter((f) => Math.abs(bg[f] - sg[f]) > 1e-9);
-  if (bad.length === 0) { same += 1; }
-  else {
-    diffs.push(k + '：' + bad.map((f) => f + ' ' + String(bg[f]) + '→' + String(sg[f])).join('、'));
+  // ⚠️ B41：**字段缺失 / 非数值必须显式判失败** —— 否则 `Math.abs(undefined - x)` = NaN，
+  //   而 `NaN > 1e-9` 为 false ⇒ 半损坏（字段缺失）会**静默通过**。
+  const missing = [];
+  const mismatched = [];
+  for (const f of KEYS) {
+    const a = bg[f];
+    const b = sg[f];
+    if (typeof a !== 'number' || typeof b !== 'number' || !Number.isFinite(a) || !Number.isFinite(b)) {
+      missing.push(f + '(基线=' + String(a) + '，产物=' + String(b) + ')');
+      continue;
+    }
+    if (Math.abs(a - b) > 1e-9) { mismatched.push(f + ' ' + String(a) + '→' + String(b)); }
   }
+  if (missing.length === 0 && mismatched.length === 0) { same += 1; continue; }
+  const parts = [];
+  if (missing.length > 0) { parts.push('字段缺失或非数值：' + missing.join('、')); }
+  if (mismatched.length > 0) { parts.push('数值不一致：' + mismatched.join('、')); }
+  diffs.push(k + '：' + parts.join('；'));
 }
 for (const k of sm.keys()) { if (!bm.has(k)) { diffs.push(k + '：新扫描多出该组'); } }
 
