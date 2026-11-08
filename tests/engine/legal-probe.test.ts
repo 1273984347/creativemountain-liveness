@@ -8,7 +8,9 @@ import { startDuel } from '../../engine/core/duel.ts';
 import {
   appealedScene, challengedScene, councilScene, lockedScene, mk, pendingScene,
 } from './fixtures.ts';
-import { getLegalActions, actionWindowOpen, LEGAL_ACTION_CAP } from '../../engine/core/legal.ts';
+import {
+  getLegalActions, getLegalActionStats, candidatesOf, actionWindowOpen, LEGAL_ACTION_CAP,
+} from '../../engine/core/legal.ts';
 import { activeAbilityId } from '../../engine/core/passives.ts';
 import { cardNeedsTarget, targetCandidates } from '../../engine/core/targeting.ts';
 import { certifyAnswer } from '../../engine/core/certification.ts';
@@ -420,3 +422,57 @@ test('§7 上限：枚举结果永不超过 LEGAL_ACTION_CAP', () => {
 
 /** 已判定过的局面（用真实入口推进，不手拼字段）。 */
 function certifyAnswerRun(s: State): State { return certifyAnswer(s, 1, 0, false).state; }
+
+// ============================ Task 6：枚举统计（P3 token 预算读数的数据源）============================
+//
+// `getLegalActionStats` 必须与 `getLegalActions` **共用同一个 `candidatesOf`**——
+// 两处各写一份粗筛，统计就会和枚举分叉（P3 读数失去意义，正是本批次要防的镜像漂移）。
+
+test('§7 统计：enumerated == 枚举长度，truncated 与候选数一致', () => {
+  for (const s of [mk(), mk(8, 23), councilScene(8, 23), appealedScene(5, 23)]) {
+    const stats = getLegalActionStats(s, 0);
+    assert.equal(stats.enumerated, getLegalActions(s, 0).length);
+    assert.ok(stats.enumerated <= LEGAL_ACTION_CAP);
+    assert.ok(stats.candidates >= stats.enumerated);
+    assert.equal(stats.truncated, stats.candidates > LEGAL_ACTION_CAP);
+    // 同一个粗筛函数：候选数必须逐字等于 candidatesOf 的长度（另写一份粗筛 ⇒ 本条红）。
+    assert.equal(stats.candidates, candidatesOf(s, 0).length);
+  }
+});
+
+test('§7 统计：出牌候选多到超上限时，枚举是候选的**定长前缀**（不写死 64）', () => {
+  const s = wideHandScene(LEGAL_ACTION_CAP * 2);
+  const stats = getLegalActionStats(s, 0);
+  const actions = getLegalActions(s, 0);
+  const candidates = candidatesOf(s, 0);
+  assert.equal(stats.candidates, candidates.length);
+  assert.equal(stats.candidates > LEGAL_ACTION_CAP, true, '前提自查：本局面必须真的把候选推过上限');
+  assert.equal(stats.truncated, true, '超上限 ⇒ truncated 必须为真');
+  assert.equal(stats.enumerated, LEGAL_ACTION_CAP, '截断点就是上限本身（写死数字的实现会在改上限时红）');
+  assert.equal(actions.length, stats.enumerated);
+  // 截断是**前缀**截断：保留的正是粗筛顺序的前 CAP 条 ⇒ 同一 state 下枚举结果可复现。
+  assert.deepEqual(actions, candidates.slice(0, LEGAL_ACTION_CAP));
+  // 上限之下不得谎报截断。
+  const narrow = getLegalActionStats(mk(), 0);
+  assert.equal(narrow.truncated, false);
+  assert.equal(narrow.enumerated, candidatesOf(mk(), 0).length, '常规局面：候选全被接受 ⇒ 枚举==候选');
+});
+
+/**
+ * 手牌特别多（无效果、不需目标 ⇒ 每张都可打）的局面：把行动阶段候选推过 `LEGAL_ACTION_CAP`。
+ * ⚠️ 只改 `hand`，不碰认证/山议字段（那些必须走 fixtures 的引擎入口）。
+ */
+function wideHandScene(handSize: number): State {
+  const cards: Card[] = Array.from({ length: handSize }, (_, i) => ({
+    id: `wide_card_${String(i)}`,
+    name: `宽手牌${String(i)}`,
+    type: 'utility' as const,
+    cost: 0,
+    color: 'red' as const,
+    rank: 1,
+    text: '取证用：无效果、不需目标',
+    effects: [],
+  }));
+  const s = mk();
+  return { ...s, players: s.players.map((p) => (p.seat === 0 ? { ...p, hand: cards } : p)) };
+}

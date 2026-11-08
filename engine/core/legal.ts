@@ -146,3 +146,25 @@ export function getLegalActions(state: State, playerId: number): Action[] {
   }
   return out;
 }
+
+/** 枚举计数（规格 §7 的派生读数，供 P3 的 token 预算口径使用）。 */
+export interface LegalActionStats {
+  /** 粗筛候选总数 */
+  readonly candidates: number;
+  /** 试跑通过并进入枚举的数量（受 LEGAL_ACTION_CAP 截断） */
+  readonly enumerated: number;
+  /** 是否发生截断（口径：`candidates > LEGAL_ACTION_CAP`，与 `enumerated` 一样由同一个粗筛给出） */
+  readonly truncated: boolean;
+}
+
+/**
+ * 候选/枚举/截断计数：P3（token 预算）读数的数据源。
+ *
+ * ⚠️ 与 `getLegalActions` **共用同一个 `candidatesOf`**，不复制第二份粗筛逻辑——
+ *   两处各写一份的话，「统计说的候选数」和「枚举真给出的候选」会分叉，
+ *   P3 读数就失去意义（本文件的存在理由正是防这种漂移）。
+ */
+export function getLegalActionStats(state: State, playerId: number): LegalActionStats {
+  const candidates = candidatesOf(state, playerId).length;
+  return { candidates, enumerated: getLegalActions(state, playerId).length, truncated: candidates > LEGAL_ACTION_CAP };
+}
