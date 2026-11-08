@@ -31,30 +31,50 @@ export const BOARD_VERSIONS: readonly BoardVersion[] = [...new Set(SCALES.map((s
   }));
 
 /**
+ * 目标格数对应的**关隘数**（由规模表 `gateCount` 派生）。
+ *
+ * ⚠️ 取同格数各人数档的**最小值**（保守：关隘多了会让高人数档更难、且与规模表口径不符）。
+ */
+export function gateCountFor(length: number): number {
+  const rows = SCALES.filter((s) => s.boardLength === length);
+  if (rows.length === 0) { return 0; }
+  return Math.min(...rows.map((r) => r.gateCount));
+}
+
+/**
  * 把棋盘**适配到目标格数**（规格 §8 `boardLength`）。
+ *
+ * ⚠️ **关隘数同时按规模表 `gateCount` 收口**（B21）：主题包提供**足够的关隘**（36 格底板里 4 座，
+ *   位于 6 / 14 / 22 / 30），适配时**只保留前 N 座**（N = 该档 gateCount），其余关隘**降级为普通格**
+ *   （名字中性化）⇒ 于是 24 / 28 / 32 / 36 格分别对应 **2 / 3 / 3 / 4 座**关隘，与规模表一致。
  *
  * @param board 源棋盘（主题包原版或 IR 里的棋盘）
  * @param length 目标格数
  */
 export function fitBoard(board: Board, length: number): Board {
   const tiles = board.tiles;
-  if (tiles.length === length) {
-    return { length, tiles: [...tiles], peakIndex: board.peakIndex };
-  }
   const peakTile = tiles[tiles.length - 1];
   const body = tiles.slice(0, -1);
+  const gateBudget = gateCountFor(length);
   const out: Tile[] = [];
-  for (let i = 0; i < length - 1; i++) {
-    const src = body[i % body.length];
-    if (src === undefined) {
+  let gates = gateBudget;
+  for (const t of body) {
+    if (out.length >= length - 1) { break; }
+    if (t.kind === 'gate') {
+      if (gates > 0) {
+        gates -= 1;
+        out.push(t);
+      } else {
+        // 超出本档关隘数 ⇒ **降级为普通格**（名字中性化，避免玩家误认）。
+        out.push({ ...t, kind: 'plain', name: '第 ' + String(t.index) + ' 段' });
+      }
       continue;
     }
-    const isRepeat = i >= body.length;
-    out.push({
-      ...src,
-      index: i + 1,
-      ...(isRepeat ? { name: '山道 ' + String(i + 1) } : {}),
-    });
+    out.push(t);
+  }
+  // 补足普通格（扩展时用中性名，避免地名重复）。
+  for (let i = out.length + 1; i < length; i++) {
+    out.push({ index: i, kind: 'plain', name: '第 ' + String(i) + ' 段' });
   }
   if (peakTile !== undefined) {
     out.push({ ...peakTile, index: length });

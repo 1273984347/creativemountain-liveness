@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { BOARD_VERSIONS, fitBoard } from '../../engine/core/board-fit.ts';
+import { BOARD_VERSIONS, fitBoard, gateCountFor } from '../../engine/core/board-fit.ts';
 import type { ThemePack } from '../../engine/types/theme.ts';
 
 test('V1.1：棋盘版清单由规模表派生 ⇒ 24/28/32/36 格对应 3/4/5-6/7-8 人', () => {
@@ -28,6 +28,18 @@ test('V1.1：每版棋盘格数正确、格号连续、峰顶在末格、关隘�
     assert.ok(board.tiles.some((t) => t.kind === 'gate'), '关隘格保留（缩放不得丢掉关键格位）');
     assert.ok(board.tiles.some((t) => t.kind === 'rift'), '裂隙格保留');
   }
+});
+
+test('B21：每档棋盘的关隘数 == 规模表 gateCount（2/3/3/4）', () => {
+  const theme = JSON.parse(readFileSync(resolve('themes/xianxia2026/theme.json'), 'utf8')) as ThemePack;
+  for (const v of BOARD_VERSIONS) {
+    const board = fitBoard(theme.board, v.length);
+    const gates = board.tiles.filter((t) => t.kind === 'gate').length;
+    assert.equal(gates, gateCountFor(v.length),
+      String(v.length) + ' 格版的关隘数应等于规模表 gateCount');
+  }
+  // 规模表口径：3 人 2 座 / 4 人 3 座 / 5–6 人 3 座 / 7–8 人 4 座。
+  assert.deepEqual(BOARD_VERSIONS.map((v) => gateCountFor(v.length)), [2, 3, 3, 4]);
 });
 
 test('V1.1：实体件构建按人数出多版棋盘（源码接线断言）', () => {

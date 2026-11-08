@@ -1296,8 +1296,8 @@
     }
   ],
   "board": {
-    "length": 28,
-    "peakIndex": 28,
+    "length": 36,
+    "peakIndex": 36,
     "tiles": [
       {
         "index": 1,
@@ -1385,10 +1385,11 @@
         "kind": "plain",
         "name": "独柱"
       },
-      {
+            {
         "index": 14,
-        "kind": "plain",
-        "name": "栈桥末"
+        "kind": "gate",
+        "name": "安全闸·叁",
+        "gate": { "fee": 4, "trialIds": ["t_star", "t_toll"] }
       },
       {
         "index": 15,
@@ -1462,8 +1463,25 @@
         "kind": "plain",
         "name": "奇点台前"
       },
-      {
+            {
         "index": 28,
+        "kind": "plain",
+        "name": "第 28 段"
+      },
+      { "index": 29, "kind": "plain", "name": "第 29 段" },
+      {
+        "index": 30,
+        "kind": "gate",
+        "name": "安全闸·肆",
+        "gate": { "fee": 5, "trialIds": ["t_star", "t_toll"] }
+      },
+      { "index": 31, "kind": "plain", "name": "第 31 段" },
+      { "index": 32, "kind": "plain", "name": "第 32 段" },
+      { "index": 33, "kind": "plain", "name": "第 33 段" },
+      { "index": 34, "kind": "plain", "name": "第 34 段" },
+      { "index": 35, "kind": "plain", "name": "第 35 段" },
+      {
+        "index": 36,
         "kind": "peak",
         "name": "奇点台"
       }
