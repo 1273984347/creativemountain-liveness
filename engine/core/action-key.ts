@@ -54,6 +54,13 @@ export function actionFromKey(key: string): Action {
   return action;
 }
 
+/**
+ * ⚠️ B69：本 switch 的判别式是**字符串头段**（`head`），不是 `Action['type']`
+ *   ⇒ `actionKey` 那侧的穷尽检查（tsc 逼分支）**管不到这里**：新增 ActionType 成员时
+ *   编码侧会被编译器逼着补，反解侧却可以静默漏（B67 的 `cert:mutual`、B68 的 `duel:card` 都漏了）。
+ *   ⇒ 唯一报警源是常驻守卫「ActionType 每个成员都在 SAMPLES 里有往返样本」
+ *     （`tests/engine/action-key.test.ts`），**不得删、不得改成手抄清单**。
+ */
 function decodeKey(key: string): Action {
   const parts = key.split(':');
   const head = String(parts[0]);
@@ -130,8 +137,21 @@ function decodeKey(key: string): Action {
         case 'appeal': return { type: 'CERTIFY_APPEAL', actor: -1, target };
         case 'appealvote': return { type: 'CERTIFY_APPEAL_VOTE', actor: -1, target, overturn: flag(parts[3], 'overturn', 'uphold') };
         case 'answer': return { type: 'CERTIFY_ANSWER', actor: -1, target, passed: flag(parts[3], 'pass', 'fail') };
+        // ⚠️ B69：B67 只补了编码侧（`cert:mutual:<target>`），反解侧漏了 ⇒ 与 DUEL_SUBMIT_CARD 同族缺口。
+        //   由「ActionType 全成员往返守卫」照出（见 tests/engine/action-key.test.ts）。
+        case 'mutual': return { type: 'CERTIFY_MUTUAL_SIGN', actor: -1, target };
         default: throw new Error(`未知认证动作：${key}`);
       }
+    }
+    // ⚠️ B69：对峙选牌（§3.3）反解 —— B68 补了编码侧与枚举层，**漏了反解侧**
+    //   ⇒ 探针把模型输出的 `duel:card:<id>` 一律判成「反解失败」（P1.answerRate 1.0 → 0.9526）。
+    //   与 `cert` 同款纪律：只认 `duel:card:<cardId>` 三段规范形 ——
+    //   kind 拼错（`duel:bogus:x`）、缺段（`duel:card`）、空 id（`duel:card:`）一律抛错；
+    //   多余尾段（`duel:card:a:b`）由 actionFromKey 的单射校验拒掉。
+    case 'duel': {
+      const kind = need(parts[1]);
+      if (kind !== 'card') { throw new Error(`未知对峙动作：${key}`); }
+      return { type: 'DUEL_SUBMIT_CARD', actor: -1, cardId: need(parts[2]) };
     }
     default: throw new Error(`未知动作 key：${key}`);
   }

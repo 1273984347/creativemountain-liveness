@@ -2,6 +2,7 @@
 // 动作 ↔ key 的可逆编码守卫：往返等价、key 互异、非法 key 必抛错（只认规范形，绝不猜）。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { actionKey, actionFromKey, withActor } from '../../engine/core/action-key.ts';
 import type { Action } from '../../engine/core/action.ts';
 
@@ -23,6 +24,13 @@ const SAMPLES: Action[] = [
   { type: 'CERTIFY_APPEAL_VOTE', actor: 1, target: 0, overturn: false },
   { type: 'CERTIFY_ANSWER', actor: 1, target: 0, passed: true },
   { type: 'CERTIFY_ANSWER', actor: 1, target: 0, passed: false },
+  // ⚠️ B69：以下四条是「ActionType 有成员、SAMPLES 却没样本」的历史欠账（根因守卫一次照出四个）。
+  //   GATE_RESOLVE / BARRIER_RESOLVE 反解早在（B18/B18-b），只是**从没人往返过**；
+  //   CERTIFY_MUTUAL_SIGN（B67）与 DUEL_SUBMIT_CARD（B68）则是**反解分支真缺**⇒ 一探针就抛「未知动作 key」。
+  { type: 'GATE_RESOLVE', actor: 2, channel: 'pay' },
+  { type: 'BARRIER_RESOLVE', actor: 2, channel: 'place' },
+  { type: 'CERTIFY_MUTUAL_SIGN', actor: 1, target: 0 },
+  { type: 'DUEL_SUBMIT_CARD', actor: 0, cardId: 'c_windstep' },
 ];
 
 test('key 往返：withActor(decode(encode(a)), a.actor) 与 a 等价', () => {
@@ -33,9 +41,10 @@ test('key 往返：withActor(decode(encode(a)), a.actor) 与 a 等价', () => {
 
 test('key 唯一：SAMPLES 互不相同 ⇒ key 集合大小相等（actor 不入 key）', () => {
   const keys = SAMPLES.map((a) => actionKey(a));
-  // 样本数钉死：B15 契约修正后复议票（overturn 对）与应答（passed 对）各占两条，共 17 条。
+  // 样本数钉死：B15 契约修正后复议票（overturn 对）与应答（passed 对）各占两条 = 17 条；
+  // B69 补齐 ActionType 全成员覆盖（关隘通道 / 裂隙通道 / 互签 / 对峙选牌各一条）⇒ 21 条。
   // 少一条 ⇒ 断言会因 keys.length 同步变小而空转，故必须先固定样本总数。
-  assert.equal(keys.length, 17, '样本被误删，唯一性断言失去覆盖面');
+  assert.equal(keys.length, 21, '样本被误删，唯一性断言失去覆盖面');
   assert.equal(new Set(keys).size, keys.length, `key 撞车：${keys.join(' | ')}`);
 });
 
@@ -59,10 +68,15 @@ test('未知 key 必须抛错，绝不猜', () => {
   //   `play:->3` 编造出空 id，`move:junk`/`…:overturn:junk` 把尾段静默丢弃。
   //   这些 key 在 Task 7 漂移守卫与 Task 15 探针里来自**模型输出**，
   //   编造出一个合法动作就是正确性 bug（会绕过引擎的「未选目标 ⇒ 不出牌」守卫），不是风格问题。
+  // 第 4 组（B69）：新增反解分支的**同款严格规范形**——
+  //   `duel:card:`（空 id）/ `duel:card`（缺段）/ `duel:bogus:x`（kind 拼错）/ `duel:card:a:b`（多余尾段）；
+  //   互签分支补齐后同样不得放宽：`cert:mutual:`（空座位）/ `cert:mutual:0:junk`（多余尾段）。
   for (const bad of ['bogus:1', 'cert:whatever:0', 'vote:xx', 'play',
     'ability', 'play:', 'cert:answer:0', 'cert:appealvote:0:yes',
     'vote:', 'cert:sign:', 'play:c_fang->', 'gate:x->', 'play:->3', 'move:junk',
-    'cert:appealvote:0:overturn:junk']) {
+    'cert:appealvote:0:overturn:junk',
+    'duel:card:', 'duel:card', 'duel:bogus:x', 'duel:card:a:b',
+    'cert:mutual:', 'cert:mutual:0:junk']) {
     assert.throws(() => actionFromKey(bad), /key|动作/, `未抛错：${bad}`);
   }
 });
@@ -81,9 +95,41 @@ test('规范形正例：0 号座位与各文法正形仍是合法 key（收紧�
     ['cert:sign:0', { type: 'CERTIFY_SIGN', actor: -1, target: 0 }],
     ['cert:appealvote:0:uphold', { type: 'CERTIFY_APPEAL_VOTE', actor: -1, target: 0, overturn: false }],
     ['cert:answer:1:pass', { type: 'CERTIFY_ANSWER', actor: -1, target: 1, passed: true }],
+    // B69：三段文法（`gate:resolve` / `barrier:resolve` / `cert:mutual` / `duel:card`）的正形也要钉住
+    //   ——收紧不得误伤规范形，尤其新补的两条反解分支。
+    ['gate:resolve:trial', { type: 'GATE_RESOLVE', actor: -1, channel: 'trial' }],
+    ['barrier:resolve:skip', { type: 'BARRIER_RESOLVE', actor: -1, channel: 'skip' }],
+    ['cert:mutual:0', { type: 'CERTIFY_MUTUAL_SIGN', actor: -1, target: 0 }],
+    ['duel:card:c_windstep', { type: 'DUEL_SUBMIT_CARD', actor: -1, cardId: 'c_windstep' }],
   ];
   for (const [key, expected] of CANONICAL) {
     assert.deepEqual(actionFromKey(key), expected, `规范形反解失败：${key}`);
     assert.equal(actionKey(actionFromKey(key)), key, `规范形往返失败：${key}`);
+  }
+});
+
+test('根因守卫：ActionType 每个成员都在 SAMPLES 里有往返样本（新增动作漏测即红）', () => {
+  // ⚠️ B69 根因：`actionKey` 的 switch 判别式是 `a.type` ⇒ **穷尽**，新增成员由 tsc 逼出分支；
+  //   而 `decodeKey` 的 switch 判别式是**字符串头段** ⇒ tsc 管不着，新增成员可以静默漏反解。
+  //   B67/B68 都只补了编码侧，本文件的 SAMPLES 又没跟着补 ⇒ 漏检一路放行到探针（P1.answerRate 0.9526）。
+  //   ⇒ 本条守卫把「枚举成员」与「往返样本」钉成一对一：以后再加动作成员，不补样本立刻红。
+  // ⚠️ 成员真值取自**源码文本**（与 tests/engine/action-contract.test.ts、门 ③ 的 unionMembers 同法），
+  //   **不手抄清单**：手抄清单会随枚举增补而漂 ⇒ 守卫自己先失效（那正是本次漏检的形状）。
+  const src = readFileSync('engine/core/action.ts', 'utf8');
+  const body = /export type ActionType =([\s\S]*?);/.exec(src)?.[1] ?? '';
+  const members = [...body.matchAll(/'([A-Z_]+)'/g)].map((m) => String(m[1]));
+  // 解析式失效（源码改写/正则不匹配）时必须红，不得静默变成「零成员 ⇒ 恒绿」。
+  assert.ok(members.length > 0, 'ActionType 解析为空 ⇒ 守卫失去真值来源');
+  const covered = new Set<string>(SAMPLES.map((a) => a.type));
+  const missing = members.filter((t) => !covered.has(t));
+  assert.deepEqual(missing, [],
+    `ActionType 有成员没有往返样本：${missing.join(', ')}`
+    + ' ⇒ 编码/反解任一侧漏接线都无人报警（B69 根因）');
+  // 有样本还不够：样本必须**真能往返**（decode 缺分支时上面那条会绿，这一条才红）。
+  for (const t of members) {
+    const a = SAMPLES.find((s) => s.type === t);
+    assert.ok(a !== undefined, `SAMPLES 缺 ${t} 的样本`);
+    assert.deepEqual(withActor(actionFromKey(actionKey(a)), a.actor), a,
+      `ActionType 成员 ${t} 往返失败：${actionKey(a)}`);
   }
 });
