@@ -25,7 +25,9 @@ import { certificationThreshold } from '../../engine/core/certification.ts';
 import { castVote, openCouncil, resolveCouncil } from '../../engine/core/council.ts';
 import { applyEffect } from '../../engine/ops/registry.ts';
 import { performAbility } from '../../engine/core/abilities.ts';
-import { certifyAnswer, certifyChallenge } from '../../engine/core/certification.ts';
+import {
+  certifyAnswer, certifyAppeal, certifyAppealVote, certifyChallenge, resolveAppeals,
+} from '../../engine/core/certification.ts';
 import { drawCards } from '../../engine/core/hand.ts';
 import { putPending } from './fixtures.ts';
 import { advanceTurn } from '../../engine/core/turn-runner.ts';
@@ -404,7 +406,7 @@ test('[LAYER-E3-STEAL 偷取计数] 窃火者偷取计入偷取者的 stolenTota
     '[LAYER-E3-STEAL 偷取计数] 受害者不计数');
 });
 
-test('[LAYER-E4-CHALLENGE 质疑计数] 判不通过即质疑成功 ⇒ 质疑者 +1；复议推翻 ⇒ −1', () => {
+test('[LAYER-E4-CHALLENGE 质疑计数] 判不通过即质疑成功 ⇒ 质疑者 +1', () => {
   const s = asIdentity(themed(), 0, 'pioneer', { kind: 'pass_gates', count: 3 });
   const pending = putPending(s, [0]);
   const challenged = certifyChallenge(pending, 1, 0);
@@ -413,6 +415,54 @@ test('[LAYER-E4-CHALLENGE 质疑计数] 判不通过即质疑成功 ⇒ 质疑�
   assert.equal(answered.ok, true, '[LAYER-E4-CHALLENGE 质疑计数] 判定应成功');
   assert.equal(answered.state.players[1]?.counters.successfulChallenges, 1,
     '[LAYER-E4-CHALLENGE 质疑计数] 判不通过（答对 ≤ 1）= 质疑成功 ⇒ 质疑者 +1');
+});
+
+test('[LAYER-E6-APPEAL 复议回退] 复议推翻 ⇒ 质疑成功计数回退 −1', () => {
+  // ⚠️ 走**真实复议流程**（5 人局：座 0 待认证、座 1 质疑、第三方 2 票投推翻）⇒
+  //   覆盖的是 `applyAppealOutcome` 的**回退分支**（不是只测函数）。
+  const s = asIdentity(themed(5), 0, 'pioneer', { kind: 'pass_gates', count: 3 });
+  const pending = putPending(s, [0]);
+  const challenged = certifyChallenge(pending, 1, 0);
+  assert.equal(challenged.ok, true, '[LAYER-E6-APPEAL 复议回退] 发起质疑应成功：' + String(challenged.note));
+  const answered = certifyAnswer(challenged.state, 1, 0, false);
+  assert.equal(answered.state.players[1]?.counters.successfulChallenges, 1,
+    '[LAYER-E6-APPEAL 复议回退] 判不通过 ⇒ 质疑成功 +1');
+  const appealed = certifyAppeal(answered.state, 0, 0);
+  assert.equal(appealed.ok, true, '[LAYER-E6-APPEAL 复议回退] 待认证者申请复议应成功：' + String(appealed.note));
+  let st = appealed.state;
+  st = certifyAppealVote(st, 2, 0, true).state;
+  st = certifyAppealVote(st, 3, 0, true).state;
+  const resolved = resolveAppeals(st, 0);
+  assert.equal(resolved.ok, true, '[LAYER-E6-APPEAL 复议回退] 复议裁定应成功：' + String(resolved.note));
+  assert.equal(resolved.state.players[1]?.counters.successfulChallenges, 0,
+    '[LAYER-E6-APPEAL 复议回退] **复议推翻 ⇒ 该次质疑不再成立 ⇒ 计数回退 −1**（规格 §6.4）');
+});
+
+test('[LAYER-E7-IDEMP 计数幂等] 重复判定不得虚高计数（一次质疑 = 一次计数）', () => {
+  // ⚠️ 引擎层**不**收紧接受面（既有裁定「去重由粗筛承担」+ 门禁登记「UI 比引擎严」）
+  //   ⇒ 幂等由**计数侧**保证 ⇒ 探针/外部调用方重复判定也不会虚高。
+  const s = asIdentity(themed(), 0, 'pioneer', { kind: 'pass_gates', count: 3 });
+  const pending = putPending(s, [0]);
+  const challenged = certifyChallenge(pending, 1, 0);
+  const first = certifyAnswer(challenged.state, 1, 0, false);
+  assert.equal(first.state.players[1]?.counters.successfulChallenges, 1,
+    '[LAYER-E7-IDEMP 计数幂等] 首次判不通过 ⇒ +1');
+  const second = certifyAnswer(first.state, 1, 0, false);
+  assert.equal(second.ok, true, '[LAYER-E7-IDEMP 计数幂等] 引擎仍接受（去重由粗筛承担）');
+  assert.equal(second.state.players[1]?.counters.successfulChallenges, 1,
+    '[LAYER-E7-IDEMP 计数幂等] **重复判定不得虚高计数**（一次质疑 = 一次计数）');
+});
+
+test('[LAYER-E8-REVERDICT 改判回退] 改判为通过 ⇒ 该次质疑不再成立 ⇒ 计数回退', () => {
+  const s = asIdentity(themed(), 0, 'pioneer', { kind: 'pass_gates', count: 3 });
+  const pending = putPending(s, [0]);
+  const challenged = certifyChallenge(pending, 1, 0);
+  const first = certifyAnswer(challenged.state, 1, 0, false);
+  assert.equal(first.state.players[1]?.counters.successfulChallenges, 1,
+    '[LAYER-E8-REVERDICT 改判回退] 首次判不通过 ⇒ +1');
+  const re = certifyAnswer(first.state, 1, 0, true);
+  assert.equal(re.state.players[1]?.counters.successfulChallenges, 0,
+    '[LAYER-E8-REVERDICT 改判回退] 改判为通过 ⇒ 质疑不再成立 ⇒ 计数回退（与复议推翻同款可逆语义）');
 });
 
 test('[LAYER-E5-MARK 即时判定] 山主质疑成功 ⇒ immediate 判定发印记', () => {
@@ -659,4 +709,37 @@ test('[B60-D 变异自证] 撤掉 immediate 判定调用 ⇒ 即时判定层必�
   assert.notEqual(r.code, 0, '[B60-D 变异自证] mutant 必须让测试变红');
   assert.ok(/AssertionError[^\n]*\[LAYER-E5-MARK/.test(r.out),
     '[B60-D 变异自证] mutant 必须红在「即时判定」层的专属措辞上');
+});
+
+test('[B60-D 变异自证] 撤掉复议推翻的计数回退 ⇒ 复议回退层必须判红', { skip: SKIP_MUTATION }, () => {
+  const r = runMutant((dir) => {
+    patchCopy(dir, 'engine/core/certification.ts',
+      "next = bumpCounterOf(next, challengerSeat, 'successfulChallenges', -1);",
+      '// mutant: 去掉复议推翻的计数回退');
+  });
+  assert.notEqual(r.code, 0, '[B60-D 变异自证] mutant 必须让测试变红');
+  assert.ok(/AssertionError[^\n]*\[LAYER-E6-APPEAL/.test(r.out),
+    '[B60-D 变异自证] mutant 必须红在「复议回退」层的专属措辞上');
+});
+
+test('[B60-D 变异自证] 撤掉计数幂等 ⇒ 计数幂等层必须判红', { skip: SKIP_MUTATION }, () => {
+  const r = runMutant((dir) => {
+    patchCopy(dir, 'engine/core/certification.ts',
+      "if (!alreadyJudged) {\n    next = bumpCounterOf(next, actor, 'successfulChallenges');\n  }",
+      "next = bumpCounterOf(next, actor, 'successfulChallenges');");
+  });
+  assert.notEqual(r.code, 0, '[B60-D 变异自证] mutant 必须让测试变红');
+  assert.ok(/AssertionError[^\n]*\[LAYER-E7-IDEMP/.test(r.out),
+    '[B60-D 变异自证] mutant 必须红在「计数幂等」层的专属措辞上');
+});
+
+test('[B60-D 变异自证] 撤掉改判回退 ⇒ 改判回退层必须判红', { skip: SKIP_MUTATION }, () => {
+  const r = runMutant((dir) => {
+    patchCopy(dir, 'engine/core/certification.ts',
+      "if (judgedFalseBefore) {\n      next = bumpCounterOf(next, actor, 'successfulChallenges', -1);\n    }",
+      '// mutant: 去掉改判回退');
+  });
+  assert.notEqual(r.code, 0, '[B60-D 变异自证] mutant 必须让测试变红');
+  assert.ok(/AssertionError[^\n]*\[LAYER-E8-REVERDICT/.test(r.out),
+    '[B60-D 变异自证] mutant 必须红在「改判回退」层的专属措辞上');
 });

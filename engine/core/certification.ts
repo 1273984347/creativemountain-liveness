@@ -161,11 +161,25 @@ export function certifyAnswer(state: State, actor: number, target: number, passe
   if (!c.pending.includes(target)) { return fail(state, `座位 ${target} 不在待认证状态`); }
   if (!c.challenged.includes(actor)) { return fail(state, `座位 ${actor} 本轮未发起质疑`); }
   if (actor === target) { return fail(state, '不能判定自己'); }
+  // ⚠️ B61（盲审必修项·计数侧修法）：**重复判定不得虚高计数**。
+  //   ⚠️ 为什么**不在引擎层加拒绝守卫**：既有裁定「`certifyAnswer` 无重复判定守卫 ⇒
+  //   **去重由粗筛承担**」（`engine/core/legal.ts:142-143`），且门禁层**登记**了
+  //   「重复判定 = 引擎接受、UI 必须不给点」这条「UI 比引擎严」的口径
+  //   （`tests/engine/legal-probe.test.ts` 的 `registeredUiStricter`）
+  //   ⇒ 引擎收紧接受面会**推翻既有裁定并让那条门禁变红** ⇒ 不擅自改口径。
+  //   ⇒ 改为**计数侧幂等**：同一 actor 的判定**只计一次**（探针/外部调用方也不虚高）。
+  const alreadyJudged = c.judgments[actor] !== undefined;
+  const judgedFalseBefore = c.judgments[actor] === false;
   const judgments: Readonly<Record<number, boolean>> = { ...c.judgments, [actor]: passed };
   let next: State = { ...state, certification: { ...c, judgments } };
   if (passed) {
     // 视为签印（§5.3.1）
     next = addSignature(next, target, 1);
+    // ⚠️ B61：若此前判过**不通过**（已计入一次「质疑成功」）而本次改判为通过
+    //   ⇒ 该次质疑不再成立 ⇒ 计数**回退 −1**（与复议推翻同款可逆语义）。
+    if (judgedFalseBefore) {
+      next = bumpCounterOf(next, actor, 'successfulChallenges', -1);
+    }
     return succeed(next, '判定通过，视为签印');
   }
   // 判不通过 → **先记录判定，给出复议窗口**（§5.3.2）。
@@ -175,7 +189,9 @@ export function certifyAnswer(state: State, actor: number, target: number, passe
   // ⚠️ B61：判不通过 = **质疑成功**（规格 §5.3.2：「质疑**成功**（答对 ≤ 1）」）
   //   ⇒ 计入**发起质疑者**的 `successfulChallenges`（§6.4 的 `successful_challenge` 目标）。
   //   ⚠️ 计数必须**先于判定**（判定读计数）⇒ 顺序不可颠倒。
-  next = bumpCounterOf(next, actor, 'successfulChallenges');
+  if (!alreadyJudged) {
+    next = bumpCounterOf(next, actor, 'successfulChallenges');
+  }
   // ⚠️ B61：`immediate` 时机的目标判定（§6.4：质疑成功时判定）⇒ 达成即发【印记】。
   //   ⚠️ 规格张力：「且该次未被复议推翻」与「即时结算」在时间上冲突（判定先于复议）⇒ 登记为遗留。
   next = settleImmediateGoals(next);
