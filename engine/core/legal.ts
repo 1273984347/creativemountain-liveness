@@ -6,18 +6,21 @@
 //   还枚举过一个**零调用方**的「出题合规裁定」动作（Task 1 已从 Action 契约移除；
 //   `action-contract.test.ts` 用本文件源码文本钉住它不再回来）——三例都是镜像漂移的实证。
 //   现在由引擎自己背书：枚举出来的动作一定被执行入口接受（`一致性-正向` 常驻用例钉住）。
-// ⚠️ 反向的教训**同样**要记（发现 2）：粗筛在四处**故意**窄于引擎——`pendingCert` /
-//   `duel !== null` / `phase !== '行动'` / `isRoundEnd`（a–d 见 `candidatesOf` 的契约表）。
+// ⚠️ 反向的教训**同样**要记（发现 2）：粗筛在五处**故意**窄于引擎——`pendingCert` /
+//   `duel !== null` / `phase !== '行动'` / `isRoundEnd` / **死亡座位**（a–e 见 `candidatesOf` 的契约表）。
 //   那是 UI 一致性与已登记 gap，**不是**引擎合法性判据，也不是待修的 bug；
-//   `一致性-正向` 对这种「少发候选」完全失明，故四处各有一条专门的取证用例钉住现状。
+//   `一致性-正向` 对这种「少发候选」完全失明，故五处各有一条专门的取证用例钉住现状。
 // ⚠️ 费用不作为门槛：规格 §3.1 未写支付、引擎不扣不校验（G-a 未裁定）。
 //
 // 覆盖的五个决策面（+ 认证子面）：
 //   行棋 MOVE / 问天 ROLL_WHEEL / 出牌 PLAY_CARD(×目标) /
 //   身份被动 ABILITY(×目标) / 山议投票 VOTE /
 //   认证 CERTIFY_SIGN·CHALLENGE·ABSTAIN·APPEAL·ANSWER·APPEAL_VOTE。
-// ⚠️ `PASS` 与 `COMPARE` **不枚举**：前者 UI 无「结束手番」入口（枚举出来等于给模型
-//   一个玩家实际操作不了的选项），后者入口待 B14——尽管 `probeAction` 对两者都能给答案。
+// ⚠️ `PASS` **不枚举**：UI 无「结束手番」入口（枚举出来等于给模型
+//   一个玩家实际操作不了的选项）——尽管 `probeAction` 对它能给出答案。
+// ⚠️ `COMPARE`（关隘出牌比对）**已可枚举**：B19 接了 UI 侧；B53 删掉了 `probe.ts` 里
+//   未清理的 B18 占位分支（同一个 switch 里两个 `case 'COMPARE'`，先命中的占位分支
+//   永远生效 ⇒ 出牌比对被永久拒收 ⇒ 枚举里永远没有它，而 UI 能做 ⇒ 同一枚举破口）。
 
 import type { Action } from './action.ts';
 import type { State } from './state.ts';
@@ -49,7 +52,7 @@ export const LEGAL_ACTION_CAP = 64;
  *   · `state.duel !== null` —— 整表清零，而 `submitDuelCard` 此时是活的玩家入口（无 Action 成员，B13 gap）；
  *   · `state.phase !== '行动'` —— `performAction` 从不读 `phase` ⇒ 山议里行棋照样被接受；
  *   · `!isRoundEnd(state)` —— 同样从不看 `turnIndex`/round 进度。
- * ⇒ 改这四条前先读 `candidatesOf` 的表格与那四条取证用例：**行为不动**，要动的是登记口径。
+ * ⇒ 改这几条前先读 `candidatesOf` 的表格与那几条取证用例：**行为不动**，要动的是登记口径。
  */
 export function actionWindowOpen(state: State, seat: number): boolean {
   const p = state.players[seat];
@@ -187,23 +190,24 @@ function certificationCandidates(state: State, seat: number): Action[] {
 /**
  * 候选总集（粗筛，不含合法性判断）——`getLegalActions` 与 `getLegalActionStats` 共用同一份。
  *
- * ## 已知窄于引擎的四处（发现 2：登记过的**口径**，不是待修的 bug）
+ * ## 已知窄于引擎的五处（发现 2：登记过的**口径**，不是待修的 bug）
  *
  * `一致性-正向` 常驻用例只钉得住「候选 ⊆ 引擎接受」这一个方向；反方向
  * （**引擎会接受、粗筛却不发**）对它完全不可见，历史上就是这么漏掉两条认证候选的
  * （见 `certificationCandidates` 注释里的发现 1）。除那两条已补齐的漏发之外，
- * 以下四处是**故意**窄，各自都有可执行证据行（`tests/engine/legal-probe.test.ts`）：
+ * 以下五处是**故意**窄，各自都有可执行证据行（`tests/engine/legal-probe.test.ts`）：
  *
  * | # | 粗筛多出来的一条判据 | 引擎现实 | 为什么仍然这么定 | 证据行 |
  * |---|---|---|---|---|
- * | a | `p.pendingCert` ⇒ 行动面整体关闭 | `performAction` 只有 `move` 分支查 `pendingCert`，`act` 分支不查 ⇒ 锁定者出牌被放行（G-b） | UI 在待认证期**禁用整个行动区**，给模型一条玩家点不到的动作等于给它一个不存在的选项 | `§7 粗筛窄于引擎四处·其一`＋表里 `PLAY_CARD@待认证锁定（G-b 取证）` |
- * | b | `state.duel !== null` ⇒ **整表清零** | 玩家此刻仍有可执行的入口 `submitDuelCard(seat, cardId)`（`{ok,state,note}` 契约；脚本/AI 另有 `autoResolveDuel`），但它**没有对应的 Action 成员** | Action 契约不在本文件改动面内（B13 gap）；对峙选牌是「隐藏信息」流程，本就打算在门禁层外置 | `§7 粗筛窄于引擎四处·其二`＋表里 `PASS@对峙未决` |
- * | c | `state.phase !== '行动'` ⇒ 不发 MOVE/ROLL_WHEEL/PLAY_CARD | `performAction` **从不读** `state.phase` ⇒ 山议阶段照样接受行棋 | 阶段是流程层的闸门（§3.1 八步），引擎不判不代表玩家可以乱按 | `§7 粗筛窄于引擎四处·其三` |
- * | d | `isRoundEnd(state)` ⇒ 同上关闭 | `performAction` 同样**不看** `turnIndex` 与 round 进度 | 「本 round 已行动过」属手番归属门禁（Task 7），与 c 同族 | `§7 粗筛窄于引擎四处·其四` |
+ * | a | `p.pendingCert` ⇒ 行动面整体关闭 | `performAction` 只有 `move` 分支查 `pendingCert`，`act` 分支不查 ⇒ 锁定者出牌被放行（G-b） | UI 在待认证期**禁用整个行动区**，给模型一条玩家点不到的动作等于给它一个不存在的选项 | `§7 粗筛窄于引擎五处·其一`＋表里 `PLAY_CARD@待认证锁定（G-b 取证）` |
+ * | b | `state.duel !== null` ⇒ **整表清零** | 玩家此刻仍有可执行的入口 `submitDuelCard(seat, cardId)`（`{ok,state,note}` 契约；脚本/AI 另有 `autoResolveDuel`），但它**没有对应的 Action 成员** | Action 契约不在本文件改动面内（B13 gap）；对峙选牌是「隐藏信息」流程，本就打算在门禁层外置 | `§7 粗筛窄于引擎五处·其二`＋表里 `PASS@对峙未决` |
+ * | c | `state.phase !== '行动'` ⇒ 不发 MOVE/ROLL_WHEEL/PLAY_CARD | `performAction` **从不读** `state.phase` ⇒ 山议阶段照样接受行棋 | 阶段是流程层的闸门（§3.1 八步），引擎不判不代表玩家可以乱按 | `§7 粗筛窄于引擎五处·其三` |
+ * | d | `isRoundEnd(state)` ⇒ 同上关闭 | `performAction` 同样**不看** `turnIndex` 与 round 进度 | 「本 round 已行动过」属手番归属门禁（Task 7），与 c 同族 | `§7 粗筛窄于引擎五处·其四` |
+ * | e | **死亡座位**（`alive !== true`）⇒ 整表清零 | `performAction` 只查 `player === undefined`，**从不查 `alive`** ⇒ 已出局座位的动作仍会被执行 | 出局者的动作**玩家点不到**（UI 只渲染存活座位）⇒ 同 a 的理由：不给模型一条不存在的选项 | `§7 粗筛窄于引擎五处·其五` |
  *
- * ⚠️ 反过来也**不要**据此加判据：`PASS` / `COMPARE` 不枚举、非当前手番不给行棋候选、
+ * ⚠️ 反过来也**不要**据此加判据：`PASS` 不枚举（`COMPARE` 已可枚举，B19 接线）、非当前手番不给行棋候选、
  *   费用不作门槛（G-a）、需目标的牌不发无目标版本——这些同样是口径，理由在各函数注释里。
- *   新加「窄于引擎」的判据时，**必须**同时留下形如上面四行的取证用例（引擎侧 `ok:true`
+ *   新加「窄于引擎」的判据时，**必须**同时留下形如上面五行的取证用例（引擎侧 `ok:true`
  *   或入口可用 + 枚举侧缺失），否则 Task 9 的登记与 Task 15 的判读无从引用。
  */
 export function candidatesOf(state: State, playerId: number): Action[] {

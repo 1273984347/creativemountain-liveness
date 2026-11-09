@@ -89,6 +89,26 @@ print/      实体轨产物（按主题分目录）+ 规则书叙述模板
 - **规则书尚未覆盖地形规则**：规格 §3.4 的福地 / 险径 / 裂隙 / 关隘 在实体规则书里仍无对应章节（待补）。
 - 主题包的**全量差异化**（各自独立的卡牌池 / 事件池 / 身份设计）属 V1.1 范围。
 
+### 动作契约层的未接线项（B15 登记，逐条现查于 2026-11-09）
+
+> 这些是**「UI 与 AI 使用同一枚举」**这条契约的已知缺口：引擎动作契约与实际接线不同步的地方。
+> 证据路径逐条给出，便于复核；括号内是本仓的缺陷编号。
+
+| # | 事实 | 证据 |
+|---|---|---|
+| G-a | **出牌费用无权威语义**：规格 §3.1 未写支付、引擎 `performAction` 的 `act` 分支**既不校验也不扣**、UI 手牌区只显示不拦、仅模拟器把 `cost <= resource` 当资格线 ⇒ 数字轨可**免费出牌** | `engine/core/turn-runner.ts`（`act` 分支）；`web/ui/hand.ts`；`tests/sim/run.mjs` |
+| G-b | **待认证锁定只在调用方生效**：引擎 `act` 分支**不查** `pendingCert`（`move` 分支查）⇒ 锁定者可用位移牌绕过 §5.1 锁定；枚举层按 UI 规则排除，但引擎本身未加固 | `engine/core/turn-runner.ts`；取证行 `tests/engine/legal-probe.test.ts`「§7 粗筛窄于引擎五处·其一」 |
+| G-c | **`gatesPassed` 无生产写入方**：四套主题各有一个身份目标是 `pass_gates`，而计数器只被**读取**（`engine/goals/registry.ts`）⇒ **4 个身份目标在数字轨永不可达**（B18 关隘接线后仍缺写入） | `engine/goals/registry.ts:38-39`；`themes/*/theme.json` |
+| G-d | **双人互验未接线**：`certifyMutualSign`（§5.5）**仅测试调用** ⇒ 双人互验在数字轨与模拟器均不可达 | `engine/core/certification.ts:431`；唯一调用方 `tests/engine/live-seats.test.ts` |
+| G-e | ~~README 门禁表缺第 ⑩ 道（浏览器 E2E）~~ ⇒ **已修**（B51 补全，现为十三道门） | `README.md` 门禁表、`tools/gate.mjs` |
+| G-f | **对峙选牌没有 `Action` 成员**：对峙未决时行动面整体关闭 ⇒ `candidatesOf` 对**所有座位**为空 ⇒ 真人必须选暗牌的时刻，AI/sidecar 拿到空动作表 | `engine/core/legal.ts`（行动窗口关闭条件）；`engine/core/duel.ts` |
+| G-g | **复议裁定无人调用**：`resolveAppeals` 在 `engine/**` 与 `web/**` **零调用方**（只有 `tests/sim/run.mjs`）⇒ 新增的复议票写入一个没人关闭的窗口 | `engine/core/certification.ts:250` |
+| G-h | **少发牌是静默的**：`createInitialState` 默认 `deckSize=40`，而 `dealInitialHands` 需要 `players × handStart`（8 人 = 56）⇒ 高人数下座位手牌偏少 | `engine/core/state.ts:251`；`engine/core/hand.ts` |
+
+> ⚠️ **粗筛故意窄于引擎的五条**（`pendingCert` / 对峙未决 / `phase` / `isRoundEnd` / 死亡座位）是**登记过的口径**，
+> 不是待修的 bug —— 枚举层刻意比引擎严，免得给模型一条玩家点不到的选项；逐条取证见
+> `tests/engine/legal-probe.test.ts` 的「§7 粗筛窄于引擎五处·其一～其五」。
+
 ## 文档
 
 - 规格：`docs/superpowers/specs/2026-11-07-creative-mountain-liveness-design.md`

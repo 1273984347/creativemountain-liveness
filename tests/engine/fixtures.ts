@@ -24,6 +24,7 @@ import {
   enterPendingCertification,
 } from '../../engine/core/certification.ts';
 import { openCouncil } from '../../engine/core/council.ts';
+import { applyEffect } from '../../engine/ops/registry.ts';
 import { getScales } from '../../engine/scales.ts';
 import type { CertificationState } from '../../engine/core/flow.ts';
 
@@ -169,6 +170,96 @@ export function councilScene(players = 4, seed = 7): State {
   assert.equal(r.state.council.resolved, false,
     `councilScene：局面名承诺「山议进行中」⇒ council.resolved 必须是 false，`
     + `实际 resolved=${String(r.state.council.resolved)}、phase=${r.state.phase}；`
+
     + `引擎 note=` + noteOf(r.note));
   return r.state;
+}
+
+/**
+ * 某个座位**已出局**的局面（发现 2 的 e 项取证：粗筛窄于引擎的第五条）。
+ *
+ * ⚠️ 用**真实引擎入口**构造：`damage` 算子在体力归零时把目标置 `alive: false`
+ *   （`engine/ops/registry.ts` 的 damage 分支）⇒ 不用手拼 `alive` 字段。
+ *   打死之前先确认目标有手牌 —— 否则粗筛会因「无牌可打」而清空，
+ *   取证就分不清是「死亡座位」这一条判据在起作用（⇒ 取证必须**只有这一个变量**）。
+ */
+export function exiledScene(players = 4, seed = 7, victimSeat = 3): State {
+  const s = mk(players, seed);
+  const victim = s.players[victimSeat];
+  assert.ok(victim !== undefined, `前提：座 ${String(victimSeat)} 必须存在`);
+  assert.ok(victim.hand.length > 0, `前提：座 ${String(victimSeat)} 必须有手牌（否则取证的变量不唯一）`);
+  const actor = victimSeat === 0 ? 1 : 0;
+  const res = applyEffect({ state: s, actor }, { op: 'damage', amount: victim.hpMax + 1, target: victimSeat });
+  const out = res.state;
+  const now = out.players[victimSeat];
+  assert.equal(now?.alive, false, `前提：座 ${String(victimSeat)} 必须真的被置为出局`);
+  return out;
+}
+
+
+/**
+ * 某个座位**停在未通关隘格上**的局面（B53：把「关隘面」纳入漂移守卫的覆盖范围）。
+ *
+ * ⚠️ 为什么需要它：默认棋盘是 `makeBoard` 造的**直线山道（无关隘）**
+ *   ⇒ 在此之前，`driftScenes` 里**没有任何关隘局面** ⇒ 「COMPARE 是否枚举」那一面
+ *   在漂移守卫中恒为空集（空集 ≠ 有效，E87）⇒ UI 与引擎在关隘面的破口**无人看得见**。
+ *
+ * ⚠️ 为什么只改 board 与 position：仓内禁令是「不手拼 certification / council / duel 字段」
+ *   （那些有专门的引擎入口与前置断言）；棋盘在**测试用直线山道**上补一个关隘格、
+ *   再把玩家挪过去，是最小必要构造，不伪造任何流程状态。
+ */
+/**
+ * `gateScene` 的**已改为付费**变体：本关只剩付费通道（试炼失败后，B24）。
+ *
+ * ⚠️ 为什么要单独一个场景：B53 的 X4（UI 侧漏判 `gate_pay_<index>`）**在集合类守卫里
+ *   看不见** —— payOnly 时 `uiCandidates` **本就不发** COMPARE 候选 ⇒ 枚举层/候选层守卫
+ *   结构上覆盖不到它 ⇒ 回退 X4 后守卫仍全绿（盲审变异实测确认）⇒ 必须另立
+ *   **直接断言 `uiBlockNotice` 的**用例（不靠集合相等）。
+ */
+export function gatePayOnlyScene(players = 4, seed = 7, gateIndex = 3, seat = 0): State {
+  const s = gateScene(players, seed, gateIndex, seat);
+  const out: State = {
+    ...s,
+    players: s.players.map((p) => (p.seat === seat
+      ? { ...p, flags: { ...p.flags, [`gate_pay_${gateIndex}`]: true } }
+      : p)),
+  };
+  assert.equal(
+    out.players[seat]?.flags[`gate_pay_${gateIndex}`],
+    true,
+    '前提：目标座位必须真的被标记为「本关已改为付费」');
+  return out;
+}
+export function gateScene(players = 4, seed = 7, gateIndex = 3, seat = 0): State {
+  const s = mk(players, seed);
+  // ⚠️ 试炼通道需要**牌堆里真实存在**的试炼牌：`drawTrial` 按 `tile.gate.trialIds`
+  //   从 `state.decks.trial` 过滤（gate.ts）⇒ 默认状态该牌堆是**空的** ⇒
+  //   不补这张牌，试炼通道必拒（引擎不枚举 `trial`）⇒ 守卫会误以为两侧不等。
+  const trialCard = {
+    id: 'test_trial_gate',
+    name: '测试试炼牌',
+    type: 'utility' as const,
+    cost: 0,
+    color: 'red' as const,
+    rank: 2,
+    text: '测试用试炼牌',
+    effects: [],
+  };
+  const tiles = s.board.tiles.map((t) =>
+    t.index === gateIndex
+      ? { ...t, kind: 'gate' as const, name: `第${String(gateIndex)}格关隘`, gate: { fee: 3, trialIds: [trialCard.id] } }
+      : t);
+  const players2 = s.players.map((p) => (p.seat === seat ? { ...p, position: gateIndex } : p));
+  const out: State = {
+    ...s,
+    board: { ...s.board, tiles },
+    players: players2,
+    decks: { ...s.decks, trial: [trialCard] },
+  };
+  assert.equal(out.players[seat]?.position, gateIndex, '前提：目标座位必须真的停在关隘格上');
+  assert.equal(
+    out.board.tiles.find((t) => t.index === gateIndex)?.kind,
+    'gate',
+    '前提：那一格必须真的是关隘（默认棋盘是无关隘的直线山道）');
+  return out;
 }

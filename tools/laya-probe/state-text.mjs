@@ -187,12 +187,17 @@ export function describeAction(state, action, seat) {
     case 'MOVE': return cut('行棋：掷骰前进');
     case 'ROLL_WHEEL': return cut('问天：掷指令骰');
     case 'PASS': return cut('结束手番');
-    // ⚠️ COMPARE **不查手牌**（与 brief 的写法不同，这里是故意的）：关隘试炼牌由 `drawTrial`
-    //   从 `decks.trial` **抽**出来（gate.ts），不是玩家手牌里的一张 ⇒ 拿 `action.cardId` 去手牌里
-    //   find 要么抛错、要么在 id 巧合时读出**另一张牌**的名字。
-    //   且 `cardId`/`target` 两字段的确切含义要等 B14 接线才定得下来（`legal.ts` 今天根本不枚举它），
-    //   所以语义先只说「以试炼牌闯关」，不把未裁定的形状写成断言。
-    case 'COMPARE': return cut('过隘：以试炼牌闯关（入口待 B14）');
+    // ⚠️ **B53 更正**：本分支此前写的是「过隘：以试炼牌闯关（入口待 B14）」⇒ **语义是反的**。
+    //   B19 已定案（规格 §3.5）：`COMPARE { actor, cardId, target }` = **出牌比对** ——
+    //   **我出自己手牌里的一张** vs **目标玩家的手牌顶**（明牌），比颜色 → 比点数。
+    //   ⇒ `cardId` 就是**我手牌里的一张**（与 PLAY_CARD 同款，可查手牌）；
+    //   而「以试炼牌闯关」是**试炼通道**（`GATE_RESOLVE{trial}`）的语义，两者**不是同一条路**。
+    //   ⚠️ B53 之前 `legal.ts` 根本不枚举 COMPARE ⇒ 本分支**不可达** ⇒ 错误语义一直藏着；
+    //   删掉探针里的 B18 占位分支后它**变得可达** ⇒ 必须同时更正语义。
+    case 'COMPARE': {
+      const card = cardOf(action.cardId);
+      return cut(`出牌比对：出「${card.name}」${target}`);
+    }
     case 'PLAY_CARD': {
       const card = cardOf(action.cardId);
       return cut(`出「${card.name}」${target}（费${card.cost}）`);

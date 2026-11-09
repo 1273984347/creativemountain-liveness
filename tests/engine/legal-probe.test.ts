@@ -8,7 +8,7 @@ import { startDuel, submitDuelCard } from '../../engine/core/duel.ts';
 import { castVote, openCouncil, resolveCouncil } from '../../engine/core/council.ts';
 import { currentPlayer, isRoundEnd } from '../../engine/core/round.ts';
 import {
-  appealedScene, challengedScene, councilScene, lockedScene, mk, pendingScene, putPending,
+  appealedScene, challengedScene, councilScene, exiledScene, gatePayOnlyScene, gateScene, lockedScene, mk, pendingScene, putPending,
 } from './fixtures.ts';
 import {
   getLegalActions, getLegalActionStats, candidatesOf, actionWindowOpen, LEGAL_ACTION_CAP,
@@ -16,6 +16,7 @@ import {
 import { abilityAvailability, activeAbilityId } from '../../engine/core/passives.ts';
 import { cardNeedsTarget, targetCandidates } from '../../engine/core/targeting.ts';
 import { actionKey } from '../../engine/core/action-key.ts';
+import { councilVoteTargets } from '../../web/ui/council.ts';
 import {
   uiAllows, uiAllowedSet, uiBlockNotice, uiCandidates, uiHasLegalTarget,
 } from '../../web/legal-gate.ts';
@@ -67,12 +68,24 @@ test('试跑：非法动作必被拒（通道 ① 引用相等 / 通道 ② ok=f
     '§5.1 待认证锁定 ⇒ performAction 的 move 分支 return state（引用相等）');
 });
 
-test('试跑：COMPARE 必拒且拒因点名 B19（出牌比对通道已定案但未实现）', () => {
+test('试跑：COMPARE 在**关隘格外**必拒（拒因是真实规则，不再点名 B19）', () => {
   const r = probeAction(mk(), { type: 'COMPARE', actor: 0, cardId: 'c', target: 1 });
   assert.equal(r.ok, false);
-  // 引擎事实：**B18 已把 COMPARE 定案为「关隘出牌比对通道」**（规格 §3.5 B18 定案 4），
-  // 但该通道的**实现**列为 B19 ⇒ 付费 / 试炼两条已接线、COMPARE 仍无可试跑入口。
-  assert.match(r.reason, /B19/, '拒因必须点名 B19，让下游知道自己撞上的是未实现而非规则拒绝');
+  // ⚠️ **B53 修正**：此前这里断言「拒因必须点名 B19」⇒ 那是把 **B18 时期的占位分支**
+  //   （`case 'COMPARE': return reject('…未实现（B19）')`）**固化成了预期行为**。
+  //   而该占位分支与 B19 的真实试跑分支**同在一个 switch** ⇒ 先命中的占位分支永远生效
+  //   ⇒ 出牌比对通道**永远被拒** ⇒ 枚举里永远没有 COMPARE，
+  //   而 UI 侧早已接线 ⇒ 「UI 与 AI 同一枚举」在关隘面破口。占位分支已删（B53）。
+  //   现在拒因来自**真实规则**（`resolveCompareGate`：「当前不在未通过的关隘格上」）。
+  assert.match(r.reason, /关隘格/, '拒因必须来自真实规则（不再是「未实现」占位）');
+});
+
+test('试跑：COMPARE 在**关隘格上**被引擎接受（B53：出牌比对通道已真正可用）', () => {
+  const s = gateScene(4, 7, 3, 0);
+  const card = s.players[0]?.hand[0];
+  assert.ok(card !== undefined, '前提自查：座 0 必须有手牌');
+  const r = probeAction(s, { type: 'COMPARE', actor: 0, cardId: card.id, target: 1 });
+  assert.equal(r.ok, true, `停在关隘格上时出牌比对必须被引擎接受；实际拒因=${r.reason}`);
 });
 
 test('试跑：PASS 判据＝引擎是否接受——mk() 上 PASS 合法（计划里那条拒因经实测不成立）', () => {
@@ -280,7 +293,7 @@ const PROBE_CASES: readonly ProbeCase[] = [
   { label: 'PASS@结算才立对峙（引擎已接受，推进挂起待对峙结算）', scene: settleIntoDuelScene, action: { type: 'PASS', actor: 0 }, ok: true, reasonRe: /挂起/ },
   { label: 'PASS@无当前手番', scene: noActorScene, action: { type: 'PASS', actor: 0 }, ok: false, reasonRe: /手番未推进/ },
   // ---- 未接线：只能显式判拒 ----
-  { label: 'COMPARE@关隘出牌比对未实现', scene: mk, action: { type: 'COMPARE', actor: 0, cardId: 'c_gate_trial', target: 1 }, ok: false, reasonRe: /B19/ },
+  { label: 'COMPARE@不在关隘格', scene: mk, action: { type: 'COMPARE', actor: 0, cardId: 'c_gate_trial', target: 1 }, ok: false, reasonRe: /关隘格/ },
   // ---- B18：关隘通道（GATE_RESOLVE）——不在关隘格上必拒 ----
   { label: 'GATE_RESOLVE@不在关隘格', scene: mk, action: { type: 'GATE_RESOLVE', actor: 0, channel: 'pay' }, ok: false, reasonRe: /关隘/ },
   // ---- B18-b：裂隙通道（BARRIER_RESOLVE）——不在可放印的裂隙格上必拒 ----
@@ -299,7 +312,9 @@ function firstCardId(): string {
 // `getLegalActions` 的三段式：**候选粗筛 → rng 隔离试跑 → 判定收集**。
 // 覆盖五个决策面：行棋 / 问天 / 出牌(×目标) / 身份被动(×目标) / 山议投票 / 认证
 // （签印·质疑·弃权·复议·判定·复议票）。
-// ⚠️ `PASS` 与 `COMPARE` **不枚举**：前者 UI 无「结束手番」入口、后者（关隘出牌比对）实现待 B19
+// ⚠️ `PASS` **不枚举**（UI 无「结束手番」入口）。`COMPARE`（关隘出牌比对）**已可枚举**：
+//   B19 接了 UI 侧，B53 修掉了探针里未删的 B18 占位分支 ⇒ 不在关隘格上时不枚举，
+//   在关隘格上时枚举（见「§7 粗筛窄于引擎五处」与关隘面漂移守卫）。
 //   —— 尽管 `probeAction` 对两者都能给答案（上面 Task 4 的表已钉住），
 //   枚举口径以「玩家现在真能提交什么」为准，不是「探针会不会说合法」。
 // ⚠️ 场景一律来自 fixtures；被动只改 `flags.passive`（不碰认证/山议字段）。
@@ -386,7 +401,7 @@ test('§7 认证段：签印/质疑/弃权在册，未质疑者无判定权、�
   assert.equal(types.has('CERTIFY_ANSWER'), false, '未质疑 ⇒ 无判定权');
   assert.equal(types.has('CERTIFY_APPEAL_VOTE'), false);
   assert.equal(types.has('PASS'), false, 'UI 无「结束手番」入口 ⇒ 不枚举');
-  assert.equal(types.has('COMPARE'), false, '关隘未接线 ⇒ 不枚举');
+  assert.equal(types.has('COMPARE'), false, '不在关隘格上 ⇒ 不枚举（关隘面另有关隘场景覆盖）');
 });
 
 test('§7 判定权只属于已质疑者，且判定去重由粗筛承担（certifyAnswer 无重复判定守卫）', () => {
@@ -563,15 +578,15 @@ test('§7 上限：枚举结果永不超过 LEGAL_ACTION_CAP（含**真的撞上
     '上限测试必须有一个「枚举结果正好停在上限」的局面，否则整条测试没有可失败的形式');
 });
 
-// ============================ 发现 2：粗筛**故意**窄于引擎的四处（取证行）============================
+// ============================ 发现 2：粗筛**故意**窄于引擎的五处（取证行）============================
 //
-// `一致性-正向` 钉的是「枚举 ⊆ 引擎接受」，而这四处是「引擎接受 ⊄ 枚举」——
+// `一致性-正向` 钉的是「枚举 ⊆ 引擎接受」，而这五处是「引擎接受 ⊄ 枚举」——
 // 它们不是漏洞，是**登记过的口径**（UI 一致性 / 未接线 gap），`legal.ts` 的
-// `actionWindowOpen` 与 `candidatesOf` 注释各有一份完整清单。本条把四处都做成可执行证据，
+// `actionWindowOpen` 与 `candidatesOf` 注释各有一份完整清单。本条把五处都做成可执行证据，
 // 让 Task 9 的登记与 Task 15 的判读引用到**行**而不是引用到**注释**。
-// ⚠️ 本条**不改变任何行为**：四处都按现状钉住；若将来引擎/口径改动，本条报红逼着当场复核。
+// ⚠️ 本条**不改变任何行为**：五处都按现状钉住；若将来引擎/口径改动，本条报红逼着当场复核。
 
-test('§7 粗筛窄于引擎四处·其一（a：pendingCert ⇒ G-b 同族）：引擎放行出牌，枚举不发', () => {
+test('§7 粗筛窄于引擎五处·其一（a：pendingCert ⇒ G-b 同族）：引擎放行出牌，枚举不发', () => {
   const locked = lockedScene();
   const card = locked.players[0]?.hand[0];
   assert.ok(card !== undefined, '前提自查：锁定者必须有手牌');
@@ -581,7 +596,7 @@ test('§7 粗筛窄于引擎四处·其一（a：pendingCert ⇒ G-b 同族）�
     '粗筛侧：pendingCert ⇒ 行动面整体关闭（与 UI 禁用行动区一致）⇒ 故意不发');
 });
 
-test('§7 粗筛窄于引擎四处·其二（b：duel !== null ⇒ 对峙 gap）：整表清零，而 submitDuelCard 是活的玩家入口', () => {
+test('§7 粗筛窄于引擎五处·其二（b：duel !== null ⇒ 对峙 gap）：整表清零，而 submitDuelCard 是活的玩家入口', () => {
   // 对峙用真实入口 startDuel 造（发现 5：不手拼 `duel` 字段）。
   const d = startDuel(mk(4, 7), 0, 1);
   assert.ok(d.duel !== null, '前提自查：startDuel 必须真的立起对峙');
@@ -596,7 +611,7 @@ test('§7 粗筛窄于引擎四处·其二（b：duel !== null ⇒ 对峙 gap）
     `引擎侧：玩家此刻仍有可执行的入口 submitDuelCard（无对应 Action 成员 ⇒ 枚举永远给不出它）：${submitted.note}`);
 });
 
-test('§7 粗筛窄于引擎四处·其三（c：phase）：引擎从不读 phase ⇒ 山议里行棋仍被接受，枚举不发', () => {
+test('§7 粗筛窄于引擎五处·其三（c：phase）：引擎从不读 phase ⇒ 山议里行棋仍被接受，枚举不发', () => {
   const council = councilScene();
   assert.equal(council.phase, '山议', '前提自查：本局面的阶段必须不是「行动」');
   const r = probeAction(council, { type: 'MOVE', actor: 0, steps: 0 });
@@ -605,7 +620,7 @@ test('§7 粗筛窄于引擎四处·其三（c：phase）：引擎从不读 phas
   assert.equal(getLegalActions(council, 0).some((a) => a.type === 'MOVE'), false, '粗筛侧：不发 MOVE/ROLL_WHEEL/PLAY_CARD');
 });
 
-test('§7 粗筛窄于引擎四处·其四（d：isRoundEnd）：引擎从不看 turnIndex，枚举按 round 末关闭', () => {
+test('§7 粗筛窄于引擎五处·其四（d：isRoundEnd）：引擎从不看 turnIndex，枚举按 round 末关闭', () => {
   const ended = roundEndScene();
   assert.ok(isRoundEnd(ended), '前提自查：本局面必须真的处于 round 末（turnIndex >= 存活人数）');
   assert.equal(ended.phase, '行动', '前提自查：阶段仍是行动 ⇒ 关掉窗口的只有 isRoundEnd 这一条判据');
@@ -614,6 +629,20 @@ test('§7 粗筛窄于引擎四处·其四（d：isRoundEnd）：引擎从不看
   const r = probeAction(ended, { type: 'MOVE', actor: 0, steps: 0 });
   assert.equal(r.ok, true, `引擎侧：performAction 不看 turnIndex / 手番归属 ⇒ 行棋被放行；实际拒因=${r.reason}`);
   assert.equal(getLegalActions(ended, 0).some((a) => a.type === 'MOVE'), false, '粗筛侧：round 已走完 ⇒ 不发');
+});
+
+test('§7 粗筛窄于引擎五处·其五（e：死亡座位）：引擎从不查 alive ⇒ 出局座位的动作仍被接受，枚举不发', () => {
+  const dead = exiledScene(4, 7, 3);
+  assert.equal(dead.players[3]?.alive, false, '前提自查：座 3 必须真的已出局');
+  assert.equal(dead.phase, '行动', '前提自查：阶段仍是行动 ⇒ 关掉窗口的只有「死亡座位」这一条判据');
+  assert.equal(dead.duel, null, '前提自查：没有对峙干扰这条判据');
+  assert.equal(dead.council.resolved, true, '前提自查：山议未在进行');
+  // 引擎侧：performAction 只查 player === undefined，**从不查 alive** ⇒ 出局座位的动作被放行
+  const r = probeAction(dead, { type: 'MOVE', actor: 3, steps: 0 });
+  assert.equal(r.ok, true, `引擎侧：performAction 不查 alive ⇒ 出局座位仍被放行；实际拒因=${r.reason}`);
+  // 粗筛侧：candidatesOf 的 alive !== true ⇒ 整表清零
+  assert.equal(candidatesOf(dead, 3).length, 0, '粗筛侧：死亡座位 ⇒ 整表清零');
+  assert.equal(getLegalActions(dead, 3).length, 0, '粗筛侧：枚举因此为空集');
 });
 
 /**
@@ -778,6 +807,8 @@ function driftScenes(seed: number): State[] {
     challengedThenPendingScene(), coPendingAppealScene(),
     starvedCertScene(seed), appealVoteCastScene(seed),
     exiledCouncilAppealScene(seed), councilVotedActionPanelScene(seed),
+    // ⚠️ B53：加入**关隘局面** ⇒ 「COMPARE 是否枚举」那一面不再恒为空集（E87）
+    gateScene(4, seed),
   ];
 }
 
@@ -790,6 +821,41 @@ function sceneTag(s: State): string {
     + ` appealVotes=${JSON.stringify(c.appealVotes)}`;
 }
 
+test('X4 回归锁：payOnly 关隘面 UI 与引擎**同判**「本关已改为付费」', () => {
+  // ⚠️ 这条判据**不能靠集合相等守卫**：payOnly 时 `uiCandidates` 本就不发 COMPARE 候选
+  //   ⇒ 枚举层 / 候选层守卫**结构上看不见**这条（盲审变异实测：回退 X4 后守卫仍全绿）。
+  //   ⇒ 必须**直接断言 `uiBlockNotice` 与 `probeAction` 同判**。
+  const s = gatePayOnlyScene(4, 7, 3, 0);
+  const card = s.players[0]?.hand[0];
+  assert.ok(card !== undefined, '前提自查：座 0 必须有手牌');
+  const action = { type: 'COMPARE' as const, actor: 0, cardId: card.id, target: 1 };
+  // UI 侧：必须拒，且拒因点名「已改为付费」（否则玩家会点一个引擎必然拒绝的动作）
+  const notice = uiBlockNotice(s, 0, action);
+  assert.notEqual(notice, null, 'payOnly 关隘面上 UI 必须拒绝出牌比对');
+  assert.match(String(notice), /已改为付费/, '拒因必须点名「本关已改为付费」');
+  // 引擎侧：同样拒，且拒因同样点名 ⇒ 两侧**同判**
+  const r = probeAction(s, action);
+  assert.equal(r.ok, false, '引擎侧必须拒绝（payOnly 关隘只剩付费通道）');
+  assert.match(r.reason, /已改为付费/, '引擎拒因必须点名「本关已改为付费」');
+});
+test('漂移守卫（常驻·面板层）：山议面板的可投目标集合 == 引擎枚举的 VOTE 集合', () => {
+  // 面板的「可投谁」是 UI 侧独立表达（`web/ui/council.ts` 的 `councilVoteTargets`），
+  // 必须与引擎枚举的 VOTE 集合一致 ⇒ 否则「UI 与 AI 使用同一枚举」在山议面破口。
+  for (const seed of [7, 11, 23, 37, 53]) {
+    for (const s of driftScenes(seed)) {
+      for (let seat = 0; seat < s.players.length; seat += 1) {
+        const engine = getLegalActions(s, seat)
+          .filter((a) => a.type === 'VOTE')
+          .map((a) => (a.type === 'VOTE' ? a.target : -1))
+          .sort((x, y) => x - y);
+        const panel = councilVoteTargets(s, seat).slice().sort((x, y) => x - y);
+        assert.deepEqual(panel, engine,
+          `seed=${String(seed)} seat=${String(seat)} phase=${s.phase}：面板可投集合必须等于引擎 VOTE 集合`
+          + `\n  面板=${JSON.stringify(panel)}\n  引擎=${JSON.stringify(engine)}`);
+      }
+    }
+  }
+});
 test('漂移守卫（常驻·枚举层）：uiAllowedSet == getLegalActions（UI 与引擎两独立实现集合相等）', () => {
   for (const seed of [7, 11, 23, 37, 53]) {
     for (const s of driftScenes(seed)) {

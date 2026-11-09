@@ -380,6 +380,13 @@
 
 **门槛固定为 3 问取 2**（答对 ≥ 2 即通过），不随人数或主题变化。
 
+**动作契约层面的两条归属（B15 落地，引擎真相）**：
+
+| # | 归属 | 引擎口径 | 理由 |
+|---|---|---|---|
+| 1 | **判定权**属于**已质疑且尚未判定**的座位 | 动作 `CERTIFY_ANSWER`（`{actor, target, passed}`）；引擎 `certifyAnswer` **没有重复判定守卫**（`judgments` 以**判定人**为键）⇒ 同一判定人若被粗筛再发一次「判通过」，引擎会照单全收 | 去重必须由**粗筛**承担（`engine/core/legal.ts`）；规格层面则由「每人每轮一次选择」自然约束 |
+| 2 | **复议由待认证者本人申请** | 动作 `CERTIFY_APPEAL` 的 `target === actor`，且需 2 灵枢 | 复议是**被质疑方的反制权**（§5.3.2 第 2 条「待认证者复议权」）；由他人代为申请会凭空创造一条无主的复议窗口 |
+
 #### 5.3.2 判罚权归属（关键：防止「认证人说了算」）
 
 判罚权采用**三方结构**，而非认证人单方裁定：
@@ -388,6 +395,7 @@
 2. **待认证者复议权**：若认证人判「不通过」，待认证者可**消耗 2 灵枢申请复议**。
 3. **第三方裁定**：复议由**除认证人与待认证者外的存活玩家**投票（匿名，多数决）裁定「该回答是否算「活人」」：
    - **复议投票不消耗认证印**：任何非当事人的存活玩家均可投票，**无论其本轮已签印、已质疑还是已弃权**。
+   - **复议票只发给非当事人**：判定人与待认证者都被引擎拒（**引擎 `certifyAppealVote` 的接受口径**；粗筛一律先发给全部待认证目标、由试跑滤除）。
    - 复议**成功** → 该题改判为通过（该认证人视为签印）；
    - 复议**失败** → 维持「不通过」，且**待认证者额外扣 1 灵枢**，待认证者后退 1 格。
    - **平票 → 视为复议成功**（保护被质疑方）。
@@ -596,7 +604,7 @@ type PlayerTurnState = {
 ```ts
 type Action =
   | { type: 'MOVE'; actor: number; steps: number }
-  | { type: 'PLAY_CARD'; actor: number; cardId: string }
+  | { type: 'PLAY_CARD'; actor: number; cardId: string; target?: number }
   | { type: 'ABILITY'; actor: number; abilityId: string; target?: number }
   | { type: 'ROLL_WHEEL'; actor: number }
   | { type: 'COMPARE'; actor: number; cardId: string; target: number }
@@ -608,9 +616,20 @@ type Action =
   | { type: 'CERTIFY_CHALLENGE'; actor: number; target: number }
   | { type: 'CERTIFY_ABSTAIN'; actor: number; target: number }
   | { type: 'CERTIFY_APPEAL'; actor: number; target: number }
-  | { type: 'CERTIFY_VALIDATE_QUESTION'; actor: number; target: number; valid: boolean }
-  | { type: 'CERTIFY_ANSWER'; actor: number; questionIndex: number; ok: boolean };
+  | { type: 'CERTIFY_APPEAL_VOTE'; actor: number; target: number; overturn: boolean }
+  | { type: 'CERTIFY_ANSWER'; actor: number; target: number; passed: boolean };
 ```
+
+**与代码同步的三处更正（B15/B18 裁定；本节此前为旧稿）**：
+
+| # | 旧稿 | 现行 | 依据 |
+|---|---|---|---|
+| 1 | `CERTIFY_VALIDATE_QUESTION`（孤儿动作） | **移除** | 对应算子**全仓零调用方** ⇒ 枚举一个没人能执行的动作只会制造假选项 |
+| 2 | 缺 `CERTIFY_APPEAL_VOTE` | **补入**（`{actor, target, overturn}`） | 复议投票是 §5.3.2 的第三方裁定，引擎 `certifyAppealVote` 已实现 ⇒ 动作契约必须能表达它，否则「UI 与 AI 同一枚举」在复议面破口 |
+| 3 | `CERTIFY_ANSWER { questionIndex, ok }` | **`{ target, passed }`**；`PLAY_CARD` 补 `target?` | 唯一真实入口是 `certifyAnswer(state, actor, target, passed)`——旧稿的 `questionIndex` 是**从未存在过的字段**；`PLAY_CARD` 的可选目标贴合 `performAction(s, seat, 'act', { cardId, target? })` |
+
+> ⚠️ **本节与 `engine/core/action.ts` 必须逐字一致**（成员集合 + 字段形状）——由
+> `tests/engine/action-contract.test.ts` 的「§6.3 规格表 == 代码」常驻断言守住（漂移即红）。
 
 ### 6.4 机制原语注册表（关键约束）
 
@@ -880,6 +899,35 @@ getLegalActions(state: State, playerId: number): Action[]
 - UI 与 AI 使用同一枚举，保证「AI 能做的玩家都能做」。
 - V1 交付接口 + 一个 `HeuristicPolicy` 骨架（不追求强度），并明确标注为占位。
 - 后续 AI 实现只需实现 `Policy.choose(state, playerId, legal): Action`，引擎与 UI 零改动。
+
+**已实现契约（B15 落地；本节此前只写承诺，现补「谁保证、哪个测试钉住、什么命令」）**：
+
+| # | 契约 | 保证者 | 常驻证据 |
+|---|---|---|---|
+| ① | **三段式枚举**：候选粗筛 → rng 隔离试跑 → 判定收集 | `engine/core/legal.ts`（`candidatesOf` → `getLegalActions`）+ `engine/core/probe.ts`（`probeAction`） | `tests/engine/legal-probe.test.ts`「一致性-正向」：枚举出的每个动作必被引擎接受 |
+| ② | **合法性权威是引擎执行入口**：`probeAction` **不掺规则校验**（不查 `card.cost`、不查 `act` 分支的 `pendingCert`、不查 target 越界）⇒ 枚举结果由引擎背书，不靠第二份手写镜像 | `engine/core/probe.ts` | 同上「一致性-正向」（若掺规则，镜像漂移会直接表现为引擎拒合法动作） |
+| ③ | **四层漂移守卫**：枚举层（`uiAllowedSet == getLegalActions`）、候选层（`uiCandidates == candidatesOf`）、门禁层（候选**之外**的越界形状也要 `uiAllows == probeAction`）、判定形状层（`uiBlockNotice` 的形状矩阵）；**面板层**（山议面板的可投集合 == 引擎 `VOTE` 集合，B53 新增） | `web/legal-gate.ts`（**独立**表达 UI 规则，不借道引擎枚举） | `tests/engine/legal-probe.test.ts`「漂移守卫」各层各一条 |
+| ④ | **候选上限** `LEGAL_ACTION_CAP = 64`；读数四字段 `getLegalActionStats` = `{candidates, enumerated, truncated, dropped}` | `engine/core/legal.ts` | 同文件「上限」用例（`wideHandScene` ⇒ 截断可失败） |
+| ⑤ | **被动标识唯一来源** `activeAbilityId(state, seat)`（`PassiveSpec = Effect` ⇒ 标识只能取 `op`） | `engine/core/passives.ts` | 同文件「§7 被动标识唯一来源」用例 |
+| ⑥ | **不枚举项两条**：`PASS`（UI 无「结束手番」入口）、**对峙选牌**（无 `Action` 成员 ⇒ 整表清零，见 G-f）。⚠️ `COMPARE`（关隘出牌比对）**已可枚举**（B19 接线 UI；B53 修掉探针里未删的 B18 占位分支） | `engine/core/legal.ts` | 同文件「§7 粗筛窄于引擎」各条取证用例 + 关隘面漂移守卫 |
+
+**粗筛故意窄于引擎的五条**（登记过的**口径**，不是待修的 bug）：
+
+| # | 粗筛多出的判据 | 引擎现实 | 为什么仍然这么定 |
+|---|---|---|---|
+| a | `p.pendingCert` ⇒ 行动面整体关闭 | `performAction` **只有 `move` 分支**查 `pendingCert`，`act` 分支不查 ⇒ 锁定者出牌被放行（G-b） | UI 在待认证期**禁用整个行动区**，给模型一条玩家点不到的动作等于给它一个不存在的选项 |
+| b | `state.duel !== null` ⇒ **整表清零** | 玩家此刻仍有入口 `submitDuelCard(seat, cardId)`，但它**没有对应的 Action 成员**（G-f） | 对峙选牌是「隐藏信息」流程，本就打算在门禁层外置 |
+| c | `state.phase !== '行动'` ⇒ 不发 MOVE/ROLL_WHEEL/PLAY_CARD | `performAction` **从不读** `state.phase` ⇒ 山议阶段照样接受行棋 | 阶段是流程层的闸门（§3.1 八步），引擎不判不代表玩家可以乱按 |
+| d | `isRoundEnd(state)` ⇒ 同上关闭 | `performAction` 同样**不看** `turnIndex` 与 round 进度 | 「本 round 已行动过」属手番归属门禁，与 c 同族 |
+| e | **死亡座位**（`alive !== true`）⇒ 整表清零 | `performAction` 只查 `player === undefined`，**不查 `alive`** ⇒ 已出局座位的动作仍会被执行 | 出局者的动作**玩家点不到**（UI 只渲染存活座位）⇒ 同 a 的理由：不给模型不存在的选项 |
+
+> ⚠️ **每条「窄于引擎」都必须有可执行取证用例**（引擎侧接受 / 入口可用，但枚举侧缺失）——
+> 共五条，见 `tests/engine/legal-probe.test.ts` 的「§7 粗筛窄于引擎五处·其一～其五」。
+> ⚠️ **反过来不要据此加判据**：`PASS` 不枚举（`COMPARE` 已可枚举，B19 接线 + B53 修占位分支）、非当前手番不给行棋候选、
+> 费用不作门槛（G-a）、需目标的牌不发无目标版本——这些同样是口径，理由在各函数注释里。
+
+**费用不作为合法性门槛**（G-a 未裁定）：`getLegalActions` 与 `uiAllows` 均不检查 `card.cost`；
+模拟器自己的 `cost <= resource` 过滤属其启发式策略，不改。
 
 **范围裁定（V1 不做 AI 陪练，完全后置到 V2）**，理由：
 

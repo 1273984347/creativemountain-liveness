@@ -111,7 +111,7 @@ function targetRefusal(state: State, seat: number, target: number | undefined, l
  *   · ANSWER ⇒ 本人已质疑且未判定 ∧ 目标待认证 ∧ 非判自己；
  *   · APPEAL ⇒ 本人待认证且未申请 ∧ 目标＝本人 ∧ ≥2 灵枢；
  *   · APPEAL_VOTE ⇒ 见下（发现 1：按引擎纠正，不再排除同场另一名待认证者）；
- *   · PASS / COMPARE ⇒ 无 UI 入口 / 待 B14。
+ *   · PASS ⇒ 无 UI 入口；· COMPARE ⇒ 关隘出牌比对通道（B19 已接线）。
  *
  * ⚠️ 分支内各判据的**顺序**只决定「先说哪一句」，不改变布尔结果（同一条合取式）；
  *   但每一条被拒的形状都必须留下一句可给人看的话（评审发现 B：拒绝不得沉默），
@@ -200,10 +200,18 @@ export function uiBlockNotice(state: State, seat: number, action: Action): strin
       return 'PASS（结束手番）在数字轨没有 UI 入口。';
     case 'COMPARE': {
       // ⚠️ B19：关隘出牌比对通道（规格 §3.5 B19 定案）——判据与 probeAction 对齐。
-      const gate = pendingGateHere(state, seat);
-      if (gate === null) { return '你当前不在未通过的关隘格上，无需比对。'; }
+      if (pendingGateHere(state, seat) === null) { return '你当前不在未通过的关隘格上，无需比对。'; }
       const card = me?.hand.find((x) => x.id === action.cardId);
       if (card === undefined) { return '手牌里没有这张牌（可能已被弃掉或不属于你）。'; }
+      // ⚠️ B53 修正：引擎 `resolveCompareGate` 在**本关已改为付费**时拒绝出牌比对
+      //   （B24 试炼失败后置 `gate_pay_<index>` 标记）⇒ UI 侧必须同判，否则
+      //   「UI 允许 / 引擎拒绝」又成一处破口。
+      // ⚠️ `pendingGateHere` 只返回 `{ fee, payOnly }`（无 index）⇒ 关隘格序号
+      //   直接取玩家所在格的 `index`（与引擎 `pendingGate` 的取法一致）。
+      const gateIndex = me?.position;
+      if (gateIndex !== undefined && me?.flags[`gate_pay_${gateIndex}`] === true) {
+        return '本关已改为付费（试炼失败后），不能再走出牌比对通道。';
+      }
       if (action.target === seat) { return '不能与自己比对。'; }
       const foe = state.players.find((p) => p.seat === action.target);
       if (foe === undefined) { return '目标不存在。'; }
@@ -307,6 +315,19 @@ export function uiCandidates(state: State, seat: number): Action[] {
     out.push({ type: 'GATE_RESOLVE', actor: seat, channel: 'pay' });
     if (!gateFace.payOnly) {
       out.push({ type: 'GATE_RESOLVE', actor: seat, channel: 'trial' });
+    }
+    // ⚠️ **B53 修正**：出牌比对通道的候选此前**整条缺失** ⇒ UI 侧候选集不含 COMPARE，
+    //   而 UI **实际有**该入口（`web/main.ts` 的手牌点击 → 选对手 → 提交 COMPARE），
+    //   引擎侧 `candidatesOf` 也发 ⇒ 两侧集合不等 ⇒ 漂移守卫在**关隘面**判红。
+    //   （此前该面恒为空集 ⇒ 破口不可见 —— E87「空集 ≠ 有效」。）
+    //   形状与引擎一致：我的每张牌 × 每个存活对手（引擎试跑会滤掉无效组合）。
+    if (!gateFace.payOnly) {
+      for (const foe of state.players) {
+        if (!foe.alive || foe.seat === seat) { continue; }
+        for (const card of me.hand) {
+          out.push({ type: 'COMPARE', actor: seat, cardId: card.id, target: foe.seat });
+        }
+      }
     }
   } else if (pendingBarrierHere(state, seat) !== null) {
     // ⚠️ B18-b：裂隙面（放印 / 不放）。
