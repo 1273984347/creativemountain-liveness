@@ -13,6 +13,10 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { SCALES, SCALE_FIELD_NAMES } from '../engine/scales.ts';
+import {
+  checkSpecCoverageTableStructure,
+  parseSpecCoverageRows,
+} from './coverage-boundaries.mjs';
 
 export const SPEC_PATH = resolve('docs/superpowers/specs/2026-11-07-creative-mountain-liveness-design.md');
 
@@ -316,33 +320,94 @@ export function checkDuplicateRows(spec) {
 //
 // A5 的落点：绿洲《发布检查表》的「门禁覆盖边界（如实登记）」。
 // 边界若只写在文档里 ⇒ 门禁不知道自己看不见什么 ⇒ 「绿灯掩盖盲区」。
-// 本检查强制：**规格 §9.3 覆盖边界表的条数 == 机器清单条数**。
+//
+// ⚠️ **B52 升级：由「条数一致」升级为「逐条对应」**。
+//   旧口径只比条数 ⇒ 规格表与机器清单**同样多、但内容错位**时照样绿灯
+//   （例：两条边界的 id 在规格表里互换 ⇒ 条数不变 ⇒ 旧检查无感）。
+//   新口径要求：**第 i 条规格行的 id == 第 i 条机器清单的 id**（同序一一对应）。
+//
+// 判据（口径单一，逐条列举；**顺序即优先级**，见下方「顺序层最先判」）：
+//   ① 结构层：表首列必须是 `id`、列数必须是 3（否则逐条配对无从谈起）。
+//   ② 顺序层：同序一一对应（第 i 行 == 第 i 条）—— **最先判**，错位即红并点名第几条。
+//   ③ 集合层：两侧 id 集合相等（规格缺一条 / 机器多一条 ⇒ 判红，并点名）。
+//   ④ 唯一层：两侧 id 各自不得重复（重复会掩盖「少一条 + 多一条」）。
+//
+// 解析复用 `tools/coverage-boundaries.mjs` 的共享函数（同一口径只有一处实现，E92）。
 export function checkCoverageBoundaries(spec, boundaryIds) {
-  const idx = spec.indexOf('门禁覆盖边界');
-  if (idx < 0) {
+  const structure = checkSpecCoverageTableStructure(spec);
+  if (!structure.ok) {
+    return {
+      id: 'C8',
+      title: '覆盖边界登记：规格表结构合规（有 id 列）',
+      ok: false,
+      detail: structure.detail,
+    };
+  }
+  const parsed = parseSpecCoverageRows(spec);
+  if (!parsed.found) {
     return {
       id: 'C8',
       title: '规格含覆盖边界登记',
       ok: false,
-      detail: '规格 §9.3 缺少「门禁覆盖边界」小节',
+      detail: parsed.detail,
     };
   }
-  // 取该表的数据行（以 | 开头、且不是表头/分隔行）
-  const sec = spec.slice(idx, spec.indexOf('\n\n**', idx) === -1 ? idx + 2000 : spec.indexOf('\n\n**', idx));
-  const rows = sec
-    .split(/\r?\n/)
-    .filter((l) => l.trim().startsWith('|'))
-    .filter((l) => !l.trim().startsWith('|---') && !l.includes('| 覆盖 | 不覆盖 |'));
-  // 表中「不覆盖」列以 `—` 结尾表示无兜底；条数即数据行数
-  const specCount = rows.length;
-  const codeCount = boundaryIds.length;
+  const specIds = parsed.ids;
+  const codeIds = boundaryIds;
   const problems = [];
-  if (specCount !== codeCount) {
-    problems.push(`规格表 ${specCount} 条 vs 机器清单 ${codeCount} 条`);
+
+  // ③ 顺序层**最先判**：第 i 行必须等于第 i 条。
+  //   ⚠️ 顺序层若放在集合层之后会**永远不可达** —— 两条 id 互换时，
+  //   集合层先报「未登记」、唯一层先报「重复」，顺序层根本没有触发机会。
+  //   ⇒ 先给「第几条错位」这个最具体的定位，再补集合与重复的信息。
+  const maxLen = Math.max(specIds.length, codeIds.length);
+  for (let i = 0; i < maxLen; i += 1) {
+    const s = specIds[i];
+    const c = codeIds[i];
+    if (s === c) {
+      continue;
+    }
+    if (s === undefined) {
+      problems.push(`第 ${i + 1} 条缺失：机器清单为 ${c}，规格表没有对应行`);
+    } else if (c === undefined) {
+      problems.push(`第 ${i + 1} 条多余：规格表为 ${s}，机器清单没有对应条目`);
+    } else {
+      problems.push(`第 ${i + 1} 条错位：规格表为 ${s}，机器清单为 ${c}`);
+    }
+    break; // 只报第一处错位（定位最具体），其余信息由下面两层补全
   }
+
+  // ② 集合层：双向点名（哪条只在规格、哪条只在机器）。
+  const specSet = new Set(specIds);
+  const codeSet = new Set(codeIds);
+  const onlyInSpec = specIds.filter((id) => !codeSet.has(id));
+  const onlyInCode = codeIds.filter((id) => !specSet.has(id));
+  if (onlyInSpec.length > 0) {
+    problems.push(`规格表有但机器清单没有：${[...new Set(onlyInSpec)].join('、')}`);
+  }
+  if (onlyInCode.length > 0) {
+    problems.push(`机器清单有但规格表未登记：${[...new Set(onlyInCode)].join('、')}`);
+  }
+
+  // ④ 唯一层：重复 id 会掩盖「少一条 + 多一条」⇒ 单独判。
+  for (const [label, ids] of [['规格表', specIds], ['机器清单', codeIds]]) {
+    const seen = new Set();
+    const dups = [];
+    for (const id of ids) {
+      if (seen.has(id)) {
+        dups.push(id);
+      } else {
+        seen.add(id);
+      }
+    }
+    if (dups.length > 0) {
+      problems.push(`${label}存在重复 id：${[...new Set(dups)].join('、')}`);
+    }
+  }
+
   return {
     id: 'C8',
-    title: `覆盖边界登记：规格表与机器清单一致（${codeCount} 条）`,
+    title: `覆盖边界登记：规格表与机器清单逐条对应（${codeIds.length} 条）`,
     ok: problems.length === 0,
     detail: problems.join('; '),
   };

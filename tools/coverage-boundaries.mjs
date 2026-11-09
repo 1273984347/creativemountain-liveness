@@ -13,7 +13,8 @@
  *
  * **新增检查项时必须同步登记边界**——否则机器无法知道新检查漏了什么。
  * 边界的增删由 `tools/doc-sync.mjs` 的 C8 检查把关：
- * 规格 §9.3 的覆盖边界表与本清单必须**条数一一对应**。
+ * 规格 §9.3 的覆盖边界表与本清单必须**逐条一一对应**（B52 升级：
+ * 由「条数一致」升级为「每行 id 与机器清单同序 id 一一对应」）。
  */
 export const COVERAGE_BOUNDARIES = [
   {
@@ -89,3 +90,132 @@ export const COVERAGE_BOUNDARIES = [
     fallback: '断言「无已入库文件超过体积上限」⇒ 跳过集合不随时间静默扩大（B51）',
   },
 ];
+
+/**
+ * 规格 §9.3 覆盖边界表的**列名**（首列必须是 id —— B52 裁定）。
+ *
+ * ⚠️ 这几个字面量是「规格表结构」的**单一事实源**：解析与校验共用 ⇒
+ *   改表结构只需改这一处，不会出现「解析认旧结构、校验认新结构」的漂移。
+ */
+export const SPEC_TABLE_ID_HEADER = 'id';
+export const SPEC_TABLE_HEADER = ['id', '覆盖', '不覆盖'];
+
+/**
+ * 找出规格 §9.3「门禁覆盖边界」小节里的**那张表**（返回表格的全部行）。
+ *
+ * ⚠️ **为什么不用 `spec.indexOf('\n\n**')` 界定小节（B52 修复）：**
+ *   仓库 `core.autocrlf=true` 且**无 `.gitattributes`** ⇒ 全新克隆后规格文件是 **CRLF**
+ *   ⇒ `'\n\n**'` 在 CRLF 下**匹配不到**（实际是 `'\r\n\r\n**'`）⇒ 兜底走全文
+ *   ⇒ 把**后续章节的表格行也吃进来**（实测：LF 下 12 条，CRLF 下 **140 条**）
+ *   ⇒ C8 会误报「规格表有但机器清单没有」140 条 ⇒ **门禁假红**。
+ *   ⇒ 改用**纯行级**定位：取小节标题之后**第一个连续表格块**，与换行符无关。
+ *
+ * @param {string} spec 规格全文。
+ * @returns {string[] | null} 表格行；找不到返回 null。
+ */
+function findSpecCoverageTable(spec) {
+  const marker = '门禁覆盖边界';
+  const idx = spec.indexOf(marker);
+  if (idx < 0) {
+    return null;
+  }
+  // 行级切分（`\r?\n` 同时兼容 LF 与 CRLF）
+  const lines = spec.slice(idx).split(/\r?\n/);
+  // 找到第一个以 | 开头的行（表头）
+  let start = -1;
+  for (let i = 0; i < lines.length; i += 1) {
+    if (lines[i].trim().startsWith('|')) {
+      start = i;
+      break;
+    }
+  }
+  if (start < 0) {
+    return null;
+  }
+  // 收集**连续**的表格行
+  const table = [];
+  for (let i = start; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (line === undefined || !line.trim().startsWith('|')) {
+      break;
+    }
+    table.push(line);
+  }
+  return table;
+}
+/**
+ * 解析规格 §9.3 的覆盖边界表 ⇒ 逐行取出 id 与各单元格。
+ *
+ * 为什么抽成共享函数（B52）：**同一口径只能有一处实现**（E92）。
+ *   此前 C8 在 `doc-sync-lib.mjs` 里数行数、`discipline.test.ts` 里又自写了一套
+ *   表格解析 ⇒ 两份实现会各自漂移（改表结构时必有一处漏改）。
+ *   现在解析只有这一份，C8 与测试共用。
+ *
+ * @param {string} spec 规格全文。
+ * @returns {{ found: boolean, ids: string[], rows: string[][], detail: string }}
+ *   `found=false` 表示规格里找不到该小节；`rows` 为逐行单元格（已切分、去空）。
+ */
+export function parseSpecCoverageRows(spec) {
+  const table = findSpecCoverageTable(spec);
+  if (table === null) {
+    return { found: false, ids: [], rows: [], detail: '规格 §9.3 缺少「门禁覆盖边界」小节或其中的表格' };
+  }
+  const rows = [];
+  for (const line of table) {
+    const cells = line.trim().split('|').slice(1, -1).map((s) => s.trim());
+    if (cells.length === 0) {
+      continue;
+    }
+    // 分隔行（|---|---|---|）与表头行（首列是「id」）不计入数据行。
+    if (cells.every((c) => /^:?-{3,}:?$/.test(c))) {
+      continue;
+    }
+    if (cells[0] === SPEC_TABLE_ID_HEADER) {
+      continue;
+    }
+    rows.push(cells);
+  }
+  // id 单元格在规格里按惯例用反引号包裹（如 `pdf-text-layer`）⇒ 解析时剥掉。
+  const ids = rows.map((c) => c[0].replace(/^`|`$/g, ''));
+  return {
+    found: true,
+    ids,
+    rows,
+    detail: `规格表 ${ids.length} 条`,
+  };
+}
+
+/**
+ * 校验规格 §9.3 的覆盖边界表**结构**（是否有 id 列、列数是否为 3）。
+ *
+ * 为什么要单独校验结构（B52）：`parseSpecCoverageRows` 只取首列 ⇒
+ *   若规格表被改成 2 列（漏了 id 列），解析仍会「成功」但取到的是
+ *   「覆盖」列的文本当 id ⇒ 变成一条莫名其妙的 id ⇒ 报「机器清单有但规格表没有」，
+ *   报错会指向错误的原因。⇒ 结构层单独判，错误直接点名「缺少 id 列」。
+ *
+ * @param {string} spec 规格全文。
+ * @returns {{ ok: boolean, detail: string }}
+ */
+export function checkSpecCoverageTableStructure(spec) {
+  const table = findSpecCoverageTable(spec);
+  if (table === null) {
+    return { ok: false, detail: '规格 §9.3 缺少「门禁覆盖边界」小节或其中的表格' };
+  }
+  if (table.length === 0) {
+    return { ok: false, detail: '规格 §9.3 的覆盖边界表为空或格式损坏' };
+  }
+  const header = table[0].trim().split('|').slice(1, -1).map((s) => s.trim());
+  if (header[0] !== SPEC_TABLE_ID_HEADER) {
+    return {
+      ok: false,
+      detail: `规格 §9.3 覆盖边界表首列必须是 id（实际「${header[0]}」）——B52 起该列是逐条配对的依据`,
+    };
+  }
+  if (header.length !== SPEC_TABLE_HEADER.length) {
+    return {
+      ok: false,
+      detail: `规格 §9.3 覆盖边界表应是 ${SPEC_TABLE_HEADER.length} 列（${SPEC_TABLE_HEADER.join(' / ')}），实际 ${header.length} 列`,
+    };
+  }
+  return { ok: true, detail: '' };
+}

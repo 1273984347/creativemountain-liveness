@@ -42,7 +42,7 @@ npm run gate           # 十三道门禁全跑
 |---|---|---|
 | ① | 类型 | `tsc --noEmit`，TS strict + noUncheckedIndexedAccess + exactOptionalPropertyTypes |
 | ② | 测试 | `node --test`，单元 + 门禁自检（负样本常驻） |
-| ③ | 文档口径 | 规格 ↔ 代码真值双向一致（C1–C9） |
+| ③ | 文档口径 | 规格 ↔ 代码真值双向一致（C1–C10，含 **C8 覆盖边界逐条对应**） |
 | ④ | 构建 | esbuild 单文件 HTML |
 | ⑤ | 主题包校验 | 四套主题的结构、引用完整性、**参数取值域** |
 | ⑥ | IR 契约 | 四套主题的 ir.json ↔ IR 类型契约 |

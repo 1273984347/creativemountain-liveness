@@ -123,3 +123,45 @@ test('C9 方向一：代码加了字段但规格未登记 → doc-sync 判红，
     removeIsolatedRepo(dir);
   }
 });
+
+// ---------- 负样本：CRLF 行尾下 C8 必须**判绿**（B52）----------
+//
+// 仓库 `core.autocrlf=true` 且无 `.gitattributes` ⇒ 全新克隆后规格是 CRLF。
+// 若解析用换行符序列界定小节 ⇒ CRLF 下解析会吃进后续章节的表格行 ⇒ 误报假红。
+// 这里在**隔离副本**里把规格转成 CRLF ⇒ doc-sync 必须仍判绿。
+test('负样本：规格为 CRLF 行尾时 doc-sync 仍判绿（行尾稳健性）', () => {
+  const dir = makeIsolatedRepo(ROOT, DOC_SYNC_INCLUDE);
+  try {
+    const specPath = resolve(dir, SPEC_REL);
+    const original = readFileSync(specPath, 'utf8');
+    const crlf = original.replace(/\r?\n/g, '\r\n');
+    assert.notEqual(crlf, original, '必须真的转换行尾，否则证明不了任何东西');
+    writeFileSync(specPath, crlf, 'utf8');
+    const run = runNode([resolve(dir, 'tools', 'doc-sync.mjs')], { cwd: dir });
+    assert.equal(run.code, 0, `CRLF 下 doc-sync 必须判绿（不得误报）：\n${run.output}`);
+  } finally {
+    removeIsolatedRepo(dir);
+  }
+});
+
+// ---------- 负样本：覆盖边界表**逐条对应**（B52）----------
+//
+// C8 由「条数一致」升级为「逐条对应」⇒ 必须证明它在**真实 doc-sync 入口**上会红。
+// 场景：把规格表里两条边界的 id 互换 ⇒ **条数不变** ⇒ 旧口径漏检，新口径判红。
+test('负样本：doc-sync 对覆盖边界 id 错位判红（条数不变），恢复后判绿', () => {
+  withBrokenSpec(
+    (s) => s.replace(
+      '| `pdf-text-layer` |',
+      '| `pdf-raw-bytes` |',
+    ),
+    (out) => {
+      // ⚠️ 不能只断言 /C8/ —— doc-sync 对**每项**检查都打印一行（含 PASS 行）
+      //   ⇒ `/C8/` 会匹配到 `PASS  C8 ...` ⇒ **恒真**、证明不了任何事（盲审 F2）。
+      //   ⇒ 必须匹配**失败行**：`FAIL  C8`。
+      assert.match(out, /FAIL\s+C8/, '必须报在 C8 覆盖边界检查上（且是 FAIL 行，不是 PASS 行）');
+      // ⚠️ 断言要**指名错位判定**（泛泛的 /未登记|没有/ 会因别的原因红而通过）。
+      assert.match(out, /第 1 条错位/, '必须报「第 1 条错位」⇒ 顺序层确实被触发');
+      assert.match(out, /pdf-raw-bytes/, '必须点名机器清单该位置的 id');
+    }
+  );
+});

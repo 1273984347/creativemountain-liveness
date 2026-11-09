@@ -10,7 +10,11 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { runNode } from './harness.ts';
-import { COVERAGE_BOUNDARIES } from '../../tools/coverage-boundaries.mjs';
+import {
+  COVERAGE_BOUNDARIES,
+  checkSpecCoverageTableStructure,
+  parseSpecCoverageRows,
+} from '../../tools/coverage-boundaries.mjs';
 
 /** 门禁脚本清单（A4 的检查对象）。 */
 const GATE_SCRIPTS = ['tools/gate.mjs', 'tools/doc-sync.mjs', 'tools/pdf-normalize.mjs'];
@@ -73,28 +77,24 @@ test('A5：边界 id 唯一（重复 id 会让核对失去意义）', async () =
   assert.equal(new Set(ids).size, ids.length, '边界 id 必须唯一');
 });
 
-test('A5：规格覆盖边界表与机器清单条数一致（doc-sync C8 的负样本同源）', () => {
+test('A5：规格覆盖边界表与机器清单逐条对应（doc-sync C8 的同源口径）', () => {
   
   const spec = readFileSync(
     resolve('docs/superpowers/specs/2026-11-07-creative-mountain-liveness-design.md'),
     'utf8'
   );
-  const idx = spec.indexOf('门禁覆盖边界');
-  assert.ok(idx >= 0, '规格必须含「门禁覆盖边界」小节');
-  // 只取该小节内的表格行：遇到第一个空行即止（其后的表格属于别的章节）
-  const sec = spec.slice(idx);
-  const rows = [];
-  for (const line of sec.split(/\r?\n/)) {
-    if (rows.length > 0 && line.trim() === '') {
-      break; // 表格结束
-    }
-    if (!line.trim().startsWith('|')) {
-      continue;
-    }
-    if (line.trim().startsWith('|---') || line.includes('| 覆盖 | 不覆盖 |')) {
-      continue; // 表头与分隔行
-    }
-    rows.push(line);
-  }
-  assert.equal(rows.length, COVERAGE_BOUNDARIES.length, '规格表与机器清单条数必须一致');
+  // 复用与 C8 **同一个解析实现**（B52：同一口径只能有一处实现，E92）
+  // ⇒ 此前本文件自写了一套表格解析，两处实现必然漂移。
+  const structure = checkSpecCoverageTableStructure(spec);
+  assert.ok(structure.ok, `规格覆盖边界表结构必须合规：${structure.detail}`);
+  const parsed = parseSpecCoverageRows(spec);
+  assert.ok(parsed.found, '规格必须含「门禁覆盖边界」小节');
+  const codeIds = COVERAGE_BOUNDARIES.map((b) => b.id);
+  assert.equal(parsed.ids.length, codeIds.length, '规格表与机器清单条数必须一致');
+  // 逐条对应：第 i 行的 id 必须等于第 i 条机器清单的 id
+  assert.deepEqual(
+    parsed.ids,
+    codeIds,
+    '规格表 id 必须与机器清单**同序一一对应**（B52：逐条对应，不只比条数）',
+  );
 });
