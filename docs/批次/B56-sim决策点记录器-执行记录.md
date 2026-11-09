@@ -52,6 +52,7 @@
 - **冒烟数据**：完整 2 局记录 **114 条 / 8.22 MB** ⇒ **超仓内 2 MB 上限** ⇒ 不入库（`.gitignore` 记为生成物）；
   仓内留 `docs/预研/data/decisions-sample.jsonl`（**2 条 / 120 KB**）作格式契约样本。
 - **提交后门禁曾红一次**（本批自查发现）：B51 的「无已入库文件超过体积上限」守卫判红 ⇒ 上面这条修正即由此而来。
+- **修正后连跑 4 次门禁全绿** ⇒ 其余偶发红属**已登记的 pdf-normalize 跨秒 flake**（B54 遗留 T2），与本批无关。
 
 ## 6. 复盘与经验沉淀
 
@@ -72,5 +73,6 @@
 
 ## 8. 提交
 
-- 提交：`<hash>` feat(B16): sim 决策点记录器（--record-decisions 默认关闭，影子决策数据源）
+- 提交：`3fa8aee` feat(B16): sim 决策点记录器（--record-decisions 默认关闭，影子决策数据源）
+- 修正提交：`936eb30` fix(B56): 决策点完整 JSONL 超 2MB 上限 ⇒ 移出版本库，仓内只留小样本
 - 显式 pathspec：`tests/sim/run.mjs`、`tests/gates/sim-record.test.ts`、`docs/预研/data/decisions-smoke.jsonl`、`docs/预研/2026-11-08-laya-sidecar.md`、`docs/批次/B55-*.md`（**B55 哈希回填并入本批首个提交**）、`docs/批次/B56-*.md`
