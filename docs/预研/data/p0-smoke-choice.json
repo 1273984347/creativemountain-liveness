@@ -1,0 +1,45 @@
+{
+  "model": "laya-rl-agent",
+  "answers": {
+    "act": {
+      "type": "choice",
+      "choice": "move",
+      "probabilities": {
+        "move": 0.8376,
+        "ask": 0.1624
+      },
+      "confidence": 0.36,
+      "answer_confidence": 0.8376,
+      "action": {
+        "act_probability": 1.0
+      },
+      "x_jev_confidence": 0.6752
+    }
+  },
+  "usage": {
+    "input_tokens": 129,
+    "output_tokens": 0,
+    "state_tokens": 91,
+    "state_tokens_dropped": 0,
+    "truncated": false,
+    "truncated_questions": []
+  },
+  "routing": {
+    "model": "multilingual",
+    "repo": "D:\\pylibs\\laya-multilingual",
+    "reason": "non-Latin script (han, 100% of letters); the English checkpoint cannot read it",
+    "detection": {
+      "script": "han",
+      "script_profile": {
+        "han": 1.0
+      },
+      "language": null,
+      "is_english": false,
+      "language_undecided": true,
+      "diacritic_rate": 0.0,
+      "non_latin_fraction": 1.0,
+      "mixed_segment": null
+    },
+    "workflow": null
+  }
+}

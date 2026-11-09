@@ -11,19 +11,20 @@
 // 用法：`node tools/laya-sidecar/env-check.mjs`（退出码 0 = 对拍通过且至少一个候选可用）
 // 产物：`docs/预研/data/p0-env.md`
 
-import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { createReadStream, existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
 // ---------- 固定口径（与计划一致，勿改）----------
-
-/** 权重文件：多语言判断模型（643 MB）。 */
-const WEIGHT = 'D:/<local-libs>/laya-multilingual/model.safetensors';
-/** 期望字节数（锁定值）。 */
-const EXPECT_BYTES = 643835514;
-/** 期望 sha256 前缀（前 8 位即可判定，避免把 64 位写进文档）。 */
-const EXPECT_SHA_PREFIX = '9d628fd9';
+//
+// ⚠️ 期望值与对拍实现**不在本文件** ⇒ 与 `serve.mjs`（反代）共用 `weights.mjs`
+//   ⇒ 同一份口径、只有一处（B55）。
+import {
+  EXPECT_WEIGHT_BYTES as EXPECT_BYTES,
+  EXPECT_WEIGHT_SHA_PREFIX as EXPECT_SHA_PREFIX,
+  WEIGHT_PATH as WEIGHT,
+  verifyWeight,
+} from './weights.mjs';
 /** 判定「候选②可用」的 torch 来源特征。 */
 const TORCH_SOURCE_MARK = 'pylibs\\torch-cu124';
 
@@ -69,16 +70,6 @@ const PROBE = [
 /** 产出的报告路径。 */
 const REPORT = resolve('docs/预研/data/p0-env.md');
 
-/** 流式算 sha256（643 MB 不可整体读入内存）。 */
-function sha256Of(file) {
-  return new Promise((done, fail) => {
-    const h = createHash('sha256');
-    const s = createReadStream(file);
-    s.on('data', (chunk) => h.update(chunk));
-    s.on('error', fail);
-    s.on('end', () => done(h.digest('hex')));
-  });
-}
 
 /** 探测一个解释器 ⇒ 返回结果对象（不抛异常，失败也记下来）。 */
 function probe(candidate) {
@@ -112,17 +103,14 @@ push('');
 // ---------- ① 权重对拍 ----------
 push('## ① 权重对拍');
 push('');
-let weightOk = false;
-if (!existsSync(WEIGHT)) {
-  push(`- ❌ 权重文件不存在：\`${WEIGHT}\``);
+const verdict = await verifyWeight(WEIGHT);
+const weightOk = verdict.ok;
+push(`- 路径：\`${WEIGHT}\``);
+if (verdict.bytes < 0) {
+  push(`- ❌ ${verdict.detail}`);
 } else {
-  const bytes = statSync(WEIGHT).size;
-  const sha = await sha256Of(WEIGHT);
-  const shaOk = sha.startsWith(EXPECT_SHA_PREFIX);
-  weightOk = bytes === EXPECT_BYTES && shaOk;
-  push(`- 路径：\`${WEIGHT}\``);
-  push(`- 字节数：**${bytes}**（期望 ${EXPECT_BYTES}）⇒ ${bytes === EXPECT_BYTES ? '✅' : '❌'}`);
-  push(`- sha256：\`${sha.slice(0, 16)}…\`（期望前缀 \`${EXPECT_SHA_PREFIX}\`）⇒ ${shaOk ? '✅' : '❌'}`);
+  push(`- 字节数：**${verdict.bytes}**（期望 ${EXPECT_BYTES}）⇒ ${verdict.bytes === EXPECT_BYTES ? '✅' : '❌'}`);
+  push(`- sha256：\`${verdict.sha256.slice(0, 16)}…\`（期望前缀 \`${EXPECT_SHA_PREFIX}\`）⇒ ${verdict.sha256.startsWith(EXPECT_SHA_PREFIX) ? '✅' : '❌'}`);
 }
 push('');
 

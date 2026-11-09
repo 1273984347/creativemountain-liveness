@@ -165,7 +165,64 @@ Compare-Object docs/balance-report.md <临时目录>/balance-after.md
 > ⇒ **不是** `{instructions, criteria}` 平铺（那是 B15 `buildChoice` 的内部形状，**不是** HTTP 形状）。
 > `questions` 的 value 缺 `criteria`（或 `type` 非 `choice`）⇒ 服务端 400/422 并**点名**缺什么。
 
-## 4. 阶段 B（B16 · Task 11–17）仍未开始## 4. 阶段 B（B16 · Task 11–17）仍未开始
+## 3.7 B55 · Task 12 + Task 13（反代 + 常驻编排）已执行 —— **通过**
+
+> 执行授权：用户 2026-11-09 授权「实现反代（补 CORS、对拍、SKIP 开关）与常驻编排」。
+> 产物：`tools/laya-sidecar/serve.mjs`（反代）、`tools/laya-sidecar/up.mjs`（编排）、`tools/laya-sidecar/weights.mjs`（共享对拍口径）、`tests/gates/sidecar-guard.test.ts`（3 条常驻测试）、`docs/预研/data/p0-smoke-choice.json`。
+
+### ① 反代（Task 13）
+
+| 项 | 实测 |
+|---|---|
+| 端口 | `LAYA_PROXY_PORT` 默认 **8711**（绑定**硬编码** `127.0.0.1`） |
+| CORS | 三头**恒带**：`access-control-allow-origin: *` / `allow-headers: content-type` / `allow-methods: POST, GET, OPTIONS`（逐字） |
+| 预检 | `OPTIONS /v1/systemone` ⇒ **204** |
+| 权重对拍 | `--weights` 指向字节数不符的文件 ⇒ **退出码非 0** + stderr「对拍失败」 |
+| 无服务 SKIP | 上游不可达 ⇒ **503** + body `{"unavailable":true}` + **仍带 ACAO**，**进程不退** |
+| 超时 | 30s（计划锁定值） |
+| 决策逻辑 | **零**（只搬运：上游有响应即**原样透传**状态码与正文） |
+
+> **共享对拍口径**：期望字节数与 sha256 前缀抽到 `tools/laya-sidecar/weights.mjs` ⇒
+> `env-check.mjs`（P0）与 `serve.mjs`（反代）**共用一处**，不各写一份。
+
+### ② 常驻编排（Task 12）
+
+`node tools/laya-sidecar/up.mjs --weights <path>` ⇒ 一条命令拉起两层并**测量就绪秒数**：
+
+| 阶段 | 实测 |
+|---|---|
+| 官方 serve 监听就绪 | **5.27s** |
+| **预热（权重冷加载）** | **17.18s** |
+| 反代就绪 | 1.69s |
+| **总就绪** | **24.25s**（含冷加载） |
+
+⚠️ **预热是必需的**（本批实测）：模型权重是**懒加载**的 ⇒ 第一次推理才真正加载 ⇒
+冷加载耗时（**17.2s**，且实测有一次**超过 30s**）⇒ **不预热的话第一个用户请求必被反代的 30s 超时砍成 503**。
+⇒ 编排在 READY 之前**主动预热一次** ⇒ 「就绪」意味着「能立刻应答」。
+
+### ③ choice 冒烟（Task 12 Step 3）
+
+`docs/预研/data/p0-smoke-choice.json`（原始响应）：
+
+| 项 | 值 |
+|---|---|
+| `answers.act.choice` | **`move`** ✅ ∈ {move, ask} |
+| `probabilities` | `{move: 0.8376, ask: 0.1624}` |
+| `confidence` | 0.36 |
+| `usage` | `input_tokens=129`、`state_tokens=91`、`truncated=false` |
+| 经反代 vs 直连 | choice 与 confidence **完全一致**（0.068s vs 0.268s）⇒ 反代不改写决策 |
+
+### ④ 本批修掉的两个真缺陷
+
+| # | 缺陷 | 后果 | 修复 |
+|---|---|---|---|
+| D1 | **反代把上游的失败原因吞成沉默的 503** | 运维分不清「上游没起」「上游超时」「上游崩了」 | 区分**连接失败 / 超时 / 上游有响应但非 2xx**（后者原样透传，不折叠），并把原因写进 stderr；**加了回归锁**（测试 ② 断言 stderr 含「上游不可达」） |
+| D2 | **常驻测试依赖环境状态** | 测试 ② 假设「上游恰好没在跑」⇒ 本批验证时编排进程正占着 8712 ⇒ 断言「503」失败 ⇒ **用例与环境耦合** | 显式指向**专用死端口 18999** ⇒ 结果与环境无关（实测：编排在跑时仍 3/3 绿） |
+
+> ⚠️ D2 是本批的第二个「纪律用在自己头上」：上一批刚立下「不能靠环境恰好如何」，
+> 转头就写了一条依赖环境的用例。
+
+## 4. 阶段 B（B16 · Task 14–17）仍未开始## 4. 阶段 B（B16 · Task 11–17）仍未开始## 4. 阶段 B（B16 · Task 11–17）仍未开始
 
 **阻塞**：Task 11 Step 2 需新建 `.laya-venv` + `pip install laya[serve]`（走网络、GB 级磁盘）；
 Task 12 Step 2 起常驻本地服务 ⇒ **两项都必须先取得用户同意**（续作计划 §「外向副作用确认点」）。
