@@ -15,7 +15,7 @@ import type { State } from '../../engine/core/state.ts';
 import type { Action } from '../../engine/core/action.ts';
 import type { ThemePack } from '../../engine/types/theme.ts';
 import { el, button, section } from './dom.ts';
-import { certificationThreshold, signatureCount } from '../../engine/core/certification.ts';
+import { appealThirdParties, certificationThreshold, signatureCount } from '../../engine/core/certification.ts';
 import { actionKey } from '../../engine/core/action-key.ts';
 import { uiAllows, uiBlockNotice } from '../legal-gate.ts';
 
@@ -65,6 +65,29 @@ export function certPanelActions(state: State, seat: number): Action[] {
  */
 export function certClickableActions(state: State, seat: number): Action[] {
   return certPanelActions(state, seat).filter((a) => uiAllows(state, seat, a));
+}
+
+/**
+ * 复议窗口的**状态文案**（B64 · T2）——玩家看得见「谁还没投、窗口何时关」。
+ *
+ * ⚠️ **只读展示**：不改引擎语义、不参与可点性判断（可点性仍唯一来自 `uiAllows`）。
+ * ⚠️ **口径必须与裁定一致**：第三方集合取自 `appealThirdParties`（**单一事实源**，
+ *   与 `resolveAppeals` 同一份）⇒ 显示的「未投 N 人」与实际裁定口径不会漂移。
+ *
+ * 导出为纯函数（无 DOM 依赖）⇒ 测试可直接断言文案，不必渲染。
+ */
+export function appealWindowStatus(state: State, target: number): string {
+  const c = state.certification;
+  const third = appealThirdParties(state, target);
+  const cast = third.filter((s) => c.appealVotes[s] !== undefined);
+  const notYet = third.filter((s) => c.appealVotes[s] === undefined);
+  const closeNote = third.length < 2
+    ? '独立第三方不足 2 人 ⇒ 轮末掷 6 面骰裁定（4–6 算复议成功）'
+    : '轮末由第三方多数决裁定（票未收齐 ⇒ 视为维持原判）';
+  return '复议 座' + target + '：第三方 ' + String(third.length) + ' 人｜已投 ' + String(cast.length)
+    + '｜未投 ' + String(notYet.length)
+    + (notYet.length > 0 ? '（座' + notYet.join('、座') + '）' : '')
+    + '｜' + closeNote;
 }
 
 export function renderCertification(
@@ -128,6 +151,13 @@ export function renderCertification(
       gated({ type: 'CERTIFY_ANSWER', actor: seat, target, passed: false }, '判定不通过 座' + target, () => { cb.onJudge(target, false); }),
     ]);
     if (row !== null) { body.push(row); rows += 1; }
+  }
+  // ---- 复议窗口状态（B64 · T2）：让玩家看得见「谁还没投、窗口何时关」----
+  // ⚠️ 之前只挂投票按钮 ⇒ 玩家看不到「还差几票」「窗口什么时候没」⇒ 只能干等。
+  //   本块是**只读展示**：不参与可点性判断（可点性仍唯一来自 `uiAllows`），
+  //   也不改引擎语义 ⇒ 纯 UI 信息补全。
+  for (const target of c.appealed) {
+    body.push(el('div', { class: 'muted', text: appealWindowStatus(state, target) }));
   }
   // ---- 第三方复议投票（§5.3.2）：判不通过后由非当事人裁定 ----
   // ⚠️ Task 7：数字轨此前完全没有复议票入口（人只能「申请复议」却投不了票，只有模拟器会程序化投）。

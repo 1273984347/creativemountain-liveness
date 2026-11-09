@@ -31,7 +31,7 @@
 
 import { getLegalActions } from '../../engine/core/legal.ts';
 import { actionKey } from '../../engine/core/action-key.ts';
-import { certificationThreshold, signatureCount } from '../../engine/core/certification.ts';
+import { appealThirdParties, certificationThreshold, signatureCount } from '../../engine/core/certification.ts';
 import { distanceToPeak } from '../../engine/core/victory.ts';
 import { tileAt } from '../../engine/core/board.ts';
 
@@ -70,17 +70,16 @@ function tileKindAt(state, position) {
  * 复议票的**计数**（评审 3：投票人必须知道自己这一票的分量）。
  *
  * 只报数、不重写规则：多数决（含平票保护、独立第三方不足 2 人时掷骰）本身留在
- * certification.ts 的 `resolveAppeals`；这里复用的只是它那条**公开**的「独立第三方」集合口径
- * （存活 − 判定人 − 待认证者），判定人取自公开的 judgments 键。
+ * certification.ts 的 `resolveAppeals`。
+ *
+ * ⚠️ **B64：不再复制「独立第三方」集合口径** —— 本函数原先把
+ * 「存活 − 判定人 − 待认证者」这条口径**抄了一份**（判定人取自 judgments 键），
+ * 而 `resolveAppeals` 内联了另一份 ⇒ 两份各自演化 ⇒ 报出来的「未投人数」
+ * 可能与实际裁定口径不一致。⇒ 现在一律取 `appealThirdParties`（**单一事实源**）。
  */
 function appealTally(state, target) {
   const c = state.certification;
-  const challenger = Object.keys(c.judgments)
-    .map((k) => Number(k))
-    .find((s) => c.judgments[s] === false);
-  const thirdParties = state.players
-    .filter((p) => p.alive && p.seat !== target && p.seat !== challenger)
-    .map((p) => p.seat);
+  const thirdParties = appealThirdParties(state, target);
   const cast = thirdParties.filter((s) => c.appealVotes[s] !== undefined);
   const overturns = cast.filter((s) => c.appealVotes[s] === true).length;
   return `第三方 ${String(thirdParties.length)} 人｜已投 ${String(cast.length)}`

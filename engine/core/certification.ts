@@ -48,6 +48,33 @@ export function signatureCount(state: State, seat: number): number {
   return state.certification.signatures[seat] ?? 0;
 }
 
+/**
+ * 复议的**独立第三方集合**（规格 §5.3.2 第 3 条）——**单一事实源**。
+ *
+ * 口径：**存活玩家 − 判定人（challenger）− 待认证者**。
+ *
+ * ⚠️ **为什么抽成导出函数（B64）**：此前这条口径在仓内有两份**复制**——
+ *   `resolveAppeals` 内联一份、`tools/laya-probe/state-text.mjs` 的 `appealTally` 又抄一份
+ *   ⇒ 口径一旦漂移，UI 显示的「未投人数」就会与实际裁定口径**不一致**
+ *   ⇒ 玩家看到的数字不可信。⇒ 本函数是唯一出处，调用方一律取用。
+ *
+ * ⚠️ **判定人取谁**：与 `resolveAppeals` 同款——`judgments` 里值为 `false`（判不通过）的第一个座位。
+ *   ⚠️ **注意二者的细微差异（既有事实，本函数不掩盖）**：
+ *   `certifyAppealVote`（引擎**接受面**）只排除**申请人**与**判定人**；
+ *   而 `resolveAppeals`（**裁定面**）把「存活 − 判定人 − 待认证对象」全算独立第三方
+ *   ⇒ **同场另一名待认证者**在裁定面上是要投票的人（规格：复议票只发给非当事人）。
+ *   ⇒ 本函数返回的是**裁定面**的第三方集合（与裁定口径一致），不是接受面的排除集合。
+ */
+export function appealThirdParties(state: State, target: number): number[] {
+  const c = state.certification;
+  const challenger = Object.keys(c.judgments)
+    .map((k) => Number(k))
+    .find((seat) => c.judgments[seat] === false);
+  return state.players
+    .filter((p) => p.alive && p.seat !== target && p.seat !== challenger)
+    .map((p) => p.seat);
+}
+
 /** 该玩家是否已用掉本轮的认证机会（签印 / 质疑 / 弃权 三选一）。 */
 export function hasUsedCertificationTurn(state: State, seat: number): boolean {
   const c = state.certification;
@@ -282,10 +309,8 @@ export function resolveAppeals(state: State, target: number): CertifyResult {
   if (challengers.length === 0) { return fail(state, '没有判不通过的题可复议'); }
   const challengerSeat = challengers[0];
   if (challengerSeat === undefined) { return fail(state, '复议对象缺失'); }
-  // 独立第三方 = 存活玩家 - 认证人 - 待认证者
-  const thirdParties = state.players
-    .filter((p) => p.alive && p.seat !== challengerSeat && p.seat !== target)
-    .map((p) => p.seat);
+  // 独立第三方 = 存活玩家 - 认证人 - 待认证者（口径出自 `appealThirdParties`：单一事实源，B64）
+  const thirdParties = appealThirdParties(state, target);
   const votes = Object.entries(c.appealVotes)
     .filter(([k]) => thirdParties.includes(Number(k)))
     .map(([, v]) => v);
