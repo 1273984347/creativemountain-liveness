@@ -30,6 +30,7 @@ import { cardNeedsTarget, targetCandidates } from '../engine/core/targeting.ts';
 import { abilityAvailability, activeAbilityId } from '../engine/core/passives.ts';
 import { actionKey } from '../engine/core/action-key.ts';
 import { isRoundEnd } from '../engine/core/round.ts';
+import { duelPicked, isDuelParticipant } from '../engine/core/duel.ts';
 
 /**
  * 行动窗口的**拒因**（null = 窗口开着）：
@@ -139,6 +140,17 @@ export function uiBlockNotice(state: State, seat: number, action: Action): strin
       return cardNeedsTarget(card)
         ? targetRefusal(state, seat, action.target, `「${card.name}」`)
         : action.target === undefined ? null : '该牌不需要选择目标。';
+    }
+    case 'DUEL_SUBMIT_CARD': {
+      // ⚠️ **B68：对峙选牌**（§3.3）—— 亮牌**对对手不可见**（预研红线 3）。
+      //   判据与引擎 `submitDuelCard` 同款：须是本次对峙的参与者 ∧ 自己尚未锁定 ∧ 牌在自己手里。
+      //   ⚠️ **只查「自己手牌」**：不查也不该查对手手牌 ⇒ 界面与枚举都拿不到对方的牌 id。
+      if (me === undefined) { return '该座位不存在（人数档位与存档不一致）。'; }
+      if (!isDuelParticipant(state, seat)) { return '你不是本次对峙的参与者。'; }
+      if (duelPicked(state, seat)) { return '你已锁定亮牌。'; }
+      const card = me.hand.find((x) => x.id === action.cardId);
+      if (card === undefined) { return '手牌中无此牌。'; }
+      return null;
     }
     case 'CERTIFY_MUTUAL_SIGN': {
       // ⚠️ B67：双人互验的互签（§5.5）—— **待认证者本人**给另一位待认证者签印。
@@ -349,6 +361,14 @@ export function uiCandidates(state: State, seat: number): Action[] {
     // ⚠️ B18-b：裂隙面（放印 / 不放）。
     out.push({ type: 'BARRIER_RESOLVE', actor: seat, channel: 'place' });
     out.push({ type: 'BARRIER_RESOLVE', actor: seat, channel: 'skip' });
+  } else if (state.duel !== null) {
+    // ⚠️ **B68：对峙面（§3.3）** —— 待决对峙时**取代**行动面。
+    //   形状与引擎 `actionPhaseCandidates` 的对峙分支**同款**：只发给对峙参与者、
+    //   只发**自己手牌**里的牌（亮牌对对手不可见 ⇒ 不得泄露对方手牌 id）。
+    if (!isDuelParticipant(state, seat) || duelPicked(state, seat)) { return out; }
+    for (const card of me.hand) {
+      out.push({ type: 'DUEL_SUBMIT_CARD', actor: seat, cardId: card.id });
+    }
   } else if (actionWindow(state, seat)) {
     out.push({ type: 'MOVE', actor: seat, steps: 0 });
     out.push({ type: 'ROLL_WHEEL', actor: seat });

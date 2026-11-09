@@ -628,8 +628,13 @@ type Action =
   | { type: 'CERTIFY_APPEAL'; actor: number; target: number }
   | { type: 'CERTIFY_APPEAL_VOTE'; actor: number; target: number; overturn: boolean }
   | { type: 'CERTIFY_ANSWER'; actor: number; target: number; passed: boolean }
-  | { type: 'CERTIFY_MUTUAL_SIGN'; actor: number; target: number };
+  | { type: 'CERTIFY_MUTUAL_SIGN'; actor: number; target: number }
+  | { type: 'DUEL_SUBMIT_CARD'; actor: number; cardId: string };
 ```
+
+> ⚠️ **B68 定案（对峙选牌接线 · G-f 收口）**：新增 `DUEL_SUBMIT_CARD` —— §3.3 的对峙选牌此前**只有引擎函数、没有动作成员**
+> ⇒ 对峙未决时枚举**整表清零**（粗筛的 `duel !== null` 判据）⇒ 真人必须选暗牌的时刻，AI/sidecar 拿到**空动作表**。
+> ⇒ 现补入动作契约：**行动者锁定自己手牌里的一张牌**（亮牌对对手不可见 ⇒ 枚举只发给对峙参与者、且只发他自己的手牌 ⇒ 不泄露对方手牌）。
 
 > ⚠️ **B67 定案（双人互验接线 · G-d 收口）**：新增 `CERTIFY_MUTUAL_SIGN` —— §5.5 的双人互验此前**只有引擎函数、没有动作成员**
 > ⇒ 无法枚举、UI 无入口、模拟器不处理 ⇒ 机制在数字轨与模拟器**均不可达**（唯一调用方是测试）。

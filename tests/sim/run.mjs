@@ -384,8 +384,9 @@ function advanceWithDuel(s, mode, opts) {
   //   且选牌策略在引擎内部 ⇒ 调用方拿不到「启发式选了什么」。
   //   ⇒ 引擎加了**只读观测回调** `onDuelPick`（不改 state / 不改 log / 不改行为）
   //   ⇒ 这里把「选牌当刻」的局面与牌记下来。
-  //   ⚠️ 该决策点**没有候选**（对峙期 `candidatesOf` 整表清零 ⇒ G-f）
-  //      ⇒ 探针必须把它归入 `noLegalActions` 桶，**不参与** P1/P6 的对比。
+  //   ⚠️ **B68 更新（G-f 已修）**：对峙期 `candidatesOf` **不再整表清零** ——
+  //   对峙参与者现在能拿到「锁定自己手牌里的一张」的候选（`DUEL_SUBMIT_CARD`）。
+  //   ⇒ 该决策点**有候选**了 ⇒ 探针不再把它归入 `noLegalActions` 桶。
   const next = advanceAuto(s, mode, {
     ...opts,
     onDuelPick: (seat, cardId, stateAtPick) => {

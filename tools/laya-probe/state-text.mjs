@@ -211,6 +211,16 @@ export function describeAction(state, action, seat) {
     //   ⇒ 只写「推翻/维持」会让两条不同 key 的候选得到同一句话，模型无从区分。
     case 'CERTIFY_APPEAL_VOTE': return cut(`复议票：座${String(action.target)}${action.overturn ? '推翻' : '维持'}`);
     case 'CERTIFY_ANSWER': return cut(`判定座${String(action.target)}${action.passed ? '通过' : '不通过'}`);
+    // ⚠️ **B67 补记**：双人互验的互签（§5.5）—— 待认证者给另一位待认证者签印。
+    //   `target` 是**另一位待认证者**（公开信息：谁在待认证人人尽皆知）⇒ 可写进语义。
+    case 'CERTIFY_MUTUAL_SIGN': return cut(`与座${String(action.target)}互签（双方互证）`);
+    // ⚠️ **B68 补记**：对峙选牌（§3.3）—— 锁定自己手牌里的一张牌（亮牌对对手不可见）。
+    //   `cardId` 取自**行动者自己手牌**（`cardOf` 已强制绑定 actor）⇒ 只描述自己的牌，
+    //   **绝不触碰对手手牌 / duel.pickA / duel.pickB**（预研红线 3）。
+    case 'DUEL_SUBMIT_CARD': {
+      const card = cardOf(action.cardId);
+      return cut(`对峙锁定亮牌：出「${card.name}` + '」');
+    }
     // ⚠️ **B57 补记**：这两个分支此前**不存在** ⇒ B18 引入关隘/裂隙通道后，
     //   `describeAction` 遇到它们直接抛「未知动作类型」⇒ `buildChoice` 崩 ⇒
     //   **影子决策探针在 8 人局（关隘更常出现）整个崩掉**。
@@ -229,9 +239,9 @@ export function describeAction(state, action, seat) {
  *   P1/P3 的候选计数会随之失真，而这类失真在本仓库已经被登记过两次。
  *
  * ⚠️ `noLegalActions`（评审 4a）：候选为空**不等于**「模型拒答」。引擎口径下至少有两条正常路径
- *   会交出空候选——待认证锁定（§5.1）与对峙未决（B13，即 G-f：对峙锁牌走 submitDuelCard，
- *   **没有对应的 Action 成员**，因而枚举不出来）。⇒ Task 15 的 P1/P2 读数必须按这个标记分桶，
- *   G-f 本身交 Task 9 登记；文本层不得为了「让题面看起来有候选」而绕开 legal.ts 的口径。
+ *   会交出空候选——待认证锁定（§5.1）与**对峙期非参与者 / 已锁定者**（B68 更新：G-f 已修 ⇒ 对峙
+ *   **参与者**已有选牌候选，不再是空动作表）。⇒ Task 15 的 P1/P2 读数必须按这个标记分桶；
+ *   文本层不得为了「让题面看起来有候选」而绕开 legal.ts 的口径。
  *
  * @param {object} state 引擎状态（只读）
  * @param {number} seat 决策座位

@@ -9,6 +9,7 @@ import { advanceTurn, performAction } from './turn-runner.ts';
 import { performAbility } from './abilities.ts';
 import { castVote } from './council.ts';
 import { resolveGate, resolveCompareGate } from './gate.ts';
+import { submitDuelCard } from './duel.ts';
 import { resolveBarrier } from './barrier.ts';
 import {
   certifyAbstain, certifyAnswer, certifyAppeal, certifyAppealVote,
@@ -150,5 +151,7 @@ export function probeAction(state: State, action: Action): ProbeResult {
     case 'CERTIFY_APPEAL_VOTE': { const r = certifyAppealVote(s, action.actor, action.target, action.overturn); return byFlag(r.ok, r.note, r.state, s); }
     // ⚠️ B67：双人互验的互签（§5.5）—— 待认证者给另一位待认证者签印。
     case 'CERTIFY_MUTUAL_SIGN': { const r = certifyMutualSign(s, action.actor, action.target); return byFlag(r.ok, r.note, r.state, s); }
+    // ⚠️ B68：对峙选牌（§3.3）—— 引擎入口 `submitDuelCard` 返回 `{ok, state, note}` 契约。
+    case 'DUEL_SUBMIT_CARD': { const r = submitDuelCard(s, action.actor, action.cardId); return byFlag(r.ok, r.note, r.state, s); }
   }
 }

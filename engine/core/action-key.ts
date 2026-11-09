@@ -29,6 +29,8 @@ export function actionKey(a: Action): string {
     case 'CERTIFY_ANSWER': return `cert:answer:${a.target}:${a.passed ? 'pass' : 'fail'}`;
     // ⚠️ B67：双人互验的互签（§5.5）—— 与 `cert:sign` **语义不同**（后者是认证人签待认证者）。
     case 'CERTIFY_MUTUAL_SIGN': return `cert:mutual:${a.target}`;
+    // ⚠️ B68：对峙选牌（§3.3）—— 亮牌对对手不可见 ⇒ key 只含**自己**的牌 id（不含对手任何信息）。
+    case 'DUEL_SUBMIT_CARD': return `duel:card:${a.cardId}`;
   }
 }
 

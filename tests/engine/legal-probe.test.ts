@@ -605,13 +605,31 @@ test('§7 粗筛与引擎同判·其一（a：pendingCert ⇒ G-b 已修）：�
     '粗筛侧：pendingCert ⇒ 行动面整体关闭（与 UI 禁用行动区一致）⇒ 故意不发');
 });
 
-test('§7 粗筛窄于引擎·其二（b：duel !== null ⇒ 对峙 gap）：整表清零，而 submitDuelCard 是活的玩家入口', () => {
+test('§7 粗筛与引擎同判·其二（b：duel !== null ⇒ G-f 已修）：参与者拿到选牌候选，非参与者无候选', () => {
   // 对峙用真实入口 startDuel 造（发现 5：不手拼 `duel` 字段）。
   const d = startDuel(mk(4, 7), 0, 1);
   assert.ok(d.duel !== null, '前提自查：startDuel 必须真的立起对峙');
+  // ⚠️ **B68 更新（G-f 已修）**：此前断言「对峙未决 ⇒ 粗筛整表清零」——那正是 G-f 的缺口
+  //   （对峙选牌无 Action 成员 ⇒ AI/sidecar 拿到空动作表）⇒ 现改为「**同判**」：
+  //   · **对峙参与者** ⇒ 拿到自己手牌的选牌候选（不再是空集）；
+  //   · **非参与者** ⇒ 无候选（他们此刻没有可做的动作）。
   for (let seat = 0; seat < d.players.length; seat += 1) {
-    assert.equal(candidatesOf(d, seat).length, 0, `座${String(seat)}：对峙未决 ⇒ 粗筛整表清零`);
-    assert.equal(getLegalActions(d, seat).length, 0, `座${String(seat)}：枚举因此为空集`);
+    const isParticipant = seat === d.duel?.seatA || seat === d.duel?.seatB;
+    const duelActions = candidatesOf(d, seat).filter((a) => a.type === 'DUEL_SUBMIT_CARD');
+    if (isParticipant) {
+      assert.ok(duelActions.length > 0,
+        `座${String(seat)}：对峙参与者必须拿到选牌候选（G-f 已修 ⇒ 不再是空动作表）`);
+      // ⚠️ **可见性边界（预研红线 3）**：候选的 `cardId` **只能是自己手牌里的牌**
+      //   ⇒ 拿不到对方的手牌 id ⇒ 无法看到对方将出什么牌。
+      const myIds = new Set(d.players[seat]?.hand.map((c) => c.id) ?? []);
+      for (const a of duelActions) {
+        assert.equal(a.type === 'DUEL_SUBMIT_CARD' && myIds.has(a.cardId), true,
+          `座${String(seat)}：选牌候选只能是自己手牌里的牌（不得含他人手牌 id）`);
+      }
+    } else {
+      assert.equal(candidatesOf(d, seat).length, 0,
+        `座${String(seat)}：非对峙参与者 ⇒ 无可做动作`);
+    }
   }
   const pick = d.players[0]?.hand[0];
   assert.ok(pick !== undefined, '前提自查：对峙双方必须有牌可选');
@@ -1456,9 +1474,15 @@ const TEMPLATE_WORDS: readonly string[] = [
   '山议进行中', '已投票座位',
   // 对峙（评审 4：只报公开座位与规则本身，绝不报谁锁没锁）
   '对峙进行中', 'vs', '双方各需锁定', '张暗牌', '揭晓前互不可见',
+  // ⚠️ **B68 补记**：对峙选牌的公开语义（「**锁定自己手牌里**的一张」）
+  //   ⇒ 是**自己**的牌名（公开：自己的手牌本就是公开集）⇒ 不泄露对方任何信息。
+  '对峙锁定亮牌',
   // 候选 key 的字面段（`actionKey` 的文法，设计 §4.4）
   'move', 'ask', 'pass', 'play', 'ability', 'vote', 'gate', 'cert',
   'sign', 'challenge', 'abstain', 'appeal', 'appealvote', 'answer', 'overturn', 'uphold', 'fail',
+  // ⚠️ **B67/B68 补记**：新动作的 key 字面段与语义模板词
+  //   （`cert:mutual:<座>` ⇒ 'mutual'；`duel:card:<牌id>` ⇒ 'duel' + 'card'）。
+  'mutual', 'duel', 'card',
   // 语义模板里的固定词
   '行棋', '掷骰前进', '问天', '掷指令骰', '结束手番', '过隘', '以试炼牌闯关', '入口待', 'B19', '出',
   '发动被动', '山议投座', '给座', '签印', '质疑座', '对座', '弃权', '自己申请复议', '资源',
@@ -2152,10 +2176,25 @@ test('对峙期（常驻·评审 4）：题面为空时要把对峙写成公开�
       assert.ok(text.includes(`对峙进行中：座${String(duel.seatA)} vs 座${String(duel.seatB)}`),
         `对峙必须写成公开事实（座${String(seat)} 视角）：${text}`);
       const choice = buildChoice(s, seat);
-      assert.equal(Object.keys(choice.criteria).length, 0,
-        `引擎口径：对峙未决 ⇒ 行动窗口关闭 ⇒ 座${String(seat)} 无候选（G-f：锁牌没有 Action 成员）`);
-      assert.equal(choice.noLegalActions, true,
-        '空候选必须带可分桶标记，否则 Task 15 的 P1/P2 会把「枚举给不出动作」读成「模型拒答」');
+      // ⚠️ **B68 更新（G-f 已修）**：参与者此刻**有**选牌候选 ⇒ 断言只对**非参与者**成立。
+      //   非参与者仍是空候选（他们此刻没有可做的动作）⇒ 可分桶标记照旧。
+      const isParticipant: boolean = seat === duel.seatA || seat === duel.seatB;
+      // ⚠️ **B68 更新（G-f 已修）**：参与者**未锁定时**才有选牌候选；已锁定者**等对方** ⇒ 无候选。
+      const locked = isParticipant && (seat === duel.seatA ? duel.pickA !== undefined : duel.pickB !== undefined);
+      if (isParticipant && !locked) {
+        // ⚠️ 参与者已有候选 ⇒ 题面**不再为空** ⇒ 但「对峙进行中」仍必须写出来（公开事实）。
+        assert.ok(Object.keys(choice.criteria).length > 0,
+          `座${String(seat)} 是对峙参与者且未锁定 ⇒ 必须有选牌候选（G-f 已修）`);
+        assert.equal(choice.noLegalActions, false,
+          `座${String(seat)} 有候选 ⇒ noLegalActions 必须为 false`);
+      } else {
+        assert.equal(Object.keys(choice.criteria).length, 0,
+          isParticipant
+            ? `座${String(seat)} 已锁定亮牌 ⇒ 等对方选牌，本回合无候选`
+            : `引擎口径：对峙未决 ⇒ 非参与者无候选（他们此刻没有可做的动作）`);
+        assert.equal(choice.noLegalActions, true,
+          '空候选必须带可分桶标记，否则 Task 15 的 P1/P2 会把「枚举给不出动作」读成「模型拒答」');
+      }
     }
   }
   // (c) 锁定进度不可反推：文本在「有人锁定」前后必须**逐字相同**，**包括参与者本人**那一侧。

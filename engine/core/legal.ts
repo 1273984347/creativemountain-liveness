@@ -6,8 +6,9 @@
 //   还枚举过一个**零调用方**的「出题合规裁定」动作（Task 1 已从 Action 契约移除；
 //   `action-contract.test.ts` 用本文件源码文本钉住它不再回来）——三例都是镜像漂移的实证。
 //   现在由引擎自己背书：枚举出来的动作一定被执行入口接受（`一致性-正向` 常驻用例钉住）。
-// ⚠️ 反向的教训**同样**要记（发现 2）：粗筛在**四处**故意窄于引擎——`duel !== null` /
-//   `phase !== '行动'` / `isRoundEnd` / **死亡座位**（a–e 见 `candidatesOf` 的契约表）。
+// ⚠️ 反向的教训**同样**要记（发现 2）：粗筛在**三条**故意窄于引擎——`phase !== '行动'` /
+//   `isRoundEnd` / **死亡座位**（a–e 见 `candidatesOf` 的契约表）。
+//   ⚠️ **B68 更新**：`duel !== null` 那条**已移除**（G-f 已修 ⇒ 对峙面改为发选牌候选）。
 //   ⚠️ **B66 更新**：`pendingCert` 那条**已不再**是「粗筛窄于引擎」——G-b 已修（引擎 `act` 分支
 //   现查 `pendingCert` ⇒ 锁定者打位移类牌被引擎拒绝）⇒ 引擎与粗筛**同判** ⇒ 该条从清单移除。
 //   那是 UI 一致性与已登记 gap，**不是**引擎合法性判据，也不是待修的 bug；
@@ -32,6 +33,7 @@ import { probeAction } from './probe.ts';
 import { cardNeedsTarget, targetCandidates } from './targeting.ts';
 import { abilityAvailability, activeAbilityId } from './passives.ts';
 import { hasUsedCertificationTurn, isCertifier } from './certification.ts';
+import { duelPicked, isDuelParticipant } from './duel.ts';
 import { isRoundEnd } from './round.ts';
 import { pendingGate } from './gate.ts';
 import { pendingBarrier } from './barrier.ts';
@@ -101,6 +103,19 @@ function actionPhaseCandidates(state: State, seat: number): Action[] {
       { type: 'BARRIER_RESOLVE', actor: seat, channel: 'place' },
       { type: 'BARRIER_RESOLVE', actor: seat, channel: 'skip' },
     ];
+  }
+  // ⚠️ **B68：对峙面（§3.3）** —— 待决对峙时**取代**行动面（该手番已被对峙阻塞）。
+  //   ⚠️ **可见性边界（预研红线 3）**：亮牌**对对手不可见** ⇒ 候选**只发自己手牌里的牌**、
+  //   **且只发给对峙参与者** ⇒ 任何一方都拿不到对方的手牌 id ⇒ 无法看到对方将出什么牌。
+  //   ⚠️ 「已锁定」的人不再发候选（引擎 `submitDuelCard` 会拒「你已锁定亮牌」⇒ 发了就是死选项）。
+  if (state.duel !== null) {
+    if (!isDuelParticipant(state, seat)) { return []; }   // 非参与者 ⇒ 无可做动作
+    if (duelPicked(state, seat)) { return []; }          // 已锁定 ⇒ 等对方
+    const out: Action[] = [];
+    for (const card of p.hand) {
+      out.push({ type: 'DUEL_SUBMIT_CARD', actor: seat, cardId: card.id });
+    }
+    return out;
   }
   if (!actionWindowOpen(state, seat)) { return []; }
   const out: Action[] = [
@@ -218,7 +233,7 @@ function certificationCandidates(state: State, seat: number): Action[] {
  * | # | 粗筛多出来的一条判据 | 引擎现实 | 为什么仍然这么定 | 证据行 |
  * |---|---|---|---|---|
  * | a | ~~`p.pendingCert` ⇒ 行动面整体关闭~~ | ⚠️ **B66 已移除该条**：G-b 已修 ⇒ 引擎 `act` 分支**现查** `pendingCert`（锁定者打**位移类**牌被引擎拒绝）⇒ 引擎与粗筛**同判**，不再是「窄于引擎」 | （原理由：UI 在待认证期禁用整个行动区，给模型一条玩家点不到的动作等于给它一个不存在的选项 —— 该理由仍成立，但已由引擎同判兜住） | `§7 粗筛窄于引擎` 现行四条 · 及其余取证行 |
- * | b | `state.duel !== null` ⇒ **整表清零** | 玩家此刻仍有可执行的入口 `submitDuelCard(seat, cardId)`（`{ok,state,note}` 契约；脚本/AI 另有 `autoResolveDuel`），但它**没有对应的 Action 成员** | Action 契约不在本文件改动面内（B13 gap）；对峙选牌是「隐藏信息」流程，本就打算在门禁层外置 | `§7 粗筛窄于引擎五处·其二`＋表里 `PASS@对峙未决` |
+ * | b | ~~`state.duel !== null` ⇒ **整表清零**~~ | ⚠️ **B68 已移除该条**：G-f 已修 ⇒ 引擎枚举层在**对峙面**发 `DUEL_SUBMIT_CARD` 候选（**取代**行动面）⇒ 对峙参与者拿到自己手牌的选牌候选，**非参与者仍无候选** | （原理由：对峙选牌是「隐藏信息」流程、本就打算在门禁层外置 —— 但「门禁层外置」不等于「**枚举整表清零**」：那会让 AI/sidecar 在真人必须选暗牌的时刻拿到**空动作表**） | `§7 粗筛与引擎同判` 现行三条 · 及其余取证行 |
  * | c | `state.phase !== '行动'` ⇒ 不发 MOVE/ROLL_WHEEL/PLAY_CARD | `performAction` **从不读** `state.phase` ⇒ 山议阶段照样接受行棋 | 阶段是流程层的闸门（§3.1 八步），引擎不判不代表玩家可以乱按 | `§7 粗筛窄于引擎五处·其三` |
  * | d | `isRoundEnd(state)` ⇒ 同上关闭 | `performAction` 同样**不看** `turnIndex` 与 round 进度 | 「本 round 已行动过」属手番归属门禁（Task 7），与 c 同族 | `§7 粗筛窄于引擎五处·其四` |
  * | e | **死亡座位**（`alive !== true`）⇒ 整表清零 | `performAction` 只查 `player === undefined`，**从不查 `alive`** ⇒ 已出局座位的动作仍会被执行 | 出局者的动作**玩家点不到**（UI 只渲染存活座位）⇒ 同 a 的理由：不给模型一条不存在的选项 | `§7 粗筛窄于引擎五处·其五` |

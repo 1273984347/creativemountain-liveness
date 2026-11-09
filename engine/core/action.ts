@@ -20,7 +20,8 @@ export type ActionType =
   | 'CERTIFY_APPEAL'
   | 'CERTIFY_APPEAL_VOTE'
   | 'CERTIFY_ANSWER'
-  | 'CERTIFY_MUTUAL_SIGN';
+  | 'CERTIFY_MUTUAL_SIGN'
+  | 'DUEL_SUBMIT_CARD';
 
 /**
  * 声明式动作。`type` 为判别式字段。
@@ -68,4 +69,13 @@ export type Action =
    *     双方都必须在 `pending` 里、且不能自己签自己）。
    * ⇒ 双方互签即各自达标（双人时门槛降为 1，见 §5.2 步骤 0 前置分支）⇒ **不产生死锁**。
    */
-  | { readonly type: 'CERTIFY_MUTUAL_SIGN'; readonly actor: number; readonly target: number };
+  | { readonly type: 'CERTIFY_MUTUAL_SIGN'; readonly actor: number; readonly target: number }
+  /**
+   * 对峙选牌（规格 §3.3，B68 定案）：锁定一张亮牌，两人都锁定即揭晓结算。
+   *
+   * ⚠️ **可见性边界（预研红线 3）**：亮牌**对对手不可见** ⇒ 本动作的 `cardId`
+   *   **只能是行动者自己手牌里的牌** ⇒ 枚举层**只发给对峙参与者**、**且只发他自己的手牌**
+   *   ⇒ 任何一方都拿不到对方的手牌 id（拿不到 ⇒ 无法看到对方将出什么牌）。
+   * ⚠️ 引擎 `submitDuelCard` 的守卫同款：非参与者 ⇒ 拒；手牌中无此牌 ⇒ 拒；已锁定 ⇒ 拒。
+   */
+  | { readonly type: 'DUEL_SUBMIT_CARD'; readonly actor: number; readonly cardId: string };
