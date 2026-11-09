@@ -19,7 +19,12 @@
     "print": "npm run build:ir && npm run build:print",
     "build:package": "node build/build-package.mjs",
     "release:check": "node tools/release-check.mjs",
-    "release": "npm run release:check && npm run build && npm run build:print && npm run build:package"
+    "release": "npm run release:check && npm run build && npm run build:print && npm run build:package",
+    "env:laya": "node tools/laya-sidecar/env-check.mjs",
+    "sidecar:laya": "node tools/laya-sidecar/up.mjs --weights D:/<local-libs>/laya-multilingual/model.safetensors",
+    "probe:laya": "node tools/laya-probe/run.mjs",
+    "probe:laya:browser": "node tools/laya-probe/browser.mjs",
+    "probe:laya:skip": "node tools/laya-probe/skip.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

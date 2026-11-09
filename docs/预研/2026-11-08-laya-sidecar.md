@@ -358,7 +358,55 @@ Compare-Object docs/balance-report.md <临时目录>/balance-after.md
 ⇒ 分类**依据是 console 错误原文**；命中不到则归 `unknown` 并保留原文。
 另加一类**非失败**：上游不在 ⇒ 反代按设计折叠成 503 ⇒ 单独归类，**不落进 unknown**（否则误导）。
 
-## 4. 阶段 B（B16 · Task 17）仍未开始## 4. 阶段 B（B16 · Task 16–17）仍未开始## 4. 阶段 B（B16 · Task 15–17）仍未开始## 4. 阶段 B（B16 · Task 14–17）仍未开始## 4. 阶段 B（B16 · Task 11–17）仍未开始## 4. 阶段 B（B16 · Task 11–17）仍未开始
+## 5. 预研结论报告（P0–P6）
+
+> 落盘时间：2026-11-09（B59 · Task 17 收官）　判据**逐字引用**续作计划 §2.3（**未下调**）。
+
+### 5.1 P0–P6 七行表（每格填实测值，无空缺）
+
+| 读数 | 判据（原文，未下调） | 实测值 | 达标 |
+|---|---|---|---|
+| **P0** | 权重对拍通过 且 `laya-serve` 起得来 且 `/health` 200 | 权重 **643835514 字节 + sha256 前缀 `9d628fd9`** 双双命中；`laya-serve` 起于 `127.0.0.1:8712`（`/health` 200，device=cuda）；候选② 本仓 venv 胜出（torch 2.6.0+cu124 来自 `D:\<local-libs>\torch-cu124`、CUDA true）；**launch 路线 = A** | ✅ |
+| **P1** | `answerRate ≥ 0.99` 且 `illegal = 0` | **answerRate = 1.0**（232/232）；**illegal = 0**；errors = 0；无候选 8 条已分桶（对峙未决 7 + 待认证锁定 1） | ✅ |
+| **P2** | GPU `p95 ≤ 300ms`；CPU `p95 ≤ 1500ms` | GPU 路径实测 **p50 = 50 ms / p95 = 63.45 ms**（n=232）⇒ **GPU 达标**；CPU 路径未测（本次全程走 CUDA） | ✅（GPU） |
+| **P3** | **`dropped` 之和 = 0**（不是 `truncated`） | **`dropped` 之和 = 0**；`maxCandidates = 51`、`meanCandidates = 15.1`；`truncated` 计数 = 0 ⇒ **不需下调 `LEGAL_ACTION_CAP`** | ✅ |
+| **P4** | `reachable = true`；否则必须给出失败层次之一 | **reachable = true**（`GET /health` 200、`POST /v1/systemone` 200 且真拿到 `choice=move`、概率 `{move:0.7853, ask:0.2147}`）；`consoleErrors = []`；**服务端留痕确认 CORS 预检**（`[serve] 收到 CORS 预检 OPTIONS /v1/systemone`） | ✅ |
+| **P5** | 输出首词 `SKIP` 且退出码 = 0 | 三种形状**逐一实测**：`SKIP {"reason":"no-sidecar",…}` / `SKIP {"reason":"proxy-says-unavailable","status":503,…}` / `SKIP {"reason":"sidecar-ready","status":200,…}`；**退出码恒 0**；常驻负样本 3/3 绿 | ✅ |
+| **P6** | 仅记录，不设判据 | **agreeRate = 40.52%**（94/232）；分歧前 20 条已列（模型倾向 `play:*`，启发式倾向 `move`/`ask`） | 记录 |
+
+### 5.2 三条判定
+
+| # | 判定 | 结论 |
+|---|---|---|
+| **接线** | 引擎状态能否喂给本地判断模型、再稳定回解成合法动作 | **能**。P1 answerRate = 1.0、illegal = 0 ⇒ 「状态 → 题面 → 模型 → key → 严格反解 → 引擎复核」整条链打通；`probeAction` 复核**零非法提交** |
+| **延迟** | 能否进真人桌局 | **GPU 路径能**（p95 = 63 ms ≪ 300 ms 判据）；CPU 路径**未测** ⇒ 「CPU 能不能进真人桌局」**未结论**（P2 判据的 CPU 分支缺读数） |
+| **浏览器** | `file://` 双击即玩能否叫到本地模型 | **能**（P4 reachable = true，零 CORS/PNA 报错）⇒ 「必须放弃双击即玩」这个结论**不被触发** |
+
+### 5.3 对 V2 的三条建议
+
+| # | 建议 | 依据 |
+|---|---|---|
+| 1 | **值得做 AI 陪练**（但定位是「陪练/教学演示」，不是竞技对手） | 接线、延迟、浏览器三条判定**全部达标**（GPU 路径 p95 63 ms、`file://` 可达）⇒ 工程可行性成立；但 P6 的 agreeRate 仅 **40.52%** ⇒ 模型的策略与当前启发式**明显不同** ⇒ 强度与体验需另立评估（§2.4 明令本预研不下强度结论） |
+| 2 | **需要分层决策**（玩法层 / 模型层分离） | 三条现实约束：① 「离线可用」是**产品承诺** ⇒ sidecar 是**可选增强**，不能成为数字轨的启动依赖（发布包零增量红线）；② 常驻服务（8712 + 8711）与 P5 的降级形状是配套的 ⇒ **降级路径必须与主路径同时设计**；③ P2 的 CPU 分支未测 ⇒ 目标机器若无 GPU，需先补 CPU 读数再定档 |
+| 3 | **B14 关隘并入枚举的剩余成本** | 关隘通道动作（`GATE_RESOLVE` / `BARRIER_RESOLVE`）**已能枚举**，但 `COMPARE`（出牌比对）此前因探针占位分支而不可枚举 ⇒ B53 已修（占位分支删除 + 只读观测回调）⇒ 剩余成本主要在**峙面**：`submitDuelCard` 没有 `Action` 成员（G-f）⇒ 对峙期枚举整表清零 ⇒ 影子决策**无法在峙面对比** ⇒ 若 V2 要让 AI 参与对峙，需**给对峙选牌补 Action 成员**（属引擎契约变更，须走状态契约冻结流程） |
+
+### 5.4 红线自证（三行，附实测输出）
+
+```
+① npm run gate 尾行：
+== PASS：13 门全绿 ==
+
+② git status --short dist/ ：
+(空)
+
+③ node -e 打印 dependencies：
+dependencies = {}
+```
+
+（补充：Python 依赖**零**——`package.json` 的 `dependencies` 为空，`devDependencies` 亦无任何 Python 相关项；
+`tools/laya-sidecar/*` 与 `tools/laya-probe/*` **不被** `esbuild.config.mjs` / `build/build-package.mjs` 引用 ⇒ **发布包零增量**。）
+
+## 4. 阶段 B（B16 · Task 17）已完成 —— 见 §5## 4. 阶段 B（B16 · Task 16–17）仍未开始## 4. 阶段 B（B16 · Task 15–17）仍未开始## 4. 阶段 B（B16 · Task 14–17）仍未开始## 4. 阶段 B（B16 · Task 11–17）仍未开始## 4. 阶段 B（B16 · Task 11–17）仍未开始
 
 **阻塞**：Task 11 Step 2 需新建 `.laya-venv` + `pip install laya[serve]`（走网络、GB 级磁盘）；
 Task 12 Step 2 起常驻本地服务 ⇒ **两项都必须先取得用户同意**（续作计划 §「外向副作用确认点」）。
