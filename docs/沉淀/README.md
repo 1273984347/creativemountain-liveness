@@ -19,7 +19,7 @@
 - [门禁清单.md](门禁清单.md) —— 十三道门禁的职责、依赖顺序、负样本锚点、失败排查
 - [负样本自证范式.md](负样本自证范式.md) —— 「违例必红、恢复必绿」的常驻自动化范式
 - [从源码派生避免第二事实源.md](从源码派生避免第二事实源.md) —— 手抄清单的替代做法与已知反例
-- [经验教训索引.md](经验教训索引.md) —— B10–B60 实证坑与通用化结论
+- [经验教训索引.md](经验教训索引.md) —— B10–B62 实证坑与通用化结论
 - [clean-room-gate-check.mjs](clean-room-gate-check.mjs) —— 干净副本门禁自检脚本（可直接跑：`node docs/沉淀/clean-room-gate-check.mjs`）
 - [balance-extract.mjs](balance-extract.mjs) —— 从平衡报告抽**位次胜率极差**（§9.2 口径；默认报告模式，`--strict` 才判红）
 - [verify-trial-reserve-critical.mjs](verify-trial-reserve-critical.mjs) —— 用已发布的扫描数据**离线复核**判定（Welch t + 精确 t 临界值；无需重跑模拟）
