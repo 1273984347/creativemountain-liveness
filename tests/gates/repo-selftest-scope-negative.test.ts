@@ -112,6 +112,15 @@ test('B51 负样本 J：允许区内**文件名**含令牌 ⇒ 不命中（允�
   });
 });
 
+test('B51 负样本 K：例外文件的**文件名**含令牌 ⇒ 必须命中（例外分支与普通分支规则一致）', () => {
+  withTempTree((dir) => {
+    put(dir, 'print/CM_SELFTEST_例外.ts', 'export const ok = 1;\n');
+    const { hits } = scanTree(dir, { exceptions: ['print/CM_SELFTEST_例外.ts'] });
+    assert.equal(hits.length, 1, '例外文件的文件名命中必须被抓到：\n' + hits.join('\n'));
+    assert.ok(hits[0]?.includes('文件名'), '命中须标明来自文件名：' + hits[0]);
+  });
+});
+
 test('B51 负样本 H：CI 配置不含令牌 ⇒ 不命中（正样本对照：证明上一条不是「见谁命中」）', () => {
   withTempTree((dir) => {
     put(dir, '.github/workflows/ci.yml', 'run: npm run gate\n');

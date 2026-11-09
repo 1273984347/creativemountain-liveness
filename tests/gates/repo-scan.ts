@@ -101,6 +101,21 @@ function collectFiles(dir: string, out: string[]): void {
 }
 
 /**
+ * 检查单个文件：**内容**与**文件名**都查。
+ *
+ * ⚠️ 为什么抽成共用函数（盲审确凿缺陷 1）：例外分支与普通分支若各写一份，
+ *   迟早一边查内容、一边只查文件名 ⇒ 规则不一致 ⇒ 成形的盲区。
+ *   ⇒ 两处共用本函数 ⇒ 不一致在结构上不可能发生。
+ */
+function checkFile(rel: string, text: string, hits: string[]): void {
+  for (const token of hitsInText(text)) { hits.push(rel + ' ⇒ ' + token); }
+  // ⚠️ **文件名**也查：文件名里带标识同样能指向绕过入口（B50 已把允许区外的
+  //   文件名引用改写为中文描述 ⇒ 这里补上守卫，防它重新长出来）。
+  const base = rel.split('/').pop() ?? '';
+  for (const token of hitsInText(base)) { hits.push(rel + ' ⇒ 文件名 ⇒ ' + token); }
+}
+
+/**
  * 扫描一棵目录树 ⇒ 命中令牌的位置 + 实际扫描过的文件。
  *
  * 跳过规则（**每条都是盲区** ⇒ 已在 `tools/coverage-boundaries.mjs` 如实登记）：
@@ -108,7 +123,8 @@ function collectFiles(dir: string, out: string[]): void {
  *   · SKIP_DIRS 整目录不扫（例外清单里的文件单独扫）；
  *   · >MAX_BYTES 的文件不扫；二进制（含 `\0`）不扫。
  */
-export function scanTree(root: string): ScanResult {
+export function scanTree(root: string, opts: { readonly exceptions?: readonly string[] } = {}): ScanResult {
+  const exceptions = opts.exceptions ?? SCAN_EXCEPTIONS;
   const hits: string[] = [];
   const scanned: string[] = [];
   const files: string[] = [];
@@ -123,19 +139,16 @@ export function scanTree(root: string): ScanResult {
     try { text = readFileSync(full, 'utf8'); } catch { continue; }
     if (text.includes('\u0000')) { continue; }
     scanned.push(rel);
-    for (const token of hitsInText(text)) { hits.push(rel + ' ⇒ ' + token); }
-    // ⚠️ **文件名**也查：文件名里带标识同样能指向绕过入口（B50 已把允许区外的
-    //   文件名引用改写为中文描述 ⇒ 这里补上守卫，防它重新长出来）。
-    const base = rel.split('/').pop() ?? '';
-    for (const token of hitsInText(base)) { hits.push(rel + ' ⇒ 文件名 ⇒ ' + token); }
+    checkFile(rel, text, hits);
   }
   // 例外文件：父目录被跳过 ⇒ 单独扫描（否则它们成为盲区）。
-  for (const rel of SCAN_EXCEPTIONS) {
+  for (const rel of exceptions) {
     const full = resolve(root, rel);
     if (!existsSync(full)) { continue; }
     const text = readFileSync(full, 'utf8');
-    scanned.push(normalizeRel(rel));
-    for (const token of hitsInText(text)) { hits.push(rel + ' ⇒ ' + token); }
+    const norm = normalizeRel(rel);
+    scanned.push(norm);
+    checkFile(norm, text, hits);
   }
   return { hits, scanned };
 }
