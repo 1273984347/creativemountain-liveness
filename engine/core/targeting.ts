@@ -29,6 +29,36 @@ export function cardNeedsTarget(card: Card): boolean {
   return card.effects.some((e) => effectNeedsTarget(e));
 }
 
+/**
+ * 一张牌是否**含位移**（规格 §5.1「待认证锁定」用）。
+ *
+ * ⚠️ **为什么不能只看 `card.type === 'motion'`**（B66 实测）：主题包里有一张
+ *   **`utility` 类型**的位移牌（`c_throwspirit` / cost 1 / `move_by_dice`）
+ *   ⇒ 只按 type 判会**漏掉它** ⇒ 锁定者仍能用它位移 ⇒ 锁定被绕过。
+ *   ⇒ 判据按 **op 语义**（与 B65 的 `pickPlayableCard` 同款思路）。
+ *
+ * ⚠️ **嵌套效果要展开**：`sequence` / `conditional` / `count` 里藏的位移也算
+ *   （否则一张 sequence 位移牌会绕过锁定）。
+ */
+export function cardHasMovement(card: Card): boolean {
+  const MOVE_OPS = new Set([
+    'move_forward', 'move_backward', 'move_to_tile', 'move_relative_to',
+    'swap_position', 'teleport', 'move_by_dice',
+  ]);
+  const walk = (effects: readonly Effect[]): boolean => {
+    for (const eff of effects) {
+      if (MOVE_OPS.has(eff.op)) { return true; }
+      if (eff.op === 'sequence' && walk(eff.effects)) { return true; }
+      if (eff.op === 'conditional') {
+        if (walk([eff.then]) || (eff.else !== undefined && walk([eff.else]))) { return true; }
+      }
+      if (eff.op === 'count' && walk([eff.effect])) { return true; }
+    }
+    return false;
+  };
+  return walk(card.effects);
+}
+
 /** 可选目标座位：**除自己外的存活玩家**（与卡面文案「对一名对手」一致）。 */
 export function targetCandidates(state: State, seat: number): number[] {
   return state.players.filter((p) => p.alive && p.seat !== seat).map((p) => p.seat);

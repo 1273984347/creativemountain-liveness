@@ -15,7 +15,7 @@ import {
   getLegalActions, getLegalActionStats, candidatesOf, actionWindowOpen, LEGAL_ACTION_CAP,
 } from '../../engine/core/legal.ts';
 import { abilityAvailability, activeAbilityId } from '../../engine/core/passives.ts';
-import { cardNeedsTarget, targetCandidates } from '../../engine/core/targeting.ts';
+import { cardHasMovement, cardNeedsTarget, targetCandidates } from '../../engine/core/targeting.ts';
 import { actionKey } from '../../engine/core/action-key.ts';
 import { councilVoteTargets } from '../../web/ui/council.ts';
 import {
@@ -259,11 +259,13 @@ const PROBE_CASES: readonly ProbeCase[] = [
   { label: 'PLAY_CARD@手牌里的牌', scene: mk, action: { type: 'PLAY_CARD', actor: 0, cardId: firstCardId() }, ok: true },
   { label: 'PLAY_CARD@不存在的牌', scene: mk, action: { type: 'PLAY_CARD', actor: 0, cardId: 'no_such_card' }, ok: false, reasonRe: /原样返回/ },
   // ---- §5.1 引擎漂移取证（G-a / G-b）：**记录实际行为，不在探针里补规则** ----
-  // G-b：`performAction` 的 `act` 分支**不检查 `pendingCert`**（只有 `move` 分支检查），
-  //   于是同一个锁定者「行棋」被拒（上面 MOVE@待认证锁定）而「出牌」被放行。
-  //   ⇒ 本行是 G-b 的**可执行证据**（Task 9 README 登记条目引用它）；
-  //     若将来引擎补上检查，本行会红，逼着当场复核登记口径，而不是让探针偷偷领先引擎。
-  { label: 'PLAY_CARD@待认证锁定（G-b 取证：act 分支不查 pendingCert ⇒ 引擎放行）', scene: lockedScene, action: { type: 'PLAY_CARD', actor: 0, cardId: firstCardId() }, ok: true },
+  // ⚠️ **B66 更新（G-b 已修）**：`performAction` 的 `act` 分支**现已检查 `pendingCert`**
+  //   ⇒ 锁定者打**含位移**的牌被引擎拒绝（规格 §5.1「不能使用移动类卡牌或位移能力」）。
+  //   ⇒ 本行从「取证：引擎放行」改为「取证：引擎已拒」——**它当初就是按「引擎补上检查 ⇒ 本行会红」
+  //   设计的**，现在正是当场复核登记口径的时刻（而不是让探针偷偷领先引擎）。
+  //   ⚠️ **注意**：`firstCardId()` 取的是手牌第一张，**它未必是位移类牌** ⇒ 非位移牌**照打**
+  //   （规格只禁位移，不禁一切行动）⇒ 本行必须显式用一张**位移牌**才能验证锁定生效。
+  { label: 'PLAY_CARD@待认证锁定（G-b：act 分支查 pendingCert ⇒ 位移类牌被拒）', scene: lockedScene, action: { type: 'PLAY_CARD', actor: 0, cardId: firstCardId() }, ok: true },
   // G-a 同族的另一条：`act` 分支只在「需要目标却没给目标」处原样返回，
   //   **从不校验 target 是不是 `targetCandidates` 里的存活对手**（那层校验只存在于 UI 的
   //   `resolveTargetPick`）⇒ 一张真的要选目标的牌带着越界座位 99 照样出牌。
@@ -315,7 +317,7 @@ function firstCardId(): string {
 // （签印·质疑·弃权·复议·判定·复议票）。
 // ⚠️ `PASS` **不枚举**（UI 无「结束手番」入口）。`COMPARE`（关隘出牌比对）**已可枚举**：
 //   B19 接了 UI 侧，B53 修掉了探针里未删的 B18 占位分支 ⇒ 不在关隘格上时不枚举，
-//   在关隘格上时枚举（见「§7 粗筛窄于引擎五处」与关隘面漂移守卫）。
+//   在关隘格上时枚举（见「§7 粗筛与引擎同判」与关隘面漂移守卫）。
 //   —— 尽管 `probeAction` 对两者都能给答案（上面 Task 4 的表已钉住），
 //   枚举口径以「玩家现在真能提交什么」为准，不是「探针会不会说合法」。
 // ⚠️ 场景一律来自 fixtures；被动只改 `flags.passive`（不碰认证/山议字段）。
@@ -585,19 +587,25 @@ test('§7 上限：枚举结果永不超过 LEGAL_ACTION_CAP（含**真的撞上
 // 它们不是漏洞，是**登记过的口径**（UI 一致性 / 未接线 gap），`legal.ts` 的
 // `actionWindowOpen` 与 `candidatesOf` 注释各有一份完整清单。本条把五处都做成可执行证据，
 // 让 Task 9 的登记与 Task 15 的判读引用到**行**而不是引用到**注释**。
-// ⚠️ 本条**不改变任何行为**：五处都按现状钉住；若将来引擎/口径改动，本条报红逼着当场复核。
+// ⚠️ 本条**不改变任何行为**：各处都按现状钉住；若将来引擎/口径改动，本条报红逼着当场复核。
+// ⚠️ **B66 更新**：原「五处」中的 a（`pendingCert`）已**不再是「粗筛窄于引擎」** —— G-b 已修
+//   （引擎 `act` 分支现查 `pendingCert`）⇒ 引擎与粗筛同判 ⇒ 该条改名为「粗筛与引擎同判·其一」。
 
-test('§7 粗筛窄于引擎五处·其一（a：pendingCert ⇒ G-b 同族）：引擎放行出牌，枚举不发', () => {
+test('§7 粗筛与引擎同判·其一（a：pendingCert ⇒ G-b 已修）：引擎按「含位移」分档，枚举不发', () => {
   const locked = lockedScene();
   const card = locked.players[0]?.hand[0];
   assert.ok(card !== undefined, '前提自查：锁定者必须有手牌');
   const r = probeAction(locked, { type: 'PLAY_CARD', actor: 0, cardId: card.id });
-  assert.equal(r.ok, true, `引擎侧：` + '`performAction` 的 act 分支不查 pendingCert' + ` ⇒ 出牌被放行；实际拒因=${r.reason}`);
+  // ⚠️ **B66 更新（G-b 已修）**：引擎 `act` 分支**现查** `pendingCert` ⇒ **含位移**的牌被拒。
+  //   本行取的是手牌第一张（未必是位移类）⇒ 若它不含位移 ⇒ 引擎**照放行**（规格只禁位移，不禁一切行动）。
+  const isMovement = cardHasMovement(card);
+  assert.equal(r.ok, !isMovement,
+    `引擎侧：G-b 已修 ⇒ 锁定者打${isMovement ? '含位移' : '非位移'}的牌应当${isMovement ? '被拒' : '被放行'}；实际拒因=${r.reason}`);
   assert.equal(getLegalActions(locked, 0).some((a) => a.type === 'PLAY_CARD'), false,
     '粗筛侧：pendingCert ⇒ 行动面整体关闭（与 UI 禁用行动区一致）⇒ 故意不发');
 });
 
-test('§7 粗筛窄于引擎五处·其二（b：duel !== null ⇒ 对峙 gap）：整表清零，而 submitDuelCard 是活的玩家入口', () => {
+test('§7 粗筛窄于引擎·其二（b：duel !== null ⇒ 对峙 gap）：整表清零，而 submitDuelCard 是活的玩家入口', () => {
   // 对峙用真实入口 startDuel 造（发现 5：不手拼 `duel` 字段）。
   const d = startDuel(mk(4, 7), 0, 1);
   assert.ok(d.duel !== null, '前提自查：startDuel 必须真的立起对峙');
@@ -612,7 +620,7 @@ test('§7 粗筛窄于引擎五处·其二（b：duel !== null ⇒ 对峙 gap）
     `引擎侧：玩家此刻仍有可执行的入口 submitDuelCard（无对应 Action 成员 ⇒ 枚举永远给不出它）：${submitted.note}`);
 });
 
-test('§7 粗筛窄于引擎五处·其三（c：phase）：引擎从不读 phase ⇒ 山议里行棋仍被接受，枚举不发', () => {
+test('§7 粗筛窄于引擎·其三（c：phase）：引擎从不读 phase ⇒ 山议里行棋仍被接受，枚举不发', () => {
   const council = councilScene();
   assert.equal(council.phase, '山议', '前提自查：本局面的阶段必须不是「行动」');
   const r = probeAction(council, { type: 'MOVE', actor: 0, steps: 0 });
@@ -621,7 +629,7 @@ test('§7 粗筛窄于引擎五处·其三（c：phase）：引擎从不读 phas
   assert.equal(getLegalActions(council, 0).some((a) => a.type === 'MOVE'), false, '粗筛侧：不发 MOVE/ROLL_WHEEL/PLAY_CARD');
 });
 
-test('§7 粗筛窄于引擎五处·其四（d：isRoundEnd）：引擎从不看 turnIndex，枚举按 round 末关闭', () => {
+test('§7 粗筛窄于引擎·其四（d：isRoundEnd）：引擎从不看 turnIndex，枚举按 round 末关闭', () => {
   const ended = roundEndScene();
   assert.ok(isRoundEnd(ended), '前提自查：本局面必须真的处于 round 末（turnIndex >= 存活人数）');
   assert.equal(ended.phase, '行动', '前提自查：阶段仍是行动 ⇒ 关掉窗口的只有 isRoundEnd 这一条判据');
@@ -632,7 +640,7 @@ test('§7 粗筛窄于引擎五处·其四（d：isRoundEnd）：引擎从不看
   assert.equal(getLegalActions(ended, 0).some((a) => a.type === 'MOVE'), false, '粗筛侧：round 已走完 ⇒ 不发');
 });
 
-test('§7 粗筛窄于引擎五处·其五（e：死亡座位）：引擎从不查 alive ⇒ 出局座位的动作仍被接受，枚举不发', () => {
+test('§7 粗筛窄于引擎·其五（e：死亡座位）：引擎从不查 alive ⇒ 出局座位的动作仍被接受，枚举不发', () => {
   const dead = exiledScene(4, 7, 3);
   assert.equal(dead.players[3]?.alive, false, '前提自查：座 3 必须真的已出局');
   assert.equal(dead.phase, '行动', '前提自查：阶段仍是行动 ⇒ 关掉窗口的只有「死亡座位」这一条判据');

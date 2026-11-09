@@ -8,7 +8,7 @@
 import { applyEffect } from '../ops/registry.ts';
 import { rollD20 } from './dice.ts';
 import { nextTurn, advanceRound, currentPlayer, isRoundEnd } from './round.ts';
-import { cardNeedsTarget } from './targeting.ts';
+import { cardHasMovement, cardNeedsTarget } from './targeting.ts';
 import { passiveOf } from './passives.ts';
 import { pendingGate } from './gate.ts';
 import { judgeBarrier, pendingBarrier } from './barrier.ts';
@@ -253,6 +253,19 @@ export function performAction(
       // ⚠️ 需要选择目标却没选 ⇒ **不出牌**（否则主题包的 target 占位 0 会误伤座位 0）
       if (cardNeedsTarget(card) && payload.target === undefined) {
         return state;
+      }
+      // ⚠️ **B66：待认证锁定的引擎层加固（G-b 收口）** —— 规格 §5.1：「待认证者在峰顶
+      //   **不能主动移动、不能使用移动类卡牌或位移能力**」。唯一离开方式是「判罚后退」。
+      //   ⇒ 此前只有 `move` 分支查 `pendingCert`，`act` 分支**不查** ⇒ 锁定者能打位移牌
+      //      绕过锁定（登顶是单向门的设计被击穿）⇒ 引擎层必须拒绝。
+      //   ⚠️ **只拦「含位移」的牌**：攻击 / 防御 / 资源类牌**照打**（规格只禁位移，不禁一切行动）——
+      //      ⚠️ 若连非位移牌也禁 ⇒ 锁定者在认证期间**完全无法行动** ⇒ 与「签印 / 质疑 / 弃权」
+      //      认证面并存的设计冲突（且那三项走的是 certify* 入口，不受此分支影响，但代价是玩家
+      //      在认证期连攒资源都不行）⇒ 口径取**只禁位移**。
+      //   ⚠️ **判位移按 op 语义、不只看 `card.type === 'motion'`**（见 `cardHasMovement`：
+      //      主题包有一张 utility 类型的位移牌 `c_throwspirit` ⇒ 只看 type 会漏掉它）。
+      if (player.pendingCert && cardHasMovement(card)) {
+        return state;   // ⚠️ 引用相等 = `probeAction` 认得的拒绝信号
       }
       // ⚠️ **B65：出牌付费（G-a 收口）** —— 打出卡牌须支付该牌的 `cost`（规格 §3.1「行事」/§4.3）。
       //   **灵枢不足 ⇒ 拒绝该动作**（不扣、不出牌、状态不变）⇒ 与 §3.5 付费通道、
