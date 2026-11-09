@@ -75,6 +75,38 @@ export function hasPassedGate(state: State, seat: number, gateIndex: number): bo
 }
 
 /**
+ * 标记「关隘已通过」——写 `gate_<index>` 标记**并**累加 `gatesPassed` 计数器（规格 §6.4）。
+ *
+ * ⚠️ **唯一事实源（为什么计数必须写在这里）**：`gate_<index>` 标记在全仓**只有两个写入点**
+ *   ——付费通道 `payGate` 与统一通过点 `passGate`（试炼通过 / 出牌比对胜 / 对方空手自动胜出
+ *   都走 `passGate`）⇒ 「写下通过标记」与「通过关隘」是**同一件事**。
+ *   ⇒ 计数与标记**必须同处落地**，否则两者会漂移：写下标记却没计数 ⇒ 目标少算；
+ *     只计数不写标记 ⇒ 同一座关隘可能被重复计数。
+ *
+ * ⚠️ **幂等**：同一座关隘**只计一次**（已带 `gate_<index>` 标记则不再 +1）。
+ *   正常路径本就不会重复通过（§3.5「已通过关隘的格不再触发关隘」⇒ `pendingGate` 直接返回 null），
+ *   幂等是**兜底**——防止将来新增通道时把同一座关隘计两次。
+ *
+ * ⚠️ **「未通过并放行」不计**：`failGate` 只写 `gate_fail_<index>`（不写通过标记）
+ *   ⇒ 根本不会走到本函数 ⇒ 被放行的玩家该座关隘**不计入**通过数。
+ */
+export function markGatePassed(state: State, actor: number, tile: Tile): State {
+  return {
+    ...state,
+    players: state.players.map((x) => {
+      if (x.seat !== actor) { return x; }
+      const already = x.flags[`gate_${tile.index}`] === true;
+      const passed = x.counters.gatesPassed ?? 0;
+      return {
+        ...x,
+        flags: { ...x.flags, [`gate_${tile.index}`]: true },
+        counters: { ...x.counters, gatesPassed: already ? passed : passed + 1 },
+      };
+    }),
+  };
+}
+
+/**
  * 付费通道（§3.5）。
  * 支付 `tile.gate.fee` 灵枢即通过；灵枢不足则失败（状态不变）。
  */
@@ -87,11 +119,9 @@ export function payGate(state: State, actor: number, tile: Tile): GateResult {
     return fail(state, false, `灵枢不足：关隘标价 ${fee}，现有 ${p.resource}`);
   }
   const players = state.players.map((x) =>
-    x.seat === actor
-      ? { ...x, resource: x.resource - fee, flags: { ...x.flags, [`gate_${tile.index}`]: true } }
-      : x,
+    x.seat === actor ? { ...x, resource: x.resource - fee } : x,
   );
-  const next: State = { ...state, players };
+  const next: State = markGatePassed({ ...state, players }, actor, tile);
   return { ok: true, state: next, passed: true, note: `支付 ${fee} 灵枢通过关隘` };
 }
 
@@ -326,10 +356,10 @@ function failGate(state: State, actor: number, tile: Tile, note: string): GateRe
  * 标记关隘已通过（写 `gate_<index>` 标记并留日志）。
  */
 function passGate(state: State, actor: number, tile: Tile, note: string): GateResult {
+  // ⚠️ B60：通过标记与 `gatesPassed` 计数**同处落地**（唯一事实源见 `markGatePassed`）。
+  const marked = markGatePassed(state, actor, tile);
   const next: State = {
-    ...state,
-    players: state.players.map((x) =>
-      x.seat === actor ? { ...x, flags: { ...x.flags, [`gate_${tile.index}`]: true } } : x),
+    ...marked,
     log: [...state.log, {
       round: state.round, turnIndex: state.turnIndex, actor, kind: 'gate',
       message: `关隘：${note}`,

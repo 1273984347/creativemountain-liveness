@@ -212,8 +212,23 @@ test('换主题会重置局面：位置 / 标记 / 负面状态 / 待认证锁�
   assert.equal(p0.position, 0, '位置应复位');
   // ⚠️ B12：`flags.passive` 是**新一局分配的身份被动规格**（随身份重新分配），
   //   不是上一局的临时标记 ⇒ 断言时排除它，其余标记仍须清空。
-  const { passive: _passive, ...restFlags } = p0.flags;
-  assert.deepEqual(restFlags, {}, '标记应清空（身份被动规格随新一局重新分配）');
+  // ⚠️ B60：`flags.goal` **同型** —— 它是**新一局派生**的身份终局目标（§6.4），
+  //   同样不是上一局的临时标记 ⇒ 一并排除，并**额外断言它来自新主题**（不得继承旧局目标）。
+  const { passive: _passive, goal: _goal, ...restFlags } = p0.flags;
+  assert.deepEqual(restFlags, {}, '[LAYER-B-INHERIT 目标不继承] 标记应清空（身份被动规格与身份目标随新一局重新分配）');
+  // ⚠️ B60：断言覆盖**全部座位**（不只座 0）——
+  //   座 0 的 flags 被本用例自己抹成 `{x:1}` ⇒ 它的目标必然是**重新派生**的
+  //   ⇒ 单看座 0 **没有判别力**（盲审实证：跨主题继承 mutant 下座 1/2 的目标仍是旧局的，
+  //   而座 0 看不出差别 ⇒ 原断言恒绿）。⇒ 必须逐座断言。
+  const newTheme = loadTheme('scifi-ai');
+  for (const p of fresh.players) {
+    const identity = newTheme.identities.find((i) => i.id === p.identityId);
+    assert.ok(identity !== undefined, '新局身份应来自新主题：' + p.identityId);
+    assert.deepEqual(
+      p.flags.goal,
+      { kind: identity.goal.kind, count: identity.goal.count ?? 1 },
+      '[LAYER-B-INHERIT 目标不继承] 身份目标应随新一局重新派生（不得继承旧主题的目标）：座 ' + String(p.seat));
+  }
   assert.deepEqual(p0.statuses, {}, '负面状态应清空');
   assert.equal(p0.pendingCert, false, '待认证锁定应解除');
   assert.equal(fresh.outcome.finished, false, '结局应复位');

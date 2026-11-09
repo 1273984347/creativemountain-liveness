@@ -22,6 +22,7 @@ import {
   performAction, advanceTurn, needsCouncilVote, needsCertificationAction,
 } from '../../engine/core/turn-runner.ts';
 import { currentPlayer } from '../../engine/core/round.ts';
+import { isGoalAchieved } from '../../engine/goals/registry.ts';
 import { performAbility } from '../../engine/core/abilities.ts';
 import { autoResolveDuel } from '../../engine/core/duel.ts';
 import { advanceAuto } from '../../engine/core/advance.ts';
@@ -441,6 +442,26 @@ function playOne(theme, players, seed, gateReserve) {
       const m = /^\[被动:([a-z_]+)\]/.exec(l.message);
       return m === null ? null : m[1];
     }).filter((x) => x !== null),
+    // ⚠️ B60：**身份目标达成的可达性读数**（证明「目标可达」而不只是「链路接通」）。
+    //   ⚠️ 口径：**由引擎判定器直接判定**（`isGoalAchieved`）⇒ 与引擎同源（单一事实源），
+    //   且「达成过」是**历史事实** ⇒ 不会被之后的放逐（§5.6：印记作废）抹掉。
+    //   ⇒ 「目标达成」与「持有印记」是**两个口径**，报告里分开列。
+    goalKinds: s.players.map((p) => {
+      const identity = theme.identities.find((i) => i.id === p.identityId);
+      const goal = identity?.goal;
+      if (goal === undefined) { return null; }
+      return isGoalAchieved(s, p.seat, goal.kind, goal.count ?? 1) ? goal.kind : null;
+    }).filter((x) => x !== null),
+    markCount: s.players.filter((p) => p.hasMark).length,
+    // ⚠️ B60：**持印玩家的目标 kind**（按 kind 分桶）⇒ 门 ⑨ 可**按判定路径**锚定：
+    //   `pass_gates` 的印记**必须**经由「计数写入 → 回合末判定 → 发印记」三环才发得出
+    //   ⇒ 撤掉任一环 ⇒ 该 kind 的持印数归零 ⇒ 锚点必红。
+    //   ⚠️ 为什么不能只看「持印总数」：`survive_with_hp` 走 `terminal` 路径（终局判定）
+    //   ⇒ 撤掉回合末判定调用后仍有人持印 ⇒ 总量锚点**测不出**该环断裂（复审实证）。
+    markKinds: s.players.filter((p) => p.hasMark).map((p) => {
+      const identity = theme.identities.find((i) => i.id === p.identityId);
+      return identity?.goal.kind ?? null;
+    }).filter((x) => x !== null),
     anomalies,
   };
 }
@@ -506,6 +527,16 @@ function summarize(cells) {
   const anomalySamples = [];
   // 先手优势的传导链：先动 → 先登顶 → 先认证 → 先终局
   const chain = { withPeak: 0, firstIsPos0: 0, firstIsWinner: 0, peakRoundSum: 0 };
+  // ⚠️ B60：身份目标达成 / 印记统计（**可达性证据**）——
+  //   goalAchieved = 目标 kind → 达成次数（玩家次，判定器直判）；
+  //   goalGames / goalPlayers = 有达成目标的局数 / 达成玩家次；
+  //   markGames / markPlayers = 有持印的局数 / 持印玩家次（印记可被作废 ⇒ 必 ≤ 达成口径）。
+  let goalGames = 0;
+  let goalPlayers = 0;
+  let markGames = 0;
+  let markPlayers = 0;
+  const goalAchieved = new Map();
+  const markAchieved = new Map();
   for (const c of cells) {
     total += 1;
     roundSum += c.rounds;
@@ -522,6 +553,15 @@ function summarize(cells) {
     const ops = c.passiveOps ?? [];
     for (const op of ops) { abilityOps.set(op, (abilityOps.get(op) ?? 0) + 1); }
     for (const op of new Set(ops)) { abilityGames.set(op, (abilityGames.get(op) ?? 0) + 1); }
+    // ⚠️ B60：目标达成统计（承上）
+    const kinds = c.goalKinds ?? [];
+    if (kinds.length > 0) { goalGames += 1; }
+    goalPlayers += kinds.length;
+    for (const k of kinds) { goalAchieved.set(k, (goalAchieved.get(k) ?? 0) + 1); }
+    const mc = c.markCount ?? 0;
+    if (mc > 0) { markGames += 1; }
+    markPlayers += mc;
+    for (const k of (c.markKinds ?? [])) { markAchieved.set(k, (markAchieved.get(k) ?? 0) + 1); }
     // B23：试炼事件累加（抽取次数 / 通过次数 / 触发过的局数）
     const evs = c.trialEvents ?? [];
     for (const ev of evs) {
@@ -572,6 +612,7 @@ function summarize(cells) {
     avgRounds: total > 0 ? roundSum / total : 0,
     avgSeats: total > 0 ? seatTotalSum / total : 0,
     gamesWithoutSeat, seatDist, champSeatDist, abilityOps, abilityGames, duelTotal, duelGames,
+    markGames, markPlayers, goalAchieved, goalGames, goalPlayers, markAchieved,
     trialDraws, trialPasses, trialGames, trialFailed, failButPassed, failReleased,
     identityWin, factionWin, seatWin, posWin, certRounds, chain, soloSeatWin, soloPosWin, soloGames,
   };
@@ -1006,6 +1047,26 @@ if (args.out !== null) {
     }
   }
   lines.push('');
+  lines.push('## 身份目标达成（实测可达性 · B60）');
+  lines.push('');
+  lines.push('> **目标达成**由引擎判定器（`engine/goals/registry.ts` 的 `isGoalAchieved`）在终局状态上**直接判定**');
+  lines.push('> ⇒ 与引擎**同源**（单一事实源），且「达成过」是**历史事实** ⇒ 不会被之后的放逐抹掉。');
+  lines.push('> ⚠️ 只有 `pass_gates` 与 `survive_with_hp` 可能非零 —— 其余 6 类的**计数器仍无写入方**（README 遗留登记，本批未授权）。');
+  lines.push('> ⚠️ **「目标达成」与「持有印记」是两个口径**：印记可被作废（§5.6：被放逐者身上的印记作废）⇒ 「持印玩家次」≤「达成玩家次」。');
+  lines.push('');
+  lines.push('| 指标 | 数值 |');
+  lines.push('|---|---|');
+  lines.push('| 有玩家达成目标的局数 | ' + String(summary.goalGames) + ' / ' + String(summary.total)
+    + '（' + (summary.total > 0 ? (summary.goalGames / summary.total * 100).toFixed(1) : '0.0') + '%） |');
+  lines.push('| 达成目标的玩家次 | ' + String(summary.goalPlayers) + ' |');
+  lines.push('| **pass_gates 达成次数（玩家次）** | **' + String(summary.goalAchieved.get('pass_gates') ?? 0)
+    + '**（每百局**玩家次** ' + (summary.total > 0 ? ((summary.goalAchieved.get('pass_gates') ?? 0) / summary.total * 100).toFixed(2) : '0.00') + '） |');
+  lines.push('| survive_with_hp 达成次数（玩家次） | ' + String(summary.goalAchieved.get('survive_with_hp') ?? 0) + ' |');
+  lines.push('| 持有【印记】的玩家次 | ' + String(summary.markPlayers) + ' |');
+  lines.push('| 其中 pass_gates 目标（**回合末判定**路径） | ' + String(summary.markAchieved.get('pass_gates') ?? 0) + ' |');
+  lines.push('| 其中 survive_with_hp 目标（**终局判定**路径） | ' + String(summary.markAchieved.get('survive_with_hp') ?? 0) + ' |');
+  lines.push('| 有玩家持有印记的局数 | ' + String(summary.markGames) + ' |');
+  lines.push('');
   lines.push('## 身份胜率（分主题）');
   lines.push('');
   for (const themeId of args.themes) {
@@ -1310,6 +1371,24 @@ if (args.check) {
   // ⚠️ B27：**挑战型必须真的会失败** —— 试炼若从无失败 ⇒ 已退化为「永远通过」（B26 的老问题复发）。
   if (summary.trialFailed <= 0) {
     problems.push('试炼在真实对局中从未失败（挑战型可能已退化为「永远通过」）');
+  }
+  // ⚠️ B60：**身份目标可达性** —— `pass_gates` 必须在真实对局中有人达成过。
+  //   若「计数写入 / 判定调用 / 发印记」任一环断掉 ⇒ 达成数恒为 0 ⇒ 这里必红
+  //   （与门 ⑨ 的「对峙可达性」同款**负样本锚点**）。
+  if ((summary.goalAchieved.get('pass_gates') ?? 0) <= 0) {
+    problems.push('身份目标 pass_gates 在真实对局中一次都没达成（目标不可达）');
+  }
+  // ⚠️ B60：**三环闭环锚点（按判定路径分桶）** ——
+  //   `pass_gates` 的印记必须**经由「计数写入 → 回合末判定 → 发印记」三环**才发得出
+  //   ⇒ 撤掉**任一环** ⇒ `pass_gates` 的持印数归零 ⇒ 这里必红。
+  //   ⚠️ **为什么不能只看持印总数**：`survive_with_hp` 走 `terminal` 路径（终局判定）
+  //   ⇒ 撤掉回合末判定调用后**仍有人持印** ⇒ 总量锚点**测不出**该环断裂（复审实证）。
+  //   ⇒ 必须**按 kind 分桶**才真正覆盖三环。
+  if ((summary.markAchieved.get('pass_gates') ?? 0) <= 0) {
+    problems.push('真实对局中没有人拿到过 pass_gates 的【印记】（计数写入 / 回合末判定 / 发印记 三环有一环断了）');
+  }
+  if (summary.markPlayers <= 0) {
+    problems.push('真实对局中没有任何玩家拿到【印记】（发印记这一环断了）');
   }
   if (problems.length > 0) {
     console.error('FAIL  ' + problems.join('；'));

@@ -18,6 +18,7 @@ import { gainResource } from './resource.ts';
 import { openCouncil, resolveCouncil, shouldHoldCouncil } from './council.ts';
 import { advanceCertificationRound, enterPendingCertification } from './certification.ts';
 import { resolveVictory } from './victory.ts';
+import { settleRoundEndGoals } from '../goals/settle.ts';
 import type { RuleMode } from '../scales.ts';
 import type { Effect } from '../types/theme.ts';
 import type { State } from './state.ts';
@@ -448,6 +449,16 @@ function endRound(next: State, mode: RuleMode): State {
       }
     }
   }
+  // ---- round 末：终局目标判定（规格 §6.4「回合末结算统一检查」+ §4.1「达成即发印记」）----
+  //   ⚠️ 位置：**山议开启之后、认证之前** ——
+  //     · 认证**之前** ⇒ 本回合达成目标的玩家，其【印记】在本回合认证中即生效
+  //       （§4.1：持印记者所需签印数减半）⇒ 印记不是「下一回合才有用」的空头奖励。
+  //   ⚠️ **山议在这里只是「开启」**（`openCouncil` ⇒ `council.resolved = false`），
+  //   真正的**放逐发生在山议被结算时**（由 UI / 模拟器在本函数返回之后驱动）⇒
+  //   **判定执行时玩家尚未被放逐** ⇒ 本回合末刚拿到印记的玩家可能随后被放逐。
+  //   ⇒ §5.6「被放逐者……其身上的印记作废」由**放逐侧**负责（`council.ts` 放逐时清 `hasMark`），
+  //     本处**不**依赖判定顺序来保证。
+  next = settleRoundEndGoals(next);
   // ---- round 末：认证（8）----
   if (next.certification.pending.length > 0) {
     const adv = advanceCertificationRound(next);

@@ -18,6 +18,7 @@
 //   机制：「拿 1 席但位置差」会输给「0 席但位置近」⇒ 先到者的领先**可被位置补偿抵消**。
 
 import type { State } from './state.ts';
+import { settleTerminalGoals } from '../goals/settle.ts';
 
 /** 距峰顶的格数（越小越前）。 */
 export function distanceToPeak(state: State, seat: number): number {
@@ -101,13 +102,18 @@ export function resolveVictory(state: State): State {
   if (state.outcome.finished) { return state; }
   const alive = state.players.filter((p) => p.alive);
   if (alive.length <= 1) {
-    return { ...state, phase: '终局', outcome: { finished: true, winners: [], reason: 'no_winner' } };
+    // ⚠️ B60：终局判定时**一次性检查** `terminal` 时机的目标
+    //   （§6.4 表：`survive_with_hp` = 终局判定时一次性检查）。
+    const marked = settleTerminalGoals(state);
+    return { ...marked, phase: '终局', outcome: { finished: true, winners: [], reason: 'no_winner' } };
   }
   if (state.round > state.scales.globalRoundLimit) {
-    const totalSeats = Object.values(state.liveSeats).reduce((a, b) => a + b, 0);
-    const winners = fallbackRanking(state);
+    // ⚠️ B60：同上 —— 终局分支也要做 `terminal` 判定。
+    const marked = settleTerminalGoals(state);
+    const totalSeats = Object.values(marked.liveSeats).reduce((a, b) => a + b, 0);
+    const winners = fallbackRanking(marked);
     return {
-      ...state,
+      ...marked,
       phase: '终局',
       outcome: { finished: true, winners, reason: totalSeats > 0 ? 'seats' : 'fallback' },
     };

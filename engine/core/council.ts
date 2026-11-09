@@ -146,7 +146,16 @@ export function resolveCouncil(state: State): CouncilResult {
   if (exiled.length === 0) {
     return succeed(next, '山议：无人被放逐（下限保护 / 凭证 / 否决）');
   }
-  const players = next.players.map((p) => (exiled.includes(p.seat) ? { ...p, alive: false } : p));
+  // ⚠️ B60：被放逐者**身上的印记作废**（规格 §5.6：「被放逐者失去认证印资格，其身上的印记作废」）。
+  //   为什么由**放逐侧**负责、而不是靠「判定时跳过出局者」：山议在本回合末只被**开启**
+  //   （`openCouncil` ⇒ `council.resolved = false`），真正的放逐发生在**山议被结算时**
+  //   ——即本函数返回**之后** ⇒ 回合末的目标判定执行时，玩家**尚未**被放逐
+  //   ⇒ 他会先拿到印记 ⇒ 只有放逐侧能把这枚印记收掉。
+  //   效果上等价（印记只减半签印门槛，而放逐者已退出 `certification.pending` ⇒ 永不可能认证），
+  //   但不收掉的话 UI 会给已出局者显示「印记」徽章，且「目标达成」统计会被虚高。
+  const players = next.players.map((p) => (exiled.includes(p.seat)
+    ? { ...p, alive: false, hasMark: false }
+    : p));
   next = { ...next, players };
   // 被放逐者若处于待认证 → 认证终止（§5.6）
   const pending = next.certification.pending.filter((seat) => !exiled.includes(seat));

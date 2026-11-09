@@ -58,15 +58,30 @@ export function assignIdentitiesAndFactions(state: State, theme: ThemePack): Sta
     const passiveFlags = identity?.passive !== undefined
       ? { passive: identity.passive as unknown }
       : {};
+    // ⚠️ B60：把身份的**终局目标**（kind + count）一并派生进运行时状态。
+    //   判定链（engine/goals/settle.ts）需要在**回合末 / 终局**读「该玩家的目标」，
+    //   而 State **不持有主题包引用**（§6.2 契约冻结）⇒ 只能在开局分配身份时**派生一次**。
+    //   ⚠️ 身份是**开局随机分配**的（B10）⇒ 目标在开局即确定 ⇒ 派生一次即够；
+    //     且 `advanceRound` **不清 flags**（round.ts:53）⇒ 整局有效。
+    //   ⚠️ `count` 缺省为 1（规格 §6.4：「count 缺省为 1」）。
+    const goalFlags = identity?.goal !== undefined
+      ? { goal: { kind: identity.goal.kind, count: identity.goal.count ?? 1 } }
+      : {};
+    // ⚠️ 键顺序保持与 B12 原实现一致（extraVotes → passive）⇒ 只在**末尾**追加 goal
+    //   ⇒ flags 的**既有键序不变**（新增的 `goal` 键排在末尾）。
+    const flags: Record<string, unknown> = {
+      ...p.flags,
+      ...(granted.extraVotes > 0
+        ? { extraVotes: ((p.flags.extraVotes as number | undefined) ?? 0) + granted.extraVotes }
+        : {}),
+      ...passiveFlags,
+      ...goalFlags,
+    };
     return {
       ...p,
       identityId: identity?.id ?? p.identityId,
       factionId: faction?.id ?? p.factionId,
-      ...(granted.extraVotes > 0
-        ? { flags: { ...p.flags, extraVotes: ((p.flags.extraVotes as number | undefined) ?? 0) + granted.extraVotes, ...passiveFlags } }
-        : (Object.keys(passiveFlags).length > 0
-          ? { flags: { ...p.flags, ...passiveFlags } }
-          : {})),
+      flags,
       hpMax,
       hp: hpMax,
       resource: faction?.resourceBase ?? p.resource,
