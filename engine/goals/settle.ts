@@ -98,6 +98,16 @@ export function settleRoundEndGoals(state: State): State {
 }
 
 /**
+ * **即时结算**目标（规格 §6.4 的 `immediate` 时机：否决生效时 / 质疑成功时）。
+ *
+ * ⚠️ B61：接线点在**质疑判不通过**处（`certification.ts` 的 `certifyAnswer`）——
+ *   规格 §5.3.2：「质疑**成功**（答对 ≤ 1）」⇒ 判不通过即质疑成功 ⇒ 此时判定并发放印记。
+ */
+export function settleImmediateGoals(state: State): State {
+  return settleGoals(state, 'immediate');
+}
+
+/**
  * 终局判定目标（规格 §6.4 的 `terminal` 时机 —— `survive_with_hp`「终局判定时一次性检查」）。
  *
  * ⚠️ **规格内部张力（如实登记，不擅自改语义）**：`survive_with_hp` 要求「存活至终局」，

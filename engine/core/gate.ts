@@ -11,6 +11,7 @@ import { rollD20 } from './dice.ts';
 import { discardDownToLimit } from './hand.ts';
 import { compareCards } from './duel.ts';
 import { applyEffectToState } from '../ops/registry.ts';
+import { counterPatch } from './counters.ts';
 
 /**
  * AI 关隘策略的**余量门槛**：付费后仍要留有余量灵枢，才值得直接付费。
@@ -96,11 +97,11 @@ export function markGatePassed(state: State, actor: number, tile: Tile): State {
     players: state.players.map((x) => {
       if (x.seat !== actor) { return x; }
       const already = x.flags[`gate_${tile.index}`] === true;
-      const passed = x.counters.gatesPassed ?? 0;
       return {
         ...x,
         flags: { ...x.flags, [`gate_${tile.index}`]: true },
-        counters: { ...x.counters, gatesPassed: already ? passed : passed + 1 },
+        // ⚠️ B61：计数累加走**共享 helper**（engine/core/counters.ts）⇒ 单一实现，不各写一份。
+        counters: already ? x.counters : counterPatch(x, 'gatesPassed'),
       };
     }),
   };

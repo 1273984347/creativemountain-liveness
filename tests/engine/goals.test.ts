@@ -23,6 +23,11 @@ import { markGatePassed, resolveCompareGate, resolveGate } from '../../engine/co
 import { goalOf, settleGoals, settleRoundEndGoals, settleTerminalGoals } from '../../engine/goals/settle.ts';
 import { certificationThreshold } from '../../engine/core/certification.ts';
 import { castVote, openCouncil, resolveCouncil } from '../../engine/core/council.ts';
+import { applyEffect } from '../../engine/ops/registry.ts';
+import { performAbility } from '../../engine/core/abilities.ts';
+import { certifyAnswer, certifyChallenge } from '../../engine/core/certification.ts';
+import { drawCards } from '../../engine/core/hand.ts';
+import { putPending } from './fixtures.ts';
 import { advanceTurn } from '../../engine/core/turn-runner.ts';
 import { resolveVictory } from '../../engine/core/victory.ts';
 import type { Card, GoalKind, ThemePack } from '../../engine/types/theme.ts';
@@ -338,6 +343,88 @@ test('[B60-C 判定与发印记] 被放逐者：印记作废（规格 §5.6）',
     '[LAYER-C-MARK 判定与发印记] **被放逐者身上的印记必须作废**（规格 §5.6）');
 });
 
+// ================= E 组：其余 4 类目标的计数器写入（B61 · T1） =================
+
+/** 把某座位改成指定身份，并同步其派生目标（构造性前置：目标由 setup 派生，测试需定点到具体身份）。 */
+function asIdentity(s: State, seat: number, identityId: string, goal: { kind: GoalKind; count: number }): State {
+  return {
+    ...s,
+    players: s.players.map((p) => (p.seat === seat
+      ? { ...p, identityId, flags: { ...p.flags, goal } }
+      : p)),
+  };
+}
+
+test('[LAYER-E1-DRAW 抽牌计数] 抽到的牌计入获得者的 cardsDrawn；开局发牌不计入', () => {
+  const s = themed();
+  // 开局发牌（installTheme → dealInitialHands）⇒ **不计入**
+  for (const p of s.players) {
+    assert.equal(p.counters.cardsDrawn ?? 0, 0,
+      '[LAYER-E1-DRAW-HAND 抽牌计数] 开局发牌不计入 cardsDrawn（起手是初始配置，不是「抽」）');
+  }
+  const r = applyEffect({ state: s, actor: 0 }, { op: 'draw_cards', count: 2 });
+  assert.equal(r.ok, true, '[LAYER-E1-DRAW 抽牌计数] 抽牌应成功');
+  assert.equal(r.state.players[0]?.counters.cardsDrawn, 2,
+    '[LAYER-E1-DRAW-OP 抽牌计数] 抽 2 张 ⇒ cardsDrawn = 2');
+  assert.equal(r.state.players[1]?.counters.cardsDrawn, undefined,
+    '[LAYER-E1-DRAW-OP 抽牌计数] 别人的抽牌不计入自己');
+});
+
+test('[LAYER-E1-DRAW-HAND 抽牌计数] hand.ts 的抽牌入口同样计入 cardsDrawn（两个独立实现各有锁）', () => {
+  const s = themed();
+  const out2 = drawCards(s, 1, 3);
+  assert.equal(out2.players[1]?.counters.cardsDrawn, 3,
+    '[LAYER-E1-DRAW-HAND 抽牌计数] hand.ts 的 drawCards ⇒ cardsDrawn = 3');
+  assert.equal(out2.players[0]?.counters.cardsDrawn, undefined,
+    '[LAYER-E1-DRAW-HAND 抽牌计数] 别人的抽牌不计入自己');
+});
+
+test('[LAYER-E2-REROLL 改判计数] modify_judgement 计入被改判者的 rerollCount', () => {
+  const s = themed();
+  const r = applyEffect({ state: s, actor: 0 }, { op: 'modify_judgement', target: 2 });
+  assert.equal(r.ok, true, '[LAYER-E2-REROLL 改判计数] 改判应成功');
+  assert.equal(r.state.players[2]?.counters.rerollCount, 1,
+    '[LAYER-E2-REROLL 改判计数] 被改判者（座 2）的 rerollCount = 1');
+  assert.equal(r.state.players[0]?.counters.rerollCount, undefined,
+    '[LAYER-E2-REROLL 改判计数] 改判计给**被改判者**，不是使用者');
+});
+
+test('[LAYER-E3-STEAL 偷取计数] 窃火者偷取计入偷取者的 stolenTotal（不是受害者）', () => {
+  const s = themed();
+  const thief = s.players.find((p) => p.identityId === 'ember');
+  assert.ok(thief !== undefined, '[LAYER-E3-STEAL 偷取计数] 开局应有人分到窃火者（ember）');
+  const victim = s.players.find((p) => p.seat !== thief.seat);
+  assert.ok(victim !== undefined, '[LAYER-E3-STEAL 偷取计数] 应有受害座位');
+  const rich: State = { ...s, players: s.players.map((p) => (p.seat === victim.seat ? { ...p, resource: 5 } : p)) };
+  const r = performAbility(rich, thief.seat, victim.seat);
+  assert.equal(r.ok, true, '[LAYER-E3-STEAL 偷取计数] 偷取应成功：' + r.note);
+  assert.equal(r.state.players[thief.seat]?.counters.stolenTotal, 1,
+    '[LAYER-E3-STEAL 偷取计数] **偷取者**的 stolenTotal = 1');
+  assert.equal(r.state.players[victim.seat]?.counters.stolenTotal, undefined,
+    '[LAYER-E3-STEAL 偷取计数] 受害者不计数');
+});
+
+test('[LAYER-E4-CHALLENGE 质疑计数] 判不通过即质疑成功 ⇒ 质疑者 +1；复议推翻 ⇒ −1', () => {
+  const s = asIdentity(themed(), 0, 'pioneer', { kind: 'pass_gates', count: 3 });
+  const pending = putPending(s, [0]);
+  const challenged = certifyChallenge(pending, 1, 0);
+  assert.equal(challenged.ok, true, '[LAYER-E4-CHALLENGE 质疑计数] 发起质疑应成功：' + String(challenged.note));
+  const answered = certifyAnswer(challenged.state, 1, 0, false);
+  assert.equal(answered.ok, true, '[LAYER-E4-CHALLENGE 质疑计数] 判定应成功');
+  assert.equal(answered.state.players[1]?.counters.successfulChallenges, 1,
+    '[LAYER-E4-CHALLENGE 质疑计数] 判不通过（答对 ≤ 1）= 质疑成功 ⇒ 质疑者 +1');
+});
+
+test('[LAYER-E5-MARK 即时判定] 山主质疑成功 ⇒ immediate 判定发印记', () => {
+  const s = asIdentity(themed(), 1, 'mountainlord', { kind: 'successful_challenge', count: 1 });
+  const pending = putPending(s, [0]);
+  const challenged = certifyChallenge(pending, 1, 0);
+  assert.equal(challenged.ok, true, '[LAYER-E5-MARK 即时判定] 发起质疑应成功：' + String(challenged.note));
+  const answered = certifyAnswer(challenged.state, 1, 0, false);
+  assert.equal(answered.state.players[1]?.hasMark, true,
+    '[LAYER-E5-MARK 即时判定] 质疑成功 ⇒ **即时判定**（§6.4）⇒ 该玩家应获得【印记】');
+});
+
 // ================= D 组：变异自证 =================
 
 /** 副本里跳过变异自证（否则副本会再跑变异 ⇒ 递归）。 */
@@ -413,8 +500,8 @@ function patchCopy(dir: string, rel: string, from: string, to: string): void {
 test('[B60-D 变异自证] 撤掉 gatesPassed 计数写入 ⇒ 计数写入层专属断言必须判红', { skip: SKIP_MUTATION }, () => {
   const r = runMutant((dir) => {
     patchCopy(dir, 'engine/core/gate.ts',
-      'counters: { ...x.counters, gatesPassed: already ? passed : passed + 1 },',
-      'counters: { ...x.counters, gatesPassed: already ? passed : passed },');
+      "counters: already ? x.counters : counterPatch(x, 'gatesPassed'),",
+      'counters: x.counters,');
   });
   assert.notEqual(r.code, 0,
     '[B60-D 变异自证] mutant（去掉计数写入）必须让测试变红 —— 否则计数写入层没有专属锁');
@@ -502,4 +589,74 @@ test('[B60-D 变异自证] 撤掉终局判定接线 ⇒ 「终局接线」层专
     '[B60-D 变异自证] mutant（去掉终局判定接线）必须让测试变红 —— 否则终局发放路径没有回归锁');
   assert.ok(/AssertionError[^\n]*\[LAYER-C-TERMINAL/.test(r.out),
     '[B60-D 变异自证] mutant 必须红在「终局接线」层的专属措辞上');
+});
+
+// ================= E 组变异自证：B61 的 4 类计数器写入 =================
+// ⚠️ 每条 mutant 对应**一个环节**，判据只匹配**该环节专属**的层标记 ⇒
+//   证明「每一环都有自己的锁」，而不是「某一环有锁就算全有」。
+
+test('[B60-D 变异自证] 撤掉 draw_cards op 的计数 ⇒ 抽牌计数（op 路径）层必须判红', { skip: SKIP_MUTATION }, () => {
+  const r = runMutant((dir) => {
+    patchCopy(dir, 'engine/ops/registry.ts',
+      "state = bumpCounterOf(state, t.seat, 'cardsDrawn', drawn.length);",
+      '// mutant: 去掉 draw_cards op 的 cardsDrawn 计数');
+  });
+  assert.notEqual(r.code, 0, '[B60-D 变异自证] mutant 必须让测试变红');
+  assert.ok(/AssertionError[^\n]*\[LAYER-E1-DRAW-OP/.test(r.out),
+    '[B60-D 变异自证] mutant 必须红在「抽牌计数（op 路径）」层的专属措辞上');
+});
+
+test('[B60-D 变异自证] 撤掉 hand.ts 的计数 ⇒ 抽牌计数（hand 路径）层必须判红', { skip: SKIP_MUTATION }, () => {
+  const r = runMutant((dir) => {
+    patchCopy(dir, 'engine/core/hand.ts',
+      ": { counters: counterPatch(target, 'cardsDrawn', drawn.length) }),",
+      ': {}),');
+  });
+  assert.notEqual(r.code, 0, '[B60-D 变异自证] mutant 必须让测试变红');
+  assert.ok(/AssertionError[^\n]*\[LAYER-E1-DRAW-HAND/.test(r.out),
+    '[B60-D 变异自证] mutant 必须红在「抽牌计数（hand 路径）」层的专属措辞上');
+});
+
+test('[B60-D 变异自证] 撤掉 modify_judgement 的计数 ⇒ 改判计数层必须判红', { skip: SKIP_MUTATION }, () => {
+  const r = runMutant((dir) => {
+    patchCopy(dir, 'engine/ops/registry.ts',
+      "state = bumpCounterOf(state, t.seat, 'rerollCount');",
+      '// mutant: 去掉 rerollCount 计数');
+  });
+  assert.notEqual(r.code, 0, '[B60-D 变异自证] mutant 必须让测试变红');
+  assert.ok(/AssertionError[^\n]*\[LAYER-E2-REROLL/.test(r.out),
+    '[B60-D 变异自证] mutant 必须红在「改判计数」层的专属措辞上');
+});
+
+test('[B60-D 变异自证] 撤掉偷取计数 ⇒ 偷取计数层必须判红', { skip: SKIP_MUTATION }, () => {
+  const r = runMutant((dir) => {
+    patchCopy(dir, 'engine/core/abilities.ts',
+      "next = bumpCounterOf(next, seat, 'stolenTotal', passive.amount);",
+      '// mutant: 去掉 stolenTotal 计数');
+  });
+  assert.notEqual(r.code, 0, '[B60-D 变异自证] mutant 必须让测试变红');
+  assert.ok(/AssertionError[^\n]*\[LAYER-E3-STEAL/.test(r.out),
+    '[B60-D 变异自证] mutant 必须红在「偷取计数」层的专属措辞上');
+});
+
+test('[B60-D 变异自证] 撤掉质疑成功计数 ⇒ 质疑计数层必须判红', { skip: SKIP_MUTATION }, () => {
+  const r = runMutant((dir) => {
+    patchCopy(dir, 'engine/core/certification.ts',
+      "next = bumpCounterOf(next, actor, 'successfulChallenges');",
+      '// mutant: 去掉 successfulChallenges 计数');
+  });
+  assert.notEqual(r.code, 0, '[B60-D 变异自证] mutant 必须让测试变红');
+  assert.ok(/AssertionError[^\n]*\[LAYER-E4-CHALLENGE/.test(r.out),
+    '[B60-D 变异自证] mutant 必须红在「质疑计数」层的专属措辞上');
+});
+
+test('[B60-D 变异自证] 撤掉 immediate 判定调用 ⇒ 即时判定层必须判红', { skip: SKIP_MUTATION }, () => {
+  const r = runMutant((dir) => {
+    patchCopy(dir, 'engine/core/certification.ts',
+      'next = settleImmediateGoals(next);',
+      '// mutant: 去掉 immediate 判定');
+  });
+  assert.notEqual(r.code, 0, '[B60-D 变异自证] mutant 必须让测试变红');
+  assert.ok(/AssertionError[^\n]*\[LAYER-E5-MARK/.test(r.out),
+    '[B60-D 变异自证] mutant 必须红在「即时判定」层的专属措辞上');
 });

@@ -22,7 +22,7 @@ import {
   performAction, advanceTurn, needsCouncilVote, needsCertificationAction,
 } from '../../engine/core/turn-runner.ts';
 import { currentPlayer } from '../../engine/core/round.ts';
-import { isGoalAchieved } from '../../engine/goals/registry.ts';
+import { GOALS, isGoalAchieved } from '../../engine/goals/registry.ts';
 import { performAbility } from '../../engine/core/abilities.ts';
 import { autoResolveDuel } from '../../engine/core/duel.ts';
 import { advanceAuto } from '../../engine/core/advance.ts';
@@ -462,6 +462,14 @@ function playOne(theme, players, seed, gateReserve) {
       const identity = theme.identities.find((i) => i.id === p.identityId);
       return identity?.goal.kind ?? null;
     }).filter((x) => x !== null),
+    counterValues: s.players.map((p) => {
+      const identity = theme.identities.find((i) => i.id === p.identityId);
+      const kind = identity?.goal.kind;
+      if (kind === undefined) { return null; }
+      const counterName = GOALS[kind]?.counter ?? '';
+      if (counterName === '') { return null; }
+      return { kind, value: p.counters[counterName] ?? 0, count: identity?.goal.count ?? 1 };
+    }).filter((x) => x !== null),
     anomalies,
   };
 }
@@ -537,6 +545,9 @@ function summarize(cells) {
   let markPlayers = 0;
   const goalAchieved = new Map();
   const markAchieved = new Map();
+  const counterMax = new Map();
+  const counterSum = new Map();
+  const counterSamples = new Map();
   for (const c of cells) {
     total += 1;
     roundSum += c.rounds;
@@ -562,6 +573,11 @@ function summarize(cells) {
     if (mc > 0) { markGames += 1; }
     markPlayers += mc;
     for (const k of (c.markKinds ?? [])) { markAchieved.set(k, (markAchieved.get(k) ?? 0) + 1); }
+    for (const cv of (c.counterValues ?? [])) {
+      counterSum.set(cv.kind, (counterSum.get(cv.kind) ?? 0) + cv.value);
+      counterMax.set(cv.kind, Math.max(counterMax.get(cv.kind) ?? 0, cv.value));
+      counterSamples.set(cv.kind, (counterSamples.get(cv.kind) ?? 0) + 1);
+    }
     // B23：试炼事件累加（抽取次数 / 通过次数 / 触发过的局数）
     const evs = c.trialEvents ?? [];
     for (const ev of evs) {
@@ -613,6 +629,7 @@ function summarize(cells) {
     avgSeats: total > 0 ? seatTotalSum / total : 0,
     gamesWithoutSeat, seatDist, champSeatDist, abilityOps, abilityGames, duelTotal, duelGames,
     markGames, markPlayers, goalAchieved, goalGames, goalPlayers, markAchieved,
+    counterMax, counterSum, counterSamples,
     trialDraws, trialPasses, trialGames, trialFailed, failButPassed, failReleased,
     identityWin, factionWin, seatWin, posWin, certRounds, chain, soloSeatWin, soloPosWin, soloGames,
   };
@@ -1051,7 +1068,10 @@ if (args.out !== null) {
   lines.push('');
   lines.push('> **目标达成**由引擎判定器（`engine/goals/registry.ts` 的 `isGoalAchieved`）在终局状态上**直接判定**');
   lines.push('> ⇒ 与引擎**同源**（单一事实源），且「达成过」是**历史事实** ⇒ 不会被之后的放逐抹掉。');
-  lines.push('> ⚠️ 只有 `pass_gates` 与 `survive_with_hp` 可能非零 —— 其余 6 类的**计数器仍无写入方**（README 遗留登记，本批未授权）。');
+  lines.push('> ⚠️ `equip_count` 与 `veto_success` 恒为 **0** —— **不是漏写计数器，而是机制缺失**：');
+  lines.push('>   `equip_card` 四套主题**零使用者**（规格无「装备」动作入口）⇒ 事件永不发生；');
+  lines.push('>   **仲裁者否决放逐**未实现（规格 §5.6 有、§4.1 权威被动表里没有）⇒ 同样无事件可计。');
+  lines.push('>   ⇒ 补计数器只会造出「永远为 0 的**假可达**」⇒ 如实登记为遗留，不补假计数器。');
   lines.push('> ⚠️ **「目标达成」与「持有印记」是两个口径**：印记可被作废（§5.6：被放逐者身上的印记作废）⇒ 「持印玩家次」≤「达成玩家次」。');
   lines.push('');
   lines.push('| 指标 | 数值 |');
@@ -1059,13 +1079,33 @@ if (args.out !== null) {
   lines.push('| 有玩家达成目标的局数 | ' + String(summary.goalGames) + ' / ' + String(summary.total)
     + '（' + (summary.total > 0 ? (summary.goalGames / summary.total * 100).toFixed(1) : '0.0') + '%） |');
   lines.push('| 达成目标的玩家次 | ' + String(summary.goalPlayers) + ' |');
-  lines.push('| **pass_gates 达成次数（玩家次）** | **' + String(summary.goalAchieved.get('pass_gates') ?? 0)
-    + '**（每百局**玩家次** ' + (summary.total > 0 ? ((summary.goalAchieved.get('pass_gates') ?? 0) / summary.total * 100).toFixed(2) : '0.00') + '） |');
-  lines.push('| survive_with_hp 达成次数（玩家次） | ' + String(summary.goalAchieved.get('survive_with_hp') ?? 0) + ' |');
-  lines.push('| 持有【印记】的玩家次 | ' + String(summary.markPlayers) + ' |');
-  lines.push('| 其中 pass_gates 目标（**回合末判定**路径） | ' + String(summary.markAchieved.get('pass_gates') ?? 0) + ' |');
-  lines.push('| 其中 survive_with_hp 目标（**终局判定**路径） | ' + String(summary.markAchieved.get('survive_with_hp') ?? 0) + ' |');
-  lines.push('| 有玩家持有印记的局数 | ' + String(summary.markGames) + ' |');
+  lines.push('| **目标 kind** | **达成次数（玩家次）** | 每百局玩家次 | 其中持印（判定路径） |');
+  lines.push('|---|---|---|---|');
+  // ⚠️ **按 kind 迭代**（不硬编码 kind 名）⇒ 新增目标类型时报告自动跟上，不会漏列。
+  const kinds = [...summary.goalAchieved.entries()].sort((a, b) => b[1] - a[1]);
+  for (const [kind, n] of kinds) {
+    const label = kind === 'pass_gates' ? '**' + kind + '**' : kind;
+    const nTxt = kind === 'pass_gates' ? '**' + String(n) + '**' : String(n);
+    lines.push('| ' + label + ' | ' + nTxt + ' | '
+      + (summary.total > 0 ? ((n / summary.total) * 100).toFixed(2) : '0.00') + ' | '
+      + String(summary.markAchieved.get(kind) ?? 0) + ' |');
+  }
+  lines.push('| **持有【印记】的玩家次（合计）** | **' + String(summary.markPlayers) + '** | — | — |');
+  lines.push('');
+  lines.push('### 目标计数器的实际值（区分「计数没写」与「写了但未达阈值」）');
+  lines.push('');
+  lines.push('> 达成次数为 0 有两种根因：① 计数器根本没写（机制未发生）② 计数写了但未达阈值。');
+  lines.push('> 下表「计数最大值」为 0 ⇒ 属前者（机制缺失）；大于 0 ⇒ 属后者（阈值/策略未达标）。');
+  lines.push('');
+  lines.push('| 目标 kind | 计数最大值 | 计数均值 | 样本（人次） |');
+  lines.push('|---|---|---|---|');
+  for (const kind of [...summary.counterMax.keys()].sort()) {
+    const cnt = summary.counterSamples.get(kind) ?? 0;
+    const sum = summary.counterSum.get(kind) ?? 0;
+    lines.push('| ' + kind + ' | ' + String(summary.counterMax.get(kind) ?? 0) + ' | '
+      + (cnt > 0 ? (sum / cnt).toFixed(2) : '0.00') + ' | ' + String(cnt) + ' |');
+  }
+  lines.push('| 有玩家持有印记的局数 | ' + String(summary.markGames) + ' | — | — |');
   lines.push('');
   lines.push('## 身份胜率（分主题）');
   lines.push('');
@@ -1389,6 +1429,14 @@ if (args.check) {
   }
   if (summary.markPlayers <= 0) {
     problems.push('真实对局中没有任何玩家拿到【印记】（发印记这一环断了）');
+  }
+  // ⚠️ B61：**successful_challenge 的可达性锚点**（**即时判定路径**）——
+  //   该 kind 的印记**必须**经由「质疑成功计数 → immediate 判定 → 发印记」三环才发得出
+  //   ⇒ 撤掉任一环 ⇒ 该 kind 的持印归零 ⇒ 必红。
+  //   ⚠️ 只锚这一类：其达成量级足够（24000 局 1299 人次 ⇒ 720 局约 39 次）⇒ 断言不会 flaky；
+  //   而 `draw_count` 在 720 局仅约 4 次 ⇒ 锚它会 flaky ⇒ **不锚**（可达性读数在平衡报告里）。
+  if ((summary.markAchieved.get('successful_challenge') ?? 0) <= 0) {
+    problems.push('真实对局中没有人拿到过 successful_challenge 的【印记】（质疑计数 / immediate 判定 / 发印记 有一环断了）');
   }
   if (problems.length > 0) {
     console.error('FAIL  ' + problems.join('；'));

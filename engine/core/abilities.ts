@@ -7,6 +7,7 @@
 import { applyEffect } from '../ops/registry.ts';
 import type { State } from './state.ts';
 import { abilityAvailability, passiveOf } from './passives.ts';
+import { bumpCounterOf } from './counters.ts';
 
 /** 发动结果。 */
 export interface AbilityResult {
@@ -67,6 +68,10 @@ export function performAbility(state: State, seat: number, target?: number): Abi
       const r = applyEffect({ state: next, actor: target }, { op: 'transfer_resource', amount: passive.amount, target: seat });
       if (!r.ok) { return { ok: false, state, note: r.note ?? '发动失败' }; }
       next = r.state;
+      // ⚠️ B61：偷取计入**偷取者**的 `stolenTotal`（规格 §6.4 的 `steal_count` 目标）。
+      //   ⚠️ 计价点**不是 op 本身**：`transfer_resource` 的语义是「actor 转给 target」，
+      //   窃火者靠**交换 actor/target** 实现「目标 −1、自己 +1」⇒ 只有**被动发动**才是偷取。
+      next = bumpCounterOf(next, seat, 'stolenTotal', passive.amount);
       note = '偷取座' + String(target) + ' 的 ' + String(passive.amount) + ' 枚灵枢';
       break;
     }

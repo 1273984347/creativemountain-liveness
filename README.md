@@ -104,7 +104,7 @@ print/      实体轨产物（按主题分目录）+ 规则书叙述模板
 | G-f | **对峙选牌没有 `Action` 成员**：对峙未决时行动面整体关闭 ⇒ `candidatesOf` 对**所有座位**为空 ⇒ 真人必须选暗牌的时刻，AI/sidecar 拿到空动作表 | `engine/core/legal.ts`（行动窗口关闭条件）；`engine/core/duel.ts` |
 | G-g | **复议裁定无人调用**：`resolveAppeals` 在 `engine/**` 与 `web/**` **零调用方**（只有 `tests/sim/run.mjs`）⇒ 新增的复议票写入一个没人关闭的窗口 | `engine/core/certification.ts:250` |
 | G-h | **少发牌是静默的**：`createInitialState` 默认 `deckSize=40`，而 `dealInitialHands` 需要 `players × handStart`（8 人 = 56）⇒ 高人数下座位手牌偏少 | `engine/core/state.ts:251`；`engine/core/hand.ts` |
-| G-i | **其余 6 类目标的计数器仍无写入方**：`equip_count` / `draw_count` / `steal_count` / `reroll_count` 四类只在**回合末**判定，但它们的计数器从未被写；`veto_success` / `successful_challenge` 两类属**即时**判定，同样无写入方且**无判定调用点**（计数器恒 0 ⇒ 行为等价）⇒ 这 6 类身份目标仍不可达 | `engine/goals/registry.ts`；`engine/goals/settle.ts` |
+| G-i | **其余 4 类身份目标仍不可达**，根因**分两类**（B61 实测 · 计数实际值分布）：① **机制缺失**：`equip_count`（`equip_card` 四套主题**零使用者**、规格无「装备」动作入口）、`veto_success`（**仲裁者否决放逐未实现**）⇒ **事件永不发生** ⇒ 补计数器只会造出「永远为 0 的**假可达**」；② **阈值/策略未达标**：`reroll_count`（阈值 3，实际计数最大 **2**）、`steal_count`（阈值 5，实际计数最大 **1**）⇒ **计数已在写**，只是没达标 | `engine/goals/settle.ts`；`docs/balance-report.md`（目标计数器的实际值） |
 
 > ⚠️ **粗筛故意窄于引擎的五条**（`pendingCert` / 对峙未决 / `phase` / `isRoundEnd` / 死亡座位）是**登记过的口径**，
 > 不是待修的 bug —— 枚举层刻意比引擎严，免得给模型一条玩家点不到的选项；逐条取证见

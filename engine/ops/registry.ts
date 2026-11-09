@@ -12,6 +12,7 @@ import { rollD6, rollD20 } from '../core/dice.ts';
 import { filterMatches } from '../types/card.ts';
 import { evaluatePredicate } from '../predicates.ts';
 import { enterPendingCertification } from '../core/certification.ts';
+import { bumpCounterOf } from '../core/counters.ts';
 import type { State } from '../core/state.ts';
 export type { OpContext, OpResult } from './context.ts';
 import {
@@ -113,6 +114,10 @@ export const OPS: OpHandlers = {
     if (drawn.length === 0) { return fail(ctx.state, '无可抽之牌（牌库与弃牌堆皆空）'); }
     const hand = ctx.state.players[t.seat]?.hand ?? [];
     let state = withPlayer(ctx.state, t.seat, { hand: [...hand, ...drawn] });
+    // ⚠️ B61：抽到的牌计入**获得者的** `cardsDrawn`（规格 §6.4 的 `draw_count` 目标）。
+    //   ⚠️ 抽牌有**两个独立实现**（本 op 与 `core/hand.ts` 的 `drawCards`，失败语义不同：
+    //   本 op 牌库空 ⇒ `ok=false`、hand.ts 静默跳过）⇒ **两处都要计数**，口径相同（实到张数）。
+    state = bumpCounterOf(state, t.seat, 'cardsDrawn', drawn.length);
     state = { ...state, decks: { ...state.decks, deck, discard } };
     return ok(withLog(state, ctx, 'draw_cards', `抽 ${drawn.length} 张牌`));
   },
@@ -732,7 +737,10 @@ export const OPS: OpHandlers = {
     if (!t.ok) { return fail(ctx.state, t.note); }
     const pl = ctx.state.players[t.seat];
     if (pl === undefined) { return fail(ctx.state, '目标不存在'); }
-    const state = withPlayer(ctx.state, t.seat, { flags: { ...pl.flags, judgementModified: true } });
+    let state = withPlayer(ctx.state, t.seat, { flags: { ...pl.flags, judgementModified: true } });
+    // ⚠️ B61：改判计入**被改判者**的 `rerollCount`（规格 §6.4 的 `reroll_count` 目标，
+    //   达成条件用词是「累计**改判**次数」；与 `reroll`（重掷骰子）语义不同 ⇒ 以用词为准）。
+    state = bumpCounterOf(state, t.seat, 'rerollCount');
     return ok(withLog(state, ctx, 'modify_judgement', `座位 ${t.seat} 的判定被改写`));
   },
   /** 造物：从**独立造物牌堆**取牌加入手牌——**不是凭空生成**（规格 §6.5）。 */

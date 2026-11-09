@@ -5,6 +5,8 @@
 import type { State } from './state.ts';
 import type { CertificationState } from './flow.ts';
 import { passiveOf } from './passives.ts';
+import { bumpCounterOf } from './counters.ts';
+import { settleImmediateGoals } from '../goals/settle.ts';
 
 /** 空认证状态。 */
 export function emptyCertification(): CertificationState {
@@ -169,6 +171,14 @@ export function certifyAnswer(state: State, actor: number, target: number, passe
   // 判不通过 → **先记录判定，给出复议窗口**（§5.3.2）。
   // 后退 1 格是**复议流程结束后**才执行的后果（见 applyFailJudgment）——
   // 否则待认证者会被立即推下山，根本来不及申请复议。
+  //
+  // ⚠️ B61：判不通过 = **质疑成功**（规格 §5.3.2：「质疑**成功**（答对 ≤ 1）」）
+  //   ⇒ 计入**发起质疑者**的 `successfulChallenges`（§6.4 的 `successful_challenge` 目标）。
+  //   ⚠️ 计数必须**先于判定**（判定读计数）⇒ 顺序不可颠倒。
+  next = bumpCounterOf(next, actor, 'successfulChallenges');
+  // ⚠️ B61：`immediate` 时机的目标判定（§6.4：质疑成功时判定）⇒ 达成即发【印记】。
+  //   ⚠️ 规格张力：「且该次未被复议推翻」与「即时结算」在时间上冲突（判定先于复议）⇒ 登记为遗留。
+  next = settleImmediateGoals(next);
   return succeed(next, '判不通过，待认证者可申请复议');
 }
 
@@ -285,6 +295,9 @@ function applyAppealOutcome(state: State, target: number, challengerSeat: number
     // 改判为通过 → 该认证人视为签印
     const judgments: Readonly<Record<number, boolean>> = { ...c.judgments, [challengerSeat]: true };
     let next: State = { ...state, certification: { ...c, judgments } };
+    // ⚠️ B61：复议**推翻** ⇒ 该次质疑不再「成功」⇒ `successfulChallenges` **回退 1**
+    //   （规格 §6.4：「成功质疑次数（且该次未被复议推翻）」⇒ 计数必须随复议回退 ⇒ 支持负 delta）。
+    next = bumpCounterOf(next, challengerSeat, 'successfulChallenges', -1);
     next = addSignature(next, target, 1);
     return succeed(next, `${label}：复议成功，改判为通过`);
   }
