@@ -21,3 +21,9 @@ tests/gates/__isolated_tsc/
 .laya-venv/
 tools/laya-sidecar/__pycache__/
 docs/预研/data/tmp/
+
+# Laya 影子决策记录（B56）：**大体积生成物**（每条含全量 state ⇒ 2 局约 8 MB）
+#   ⇒ 超过仓内「已入库文件 ≤2MB」纪律（B51 守卫）⇒ 不入库；生成命令见批次记录
+docs/预研/data/decisions-*.jsonl
+!docs/预研/data/decisions-sample.jsonl
+

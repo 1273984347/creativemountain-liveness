@@ -49,7 +49,9 @@
 - `node --test tests/gates/sim-record.test.ts`：**3 / 3**。
 - `node --test "tests/**/*.test.ts"`：460/461 通过（1 既存 todo）。
 - `tsc --noEmit`：0 错（本批曾红两次：catch 参数 `unknown` 的 TS2339、`unknown ?? ''` 仍是 `{}` 的 TS2339）。
-- 冒烟数据 `docs/预研/data/decisions-smoke.jsonl` 已入库（114 行）。
+- **冒烟数据**：完整 2 局记录 **114 条 / 8.22 MB** ⇒ **超仓内 2 MB 上限** ⇒ 不入库（`.gitignore` 记为生成物）；
+  仓内留 `docs/预研/data/decisions-sample.jsonl`（**2 条 / 120 KB**）作格式契约样本。
+- **提交后门禁曾红一次**（本批自查发现）：B51 的「无已入库文件超过体积上限」守卫判红 ⇒ 上面这条修正即由此而来。
 
 ## 6. 复盘与经验沉淀
 

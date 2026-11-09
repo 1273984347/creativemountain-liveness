@@ -225,7 +225,12 @@ Compare-Object docs/balance-report.md <临时目录>/balance-after.md
 ## 3.8 B56 · Task 14（sim 决策点记录器）已执行 —— **通过**
 
 > 执行授权：用户 2026-11-09 授权「实现 sim 决策点记录器（`--record-decisions`，默认关闭且报告逐字不变）」。
-> 产物：`tests/sim/run.mjs`（`--record-decisions`）、`tests/gates/sim-record.test.ts`（3 条常驻测试）、`docs/预研/data/decisions-smoke.jsonl`。
+> 产物：`tests/sim/run.mjs`（`--record-decisions`）、`tests/gates/sim-record.test.ts`（3 条常驻测试）、`docs/预研/data/decisions-sample.jsonl`（**小样本** 2 条 / 120 KB）。
+>
+> ⚠️ **完整记录不入库**：2 局的完整 JSONL 实测 **8.22 MB**（每条含全量 state）⇒ 超过仓内
+> 「已入库文件 ≤ 2 MB」纪律（B51 的扫描盲区守卫）⇒ **门 ② 会判红** ⇒ 完整文件按**生成物**处理
+> （`docs/预研/data/decisions-*.jsonl` 已进 `.gitignore`），仓内只留小样本作**格式契约**。
+> 重新生成命令：`node tests/sim/run.mjs --themes xianxia2026 --players 4 --games 2 --record-decisions docs/预研/data/decisions-smoke.jsonl --out <tmp>.md`。
 
 ### ① 两个不变量（都被常驻测试钉住）
 
