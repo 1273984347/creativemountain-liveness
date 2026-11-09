@@ -124,6 +124,10 @@ export function scanTree(root: string): ScanResult {
     if (text.includes('\u0000')) { continue; }
     scanned.push(rel);
     for (const token of hitsInText(text)) { hits.push(rel + ' ⇒ ' + token); }
+    // ⚠️ **文件名**也查：文件名里带标识同样能指向绕过入口（B50 已把允许区外的
+    //   文件名引用改写为中文描述 ⇒ 这里补上守卫，防它重新长出来）。
+    const base = rel.split('/').pop() ?? '';
+    for (const token of hitsInText(base)) { hits.push(rel + ' ⇒ 文件名 ⇒ ' + token); }
   }
   // 例外文件：父目录被跳过 ⇒ 单独扫描（否则它们成为盲区）。
   for (const rel of SCAN_EXCEPTIONS) {

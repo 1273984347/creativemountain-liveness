@@ -95,6 +95,23 @@ test('B51 负样本 G：CI 配置含令牌 ⇒ CI 检查必须命中（证明它
   });
 });
 
+test('B51 负样本 I：文件名含令牌 ⇒ 必须命中（文件名级引用同样能指向绕过入口）', () => {
+  withTempTree((dir) => {
+    put(dir, 'tools/release-check--selftest.mjs', 'export const ok = 1;\n');
+    const { hits } = scanTree(dir);
+    assert.equal(hits.length, 1, '文件名命中必须被抓到：\n' + hits.join('\n'));
+    assert.ok(hits[0]?.includes('文件名'), '命中须标明来自文件名：' + hits[0]);
+  });
+});
+
+test('B51 负样本 J：允许区内**文件名**含令牌 ⇒ 不命中（允许区对文件名同样生效）', () => {
+  withTempTree((dir) => {
+    put(dir, 'tests/gates/demo--selftest.test.ts', 'export const ok = 1;\n');
+    const { hits } = scanTree(dir);
+    assert.deepEqual([...hits], [], '允许区的文件名不得命中：\n' + hits.join('\n'));
+  });
+});
+
 test('B51 负样本 H：CI 配置不含令牌 ⇒ 不命中（正样本对照：证明上一条不是「见谁命中」）', () => {
   withTempTree((dir) => {
     put(dir, '.github/workflows/ci.yml', 'run: npm run gate\n');

@@ -112,5 +112,7 @@ test('负样本：测试门禁对失败用例判红，恢复后判绿', { concur
     }
   } finally {
     cleanup(TEST_PROBE);
+    // 探针目录整体清掉 ⇒ 测试后不留空目录（已在 .gitignore 登记，双保险）。
+    rmSync(PROBE_DIR, { recursive: true, force: true });
   }
 });
