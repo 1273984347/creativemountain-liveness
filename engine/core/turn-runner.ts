@@ -14,7 +14,7 @@ import { pendingGate } from './gate.ts';
 import { judgeBarrier, pendingBarrier } from './barrier.ts';
 import { startDuel } from './duel.ts';
 import { drawCards, discardDownToLimit } from './hand.ts';
-import { gainResource } from './resource.ts';
+import { gainResource, spendResource } from './resource.ts';
 import { openCouncil, resolveCouncil, shouldHoldCouncil } from './council.ts';
 import { advanceCertificationRound, enterPendingCertification } from './certification.ts';
 import { resolveVictory } from './victory.ts';
@@ -254,8 +254,18 @@ export function performAction(
       if (cardNeedsTarget(card) && payload.target === undefined) {
         return state;
       }
+      // ⚠️ **B65：出牌付费（G-a 收口）** —— 打出卡牌须支付该牌的 `cost`（规格 §3.1「行事」/§4.3）。
+      //   **灵枢不足 ⇒ 拒绝该动作**（不扣、不出牌、状态不变）⇒ 与 §3.5 付费通道、
+      //   §5.3 申请复议的「资源不足即拒绝」同款。
+      //   ⚠️ **为什么扣费放在「移出手牌」之前**：先扣后弃 ⇒ 扣费失败时手牌与灵枢都原样不动；
+      //   若先弃牌再扣 ⇒ 扣费失败会留下「牌已弃、钱没扣」的坏状态。
+      //   ⚠️ **为什么用 `spendResource`（既有算子）**：灵枢不足的语义（ok:false + 状态不变）
+      //   已由它定义（§4.3 / §5.3.4 同款）⇒ 这里不另写一份「够不够」的判断。
+      const paid = spendResource(next, seat, card.cost);
+      if (!paid.ok) { return state; }   // ⚠️ 引用相等 = `probeAction` 认得的拒绝信号
+      next = paid.state;
       // 打出：移出手牌 → 依次结算效果
-      const hand = player.hand.filter((c) => c.id !== cardId);
+      const hand = next.players[seat]?.hand.filter((c) => c.id !== cardId) ?? [];
       next = { ...next, players: next.players.map((p) => (p.seat === seat ? { ...p, hand } : p)) };
       for (const eff of card.effects) {
         next = applyEffect({ state: next, actor: seat, sourceCard: card }, retarget(eff, payload.target)).state;

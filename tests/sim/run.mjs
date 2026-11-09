@@ -242,6 +242,66 @@ function certificationTurn(s) {
 }
 
 /**
+ * AI 的**出牌选牌**（B65）——按效果强度选，不是「第一张付得起的牌」。
+ *
+ * ⚠️ **为什么改（G-a 付费的连带后果）**：出牌改为**付费**后（规格 §3.1「行事」/§4.3），
+ *   灵枢迅速见底 ⇒ 旧策略「找第一张 `cost <= resource` 的牌」会让大量回合**无牌可打**
+ *   ⇒ 退化为行棋 ⇒ 对局拖长、并列封顶变多 ⇒ **独赢局口径下位次胜率极差被噪声主导**
+ *   （实测：8 人局独赢局 391/400 → 350/400 ⇒ 极差 5.9pp → 13.4pp，门 ⑫ 判红）。
+ *
+ * ⚠️ **判据只用 op 语义，不硬编码主题卡名**（⇒ 四套主题通用、新增卡自动跟上）：
+ *   · **位移类**（`move_forward` / `move_by_dice` / `teleport` / `swap_position` …）
+ *     ⇒ 推进登顶 ⇒ 直接影响「谁先坐上活人席」⇒ 优先打；
+ *   · **压制类**（`damage` / `poison` / `slow` / `silence` / `skip_turn`）
+ *     ⇒ 削弱对手 ⇒ 次优先；
+ *   · 其余（`heal` / `shield` / `gain_resource` / 抽牌…）⇒ 兜底。
+ *
+ * ⚠️ **平价优先**：同强度下**优先选更便宜的牌**（资源是稀缺资源 ⇒ 少花多得牌）。
+ * ⚠️ **不越权**：本函数只**选牌**，不代替引擎判合法（费用不足的牌由引擎拒 ⇒ 见 B65/A-7）。
+ *
+ * @param {object} hand 座的手牌
+ * @param {number} resource 当前灵枢
+ * @returns {object|undefined} 选中的牌（无可打牌 ⇒ undefined）
+ */
+export function pickPlayableCard(hand, resource) {
+  const affordable = hand.filter((c) => c.cost <= resource);
+  // ⚠️ 无可打牌时返回 **undefined**（不是 null）⇒ 与调用点的 `card === undefined` 判据一致
+  //   （返回 null 会让调用点漏判 ⇒ 读 `card.id` 抛 TypeError）。
+  if (affordable.length === 0) { return undefined; }
+  const rank = (card) => {
+    const ops = new Set();
+    const collect = (list) => {
+      for (const eff of list) {
+        ops.add(eff.op);
+        if (eff.op === 'sequence' && Array.isArray(eff.effects)) { collect(eff.effects); }
+      }
+    };
+    collect(card.effects);
+    // 位移类（推进登顶 ⇒ 影响活人席归属）
+    for (const op of ['move_forward', 'move_by_dice', 'teleport', 'swap_position']) {
+      if (ops.has(op)) { return 3; }
+    }
+    // 压制类（削弱对手）
+    for (const op of ['damage', 'poison', 'slow', 'silence', 'skip_turn']) {
+      if (ops.has(op)) { return 2; }
+    }
+    return 1;
+  };
+  let best = null;
+  let bestRank = 0;
+  let bestCost = Infinity;
+  for (const card of affordable) {
+    const r = rank(card);
+    if (r > bestRank || (r === bestRank && card.cost < bestCost)) {
+      best = card;
+      bestRank = r;
+      bestCost = card.cost;
+    }
+  }
+  return best;
+}
+
+/**
  * AI 偶尔发动身份被动（B12）。
  *
  * ⚠️ **可达性要求**：若 AI 从不发动，被动在真实对局中**永远不会触发** ⇒
@@ -344,7 +404,9 @@ function playOne(theme, players, seed, gateReserve) {
     const player = s.players[seat];
     if (player !== undefined && player.pendingCert) {
       // 待认证锁定：不能位移（规格 §5.1），但仍可打非位移牌
-      const card = player.hand.find((c) => c.cost <= player.resource && c.type !== 'motion');
+      // ⚠️ B65：用 `pickPlayableCard` 选牌（按效果强度 + 平价优先），不再「取第一张付得起的」。
+      const lockedHand = player.hand.filter((c) => c.type !== 'motion');
+      const card = pickPlayableCard(lockedHand, player.resource);
       if (card !== undefined) {
         const target = pickTarget(s, seat);
         // ⚠️ B56：记录决策点（待认证锁定下的出牌）
@@ -380,7 +442,8 @@ function playOne(theme, players, seed, gateReserve) {
       const rowAsk = recorder === null ? undefined : recorder[recAsk];
       if (rowAsk !== undefined) { rowAsk.face = s.lastDice ?? null; }
     } else {
-      const card = player === undefined ? undefined : player.hand.find((c) => c.cost <= player.resource);
+      // ⚠️ B65：用 `pickPlayableCard` 选牌（按效果强度 + 平价优先），不再「取第一张付得起的」。
+      const card = player === undefined ? undefined : pickPlayableCard(player.hand, player.resource);
       if (card === undefined) {
         record(s, seat, actionKey({ type: 'MOVE', actor: seat, steps: 0 }));
         s = performAction(s, seat, 'move');

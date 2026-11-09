@@ -96,7 +96,7 @@ print/      实体轨产物（按主题分目录）+ 规则书叙述模板
 
 | # | 事实 | 证据 |
 |---|---|---|
-| G-a | **出牌费用无权威语义**：规格 §3.1 未写支付、引擎 `performAction` 的 `act` 分支**既不校验也不扣**、UI 手牌区只显示不拦、仅模拟器把 `cost <= resource` 当资格线 ⇒ 数字轨可**免费出牌** | `engine/core/turn-runner.ts`（`act` 分支）；`web/ui/hand.ts`；`tests/sim/run.mjs` |
+| G-a | ~~**出牌费用无权威语义**：规格 §3.1 未写支付、引擎 `performAction` 的 `act` 分支**既不校验也不扣**、UI 手牌区只显示不拦、仅模拟器把 `cost <= resource` 当资格线 ⇒ 数字轨可**免费出牌**~~ ⇒ **已修**（B65 裁定为**出牌付费**：打出卡牌须支付该牌 `cost`（规格 §3.1「行事」/§4.3 已补）⇒ **灵枢不足即引擎拒绝**（不扣、不出牌）；UI `uiBlockNotice` 同款拒因并点名「灵枢不足」；枚举层由**引擎自己拒**、试跑如实反映（不另写 `cost` 镜像判据）。⚠️ 连带后果已处置：付费使资源成为真约束 ⇒ 8 人档出现**真实**位次偏差 ⇒ 门 ⑫ 与统计口径阈值已按跨 10 组独立样本**重校准**（规格 §5.8/§9.2 有 B65 补记）） | `engine/core/turn-runner.ts`（`act` 分支）；`engine/core/balance.ts`（阈值单一事实源）；`web/legal-gate.ts`；`tests/engine/card-cost.test.ts`；`docs/superpowers/specs/2026-11-07-creative-mountain-liveness-design.md` |
 | G-b | **待认证锁定只在调用方生效**：引擎 `act` 分支**不查** `pendingCert`（`move` 分支查）⇒ 锁定者可用位移牌绕过 §5.1 锁定；枚举层按 UI 规则排除，但引擎本身未加固 | `engine/core/turn-runner.ts`；取证行 `tests/engine/legal-probe.test.ts`「§7 粗筛窄于引擎五处·其一」 |
 | G-c | ~~**`gatesPassed` 无生产写入方**：四套主题各有一个身份目标是 `pass_gates`，而计数器只被**读取**（`engine/goals/registry.ts`）⇒ **4 个身份目标在数字轨永不可达**（B18 关隘接线后仍缺写入）~~ ⇒ **已修**（B60 补齐三环：计数写入 `markGatePassed` + 判定调用 `goals/settle.ts` + 达成即发【印记】；实测 `pass_gates` 达成 **498 次 / 24000 局** ⇒ 目标真实可达） | `engine/core/gate.ts`；`engine/goals/settle.ts`；`tests/engine/goals.test.ts` |
 | G-d | **双人互验未接线**：`certifyMutualSign`（§5.5）**仅测试调用** ⇒ 双人互验在数字轨与模拟器均不可达 | `engine/core/certification.ts:431`；唯一调用方 `tests/engine/live-seats.test.ts` |

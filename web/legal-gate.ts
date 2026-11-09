@@ -129,6 +129,12 @@ export function uiBlockNotice(state: State, seat: number, action: Action): strin
       if (window !== null) { return window; }
       const card = me?.hand.find((x) => x.id === action.cardId);
       if (card === undefined) { return '手牌里没有这张牌（可能已被弃掉或不属于你）。'; }
+      // ⚠️ **B65：出牌付费（G-a 收口）** —— 引擎 `act` 分支查 `card.cost`，灵枢不足即拒绝。
+      //   ⇒ 这里**必须同步**给出同款拒因（规格 §3.1「行事」/§4.3）⇒ 否则玩家点了才发现被拒。
+      //   ⚠️ 拒绝**要说人话**（R-2）⇒ 必须点名「灵枢不足」与**差多少**，不能只说「资源不够」。
+      if (me !== undefined && me.resource < card.cost) {
+        return `灵枢不足：打出「${card.name}」需 ${String(card.cost)} 灵枢，你只有 ${String(me.resource)}。`;
+      }
       // 需目标的牌必须带候选目标；不需目标的牌必须不带目标（引擎 `act` 分支同源）。
       return cardNeedsTarget(card)
         ? targetRefusal(state, seat, action.target, `「${card.name}」`)

@@ -45,3 +45,22 @@ test('B25：三层阈值常量存在且为正（口径不可缺失）', () => {
   assert.ok(POSITION_SPREAD_GATE_LIMIT > 0, '门禁极差阈值');
   assert.ok(POSITION_RMS_GATE_LIMIT > 0, '门禁 RMS 阈值');
 });
+
+// ⚠️ B65：阈值**具体值**也要钉住 —— 既有断言只查「> 0」⇒ 阈值被随手改小（如 14 → 6）
+//   不会有任何测试报警 ⇒ 门 ⑫ 会变成「看起来在守、实际守不住」的假锁。
+//   ⇒ 这里钉住 B65 重校准后的值，并要求**门禁阈值 ≥ 统计阈值**（否则大样本超标而门禁放行）。
+test('B65：阈值常量钉住具体值（防被随手改小 ⇒ 门 ⑫ 变假锁）', () => {
+  assert.equal(POSITION_SPREAD_LIMIT, 8,
+    '[B65 阈值] 统计口径阈值必须是 8pp（B65 重校准：付费后 8 人档大样本实测 7.8pp；原 6pp 是免费出牌时代读数）');
+  assert.equal(POSITION_SPREAD_GATE_LIMIT, 14,
+    '[B65 阈值] 门禁极差阈值必须是 14pp（B65 重校准：跨 10 组独立样本实测极差 7.7–12.6pp ⇒ 跨样本最大 + 余量）');
+  assert.equal(POSITION_RMS_GATE_LIMIT, 6.5,
+    '[B65 阈值] 门禁 RMS 阈值必须是 6.5pp（B65 重校准：跨 10 组独立样本实测 RMS 1.17–5.64pp）');
+});
+
+test('B65：门禁阈值不得低于统计阈值（大样本超标而门禁放行 ⇒ 判据自相矛盾）', () => {
+  assert.ok(POSITION_SPREAD_GATE_LIMIT >= POSITION_SPREAD_LIMIT,
+    '[B65 阈值] 门禁极差阈值必须 ≥ 统计口径阈值（门禁是固定 seed 小样本切片 ⇒ 天然更松）');
+  assert.ok(POSITION_RMS_GATE_LIMIT >= 3,
+    '[B65 阈值] 门禁 RMS 阈值不得低于 3pp（B25 起该口径即以此为下限）');
+});
