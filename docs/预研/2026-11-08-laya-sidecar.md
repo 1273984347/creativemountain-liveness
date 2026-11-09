@@ -222,7 +222,53 @@ Compare-Object docs/balance-report.md <临时目录>/balance-after.md
 > ⚠️ D2 是本批的第二个「纪律用在自己头上」：上一批刚立下「不能靠环境恰好如何」，
 > 转头就写了一条依赖环境的用例。
 
-## 4. 阶段 B（B16 · Task 14–17）仍未开始## 4. 阶段 B（B16 · Task 11–17）仍未开始## 4. 阶段 B（B16 · Task 11–17）仍未开始
+## 3.8 B56 · Task 14（sim 决策点记录器）已执行 —— **通过**
+
+> 执行授权：用户 2026-11-09 授权「实现 sim 决策点记录器（`--record-decisions`，默认关闭且报告逐字不变）」。
+> 产物：`tests/sim/run.mjs`（`--record-decisions`）、`tests/gates/sim-record.test.ts`（3 条常驻测试）、`docs/预研/data/decisions-smoke.jsonl`。
+
+### ① 两个不变量（都被常驻测试钉住）
+
+| 不变量 | 实测 |
+|---|---|
+| **报告逐字不变**（判据是**文件 diff 为空**，不是 stdout） | 带开关与不带开关跑同一组参数 ⇒ 报告**逐字相同** ✅ |
+| **默认关闭** | 不带开关 ⇒ **不产出任何 JSONL**、报告照常生成、sim 退出码 0 ✅ |
+| 默认路径开销 | `record()` 首行即 `return -1` ⇒ **零开销、零产物** |
+
+### ② 记录格式（11 个字段，顺序固定）
+
+`seq`（**从 0 开始 ⇒ seq == 行号**）· `themeId` · `players` · `seed`（**本局**的 seed）· `round` · `turnIndex` · `seat` · `phase` · `face` · `heuristic` · `state`（`stateToJson` 文本）
+
+> ⚠️ **`face` 是引擎产生的骰面点数**（move ⇒ 移动骰 1–6；ask ⇒ 指令骰 1–20；无骰面的决策点 ⇒ `null`）
+> ⇒ 它在**动作执行后**才有 ⇒ 记录时先占位、动作后**回填该条的 face**（只改记录字段，不改 state 与决策）。
+
+### ③ 十个决策点（现查现用：计划写「九个」但列举了 11 类 ⇒ 以代码为准）
+
+| # | 决策点 | `heuristic` 形状 |
+|---|---|---|
+| 1 | 山议落票 | `vote:<座>` |
+| 2 | 认证签印 | `cert:sign:<座>` |
+| 3 | 认证质疑 | `cert:challenge:<座>` |
+| 4 | 认证判定 | `cert:answer:<座>:pass\|fail` |
+| 5 | 认证复议申请 | `cert:appeal:<座>` |
+| 6 | 认证复议票 | `cert:appealvote:<座>:overturn\|uphold` |
+| 7 | 被动发动 | `ability:<op>`（需目标时带 `-><座>`） |
+| 8 | 行棋 | `move` |
+| 9 | 问天 | `ask` |
+| 10 | 出牌 | `play:<cardId>` / `play:<cardId>-><座>` |
+
+实测（5 人 × 30 局 ⇒ 2000+ 条）**十类全部有数据**，含复议与复议票。
+
+> ⚠️ **对峙选牌记不到**：它由引擎的 `autoResolveDuel` **内部**决定 ⇒ sim 侧拿不到「模型选了什么」；
+> 另发现 `run.mjs` 里的 `pickDuelCard` 是**死代码**（定义了从未被调用）⇒ 一并登记为遗留。
+
+### ④ ⚠️ 可见性红线（喂模型前必读）
+
+`state` 字段是 `stateToJson(state)` 的**全量**状态 ⇒ **含 rng 内部状态**（`initialSeed` / `s`）
+⇒ **直接把它喂给模型，模型就能预测后续随机流**。
+⇒ 本文件是**本地中间产物**；喂模型前**必须**经 `tools/laya-probe/state-text.mjs` 的可见性受限文本化（它只取公开字段、**不读 rng**）。
+
+## 4. 阶段 B（B16 · Task 15–17）仍未开始## 4. 阶段 B（B16 · Task 14–17）仍未开始## 4. 阶段 B（B16 · Task 11–17）仍未开始## 4. 阶段 B（B16 · Task 11–17）仍未开始
 
 **阻塞**：Task 11 Step 2 需新建 `.laya-venv` + `pip install laya[serve]`（走网络、GB 级磁盘）；
 Task 12 Step 2 起常驻本地服务 ⇒ **两项都必须先取得用户同意**（续作计划 §「外向副作用确认点」）。

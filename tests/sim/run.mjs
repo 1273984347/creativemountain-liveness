@@ -33,13 +33,68 @@ import {
   resolveAppeals, isCertifier, hasUsedCertificationTurn,
 } from '../../engine/core/certification.ts';
 import { SCALES } from '../../engine/scales.ts';
+// ⚠️ B56：决策点记录器用到的两个**只读**工具（不改任何对局行为）。
+import { stateToJson } from '../../engine/core/serialize.ts';
+import { actionKey } from '../../engine/core/action-key.ts';
 
 const ROOT = process.cwd();
 const THEME_IDS = ['xianxia2026', 'scifi-ai', 'hybrid', 'urban-psych'];
 
+/**
+ * ---------- 决策点记录器（B56）----------
+ *
+ * 用途：给**影子决策探针**（Task 15）提供「启发式在每个决策点**实际选了什么**」的数据源。
+ * ⚠️ 记录的 `state` 一律是**动作执行前**的局面（rng 快照与执行时一致 ⇒ 可复现）。
+ *
+ * ⚠️ **默认关闭**：`recorder === null` ⇒ `record()` 是**空操作** ⇒ 日常模拟零开销、零产物。
+ *   ⇒ 报告**逐字不变**是这个工具的第一不变量（见 `tests/gates/sim-record.test.ts`）。
+ *
+ * ⚠️ **只加行、不改任何决策**：`record()` 是纯读（不改 state、不改控制流、不消耗 rng）。
+ *
+ * ⚠️ **可见性红线（务必知悉）**：`state` 字段是 `stateToJson(state)` 的**全量**状态，
+ *   **含 rng 内部状态**（`initialSeed` / `s`）⇒ **直接把它喂给模型会让模型预测随机流**。
+ *   ⇒ 本文件是**本地中间产物**；喂模型前**必须**经 `tools/laya-probe/state-text.mjs`
+ *   的可见性受限文本化（它只取公开字段，不读 rng）。
+ */
+
+/** 记录器（null = 关闭）。 */
+let recorder = null;
+/** 记录序号（**从 0 开始** ⇒ `seq` 就是行号；跨全部主题与人数档位）。 */
+let recordSeq = 0;
+/** 当前局的记录上下文（`playOne` 设置 ⇒ 决策函数内无需改签名）。 */
+let recordCtx = null;
+
+/**
+ * 记一个决策点。
+ *
+ * @param {object} state **动作执行前**的局面（探针要重建「当时看到什么」）。
+ * @param {number} seat 决策座位。
+ * @param {string} heuristic 启发式选中的动作（`actionKey`；对峙选牌用 `duel_card:<id>`）。
+ * @param {number|null} face 引擎产生的**骰面点数**（无骰面的决策点为 null）。
+ * @returns {number} 该条记录的下标（**动作执行后**可回填 `face`；关闭时返回 -1）。
+ */
+function record(state, seat, heuristic, face = null) {
+  if (recorder === null) { return -1; }
+  const ctx = recordCtx;
+  recorder.push({
+    seq: recordSeq++,
+    themeId: ctx?.themeId ?? '',
+    players: ctx?.players ?? 0,
+    seed: ctx?.seed ?? 0,
+    round: state.round,
+    turnIndex: state.turnIndex,
+    seat,
+    phase: state.phase,
+    face,
+    heuristic,
+    state: stateToJson(state),
+  });
+  return recorder.length - 1;
+}
+
 /** 解析命令行参数。 */
 function parseArgs(argv) {
-  const out = { games: 1000, check: false, out: null, themes: THEME_IDS, players: SCALES.map((s) => s.players), trialRate: false, trialTimes: 400, seedBase: 1000, positionSpread: false, gateReserve: undefined, scanReserves: [], scanSeeds: [], scanJson: null };
+  const out = { games: 1000, check: false, out: null, themes: THEME_IDS, players: SCALES.map((s) => s.players), trialRate: false, trialTimes: 400, seedBase: 1000, positionSpread: false, gateReserve: undefined, scanReserves: [], scanSeeds: [], scanJson: null, record: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--games') { out.games = Number(argv[++i]); }
@@ -61,6 +116,8 @@ function parseArgs(argv) {
     else if (a === '--scan-seeds') { out.scanSeeds = argv[++i].split(',').map(Number); }
     // ⚠️ B34：把**各组原始统计量**落盘（JSON）⇒ 离线回归可直接重算 Welch t（无舍入误差）
     else if (a === '--scan-json') { out.scanJson = argv[++i]; }
+    // ⚠️ B56：**决策点记录器**（默认关闭 ⇒ 不带此开关时零开销、零产物）
+    else if (a === '--record-decisions') { out.record = argv[++i]; }
   }
   return out;
 }
@@ -122,6 +179,8 @@ function councilTurn(s) {
   for (const p of alive) {
     const t = pickTarget(s, p.seat);
     if (t === undefined) { continue; }
+    // ⚠️ B56：记录决策点（**动作前**的局面）
+    record(s, p.seat, actionKey({ type: 'VOTE', actor: p.seat, target: t }));
     const r = castVote(s, p.seat, t);
     if (r.ok) { s = r.state; }
   }
@@ -137,14 +196,19 @@ function certificationTurn(s) {
       if (!isCertifier(s, p.seat) || hasUsedCertificationTurn(s, p.seat)) { continue; }
       const challenger = p.resource >= 2 && s.rng.next() < 0.2;
       if (challenger) {
+        // ⚠️ B56：记录决策点（**动作前**的局面）
+        record(s, p.seat, actionKey({ type: 'CERTIFY_CHALLENGE', actor: p.seat, target }));
         const r = certifyChallenge(s, p.seat, target);
         if (r.ok) {
           s = r.state;
           const passed = s.rng.next() < 0.65;
+          record(s, p.seat, actionKey({ type: 'CERTIFY_ANSWER', actor: p.seat, target, passed }));
           const ans = certifyAnswer(s, p.seat, target, passed);
           if (ans.ok) { s = ans.state; }
         }
       } else {
+        // ⚠️ B56：记录决策点（签印）
+        record(s, p.seat, actionKey({ type: 'CERTIFY_SIGN', actor: p.seat, target }));
         const sign = certifySign(s, p.seat, target);
         if (sign.ok) { s = sign.state; }
       }
@@ -153,6 +217,8 @@ function certificationTurn(s) {
     const judged = Object.entries(s.certification.judgments)
       .some(([k, v]) => v === false && Number(k) !== target);
     if (judged && s.rng.next() < 0.35) {
+      // ⚠️ B56：记录决策点（复议申请）
+      record(s, target, actionKey({ type: 'CERTIFY_APPEAL', actor: target, target }));
       const ap = certifyAppeal(s, target, target);
       if (ap.ok) {
         s = ap.state;
@@ -160,7 +226,10 @@ function certificationTurn(s) {
           if (!p.alive || p.seat === target) { continue; }
           if (s.certification.challenged.includes(p.seat)) { continue; }
           if (s.certification.appealVotes[p.seat] !== undefined) { continue; }
-          const v = certifyAppealVote(s, p.seat, target, s.rng.next() < 0.5);
+          const overturn = s.rng.next() < 0.5;
+          // ⚠️ B56：记录决策点（复议票）
+          record(s, p.seat, actionKey({ type: 'CERTIFY_APPEAL_VOTE', actor: p.seat, target, overturn }));
+          const v = certifyAppealVote(s, p.seat, target, overturn);
           if (v.ok) { s = v.state; }
         }
         const rs = resolveAppeals(s, target);
@@ -195,6 +264,11 @@ function maybeUseAbility(s, seat) {
     for (const p of others) { if (best !== undefined && p.resource > best.resource) { best = p; } }
     target = best.seat;
   }
+  // ⚠️ B56：记录决策点（动作执行前的局面）
+  const abilityId = op;
+  record(s, seat, actionKey(target === undefined
+    ? { type: 'ABILITY', actor: seat, abilityId }
+    : { type: 'ABILITY', actor: seat, abilityId, target }));
   const r = performAbility(s, seat, target);
   return r.ok ? { state: r.state, op } : null;
 }
@@ -233,6 +307,8 @@ function advanceWithDuel(s, mode, opts) {
 
 /** 跑一局，返回该局的统计与异常。 */
 function playOne(theme, players, seed, gateReserve) {
+  // ⚠️ B56：记录本局上下文（主题 / 人数 / **本局 seed**）⇒ 决策点函数内无需改签名。
+  recordCtx = { themeId: theme.meta.id, players, seed };
   const base = createInitialState({ players, seed, deckSize: theme.counts.deckTotal });
   let s = installTheme(base, theme);
   const anomalies = [];
@@ -256,6 +332,10 @@ function playOne(theme, players, seed, gateReserve) {
       const card = player.hand.find((c) => c.cost <= player.resource && c.type !== 'motion');
       if (card !== undefined) {
         const target = pickTarget(s, seat);
+        // ⚠️ B56：记录决策点（待认证锁定下的出牌）
+        record(s, seat, actionKey(target === undefined
+          ? { type: 'PLAY_CARD', actor: seat, cardId: card.id }
+          : { type: 'PLAY_CARD', actor: seat, cardId: card.id, target }));
         s = performAction(s, seat, 'act', target === undefined ? { cardId: card.id } : { cardId: card.id, target });
       }
       s = advanceWithDuel(s, 'standard', { gateReserve });
@@ -273,15 +353,28 @@ function playOne(theme, players, seed, gateReserve) {
       }
     }
     if (roll < 0.75) {
+      // ⚠️ B56：记录决策点（骰面在**动作执行后**才有 ⇒ 先占位，事后回填）
+      const recMove = record(s, seat, actionKey({ type: 'MOVE', actor: seat, steps: 0 }));
       s = performAction(s, seat, 'move');
+      // ⚠️ 纯 JS（`.mjs` 里不得用 TS 的非空断言 `!` —— E22）
+      const rowMove = recorder === null ? undefined : recorder[recMove];
+      if (rowMove !== undefined) { rowMove.face = s.lastDice ?? null; }
     } else if (roll < 0.85) {
+      const recAsk = record(s, seat, actionKey({ type: 'ROLL_WHEEL', actor: seat }));
       s = performAction(s, seat, 'ask');
+      const rowAsk = recorder === null ? undefined : recorder[recAsk];
+      if (rowAsk !== undefined) { rowAsk.face = s.lastDice ?? null; }
     } else {
       const card = player === undefined ? undefined : player.hand.find((c) => c.cost <= player.resource);
       if (card === undefined) {
+        record(s, seat, actionKey({ type: 'MOVE', actor: seat, steps: 0 }));
         s = performAction(s, seat, 'move');
       } else {
         const target = pickTarget(s, seat);
+        // ⚠️ B56：记录决策点（需目标的牌带 target）
+        record(s, seat, actionKey(target === undefined
+          ? { type: 'PLAY_CARD', actor: seat, cardId: card.id }
+          : { type: 'PLAY_CARD', actor: seat, cardId: card.id, target }));
         s = performAction(s, seat, 'act', target === undefined ? { cardId: card.id } : { cardId: card.id, target });
       }
     }
@@ -802,6 +895,8 @@ function runGateReserveScan(args) {
 
 // ---------- 主流程 ----------
 const args = parseArgs(process.argv.slice(2));
+// ⚠️ B56：**默认关闭** ⇒ 只有显式给了 `--record-decisions` 才启用记录器。
+if (args.record !== null) { recorder = []; }
 // ⚠️ B23：定向长跑模式（通过率专项平衡）—— 独立于全量模拟，提前分流。
 if (args.trialRate) {
   runTrialRate(args);
@@ -842,6 +937,15 @@ for (const themeId of args.themes) {
   }
   perTheme.set(themeId, themeCells);
 }
+// ⚠️ B56：**决策点记录器**落盘（位置：主题循环之后、`summarize` 之前 ——
+//   与计划一致 ⇒ 记录的是**全部**主题 × 人数档位的决策点）。
+//   ⚠️ 默认关闭 ⇒ 不带 `--record-decisions` 时**不产出任何文件**、**不改变报告**。
+if (args.record !== null && recorder !== null) {
+  const lines = recorder.map((r) => JSON.stringify(r));
+  writeFileSync(args.record, lines.join('\n') + (lines.length > 0 ? '\n' : ''), 'utf8');
+  console.log('决策点记录：' + lines.length + ' 条 → ' + args.record);
+}
+
 const summary = summarize(cells);
 
 console.log('== 创界山·活人认证 规模与平衡模拟 ==');
