@@ -307,10 +307,17 @@ export function resolveAppeals(state: State, target: number): CertifyResult {
 /** 应用复议结果。 */
 function applyAppealOutcome(state: State, target: number, challengerSeat: number, success: boolean, label: string): CertifyResult {
   const c = state.certification;
+  // ⚠️ B63：**复议裁定 = 投票窗口关闭** ⇒ 清掉该待认证者的 `appealed`。
+  //   此前 `applyAppealOutcome` **不清** `appealed` ⇒ 裁定后窗口仍开着
+  //   ⇒ 轮末会**再裁定一次**（重复扣灵枢 / 重复后退）⇒ 且 UI 仍显示复议票入口（G-g）。
+  //   ⚠️ **实测证据**（B63 · A/B 对照）：同一局面在 **HEAD 代码**上裁定后 `appealed` 仍为 `[0]`
+  //   （窗口开着），在本文件改动后为 `[]`（已关闭）⇒ 这不只是「注释口径」，
+  //   而是**可观测的行为改变**（24000 局报告随之变化，见 `docs/balance-report.md`）。
+  const closed: CertificationState = { ...c, appealed: c.appealed.filter((seat) => seat !== target) };
   if (success) {
     // 改判为通过 → 该认证人视为签印
     const judgments: Readonly<Record<number, boolean>> = { ...c.judgments, [challengerSeat]: true };
-    let next: State = { ...state, certification: { ...c, judgments } };
+    let next: State = { ...state, certification: { ...closed, judgments } };
     // ⚠️ B61：复议**推翻** ⇒ 该次质疑不再「成功」⇒ `successfulChallenges` **回退 1**
     //   （规格 §6.4：「成功质疑次数（且该次未被复议推翻）」⇒ 计数必须随复议回退 ⇒ 支持负 delta）。
     next = bumpCounterOf(next, challengerSeat, 'successfulChallenges', -1);
@@ -319,7 +326,7 @@ function applyAppealOutcome(state: State, target: number, challengerSeat: number
   }
   // 失败 → 维持原判，待认证者额外扣 1 灵枢，并执行后退
   const players = state.players.map((p) => (p.seat === target ? { ...p, resource: Math.max(0, p.resource - 1) } : p));
-  let next: State = { ...state, players };
+  let next: State = { ...state, players, certification: closed };
   next = applyFailJudgment(next, target);
   return succeed(next, `${label}：复议失败，维持原判，待认证者 -1 灵枢并后退 1 格`);
 }
@@ -365,6 +372,19 @@ export function advanceCertificationRound(state: State): CertifyResult {
       certification: { ...emptyCertification(), round: 1, pending: [...c.pending] },
     };
     return succeed(opened, '开始第 1 轮认证');
+  }
+  // ⚠️ B63：**复议裁定在此关闭投票窗口**（规格 §5.3.2 第 3 条 + §4.1「成功质疑」定义）。
+  //   ⚠️ 此前生产路径**无人调用 `resolveAppeals`**（仅 `tests/sim/run.mjs` 调）⇒ 两个后果：
+  //   ① 投票写进一个**永远不会关掉**的窗口（G-g / `web/ui/cert.ts` 的 R-5 登记）；
+  //   ② **更严重**：下方循环**主动跳过**已申请复议的座位（「由 resolveAppeals 处理」）
+  //      ⇒ 生产路径下待认证者**永远不会被结算**（卡在峰顶：不后退、不签印、不进入下一轮）。
+  //   ⇒ 轮末对每个已申请复议的待认证者裁定：票已收齐 ⇒ 按多数决（第三方不足 2 人则掷 6 面骰）；
+  //     **票未收齐 ⇒ 多数决必然不通过 ⇒ 视为「维持原判」**（复议失败：扣 1 灵枢 + 后退 1 格）
+  //     ⇒ 保证窗口**必关闭**（否则卡死）。
+  for (const seat of c.appealed) {
+    if (!c.pending.includes(seat)) { continue; }
+    const r = resolveAppeals(state, seat);
+    if (r.ok) { state = r.state; }
   }
   // 轮末：对「判不通过且未申请复议」的认证人执行后退后果（§5.3.2）
   // ——判不通过本身不立即后退；复议窗口关闭后才执行。

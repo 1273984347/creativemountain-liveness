@@ -653,7 +653,8 @@ function render(): void {
       onAppealVote: (target, overturn) => {
         // 门禁:复议票 —— 与同级的 onChallenge 一个口径：引擎拒绝时必须把 r.note 交出去，
         //   不得静默丢弃 r.ok/r.note（评审发现 B）。按钮本身已由 uiAllows 过闸，
-        //   这里是「面板过期 / 状态已被别处推进」时的兜底；G-g（裁定无人调用）另见 web/ui/cert.ts 的注释。
+        //   这里是「面板过期 / 状态已被别处推进」时的兜底；G-g（复议裁定）已由 B63 接线，
+        //   投票窗口在**轮末**由引擎关闭（详见 web/ui/cert.ts 的注释）。
         const r = certifyAppealVote(s, ui.seat, target, overturn);
         if (!r.ok) {
           ui.notice = '复议投票未落账：' + (r.note ?? '引擎未给出原因');

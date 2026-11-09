@@ -26,7 +26,7 @@ import { castVote, openCouncil, resolveCouncil } from '../../engine/core/council
 import { applyEffect } from '../../engine/ops/registry.ts';
 import { performAbility } from '../../engine/core/abilities.ts';
 import {
-  certifyAnswer, certifyAppeal, certifyAppealVote, certifyChallenge, resolveAppeals,
+  advanceCertificationRound, certifyAnswer, certifyAppeal, certifyAppealVote, certifyChallenge, resolveAppeals,
 } from '../../engine/core/certification.ts';
 import { drawCards } from '../../engine/core/hand.ts';
 import { putPending } from './fixtures.ts';
@@ -465,6 +465,46 @@ test('[LAYER-E8-REVERDICT 改判回退] 改判为通过 ⇒ 该次质疑不再�
     '[LAYER-E8-REVERDICT 改判回退] 改判为通过 ⇒ 质疑不再成立 ⇒ 计数回退（与复议推翻同款可逆语义）');
 });
 
+test('[LAYER-E9-APPEAL-CLOSE 复议窗口] 生产路径：轮末关闭复议窗口 ⇒ 待认证者不再卡在峰顶', () => {
+  // ⚠️ 此前生产路径**无人调用** `resolveAppeals` ⇒ 轮末结算**主动跳过**已申请复议的座位
+  //   ⇒ 待认证者**永远不被结算**（卡在峰顶）⇒ 本用例钉住「轮末必须关闭复议窗口」。
+  const s = asIdentity(themed(5), 0, 'pioneer', { kind: 'pass_gates', count: 3 });
+  const pending = putPending(s, [0]);
+  const challenged = certifyChallenge(pending, 1, 0);
+  assert.equal(challenged.ok, true, '[LAYER-E9-APPEAL-CLOSE 复议窗口] 发起质疑应成功');
+  const answered = certifyAnswer(challenged.state, 1, 0, false);
+  assert.equal(answered.ok, true, '[LAYER-E9-APPEAL-CLOSE 复议窗口] 判定应成功');
+  const appealed = certifyAppeal(answered.state, 0, 0);
+  assert.equal(appealed.ok, true, '[LAYER-E9-APPEAL-CLOSE 复议窗口] 申请复议应成功：' + String(appealed.note));
+  assert.ok(appealed.state.certification.appealed.includes(0),
+    '[LAYER-E9-APPEAL-CLOSE 复议窗口] 申请后复议窗口应打开');
+  const peak = appealed.state.board.peakIndex;
+  // 轮末结算（不投复议票 ⇒ 票未收齐 ⇒ 维持原判 ⇒ 后退 1 格）
+  const settled = advanceCertificationRound(appealed.state);
+  assert.ok(settled.ok, '[LAYER-E9-APPEAL-CLOSE 复议窗口] 轮末结算应成功：' + String(settled.note));
+  const p0 = settled.state.players[0];
+  assert.ok((p0?.position ?? peak) < peak,
+    '[LAYER-E9-APPEAL-CLOSE 复议窗口] **待认证者不得卡在峰顶**（未接线时轮末跳过它 ⇒ 永远不结算）');
+});
+
+test('[LAYER-E10-APPEAL-WINDOW 窗口关闭] 复议裁定后 appealed 被清（窗口关闭 ⇒ 不会重复裁定）', () => {
+  const s = asIdentity(themed(5), 0, 'pioneer', { kind: 'pass_gates', count: 3 });
+  const pending = putPending(s, [0]);
+  const challenged = certifyChallenge(pending, 1, 0);
+  const answered = certifyAnswer(challenged.state, 1, 0, false);
+  const appealed = certifyAppeal(answered.state, 0, 0);
+  assert.ok(appealed.ok, '[LAYER-E10-APPEAL-WINDOW 窗口关闭] 申请复议应成功');
+  let st = appealed.state;
+  st = certifyAppealVote(st, 2, 0, true).state;
+  st = certifyAppealVote(st, 3, 0, true).state;
+  const resolved = resolveAppeals(st, 0);
+  assert.equal(resolved.ok, true, '[LAYER-E10-APPEAL-WINDOW 窗口关闭] 复议裁定应成功：' + String(resolved.note));
+  assert.equal(resolved.state.certification.appealed.includes(0), false,
+    '[LAYER-E10-APPEAL-WINDOW 窗口关闭] **裁定后复议窗口必须关闭**（否则轮末会再裁定一次 ⇒ 重复扣灵枢/后退）');
+  assert.equal(resolved.state.players[1]?.counters.successfulChallenges, 0,
+    '[LAYER-E10-APPEAL-WINDOW 窗口关闭] 复议推翻 ⇒ 该次质疑不再成立 ⇒ 计数回退');
+});
+
 test('[LAYER-E5-MARK 即时判定] 山主质疑成功 ⇒ immediate 判定发印记', () => {
   const s = asIdentity(themed(), 1, 'mountainlord', { kind: 'successful_challenge', count: 1 });
   const pending = putPending(s, [0]);
@@ -639,6 +679,17 @@ test('[B60-D 变异自证] 撤掉终局判定接线 ⇒ 「终局接线」层专
     '[B60-D 变异自证] mutant（去掉终局判定接线）必须让测试变红 —— 否则终局发放路径没有回归锁');
   assert.ok(/AssertionError[^\n]*\[LAYER-C-TERMINAL/.test(r.out),
     '[B60-D 变异自证] mutant 必须红在「终局接线」层的专属措辞上');
+});
+
+test('[B60-D 变异自证] 撤掉轮末的复议裁定接线 ⇒ 「复议窗口」层必须判红', { skip: SKIP_MUTATION }, () => {
+  const r = runMutant((dir) => {
+    patchCopy(dir, 'engine/core/certification.ts',
+      "  for (const seat of c.appealed) {\n    if (!c.pending.includes(seat)) { continue; }\n    const r = resolveAppeals(state, seat);\n    if (r.ok) { state = r.state; }\n  }",
+      '  // mutant: 去掉轮末的复议裁定接线');
+  });
+  assert.notEqual(r.code, 0, '[B60-D 变异自证] mutant 必须让测试变红');
+  assert.ok(/AssertionError[^\n]*\[LAYER-E9-APPEAL-CLOSE/.test(r.out),
+    '[B60-D 变异自证] mutant 必须红在「复议窗口」层的专属措辞上');
 });
 
 // ================= E 组变异自证：B61 的 4 类计数器写入 =================

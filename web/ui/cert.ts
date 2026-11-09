@@ -132,10 +132,14 @@ export function renderCertification(
   // ---- 第三方复议投票（§5.3.2）：判不通过后由非当事人裁定 ----
   // ⚠️ Task 7：数字轨此前完全没有复议票入口（人只能「申请复议」却投不了票，只有模拟器会程序化投）。
   //   显隐统一交 `uiAllows`——它已按引擎口径放行「同场另一名待认证者」（co-pending 仍是独立第三方）。
-  // ⚠️ G-g（评审发现 E / 裁定 R-5）：这张票在数字轨**只被记录、无人裁定**——
-  //   `resolveAppeals` 在 `engine/**` 与 `web/**` 零调用方（仅 `tests/sim/run.mjs` 调它），
-  //   且 `applyAppealOutcome` 不清 `appealed` ⇒ 投票写进的是一个不会被关掉的窗口。
-  //   「投票窗口何时关闭」属流程层的未决设计，已登记为 G-g 交 Task 9；本入口不等于复议端到端完成。
+  // ✅ B63（G-g / 评审发现 E / 裁定 R-5）：这张票在数字轨**已有人裁定**——
+  //   ① 轮末结算（`advanceCertificationRound`）对每个已申请复议的待认证者调 `resolveAppeals`
+  //      ⇒ 投票窗口**必关闭**（票已收齐 ⇒ 多数决；第三方不足 2 人 ⇒ 掷 6 面骰；
+  //        票未收齐 ⇒ 多数决必然不通过 ⇒ 视为「维持原判」⇒ 扣 1 灵枢 + 后退 1 格）。
+  //   ② `applyAppealOutcome` 裁定后**清掉** `appealed` ⇒ 轮末不会对同一窗口**再裁定一次**
+  //      （否则重复扣灵枢 / 重复后退）。
+  //   ⇒ 「投票窗口何时关闭」已裁定为**轮末关闭**（规格 §5.3.2 第 3 条 + §4.1「成功质疑」定义）。
+  //   ⚠️ 本入口只负责**投票**；**申请复议**（CERTIFY_APPEAL）与**裁定**分别见 cert.ts 上文与引擎轮末。
   for (const target of c.appealed) {
     const row = rowOf([
       gated({ type: 'CERTIFY_APPEAL_VOTE', actor: seat, target, overturn: true }, '推翻原判', () => { cb.onAppealVote(target, true); }),
