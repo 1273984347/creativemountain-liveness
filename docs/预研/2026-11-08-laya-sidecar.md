@@ -318,7 +318,47 @@ Compare-Object docs/balance-report.md <临时目录>/balance-after.md
 - **采样排除小样本**：`decisions-sample.jsonl` 只有 2 条 ⇒ 会被字典序掺进正式读数 ⇒ 排除；
 - **4 人与 8 人轮流取** ⇒ 否则后一个文件一条都进不来（读数只代表一种规模）。
 
-## 4. 阶段 B（B16 · Task 16–17）仍未开始## 4. 阶段 B（B16 · Task 15–17）仍未开始## 4. 阶段 B（B16 · Task 14–17）仍未开始## 4. 阶段 B（B16 · Task 11–17）仍未开始## 4. 阶段 B（B16 · Task 11–17）仍未开始
+## 4.0 B58 · Task 16（P4 浏览器可达性）已执行 —— **通过：file:// 双击即玩可调用本地 sidecar**
+
+> 执行授权：用户 2026-11-09 授权「实现浏览器可达性探针 P4，验证 file:// 页面调用反代的 CORS/PNA 行为」。
+> 产物：`tools/laya-probe/browser.mjs`、`docs/预研/data/p4-browser.json`。
+
+### ① 两条硬约束（缺一即无效）
+
+| 约束 | 落地 |
+|---|---|
+| `page.on('console')` / `page.on('pageerror')` 必须在 `page.goto(...)` **之前**注册 | ✅ 注册在 `goto` 之前（否则收不到 CORS/PNA 报错，而报错正是失败层次的唯一证据） |
+| 页面必须用 `file://` 打开（不得改用 http 预览） | ✅ `pathToFileURL(dist/发布包/数字轨/创界山-活人认证.html)` ⇒ `file:///D:/…/创界山-活人认证.html` |
+
+### ② 读数
+
+| 项 | 值 |
+|---|---|
+| `GET /health` | **200**（`reachable = true`） |
+| `POST /v1/systemone` | **200** ⇒ 真的拿到推理结果：`choice=move`，概率 `{move: 0.7853, ask: 0.2147}`，`confidence 0.2496`，`usage.input_tokens=75` |
+| `consoleErrors` | **[]**（零 CORS / PNA / 混合内容报错） |
+| `failureClass` | `none` |
+| **CORS 预检** | **服务端留痕确认**：`[serve] 收到 CORS 预检 OPTIONS /v1/systemone` ⇒ 预检**确实发生**且被正确处理（204） |
+
+> ⚠️ **预检留痕是补做的**：浏览器不暴露自动预检 ⇒ 「预检通过」原本只能**推断**
+> （POST + `content-type: application/json` 必触发预检）⇒ B58 给反代加了一行预检日志 ⇒ 变成**实测**。
+
+### ③ 结论（按计划 §2.3 的 P4 判据）
+
+判据：**`reachable = true`；否则必须给出失败层次之一**，不达标 ⇒「V2 必须走 http 预览服务，放弃双击即玩」。
+
+⇒ 实测 **达标** ⇒ **「双击即玩」的产品承诺未被推翻**：`file://` 单文件数字轨**能**调用本地 sidecar。
+
+> ⚠️ **如实限定**：P4 只解除了「必须放弃双击即玩」这个结论，**不等于** sidecar 可以进产品 ——
+> 仍需 Task 17（P5 降级自证）、发布包零增量、以及「离线可用」承诺与常驻服务的取舍（产品决策）。
+
+### ④ 失败分类（四种，缺一不可归）
+
+`OPTIONS 405` / 缺 `Access-Control-Allow-Origin` / 私有网络访问（PNA）预检被拒 / 混合内容被拦
+⇒ 分类**依据是 console 错误原文**；命中不到则归 `unknown` 并保留原文。
+另加一类**非失败**：上游不在 ⇒ 反代按设计折叠成 503 ⇒ 单独归类，**不落进 unknown**（否则误导）。
+
+## 4. 阶段 B（B16 · Task 17）仍未开始## 4. 阶段 B（B16 · Task 16–17）仍未开始## 4. 阶段 B（B16 · Task 15–17）仍未开始## 4. 阶段 B（B16 · Task 14–17）仍未开始## 4. 阶段 B（B16 · Task 11–17）仍未开始## 4. 阶段 B（B16 · Task 11–17）仍未开始
 
 **阻塞**：Task 11 Step 2 需新建 `.laya-venv` + `pip install laya[serve]`（走网络、GB 级磁盘）；
 Task 12 Step 2 起常驻本地服务 ⇒ **两项都必须先取得用户同意**（续作计划 §「外向副作用确认点」）。

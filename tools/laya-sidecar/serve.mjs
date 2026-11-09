@@ -109,6 +109,9 @@ const server = createServer((req, res) => {
 
   // OPTIONS ⇒ 204（预检）
   if (req.method === 'OPTIONS') {
+    // ⚠️ **B58 补记**：记一行「收到预检」⇒ 让「CORS 预检确实发生过」从**推断**变成**实测**
+    //   （P4 的结论依赖于此；浏览器不暴露自动预检，只能从服务端侧留痕）。
+    process.stderr.write(`[serve] 收到 CORS 预检 OPTIONS ${path}\n`);
     res.writeHead(204, { ...CORS_HEADERS, 'content-length': '0' });
     res.end();
     return;
