@@ -119,7 +119,53 @@ Compare-Object docs/balance-report.md <临时目录>/balance-after.md
 > ⇒ B53 全部修复；修复过程中**漂移守卫当场判红**并列出两侧 17 vs 16 条 ⇒ 证明该面从空集变为真在比对。
 > 新增夹具 `gateScene()`（关隘格 + 玩家位置 + 一张试炼牌进 `decks.trial`，否则试炼通道必拒）。
 
-## 4. 阶段 B（B16 · Task 11–17）仍未开始
+## 3.6 B54 · Task 11（P0 环境自检）已执行 —— **通过，路线 = A**
+
+> 执行授权：用户 2026-11-09 明确授权「安装所需 Python 依赖并启动常驻本地服务，完成 P0 环境自检」。
+> 产物：`tools/laya-sidecar/env-check.mjs` + `docs/预研/data/p0-env.md`（脚本自动生成）。
+
+### ① 权重对拍（通过）
+
+| 项 | 期望 | 实测 |
+|---|---|---|
+| 路径 | `D:/<local-libs>/laya-multilingual/model.safetensors` | 同 |
+| 字节数 | 643835514 | **643835514** ✅ |
+| sha256 前缀 | `9d628fd9` | **`9d628fd971b70038…`** ✅ |
+
+### ② 解释器探测（候选② 胜出，**无跨项目耦合**）
+
+| 候选 | laya | torch | torch 来源 | CUDA | 判定 |
+|---|---|---|---|---|---|
+| ② 本仓 `.laya-venv` | 0.4.21 | 2.6.0+cu124 | `D:\<local-libs>\torch-cu124\torch\__init__.py` | **true** | **采用** ✅ |
+| ③ 邻居仓 venv | 0.4.21 | 2.6.0+cu124 | `D:\<other-repo>\experiments\venv\…` | true | 备选（**跨项目耦合**） |
+
+### ③ API 面与路线判定
+
+- `serve.create_app(router: Optional[Any] = None)` ⇒ 首参接受 router ✅
+- `laya.Router.__init__(models: Optional[Dict[str, str]] = None, device, …, default='multilingual', …)` ⇒ `models` 是**模型名 → 本地路径**映射 ✅ ⇒ **A 路成立**
+- `laya.load(model_id_or_path='convaiinnovations/laya', …)` ⇒ B 路亦成立（但优先 A）
+- **launch 路线 = A**（官方 app 指向本地权重）
+
+### ④ 常驻服务的**起停验证**（超出 P0 的额外实证）
+
+按 A 路写了 `tools/laya-sidecar/launch.py`（硬绑 `127.0.0.1`、`LAYA_SERVE_PORT=8712`、进程内设 `USE_TF=0`/`HF_HUB_OFFLINE=1`/`TRANSFORMERS_OFFLINE=1`/`HF_HOME=D:\<local-libs>\hf-home`）并**起停一轮**：
+
+| 项 | 实测 |
+|---|---|
+| 启动 | `Uvicorn running on http://127.0.0.1:8712`，device=cuda ✅ |
+| `/health` | `{"status":"ok","device":"cuda",…}` ✅ |
+| 端点面 | `/health`(GET)、`/v1/route`(POST)、`/v1/systemone`(POST)、`/v1/systemone/batch`(POST) ✅ |
+| **真实推理** | `POST /v1/systemone` ⇒ **200**：`choice=play:test_card_0`，概率 `{move:0.0387, ask:0.0114, play:test_card_0:0.9499}`，confidence 0.7945 ✅ |
+| **本地权重确实被用上** | `routing.repo = D:\<local-libs>\laya-multilingual`；路由理由「non-Latin script (han, 100%) ⇒ English checkpoint 读不了」⇒ **A 路在真实推理上确认成立** ✅ |
+| token 口径 | `input_tokens=147`、`state_tokens=91`、`truncated=false` ⇒ P3 的 token 预算读数**有真实来源** |
+| 收尾 | 服务已停止、**8712 端口已释放**（常驻属 Task 12 的交付物，本批只做起停验证） |
+
+> ⚠️ **形状要点（探针 Task 15 必读）**：`/v1/systemone` 的请求体是
+> `{ state: <字符串或结构>, questions: { qid: { type: 'choice', instructions: <题面>, criteria: { <label>: <描述> } } } }`
+> ⇒ **不是** `{instructions, criteria}` 平铺（那是 B15 `buildChoice` 的内部形状，**不是** HTTP 形状）。
+> `questions` 的 value 缺 `criteria`（或 `type` 非 `choice`）⇒ 服务端 400/422 并**点名**缺什么。
+
+## 4. 阶段 B（B16 · Task 11–17）仍未开始## 4. 阶段 B（B16 · Task 11–17）仍未开始
 
 **阻塞**：Task 11 Step 2 需新建 `.laya-venv` + `pip install laya[serve]`（走网络、GB 级磁盘）；
 Task 12 Step 2 起常驻本地服务 ⇒ **两项都必须先取得用户同意**（续作计划 §「外向副作用确认点」）。

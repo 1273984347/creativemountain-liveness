@@ -16,3 +16,8 @@ tests/gates/__isolated_tsc/
 
 # 门禁自检的探针与隔离目录（B51：移出 tests/ ⇒ 不被门禁②的 glob 扫到 ⇒ 并行假红）
 .probe/
+
+# Laya sidecar 预研（B16 · Task 11）：本仓自建 venv / Python 缓存 / 预研临时产物
+.laya-venv/
+tools/laya-sidecar/__pycache__/
+docs/预研/data/tmp/
