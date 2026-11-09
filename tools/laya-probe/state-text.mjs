@@ -212,6 +212,12 @@ export function describeAction(state, action, seat) {
     //   ⇒ 只写「推翻/维持」会让两条不同 key 的候选得到同一句话，模型无从区分。
     case 'CERTIFY_APPEAL_VOTE': return cut(`复议票：座${String(action.target)}${action.overturn ? '推翻' : '维持'}`);
     case 'CERTIFY_ANSWER': return cut(`判定座${String(action.target)}${action.passed ? '通过' : '不通过'}`);
+    // ⚠️ **B57 补记**：这两个分支此前**不存在** ⇒ B18 引入关隘/裂隙通道后，
+    //   `describeAction` 遇到它们直接抛「未知动作类型」⇒ `buildChoice` 崩 ⇒
+    //   **影子决策探针在 8 人局（关隘更常出现）整个崩掉**。
+    //   ⇒ 补上（语义照规格 §3.5 / §3.4 定案：付费 vs 试炼 / 放印 vs 通过）。
+    case 'GATE_RESOLVE': return cut(action.channel === 'trial' ? '过隘：走试炼通道' : '过隘：付费通过');
+    case 'BARRIER_RESOLVE': return cut(action.channel === 'place' ? '裂隙：放置封路印' : '裂隙：直接通过');
     default: throw new Error(`describeAction：未知动作类型 ${String(action.type)}`);
   }
 }

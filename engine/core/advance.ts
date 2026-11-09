@@ -25,14 +25,23 @@ import { currentPlayer } from './round.ts';
  *   本函数替玩家选了「灵枢够就付费、否则走试炼」。
  */
 /**
- * @param opts 可选覆盖：`gateReserve` = 关隘付费的余量门槛（默认 `GATE_RESOURCE_RESERVE`）。
+ * @param opts 可选覆盖：`gateReserve` = 关隘付费的余量门槛（默认 `GATE_RESOURCE_RESERVE`）；
+ *   `onDuelPick` = **对峙选牌的只读观测回调**（B56 遗留 T1：把「对峙未决的那一瞬」交出来）。
  *   ⚠️ 可注入 ⇒ 余量阈值的**多值扫描**能走生产同一条代码路径（不另写模拟器副本）。
  */
-export function advanceAuto(state: State, mode: RuleMode, opts?: { readonly gateReserve?: number }): State {
+export function advanceAuto(
+  state: State,
+  mode: RuleMode,
+  opts?: {
+    readonly gateReserve?: number;
+    /** 对峙选牌的**只读**观测回调（不改任何行为）。 */
+    readonly onDuelPick?: (seat: number, cardId: string, stateAtPick: State) => void;
+  },
+): State {
   let next = advanceTurn(state, mode);
   // ---- 对峙闭环（B13）----
   if (next.duel !== null) {
-    next = autoResolveDuel(next);
+    next = autoResolveDuel(next, opts?.onDuelPick);
     next = advanceTurn(next, mode);
   }
   // ---- 关隘闭环（B18）----

@@ -97,8 +97,18 @@ function autoLose(state: State, seatA: number, seatB: number, loser: number): St
  *   ⇒ 提供统一的自动选牌出口，避免每个调用方各写一套（且策略不一致）。
  *
  * 选牌策略：**红优先、同色点数大优先**。
+ *
+ * @param onPick **可选观测回调**：`(seat, cardId, stateAtPick)` ⇒ 选牌**当刻**的局面。
+ *   ⚠️ **纯观测**（不改 state、不改 log、不改任何行为）⇒ 不传时行为与之前**逐字相同**。
+ *   ⚠️ 为什么需要（B56 遗留 T1）：对峙在**同一次 `advanceAuto` 内**立起并结算
+ *   ⇒ 「对峙未决的局面」从外部**只存在一瞬、不可得**；而选牌策略在引擎内部
+ *   ⇒ 调用方拿不到「启发式选了什么」⇒ 影子决策探针无法在峙面做模型/启发式对比。
+ *   ⇒ 此回调把那一瞬交出来（**只读**）。
  */
-export function autoResolveDuel(state: State): State {
+export function autoResolveDuel(
+  state: State,
+  onPick?: (seat: number, cardId: string, stateAtPick: State) => void,
+): State {
   const d = state.duel;
   if (d === null) { return state; }
   const pick = (seat: number): string | null => {
@@ -115,9 +125,16 @@ export function autoResolveDuel(state: State): State {
   };
   let next = state;
   const pa = pick(d.seatA);
-  if (pa !== null) { next = submitDuelCard(next, d.seatA, pa).state; }
+  if (pa !== null) {
+    // ⚠️ 回调收到的是**选牌当刻**的局面（`state` 仍是对峙未决、含双方手牌）。
+    onPick?.(d.seatA, pa, next);
+    next = submitDuelCard(next, d.seatA, pa).state;
+  }
   const pb = pick(d.seatB);
-  if (pb !== null) { next = submitDuelCard(next, d.seatB, pb).state; }
+  if (pb !== null) {
+    onPick?.(d.seatB, pb, next);
+    next = submitDuelCard(next, d.seatB, pb).state;
+  }
   return next;
 }
 

@@ -1,7 +1,8 @@
 // tests/engine/legal-probe.test.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { isolatedState, probeAction } from '../../engine/core/probe.ts';
 import { advanceTurn, performAction } from '../../engine/core/turn-runner.ts';
 import { startDuel, submitDuelCard } from '../../engine/core/duel.ts';
@@ -1374,6 +1375,55 @@ function escapeRegExp(v: string): string {
   return v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/**
+ * **主题数据词表**（B57 · Task 15 Step 3）：从**主题包自己**派生，不手抄。
+ *
+ * ⚠️ 为什么必须派生（Task 8 留下的必修项）：
+ *   · 被动 op 有 **8 种**（`move_forward` / `create_card` / `peek_deck` / `extra_vote` /
+ *     `shield` / `transfer_resource` / `modify_judgement` / `certify_free_pass`）
+ *     ⇒ 手抄的词表只列了 2 种 ⇒ 其余 6 种出现在文本里会被**误判为泄漏**；
+ *   · 牌名含间隔号（「御风·远」）⇒ 分词后是几段 ⇒ 整段入表**匹配不上**。
+ *
+ * ⇒ 词表的数据侧从**主题自带的牌名 / 被动 op 全集**派生（按构造即公开）。
+ *
+ * @returns {Set<string>} 允许出现的 token
+ */
+function themeDataWords(): Set<string> {
+  const out = new Set<string>();
+  const dir = resolve(ROOT, 'themes');
+  let ids: string[] = [];
+  try {
+    for (const themeId of readdirSync(dir, { withFileTypes: true })) {
+      if (!themeId.isDirectory()) { continue; }
+      const file = resolve(dir, themeId.name, 'theme.json');
+      if (!existsSync(file)) { continue; }
+      const theme = JSON.parse(readFileSync(file, 'utf8')) as {
+        identities?: { readonly passive?: { readonly op?: string } }[];
+        cards?: { readonly name?: string }[];
+      };
+      for (const ident of theme.identities ?? []) {
+        const op = ident.passive?.op;
+        if (typeof op === 'string' && op !== '') { ids.push(op); }
+      }
+      for (const card of theme.cards ?? []) {
+        const name = card.name;
+        if (typeof name === 'string' && name !== '') {
+          // ⚠️ 牌名按**同一 token 规则**分段（间隔号会被切开 ⇒ 整段匹配不上）。
+          for (const piece of tokensOf(name)) { out.add(piece); }
+        }
+      }
+    }
+  } catch {
+    // ⚠️ 主题包不可读 ⇒ 词表为空 ⇒ 真实主题场景会误判 ⇒ 由调用方显式报告（不静默）。
+    return out;
+  }
+  for (const op of ids) { out.add(op); }
+  return out;
+}
+
+/** 仓库根（读主题包用）。 */
+const ROOT = process.cwd();
+
 /** 文本层模板里出现的**固定词**（整段出现，不含数字）。改文案必须同步这张表——有意的评审点。 */
 const TEMPLATE_WORDS: readonly string[] = [
   // 题面与表头
@@ -1396,6 +1446,10 @@ const TEMPLATE_WORDS: readonly string[] = [
   '行棋', '掷骰前进', '问天', '掷指令骰', '结束手番', '过隘', '以试炼牌闯关', '入口待', 'B19', '出',
   '发动被动', '山议投座', '给座', '签印', '质疑座', '对座', '弃权', '自己申请复议', '资源',
   '复议票', '判定座', '通过', '不通过',
+  // ⚠️ **B57 补记**：`describeAction` 补上了 B18 的关隘/裂隙通道分支
+  //   （此前缺这两个类型 ⇒ `buildChoice` 遇到它们直接抛错 ⇒ 探针在 8 人局崩）。
+  //   ⇒ 新文案必须同步进这张表，否则泄漏守卫会判红。
+  '走试炼通道', '付费通过', '放置封路印', '直接通过',
   // 已知的身份被动 id（测试面出现的两个；新增被动会红，按提示补表即可）
   'transfer_resource', 'peek_deck',
   // 地形 kind：`TileKind` 是主题契约里的**闭合枚举**（engine/types/theme.ts:168）⇒ 可以逐字列全
@@ -1420,6 +1474,17 @@ interface Vocabulary {
 
 function vocabularyFor(state: State, seat: number): Vocabulary {
   const exact = new Set<string>(TEMPLATE_WORDS);
+  // ⚠️ B57：并入**主题派生**的数据词表（被动 op 全集 + 牌名分段）。
+  for (const w of themeDataWords()) { exact.add(w); }
+  // ⚠️ **B57（Task 15 Step 3）：牌名必须按**同一 token 规则**分段入表**。
+  //   真实主题的牌名带间隔号（如「御风·远」）⇒ `TOKEN_RUN` 会把它切成「御风」+「远」两段
+  //   ⇒ 只把整段名放进词表 ⇒ 分词后的 token **匹配不上** ⇒ 合规实现被误判为泄漏。
+  for (const c of state.players[seat]?.hand ?? []) {
+    for (const piece of tokensOf(c.name)) { exact.add(piece); }
+  }
+  for (const x of state.publicCards) {
+    for (const piece of tokensOf(x.name)) { exact.add(piece); }
+  }
   for (const p of state.players) {
     // 身份/阵营 id 全场公开（§4.1 明牌竞速）
     exact.add(p.identityId);
@@ -1665,6 +1730,31 @@ function visScenes(): VisScene[] {
   ];
 }
 
+test('可见性红线（B57 · Task 15 Step 3）：**真实主题**场景不误判（间隔号牌名 + 8 种被动 op）', () => {
+  // ⚠️ **背景**：词表原先只按 ASCII 测试主题校准 ⇒ 真实主题的
+  //   · 牌名带间隔号（「御风·远」⇒ 分词成两段 ⇒ 整段入表匹配不上）；
+  //   · 被动 op 有 8 种（词表只列 2 种 ⇒ 其余 6 种被误判为泄漏）；
+  //   ⇒ 合规实现被误判 ⇒ 本条把真实主题钉成**常驻断言**。
+  const theme = JSON.parse(readFileSync(resolve(ROOT, 'themes/xianxia2026/theme.json'), 'utf8')) as {
+    cards?: { readonly id: string; readonly name: string }[];
+    identities?: { readonly passive?: { readonly op?: string } }[];
+  };
+  // 前提自查：真实主题确实带间隔号牌名、且被动 op 超过 2 种（否则本条会假绿）
+  const dotted = (theme.cards ?? []).filter((c) => c.name.includes('·'));
+  assert.ok(dotted.length > 0, '前提：真实主题必须有含间隔号的牌名');
+  const ops = new Set((theme.identities ?? []).map((i) => i.passive?.op ?? ''));
+  assert.ok(ops.size > 2, `前提：真实主题的被动 op 应多于 2 种，实际 ${String(ops.size)}`);
+  // 词表派生后，这些牌名的**分段**与全部 op 都必须是合法 token
+  const vocab = vocabularyFor(mk(4, 7), 0);
+  for (const c of dotted) {
+    for (const piece of tokensOf(c.name)) {
+      assert.ok(vocab.exact.has(piece), `含间隔号牌名「${c.name}」的分段「${piece}」必须在词表内`);
+    }
+  }
+  for (const op of ops) {
+    assert.ok(op !== '' && vocab.exact.has(op), `被动 op「${op}」必须在词表内（派生自主题）`);
+  }
+});
 test('可见性红线（常驻·输出层）：文本化结果只允许出现词表内的 token（封闭世界）', () => {
   for (const scene of visScenes()) {
     // 对峙锁定牌先按**字段→归属座位**独立核一遍（不借 forbiddenEntries 的过滤逻辑，免得自证）

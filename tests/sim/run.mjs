@@ -302,7 +302,21 @@ function resolveDuelByAI(s) {
 function advanceWithDuel(s, mode, opts) {
   // ⚠️ B18：委托引擎层统一出口（对峙 + 关隘闭环都在里面）——
   //   没有关隘闭环时，AI 会在关隘格上反复行棋直到离开 ⇒ **免费穿过关隘**。
-  return advanceAuto(s, mode, opts);
+  //
+  // ⚠️ **B57 修（对峙面观测）**：对峙在**同一次 `advanceAuto` 内**立起并结算
+  //   （`engine/core/advance.ts`）⇒ 「对峙未决的局面」从外部**只存在一瞬、不可得**；
+  //   且选牌策略在引擎内部 ⇒ 调用方拿不到「启发式选了什么」。
+  //   ⇒ 引擎加了**只读观测回调** `onDuelPick`（不改 state / 不改 log / 不改行为）
+  //   ⇒ 这里把「选牌当刻」的局面与牌记下来。
+  //   ⚠️ 该决策点**没有候选**（对峙期 `candidatesOf` 整表清零 ⇒ G-f）
+  //      ⇒ 探针必须把它归入 `noLegalActions` 桶，**不参与** P1/P6 的对比。
+  const next = advanceAuto(s, mode, {
+    ...opts,
+    onDuelPick: (seat, cardId, stateAtPick) => {
+      record(stateAtPick, seat, 'duel_card:' + cardId);
+    },
+  });
+  return next;
 }
 
 /** 跑一局，返回该局的统计与异常。 */
