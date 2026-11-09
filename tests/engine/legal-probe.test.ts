@@ -1142,8 +1142,17 @@ test('行为变化 3（R-1 的后果）：待认证者灵枢不足时不再给�
   const appeal: Action = { type: 'CERTIFY_APPEAL', actor: 1, target: 1 };
   assert.equal(uiAllows(s, 1, appeal), false, '引擎 0 灵枢必拒 ⇒ UI 也不给点（新代码必须站 uiAllows 这边）');
   assert.match(uiBlockNotice(s, 1, appeal) ?? '', /2 灵枢/, '拒绝理由要点名成本来源，不能只说「不可申请」');
-  assert.deepEqual(certClickableActions(s, 1).map(actionKey), [],
-    '座 1 在面板上不得拿到任何按钮（旧代码会挂出一个点了就静默失败的复议按钮）');
+  // ⚠️ **B67 更新**：本条原断言「座 1 在面板上不得拿到**任何**按钮」——
+  //   但 G-d 接线后**互签**成了待认证者的另一个合法入口，且**互签不花钱**（是待认证者之间的签印）
+  //   ⇒ 灵枢不足**不该**连带禁掉互签 ⇒ 断言须改为「不得出现**要花钱**的复议按钮」。
+  //   ⚠️ 面板上若还有别的免费入口（如互签），本条**不该**断言「一颗按钮都没有」——
+  //   那会把「免费入口」也误判成缺陷。
+  const panel = certClickableActions(s, 1).map(actionKey);
+  assert.equal(panel.includes(actionKey(appeal)), false,
+    '座 1 在面板上不得拿到「申请复议」按钮（旧代码会挂出一个点了就静默失败的复议按钮）');
+  // ⚠️ 互签对象是**另一位待认证者**（本局面 `pending=[1,2]` ⇒ 座 1 与座 2 互签）
+  assert.equal(panel.filter((k) => k === 'cert:mutual:2').length, 1,
+    '座 1 与座 2 互签的按钮**应当**出现（互签不花钱 ⇒ 不受灵枢不足影响）');
 });
 
 // ---- ③ 拒绝不得沉默（R-2）----

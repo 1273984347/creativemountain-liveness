@@ -148,8 +148,9 @@ function councilCandidates(state: State, seat: number): Action[] {
  *   · 复议票 `CERTIFY_APPEAL_VOTE` 只发给非当事人（认证人与待认证者都被引擎拒）。
  * 签印/质疑/弃权共用引擎自己的 `hasUsedCertificationTurn` 判据（本轮机会三选一），
  * 不在这里重写那份集合判断。
- * ⚠️ 双人互验（§5.5）的 `certifyMutualSign` **没有对应的 Action 成员** ⇒ 无法枚举，
- *   待 Action 契约裁定（本文件不擅自新增动作类型）。
+ * ⚠️ **B67 更新**：双人互验（§5.5）的 `certifyMutualSign` **已有 Action 成员**
+ *   （`CERTIFY_MUTUAL_SIGN`，B67 补入）⇒ 本层发互签候选（待认证者给另一位待认证者），
+ *   条件与 UI 侧 `uiCandidates` / 面板侧 `certPanelActions` **同款**（本轮未用过机会）⇒ 三层集合相等。
  *
  * ⚠️ **待认证者本人不是「整段返回」**（发现 1，两条都是引擎真接受、粗筛曾漏发）：
  *   · `certifyAnswer` 只看 `pending(target)` ∧ `challenged(actor)` ∧ `actor !== target`，
@@ -164,9 +165,22 @@ function certificationCandidates(state: State, seat: number): Action[] {
   const c = state.certification;
   if (c.pending.length === 0) { return []; }
   const out: Action[] = [];
-  if (c.pending.includes(seat) && !c.appealed.includes(seat)) {
+  if (c.pending.includes(seat)) {
     // 待认证者本人：唯一属于他的入口是复议（本人申请，`target === actor`）。
-    out.push({ type: 'CERTIFY_APPEAL', actor: seat, target: seat });
+    // ⚠️ **复议与互签是两个独立入口** ⇒ 申请复议**不**占用互签（互签的占用记在 `signed`）。
+    if (!c.appealed.includes(seat)) {
+      out.push({ type: 'CERTIFY_APPEAL', actor: seat, target: seat });
+    }
+    // ⚠️ **B67：双人互验的互签**（§5.5）—— 待认证者给**另一位**待认证者签印。
+    //   ⚠️ **只发给「另一位待认证者」**（`target !== seat`）⇒ 互签语义天然自洽；
+    //   「对方是否还在待认证」由试跑（引擎 `certifyMutualSign`）便宜地滤掉 ⇒ 不在此手写镜像判据。
+    //   ⚠️ **本轮已用过机会的座位不发**（与签印 / 质疑 / 弃权同一层：`hasUsedCertificationTurn`）。
+    if (!hasUsedCertificationTurn(state, seat)) {
+      for (const other of c.pending) {
+        if (other === seat) { continue; }
+        out.push({ type: 'CERTIFY_MUTUAL_SIGN', actor: seat, target: other });
+      }
+    }
   }
   // 本轮机会三选一：认证人判据取引擎的 `isCertifier`（待认证者不是认证人 ⇒ 引擎必拒 ⇒ 不发，省试跑）。
   const certifierTurn = isCertifier(state, seat) && !hasUsedCertificationTurn(state, seat);

@@ -15,7 +15,7 @@ import type { State } from '../../engine/core/state.ts';
 import type { Action } from '../../engine/core/action.ts';
 import type { ThemePack } from '../../engine/types/theme.ts';
 import { el, button, section } from './dom.ts';
-import { appealThirdParties, certificationThreshold, signatureCount } from '../../engine/core/certification.ts';
+import { appealThirdParties, certificationThreshold, hasUsedCertificationTurn, signatureCount } from '../../engine/core/certification.ts';
 import { actionKey } from '../../engine/core/action-key.ts';
 import { uiAllows, uiBlockNotice } from '../legal-gate.ts';
 
@@ -28,6 +28,12 @@ export interface CertCallbacks {
   readonly onAppeal: (target: number) => void;
   /** 第三方复议投票（§5.3.2）：overturn=true 推翻原判 / false 维持原判。 */
   readonly onAppealVote: (target: number, overturn: boolean) => void;
+  /**
+   * 双人互验的互签（§5.5，B67）：**待认证者本人**给另一位待认证者签印。
+   *
+   * ⚠️ 与 `onSign` 语义不同：`onSign` 是**认证人**签**待认证者**；互签是**待认证者**签**待认证者**。
+   */
+  readonly onMutualSign: (target: number) => void;
 }
 
 /**
@@ -49,6 +55,16 @@ export function certPanelActions(state: State, seat: number): Action[] {
     out.push({ type: 'CERTIFY_ANSWER', actor: seat, target, passed: false });
   }
   out.push({ type: 'CERTIFY_APPEAL', actor: seat, target: seat });
+  // ⚠️ **B67：双人互验的互签**（§5.5）—— 待认证者给另一位待认证者签印。
+  //   ⚠️ **条件与引擎 `certificationCandidates` / UI `uiCandidates` 同款**：
+  //   「本轮未用过认证机会」（签印 / 质疑 / 弃权 / 互签 四者互斥）。
+  //   ⇒ 三层候选必须**同条件**，否则漂移守卫（面板可点性 == 引擎认证面）必红。
+  if (!hasUsedCertificationTurn(state, seat)) {
+    for (const other of c.pending) {
+      if (other === seat) { continue; }
+      out.push({ type: 'CERTIFY_MUTUAL_SIGN', actor: seat, target: other });
+    }
+  }
   for (const target of c.appealed) {
     out.push({ type: 'CERTIFY_APPEAL_VOTE', actor: seat, target, overturn: true });
     out.push({ type: 'CERTIFY_APPEAL_VOTE', actor: seat, target, overturn: false });
@@ -135,6 +151,17 @@ export function renderCertification(
       gated({ type: 'CERTIFY_SIGN', actor: seat, target }, '签印 座' + target, () => { cb.onSign(target); }),
       gated({ type: 'CERTIFY_CHALLENGE', actor: seat, target }, '质疑 座' + target, () => { showQuestionForm(target); }),
       gated({ type: 'CERTIFY_ABSTAIN', actor: seat, target }, '弃权', () => { cb.onAbstain(target); }),
+    ]);
+    if (row !== null) { body.push(row); rows += 1; }
+  }
+  // ---- 双人互验的互签（B67 · §5.5）：待认证者给**另一位**待认证者签印 ----
+  // ⚠️ 与上面的「认证人三面」**语义不同**（认证人签待认证者 vs 待认证者签待认证者）⇒ 单独一段。
+  //   互签者与被签者**都是待认证者** ⇒ 各自达标（双人时门槛降为 1）⇒ 不产生死锁。
+  for (const other of pending) {
+    if (other === seat) { continue; }
+    const row = rowOf([
+      gated({ type: 'CERTIFY_MUTUAL_SIGN', actor: seat, target: other },
+        '与座' + other + ' 互签（双方互证）', () => { cb.onMutualSign(other); }),
     ]);
     if (row !== null) { body.push(row); rows += 1; }
   }

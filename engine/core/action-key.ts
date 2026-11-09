@@ -27,6 +27,8 @@ export function actionKey(a: Action): string {
     case 'CERTIFY_APPEAL': return `cert:appeal:${a.target}`;
     case 'CERTIFY_APPEAL_VOTE': return `cert:appealvote:${a.target}:${a.overturn ? 'overturn' : 'uphold'}`;
     case 'CERTIFY_ANSWER': return `cert:answer:${a.target}:${a.passed ? 'pass' : 'fail'}`;
+    // ⚠️ B67：双人互验的互签（§5.5）—— 与 `cert:sign` **语义不同**（后者是认证人签待认证者）。
+    case 'CERTIFY_MUTUAL_SIGN': return `cert:mutual:${a.target}`;
   }
 }
 

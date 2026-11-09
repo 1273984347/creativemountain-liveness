@@ -140,6 +140,16 @@ export function uiBlockNotice(state: State, seat: number, action: Action): strin
         ? targetRefusal(state, seat, action.target, `「${card.name}」`)
         : action.target === undefined ? null : '该牌不需要选择目标。';
     }
+    case 'CERTIFY_MUTUAL_SIGN': {
+      // ⚠️ B67：双人互验的互签（§5.5）—— **待认证者本人**给另一位待认证者签印。
+      //   判据与引擎 `certifyMutualSign` 同源（双方都在 pending ∧ 非自己 ∧ 本轮未用过机会）。
+      if (me === undefined) { return '该座位不存在（人数档位与存档不一致）。'; }
+      if (!c.pending.includes(seat)) { return '互签要求你本人在待认证状态。'; }
+      if (!c.pending.includes(action.target)) { return '对方不在待认证状态（互签要求双方都在待认证）。'; }
+      if (action.target === seat) { return '不能与自己互签。'; }
+      if (c.signed.includes(seat)) { return '本轮已用过认证机会（互签 / 签印 / 质疑 / 弃权 三者互斥）。'; }
+      return null;
+    }
     case 'ABILITY': {
       const window = actionWindowRefusal(state, seat);
       if (window !== null) { return window; }
@@ -372,8 +382,19 @@ export function uiCandidates(state: State, seat: number): Action[] {
   // ---- 认证面 ----
   const c = state.certification;
   if (c.pending.length > 0) {
-    if (isPendingSeat(c, seat) && !c.appealed.includes(seat)) {
-      out.push({ type: 'CERTIFY_APPEAL', actor: seat, target: seat });
+    if (isPendingSeat(c, seat)) {
+      // ⚠️ **复议与互签是两个独立入口** ⇒ 申请复议**不**占用互签（互签的占用记在 `signed`）。
+      if (!c.appealed.includes(seat)) {
+        out.push({ type: 'CERTIFY_APPEAL', actor: seat, target: seat });
+      }
+      // ⚠️ **B67：双人互验的互签**（§5.5）—— 待认证者给**另一位**待认证者签印。
+      //   形状与引擎 `certificationCandidates` 同款（每位「另一位待认证者」一条）⇒ 两侧集合相等。
+      if (!usedCertTurn(c, seat)) {
+        for (const other of c.pending) {
+          if (other === seat) { continue; }
+          out.push({ type: 'CERTIFY_MUTUAL_SIGN', actor: seat, target: other });
+        }
+      }
     }
     const certifierTurn = isCertifierLike(state, seat) && !usedCertTurn(c, seat);
     const judged = c.judgments[seat] !== undefined;

@@ -499,8 +499,13 @@ export function enterPendingCertification(state: State, seat: number): CertifyRe
 }
 
 /**
- * 双人互验的互签（§5.5）：A 签 B 与 B 签 A 互为对方贡献 1 枚签印。
+ * 双人互验的互签（§5.5，B67 接线）：A 签 B 与 B 签 A 互为对方贡献 1 枚签印。
  * 门槛已降为 1，因此互签即可各自达标。
+ *
+ * ⚠️ **B67 的守卫收紧**（此前只有测试调用 ⇒ 守卫从未被真正检验过）：
+ *   · **双方都必须在 `pending` 里**（互签是**待认证者之间**的事 ⇒ 不是认证人签待认证者）；
+ *   · 不能自己签自己；
+ *   · **同轮只能互签一次**（与「每人每轮一次认证机会」同族 ⇒ 否则一个座位可给同伴刷多枚签印）。
  */
 export function certifyMutualSign(state: State, actor: number, target: number): CertifyResult {
   const c = state.certification;
@@ -508,6 +513,14 @@ export function certifyMutualSign(state: State, actor: number, target: number): 
     return fail(state, '互签要求双方都在待认证状态');
   }
   if (actor === target) { return fail(state, '不能与自己互签'); }
+  // ⚠️ **同轮只能互签一次**：复用已有的 `signed` 数组记录「本轮已用过认证机会」的座位。
+  //   ⚠️ **为什么复用而不新增字段**：规格 §6.2 的 State 契约**已冻结**（B1 起「不再变更」）⇒
+  //   新增 `mutualSigned` 会动契约 ⇒ 而 `signed` 正是「本轮已用掉认证机会」的既有载体
+  //   （`hasUsedCertificationTurn` 就查它）⇒ 互签者记进 `signed` **语义自洽**：
+  //   互签**就是**该座位本轮用掉的认证机会（与签印 / 质疑 / 弃权同一层）。
+  //   ⇒ 且互签者必是**待认证者**、认证人必**不是**待认证者 ⇒ 两类记录**不会互相污染**。
+  if (c.signed.includes(actor)) { return fail(state, '本轮已用过认证机会'); }
   const next = addSignature(state, target, 1);
-  return succeed(next, `互签：座位 ${actor} 为座位 ${target} 签印`);
+  const withUsed = { ...next, certification: { ...next.certification, signed: [...next.certification.signed, actor] } };
+  return succeed(withUsed, `互签：座位 ${actor} 为座位 ${target} 签印`);
 }

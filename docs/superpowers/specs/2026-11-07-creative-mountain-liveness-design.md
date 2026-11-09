@@ -447,6 +447,9 @@
 - **每人的实际门槛降为 1**（对方的签印即达标）——对应 §5.2 门槛公式的**前置分支（步骤 0）**：双人同时待认证时直接取 `base = 1`，**跳过 min、不走印记减半**（有印记的双人互验仍是 1，不因印记再变）。
 - **第三人的认证印不计入门槛判定**，仅作加速：第三人使用时可指定给任一方（不受「必须选边」的困扰，因为门槛已降为 1）。
 - **不产生死锁**：双方互签即各自达标，第三人签不签都不影响推进。
+  - ⚠️ **B67 补记（引擎层落地 · G-d 收口）**：本条**规格一直是对的** ⇒ 本批只补**实现**、规则零改动。此前 `certifyMutualSign` **只有引擎函数、没有动作成员** ⇒ 无法枚举、UI 无入口、模拟器不处理 ⇒ 机制在数字轨与模拟器**均不可达**（唯一调用方是测试）⇒ 且双人会因「两人都要等对方签」而**死锁**（正违反本条）。
+  - ⇒ **互签是「待认证者自己的认证动作」**（与签印 / 质疑 / 弃权同一层，但语义不同：`CERTIFY_SIGN` 是**认证人**签**待认证者**，互签是**待认证者**签**待认证者**）⇒ 新增动作成员 `CERTIFY_MUTUAL_SIGN {actor, target}`。
+  - ⚠️ **「每人每轮一次认证机会」对互签同样成立**：互签者记入 `signed`（复用既有载体，不动 §6.2 冻结的 State 契约）⇒ 同一轮不能既互签又签印/质疑/弃权。
 - **同时达标时**：两人**各得 1 个活人席**（B11 裁定：活人席数量不限），**不结束本局**；两人各自回到山道起点，可再次登顶再取席。
 - 戏剧性来源：「活人」问题升级为「你们互相证明对方是活的」——双方都必须在对方出的题上真的开口、真的答得出。
 
@@ -624,8 +627,15 @@ type Action =
   | { type: 'CERTIFY_ABSTAIN'; actor: number; target: number }
   | { type: 'CERTIFY_APPEAL'; actor: number; target: number }
   | { type: 'CERTIFY_APPEAL_VOTE'; actor: number; target: number; overturn: boolean }
-  | { type: 'CERTIFY_ANSWER'; actor: number; target: number; passed: boolean };
+  | { type: 'CERTIFY_ANSWER'; actor: number; target: number; passed: boolean }
+  | { type: 'CERTIFY_MUTUAL_SIGN'; actor: number; target: number };
 ```
+
+> ⚠️ **B67 定案（双人互验接线 · G-d 收口）**：新增 `CERTIFY_MUTUAL_SIGN` —— §5.5 的双人互验此前**只有引擎函数、没有动作成员**
+> ⇒ 无法枚举、UI 无入口、模拟器不处理 ⇒ 机制在数字轨与模拟器**均不可达**（唯一调用方是测试）。
+> ⇒ 现补入动作契约：**待认证者本人**给**另一位待认证者**签印（与 `CERTIFY_SIGN` 语义不同、不可复用 ——
+> 后者是**认证人**给**待认证者**签印）。⚠️ 本节与 `engine/core/action.ts` 必须逐字一致（成员集合 + 字段形状）
+> —— 由 `tests/engine/action-contract.test.ts` 的常驻断言守住（漂移即红）。
 
 **与代码同步的三处更正（B15/B18 裁定；本节此前为旧稿）**：
 

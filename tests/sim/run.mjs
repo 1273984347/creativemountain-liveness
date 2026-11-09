@@ -30,7 +30,7 @@ import { resolveGate } from '../../engine/core/gate.ts';
 import { computePositionSpread, POSITION_RMS_GATE_LIMIT, POSITION_SPREAD_GATE_LIMIT, TRIAL_PASS_RANGES, tCritical05 } from '../../engine/core/balance.ts';
 import { castVote, resolveCouncil } from '../../engine/core/council.ts';
 import {
-  certifySign, certifyChallenge, certifyAnswer, certifyAppeal, certifyAppealVote,
+  certifySign, certifyChallenge, certifyAnswer, certifyAppeal, certifyAppealVote, certifyMutualSign,
   resolveAppeals, isCertifier, hasUsedCertificationTurn,
 } from '../../engine/core/certification.ts';
 import { SCALES } from '../../engine/scales.ts';
@@ -212,6 +212,21 @@ function certificationTurn(s) {
         record(s, p.seat, actionKey({ type: 'CERTIFY_SIGN', actor: p.seat, target }));
         const sign = certifySign(s, p.seat, target);
         if (sign.ok) { s = sign.state; }
+      }
+    }
+    // ⚠️ **B67：双人互验的互签**（§5.5）—— 待认证者给**另一位**待认证者签印。
+    //   ⚠️ **为什么必须做**：此前双人互验**只有引擎函数、没有动作成员**（G-d）⇒ 数字轨与模拟器
+    //   **均不可达** ⇒ 双人局会因「两人都要等对方签」而死锁（规格 §5.5 明写「**不产生死锁**」）。
+    //   ⇒ 互签一旦双方都发生 ⇒ 各自达标（双人时门槛降为 1，见 §5.2 步骤 0）。
+    if (targets.length >= 2) {
+      for (const me of targets) {
+        if (hasUsedCertificationTurn(s, me)) { continue; }
+        const other = targets.find((x) => x !== me);
+        if (other === undefined) { continue; }
+        // ⚠️ B56：记录决策点（**动作前**的局面）
+        record(s, me, actionKey({ type: 'CERTIFY_MUTUAL_SIGN', actor: me, target: other }));
+        const ms = certifyMutualSign(s, me, other);
+        if (ms.ok) { s = ms.state; }
       }
     }
     // 待认证者申请复议（被判不通过时）

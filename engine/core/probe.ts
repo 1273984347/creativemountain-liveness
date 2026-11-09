@@ -12,7 +12,7 @@ import { resolveGate, resolveCompareGate } from './gate.ts';
 import { resolveBarrier } from './barrier.ts';
 import {
   certifyAbstain, certifyAnswer, certifyAppeal, certifyAppealVote,
-  certifyChallenge, certifySign,
+  certifyChallenge, certifyMutualSign, certifySign,
 } from './certification.ts';
 import type { Action } from './action.ts';
 import type { RuleMode } from '../scales.ts';
@@ -148,5 +148,7 @@ export function probeAction(state: State, action: Action): ProbeResult {
     case 'CERTIFY_APPEAL': { const r = certifyAppeal(s, action.actor, action.target); return byFlag(r.ok, r.note, r.state, s); }
     case 'CERTIFY_ANSWER': { const r = certifyAnswer(s, action.actor, action.target, action.passed); return byFlag(r.ok, r.note, r.state, s); }
     case 'CERTIFY_APPEAL_VOTE': { const r = certifyAppealVote(s, action.actor, action.target, action.overturn); return byFlag(r.ok, r.note, r.state, s); }
+    // ⚠️ B67：双人互验的互签（§5.5）—— 待认证者给另一位待认证者签印。
+    case 'CERTIFY_MUTUAL_SIGN': { const r = certifyMutualSign(s, action.actor, action.target); return byFlag(r.ok, r.note, r.state, s); }
   }
 }

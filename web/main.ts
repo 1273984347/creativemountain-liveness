@@ -6,7 +6,7 @@ import { createInitialState, type State } from '../engine/core/state.ts';
 import { currentPlayer, isRoundEnd } from '../engine/core/round.ts';
 import { performAction, advanceTurn, needsCouncilVote, needsCertificationAction } from '../engine/core/turn-runner.ts';
 import { castVote, resolveCouncil } from '../engine/core/council.ts';
-import { certifySign, certifyChallenge, certifyAbstain, certifyAnswer, certifyAppeal, certifyAppealVote } from '../engine/core/certification.ts';
+import { certifySign, certifyChallenge, certifyAbstain, certifyAnswer, certifyAppeal, certifyAppealVote, certifyMutualSign } from '../engine/core/certification.ts';
 import { stateToJson, stateFromJson } from '../engine/core/serialize.ts';
 import { installTheme } from '../engine/core/setup.ts';
 import type { Action } from '../engine/core/action.ts';
@@ -650,6 +650,20 @@ function render(): void {
       onAbstain: (target) => { const r = certifyAbstain(s, ui.seat, target); ui.state = r.ok ? r.state : s; render(); },
       onJudge: (target, passed) => { const r = certifyAnswer(s, ui.seat, target, passed); ui.state = r.ok ? r.state : s; render(); },
       onAppeal: (target) => { const r = certifyAppeal(s, ui.seat, target); ui.state = r.ok ? r.state : s; render(); },
+      onMutualSign: (target) => {
+        // ⚠️ **B67：双人互验的互签**（§5.5）—— 待认证者本人给另一位待认证者签印。
+        //   与 `onSign`（认证人签待认证者）**语义不同** ⇒ 走独立入口 `certifyMutualSign`。
+        //   拒绝要说人话（R-2）⇒ 引擎拒时把 `r.note` 交出去，不静默丢弃。
+        const r = certifyMutualSign(s, ui.seat, target);
+        if (!r.ok) {
+          ui.notice = '互签未落账：' + (r.note ?? '引擎未给出原因');
+          render();
+          return;
+        }
+        ui.notice = r.note ?? ('已与座' + String(target) + ' 互签');
+        ui.state = r.state;
+        render();
+      },
       onAppealVote: (target, overturn) => {
         // 门禁:复议票 —— 与同级的 onChallenge 一个口径：引擎拒绝时必须把 r.note 交出去，
         //   不得静默丢弃 r.ok/r.note（评审发现 B）。按钮本身已由 uiAllows 过闸，

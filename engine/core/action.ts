@@ -19,7 +19,8 @@ export type ActionType =
   | 'CERTIFY_ABSTAIN'
   | 'CERTIFY_APPEAL'
   | 'CERTIFY_APPEAL_VOTE'
-  | 'CERTIFY_ANSWER';
+  | 'CERTIFY_ANSWER'
+  | 'CERTIFY_MUTUAL_SIGN';
 
 /**
  * 声明式动作。`type` 为判别式字段。
@@ -57,4 +58,14 @@ export type Action =
   | { readonly type: 'CERTIFY_ABSTAIN'; readonly actor: number; readonly target: number }
   | { readonly type: 'CERTIFY_APPEAL'; readonly actor: number; readonly target: number }
   | { readonly type: 'CERTIFY_APPEAL_VOTE'; readonly actor: number; readonly target: number; readonly overturn: boolean }
-  | { readonly type: 'CERTIFY_ANSWER'; readonly actor: number; readonly target: number; readonly passed: boolean };
+  | { readonly type: 'CERTIFY_ANSWER'; readonly actor: number; readonly target: number; readonly passed: boolean }
+  /**
+   * 双人互验的互签（规格 §5.5，B67 定案）。
+   *
+   * ⚠️ **与 `CERTIFY_SIGN` 语义不同、不可复用**：
+   *   · `CERTIFY_SIGN` 是**认证人**（存活、非待认证者）给**待认证者**签印（引擎 `isCertifier` 守卫）；
+   *   · `CERTIFY_MUTUAL_SIGN` 是**待认证者本人**给**另一位待认证者**签印（引擎 `certifyMutualSign` 守卫：
+   *     双方都必须在 `pending` 里、且不能自己签自己）。
+   * ⇒ 双方互签即各自达标（双人时门槛降为 1，见 §5.2 步骤 0 前置分支）⇒ **不产生死锁**。
+   */
+  | { readonly type: 'CERTIFY_MUTUAL_SIGN'; readonly actor: number; readonly target: number };
