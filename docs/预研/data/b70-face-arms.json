@@ -1,0 +1,150 @@
+{
+ "generatedAt": "2026-11-10T16:07:43.602Z",
+ "proxy": "http://127.0.0.1:8711",
+ "results": [
+  {
+   "face": "play",
+   "gamesPerArm": 400,
+   "seeds": 100,
+   "players": 4,
+   "themes": [
+    "xianxia2026",
+    "scifi-ai",
+    "hybrid",
+    "urban-psych"
+   ],
+   "baselineSeat0Wins": 124,
+   "modelSeat0Wins": 74,
+   "baselineWinRate": 0.31,
+   "modelWinRate": 0.185,
+   "improved": false,
+   "b": 105,
+   "c": 55,
+   "both": 19,
+   "neither": 221,
+   "changed": 160,
+   "paired": 400,
+   "chi2": 15.00625,
+   "significant": true,
+   "noDiscordant": false,
+   "changedRate": 0.4,
+   "verdict": "该面模型劣于启发式，保持贪心",
+   "modelCalls": 2487,
+   "latencyMs": {
+    "p50": 57,
+    "p95": 71
+   },
+   "fallbackGames": {
+    "baseline": 28,
+    "model": 33
+   },
+   "avgRounds": {
+    "baseline": 13,
+    "model": 13
+   },
+   "anomalies": 0,
+   "injection": {
+    "calls": 2487,
+    "fallbacks": 0,
+    "emptyCandidates": 3637
+   },
+   "minutes": 2.36
+  },
+  {
+   "face": "council",
+   "gamesPerArm": 400,
+   "seeds": 100,
+   "players": 4,
+   "themes": [
+    "xianxia2026",
+    "scifi-ai",
+    "hybrid",
+    "urban-psych"
+   ],
+   "baselineSeat0Wins": 124,
+   "modelSeat0Wins": 121,
+   "baselineWinRate": 0.31,
+   "modelWinRate": 0.3025,
+   "improved": false,
+   "b": 74,
+   "c": 71,
+   "both": 50,
+   "neither": 205,
+   "changed": 145,
+   "paired": 400,
+   "chi2": 0.027586,
+   "significant": false,
+   "noDiscordant": false,
+   "changedRate": 0.3625,
+   "verdict": "未检出改善",
+   "modelCalls": 400,
+   "latencyMs": {
+    "p50": 60,
+    "p95": 69
+   },
+   "fallbackGames": {
+    "baseline": 28,
+    "model": 15
+   },
+   "avgRounds": {
+    "baseline": 13,
+    "model": 13
+   },
+   "anomalies": 0,
+   "injection": {
+    "calls": 400,
+    "fallbacks": 0,
+    "emptyCandidates": 4859
+   },
+   "minutes": 0.41
+  },
+  {
+   "face": "certify",
+   "gamesPerArm": 400,
+   "seeds": 100,
+   "players": 4,
+   "themes": [
+    "xianxia2026",
+    "scifi-ai",
+    "hybrid",
+    "urban-psych"
+   ],
+   "baselineSeat0Wins": 124,
+   "modelSeat0Wins": 131,
+   "baselineWinRate": 0.31,
+   "modelWinRate": 0.3275,
+   "improved": true,
+   "b": 25,
+   "c": 32,
+   "both": 99,
+   "neither": 244,
+   "changed": 57,
+   "paired": 400,
+   "chi2": 0.631579,
+   "significant": false,
+   "noDiscordant": false,
+   "changedRate": 0.1425,
+   "verdict": "未检出改善",
+   "modelCalls": 553,
+   "latencyMs": {
+    "p50": 61,
+    "p95": 68
+   },
+   "fallbackGames": {
+    "baseline": 28,
+    "model": 59
+   },
+   "avgRounds": {
+    "baseline": 13,
+    "model": 13
+   },
+   "anomalies": 0,
+   "injection": {
+    "calls": 553,
+    "fallbacks": 0,
+    "emptyCandidates": 4876
+   },
+   "minutes": 0.57
+  }
+ ]
+}

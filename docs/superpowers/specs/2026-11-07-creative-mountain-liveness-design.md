@@ -963,6 +963,14 @@ getLegalActions(state: State, playerId: number): Action[]
 
 V1 的新手门槛由 **§6.6 脚本化教学演示** 承担（成本低一个数量级，且不引入新规则）。
 
+**决策层单一真相源与策略注入（B70 落地）**：
+
+- `tests/sim/policy.mjs` 是 sim 决策层的**单一真相源**（9 个决策函数 + 决策点记录器；依赖单向 `run.mjs → policy.mjs → engine/*`，禁止反向 import）。
+- `playOne` 的第 5 参 `FacePolicy`（`{face: 'play'|'council'|'certify', seat, decide, timeoutMs?}`）**默认关闭**（缺省 undefined ⇒ 行为与无注入逐字相同，门 ⑨ 报告逐字等价）；sim CLI **不新增开关** —— 注入只被评估器使用。
+- 任何注入失败（返回 null / 非法 key / 抛错 / 超时）都**回落启发式**并计数，对局不得卡死；站点面 ≡ 策略面是问出口的前置条件。
+- 三面模型评估器 `tools/laya-probe/game-arms.mjs`（`npm run eval:faces`）**不进门禁**，无服务即 SKIP（退出码 0）；统计层 `tools/laya-probe/face-stats.mjs`（同 seed 配对 McNemar、连续性校正、临界 3.841、判定措辞固定三种）有常驻单测。
+- **实测结论（2026-11-11 本地，每面 400 局/臂，4 主题 × 100 seed × 4 人局，模型座 0）**：play 面 χ²=15.00625 > 3.841 ⇒ **劣于启发式**（31.0%→18.5%）；council 面 χ²=0.027586、certify 面 χ²=0.631579 ⇒ **未检出改善** ⇒ **对峙选牌与三面决策全部保持贪心**（读数与判定原文见 `docs/预研/2026-11-09-b70-face-evaluation.md`）。
+
 ---
 
 ## 8. 规模自适应
