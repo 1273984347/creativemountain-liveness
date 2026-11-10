@@ -24,7 +24,8 @@
     "sidecar:laya": "node tools/laya-sidecar/up.mjs --weights D:/<local-libs>/laya-multilingual/model.safetensors",
     "probe:laya": "node tools/laya-probe/run.mjs",
     "probe:laya:browser": "node tools/laya-probe/browser.mjs",
-    "probe:laya:skip": "node tools/laya-probe/skip.mjs"
+    "probe:laya:skip": "node tools/laya-probe/skip.mjs",
+    "eval:faces": "node tools/laya-probe/game-arms.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
