@@ -282,7 +282,8 @@ test('反向配平：face=certify/council 时别的站点按「问不到候选�
     assert.ok(arrivals > calls, `${face} 面必须真的到达过**别的**站点（否则 emptyCandidates 是摆设）`);
 
     // 改道臂：每一次 `calls` 都要兑现成该座位的一条本面动作记录 ⇒ 差值就是
-    // 「计进 calls 却既没 record 也没 fallback」的静默丢弃数（修复前 certify 面实测每局 1 次）。
+    // 「计进 calls 却既没 record 也没 fallback」的静默丢弃数
+    // （本轮取数实测：修复前 certify 面每 40 局漏 2 次、面越大越稀；修复后恒 0）。
     for (const seed of INJECT_SEEDS[face]) {
       const rows: DecisionRecord[] = [];
       setRecorder(rows);
