@@ -140,8 +140,15 @@ async function certificationTurn(s, policy, counters, hit) {
       //   本面**只**改道「签印 / 质疑 / 弃权」三选；下面的判定（`certifyAnswer`）、互签
       //   （`certifyMutualSign`）、复议申请与复议票**一律走原逻辑**。
       //   ⚠️ 改道命中时不再消耗原来那次 `s.rng.next() < 0.2` ⇒ 模型臂随机流自首个分歧起分叉。
+      //   ⚠️ B70 评审 I-1（修复轮 1）：候选**按当前 target 收窄**后才问策略器 —— 本层的记录
+      //     （`actionKey(picked)`）与下面的执行都用同一个 `target` ⇒ 模型/记录/执行三者一致。
+      //     （`pending.length >= 2` 时 `legal.ts` 会对**每个**待认证目标各发三条候选，不收窄就会
+      //     出现「模型想质疑 5、引擎实际质疑 3、JSONL 记下没发生过的事」。council 面本来就忠实
+      //     使用 `picked.target` ⇒ 收窄后两面口径统一。）
+      //   ⚠️ 候选都经 `getLegalActions` ⇒ `probeAction` 背书，故保持「先 record 后判 ok」的形状，
+      //     不需要为 `r.ok === false` 加分支。
       if (hit(p.seat)) {
-        const picked = await askPolicy(policy, s, p.seat, counters);
+        const picked = await askPolicy(policy, s, p.seat, counters, (a) => a.target === target);
         if (picked !== null) {
           record(s, p.seat, actionKey(picked));
           const r = picked.type === 'CERTIFY_CHALLENGE' ? certifyChallenge(s, p.seat, target)
@@ -337,12 +344,29 @@ const FACE_TYPES = {
  * 问一次策略；任何失败都回落（返回 null），并计数。
  * ⚠️ 绝不抛错到调用方：注入失败不得让对局卡死或丢样本。
  *
- * 计数口径：`emptyCandidates` 在「该面一条候选都没有」时递增且**不计入 calls**
+ * 计数口径：`emptyCandidates` 在「该面**问不到**一条候选」时递增且**不计入 calls**
  * （没问出口，自然没有回落）；`calls` 只统计真的问了策略器的次数。
+ *
+ * @param {FacePolicy} policy 注入描述。
+ * @param {object} state **动作执行前**的局面。
+ * @param {number} seat 决策座位。
+ * @param {object} counters 本局计数（就地递增）。
+ * @param {(a: object) => boolean} [filter] **可选**的候选收窄（默认全部放行）。
+ *   调用点的循环维度比「该座位的全部候选」更细时（certify 面：外层还按待认证 target 逐个人转），
+ *   必须用它把候选钉到**当前这一次执行的对象**上 —— 否则策略器选的 target 与循环实际执行的
+ *   target 可以不是同一个人，记录（`actionKey(picked)`）与引擎真正发生的动作就会不一致（B70 评审 I-1）。
+ *   收窄后为空 ⇒ 与「该面无候选」同一口径：`emptyCandidates += 1` 后回落，**不新增计数种类**。
  */
-async function askPolicy(policy, state, seat, counters) {
+async function askPolicy(policy, state, seat, counters, filter) {
+  const keep = filter ?? (() => true);
   const types = FACE_TYPES[policy.face];
-  const candidates = getLegalActions(state, seat).filter((a) => types.includes(a.type));
+  // ⚠️ 运行时守卫（B70 Task 3 修复轮 1 · 连带修正）：`policy` 由 `.mjs` 调用方直接构造
+  //   （Task 5 的 game-arms.mjs），TS 的字面量联合类型**保护不到它** ⇒ face 拼错时
+  //   `FACE_TYPES[policy.face]` 是 undefined，`types.includes` 会在 try **之外**抛 TypeError
+  //   ⇒ 炸掉整局。按「问不出去」的既有口径处理：记 emptyCandidates 后返回 null 走回落，
+  //   不抛错、不新增第四种计数、不记 fallbacks（Task 5 的读数口径依赖这三条）。
+  if (types === undefined) { counters.emptyCandidates += 1; return null; }
+  const candidates = getLegalActions(state, seat).filter((a) => types.includes(a.type) && keep(a));
   if (candidates.length === 0) { counters.emptyCandidates += 1; return null; }
   counters.calls += 1;
   // ⚠️ 超时定时器必须在 finally 里清掉（B70 Task 3 控制器裁定）：
@@ -557,7 +581,8 @@ async function playOne(theme, players, seed, gateReserve, policy) {
     anomalies,
     // ⚠️ B70 Task 3：注入计数（缺省 policy ⇒ 恒 `{ calls: 0, fallbacks: 0, emptyCandidates: 0 }`）。
     //   `calls` = 真的问了策略器的次数；`fallbacks` = 其中回落的次数；
-    //   `emptyCandidates` = 该面一条候选都没有（没问出口 ⇒ 不计入 calls/fallbacks）的次数。
+    //   `emptyCandidates` = 该面**问不到**候选（本来就没有 / certify 面按当前 target 收窄后为空
+    //   / 未登记的 face ⇒ 没问出口 ⇒ 不计入 calls/fallbacks）的次数。
     injection: counters,
   };
 }

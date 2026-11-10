@@ -38,7 +38,8 @@ export type Recorder = DecisionRecord[] | null;
  *
  * · `calls` —— **真的问了策略器**的次数（候选非空才问得出口）；
  * · `fallbacks` —— 其中**回落原启发式**的次数（null / 非字符串 / 非法 key / 不在候选集 / 抛错 / 超时）；
- * · `emptyCandidates` —— 该面**一条候选都没有**的次数（没问出口 ⇒ 既不计 calls 也不计 fallbacks）。
+ * · `emptyCandidates` —— 该面**问不到候选**的次数（本来就没有 / certify 面按当前 target
+ *   收窄后为空 / 未登记的 face ⇒ 没问出口 ⇒ 既不计 calls 也不计 fallbacks）。
  */
 export interface InjectionCounters {
   /** ⚠️ 字段可变：`askPolicy` 就地递增（故**不**声明为 readonly —— 声明成只读就是谎报）。 */
@@ -58,7 +59,12 @@ export interface InjectionCounters {
  *   **契约不受影响**：`askPolicy` 对非字符串一律按回落处理，异常/超时同样回落并计数。
  */
 export interface FacePolicy {
-  /** 注入哪个决策面。 */
+  /**
+   * 注入哪个决策面。
+   * ⚠️ 运行时守卫（B70 Task 3 修复轮 1）：`.mjs` 调用方（Task 5 的评估器）构造的对象拿不到
+   *   这层字面量联合类型的保护 ⇒ 拼错 / 未登记的 face **不抛错**，按「该面问不到候选」处理
+   *   （`emptyCandidates += 1` 后回落原启发式），既不新增计数种类也不影响缺省路径。
+   */
   readonly face: 'play' | 'council' | 'certify';
   /** 只接管这一个座位（其余座位恒走原启发式）。 */
   readonly seat: number;
