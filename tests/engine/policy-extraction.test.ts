@@ -40,16 +40,17 @@ test('两个死函数已删除（B18 委托引擎后零调用方）', () => {
   }
 });
 
-test('缺省等价：省略后两参 与 显式传 undefined 结果逐字相同 + 两条硬契约（async / 4 参）', async () => {
+test('缺省等价：省略后两参 与 显式传 undefined 结果逐字相同 + 两条硬契约（async / 5 参）', async () => {
   const { playOne } = await import('../../tests/sim/policy.mjs');
   const theme = JSON.parse(readFileSync(resolve('themes/xianxia2026/theme.json'), 'utf8'));
   // ⚠️ B70 修 round 1（评审 I-2）：下面的 deepEqual 在 JS 语义下恒成立（缺省与显式 undefined 同值），
   //   它守的是「第 5 参不改变行为」，但**不能**独立失败。交付物的两条硬契约必须另有断言：
   //   ① playOne 是 async ⇒ 返回 Promise（Task 3 注入模型策略要 await 它）；
-  //   ② 签名保持 4 参（第 5 参 `policy` 到 Task 3 才加 ⇒ 现在多传必须被忽略）。
+  //   ② 签名保持 5 参（B70 Task 3 已加第 5 参 `policy` ⇒ **不得写默认值、不得改成 rest**：
+  //      `Function.length` 遇到第一个带默认值/rest 的形参就停止计数，写了本条守护当场失效）。
   const pending = playOne(theme, 4, 4242);
   assert.ok(pending instanceof Promise, 'playOne 必须返回 Promise（async 契约）');
-  assert.equal(playOne.length, 4, 'playOne 形参数必须恰为 4：theme, players, seed, gateReserve');
+  assert.equal(playOne.length, 5, 'playOne 形参数必须恰为 5：theme, players, seed, gateReserve, policy');
   const a = await pending;
   const b = await playOne(theme, 4, 4242, undefined, undefined);
   assert.deepEqual({ winners: a.winners, rounds: a.rounds, reason: a.reason },

@@ -15,11 +15,12 @@ import { advanceAuto } from '../../engine/core/advance.ts';
 import { castVote, resolveCouncil } from '../../engine/core/council.ts';
 import {
   certifySign, certifyChallenge, certifyAnswer, certifyAppeal, certifyAppealVote, certifyMutualSign,
-  resolveAppeals, isCertifier, hasUsedCertificationTurn,
+  certifyAbstain, resolveAppeals, isCertifier, hasUsedCertificationTurn,
 } from '../../engine/core/certification.ts';
 
+import { getLegalActions } from '../../engine/core/legal.ts';
 import { stateToJson } from '../../engine/core/serialize.ts';
-import { actionKey } from '../../engine/core/action-key.ts';
+import { actionKey, actionFromKey, withActor } from '../../engine/core/action-key.ts';
 
 let recorder = null;
 let recordSeq = 0;
@@ -104,9 +105,20 @@ function pickTarget(s, seat) {
 }
 
 export /** 山议：每人投给位置最高的对手，然后结算。 */
-function councilTurn(s) {
+async function councilTurn(s, policy, counters, hit) {
   const alive = s.players.filter((p) => p.alive);
   for (const p of alive) {
+    // ⚠️ B70 Task 3：**council 面注入**（默认关闭 ⇒ hit 恒 false，下面整段是空操作）。
+    //   改道命中即投完 `continue`（该循环原本同层就有 `continue` ⇒ 语义等价于「这个人投完了」）；
+    //   任何失败（null / 非法 key / 抛错 / 超时 / 引擎拒绝）⇒ 落回下面的 `pickTarget` 启发式。
+    if (hit(p.seat)) {
+      const picked = await askPolicy(policy, s, p.seat, counters);
+      if (picked !== null && picked.type === 'VOTE') {
+        record(s, p.seat, actionKey(picked));
+        const v = castVote(s, p.seat, picked.target);
+        if (v.ok) { s = v.state; continue; }
+      }
+    }
     const t = pickTarget(s, p.seat);
     if (t === undefined) { continue; }
     // ⚠️ B56：记录决策点（**动作前**的局面）
@@ -119,11 +131,25 @@ function councilTurn(s) {
 }
 
 export /** 认证一轮：认证人签印/质疑 → 判定 → 待认证者复议 → 第三方投票 → 复议裁定。 */
-function certificationTurn(s) {
+async function certificationTurn(s, policy, counters, hit) {
   const targets = [...s.certification.pending];
   for (const target of targets) {
     for (const p of s.players) {
       if (!isCertifier(s, p.seat) || hasUsedCertificationTurn(s, p.seat)) { continue; }
+      // ⚠️ B70 Task 3：**certify 面注入**（默认关闭 ⇒ hit 恒 false）。
+      //   本面**只**改道「签印 / 质疑 / 弃权」三选；下面的判定（`certifyAnswer`）、互签
+      //   （`certifyMutualSign`）、复议申请与复议票**一律走原逻辑**。
+      //   ⚠️ 改道命中时不再消耗原来那次 `s.rng.next() < 0.2` ⇒ 模型臂随机流自首个分歧起分叉。
+      if (hit(p.seat)) {
+        const picked = await askPolicy(policy, s, p.seat, counters);
+        if (picked !== null) {
+          record(s, p.seat, actionKey(picked));
+          const r = picked.type === 'CERTIFY_CHALLENGE' ? certifyChallenge(s, p.seat, target)
+            : picked.type === 'CERTIFY_ABSTAIN' ? certifyAbstain(s, p.seat, target)
+            : certifySign(s, p.seat, target);
+          if (r.ok) { s = r.state; continue; }
+        }
+      }
       const challenger = p.resource >= 2 && s.rng.next() < 0.2;
       if (challenger) {
         // ⚠️ B56：记录决策点（**动作前**的局面）
@@ -300,8 +326,53 @@ async function advanceWithDuel(s, mode, opts) {
   return next;
 }
 
+/** 面 → 该面的动作类型集合（certify 面只含签印/质疑/弃权，判定与复议仍走原逻辑）。 */
+const FACE_TYPES = {
+  play: ['PLAY_CARD'],
+  council: ['VOTE'],
+  certify: ['CERTIFY_SIGN', 'CERTIFY_CHALLENGE', 'CERTIFY_ABSTAIN'],
+};
+
+/**
+ * 问一次策略；任何失败都回落（返回 null），并计数。
+ * ⚠️ 绝不抛错到调用方：注入失败不得让对局卡死或丢样本。
+ *
+ * 计数口径：`emptyCandidates` 在「该面一条候选都没有」时递增且**不计入 calls**
+ * （没问出口，自然没有回落）；`calls` 只统计真的问了策略器的次数。
+ */
+async function askPolicy(policy, state, seat, counters) {
+  const types = FACE_TYPES[policy.face];
+  const candidates = getLegalActions(state, seat).filter((a) => types.includes(a.type));
+  if (candidates.length === 0) { counters.emptyCandidates += 1; return null; }
+  counters.calls += 1;
+  // ⚠️ 超时定时器必须在 finally 里清掉（B70 Task 3 控制器裁定）：
+  //   评估器要跑上千次调用，`Promise.race` 里那个 30s timer 若不清，
+  //   每次调用都留一个挂起句柄 ⇒ 进程退出前滞留、timer 堆积。
+  //   这是零行为变更的纯资源修正：超时仍然 ⇒ reject ⇒ 走同一个 catch ⇒ `fallbacks += 1`。
+  let timer = null;
+  try {
+    const key = await Promise.race([
+      policy.decide(state, seat, candidates),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => { reject(new Error('policy-timeout')); }, policy.timeoutMs ?? 30000);
+      }),
+    ]);
+    if (typeof key !== 'string') { counters.fallbacks += 1; return null; }
+    const action = withActor(actionFromKey(key), seat);
+    const match = candidates.find((c) => actionKey(c) === actionKey(action));
+    if (match === undefined) { counters.fallbacks += 1; return null; }
+    return match;
+  } catch { counters.fallbacks += 1; return null; } finally {
+    if (timer !== null) { clearTimeout(timer); }
+  }
+}
+
 export /** 跑一局，返回该局的统计与异常。 */
-async function playOne(theme, players, seed, gateReserve) {
+async function playOne(theme, players, seed, gateReserve, policy) {
+  // ⚠️ B70 Task 3：**默认关闭**的策略注入。`policy === undefined`（sim CLI 的全部调用）
+  //   ⇒ `hit` 恒 false ⇒ 三处改道分支一次都不进 ⇒ 与注入前逐字同行为（门 ⑨ diff 为空是硬约束）。
+  const counters = { calls: 0, fallbacks: 0, emptyCandidates: 0 };
+  const hit = (seat) => policy !== undefined && policy !== null && policy.seat === seat;
   // ⚠️ B56：记录本局上下文（主题 / 人数 / **本局 seed**）⇒ 决策点函数内无需改签名。
   recordCtx = { themeId: theme.meta.id, players, seed };
   const base = createInitialState({ players, seed, deckSize: theme.counts.deckTotal });
@@ -317,8 +388,8 @@ async function playOne(theme, players, seed, gateReserve) {
   let firstPendingPos = -1;
   while (!s.outcome.finished) {
     if (steps++ > maxSteps) { anomalies.push('死循环：超过 ' + maxSteps + ' 步'); break; }
-    if (needsCouncilVote(s)) { s = councilTurn(s); }
-    if (needsCertificationAction(s)) { s = certificationTurn(s); }
+    if (needsCouncilVote(s)) { s = await councilTurn(s, policy, counters, hit); }
+    if (needsCertificationAction(s)) { s = await certificationTurn(s, policy, counters, hit); }
     const seat = currentPlayer(s);
     if (seat < 0) { break; }
     const player = s.players[seat];
@@ -326,6 +397,20 @@ async function playOne(theme, players, seed, gateReserve) {
       // 待认证锁定：不能位移（规格 §5.1），但仍可打非位移牌
       // ⚠️ B65：用 `pickPlayableCard` 选牌（按效果强度 + 平价优先），不再「取第一张付得起的」。
       const lockedHand = player.hand.filter((c) => c.type !== 'motion');
+      // ⚠️ B70 Task 3：**play 面注入（待认证锁定分支）**。该分支原本就以 `advanceWithDuel` +
+      //   `continue` 收尾 ⇒ 改道分支自带推进（这里 `continue` 合法且必要）。
+      //   ⚠️ 现状读数：§7 粗筛在 `pendingCert` 时**不发行动面候选**（`actionWindowOpen` 为假）
+      //   ⇒ 锁定分支的 `askPolicy` 目前只会 `emptyCandidates += 1` 后回落，不产生 `calls`。
+      if (hit(seat)) {
+        const picked = await askPolicy(policy, s, seat, counters);
+        if (picked !== null && picked.type === 'PLAY_CARD') {
+          const payload = picked.target === undefined ? { cardId: picked.cardId } : { cardId: picked.cardId, target: picked.target };
+          record(s, seat, actionKey(picked));
+          s = performAction(s, seat, 'act', payload);
+          s = await advanceWithDuel(s, 'standard', { gateReserve });
+          continue;
+        }
+      }
       const card = pickPlayableCard(lockedHand, player.resource);
       if (card !== undefined) {
         const target = pickTarget(s, seat);
@@ -338,42 +423,58 @@ async function playOne(theme, players, seed, gateReserve) {
       s = await advanceWithDuel(s, 'standard', { gateReserve });
       continue;
     }
-    const roll = s.rng.next();
-    // B12：AI 偶尔发动身份被动（发动成功则**占用本回合行动**，不再行棋/问天/出牌）
-    if (roll < 0.16) {
-      const used = maybeUseAbility(s, seat);
-      if (used !== null) {
-        abilityOps.push(used.op);
-        s = used.state;
-        s = advanceTurn(s, 'standard');
-        continue;
+    // ⚠️ B70 Task 3：**play 面注入（普通分支）**。
+    //   ⚠️ 这里**不得用 `continue`** —— 尾部还有 `advanceWithDuel` 与 `firstPendingSeat` 统计，
+    //   跳过会让模型臂少记「首个登顶者」的传导数据 ⇒ 改用 `injected` 标志位把**原决策块**包起来。
+    //   原块（含 `s.rng.next()` 的 0.16/0.75/0.85 三段）整块留在 `if (!injected)` 里 ⇒ 回落路径一行未改。
+    let injected = false;
+    if (hit(seat)) {
+      const picked = await askPolicy(policy, s, seat, counters);
+      if (picked !== null && picked.type === 'PLAY_CARD') {
+        const payload = picked.target === undefined ? { cardId: picked.cardId } : { cardId: picked.cardId, target: picked.target };
+        record(s, seat, actionKey(picked));
+        s = performAction(s, seat, 'act', payload);
+        injected = true;
       }
     }
-    if (roll < 0.75) {
-      // ⚠️ B56：记录决策点（骰面在**动作执行后**才有 ⇒ 先占位，事后回填）
-      const recMove = record(s, seat, actionKey({ type: 'MOVE', actor: seat, steps: 0 }));
-      s = performAction(s, seat, 'move');
-      // ⚠️ 纯 JS（`.mjs` 里不得用 TS 的非空断言 `!` —— E22）
-      const rowMove = recorder === null ? undefined : recorder[recMove];
-      if (rowMove !== undefined) { rowMove.face = s.lastDice ?? null; }
-    } else if (roll < 0.85) {
-      const recAsk = record(s, seat, actionKey({ type: 'ROLL_WHEEL', actor: seat }));
-      s = performAction(s, seat, 'ask');
-      const rowAsk = recorder === null ? undefined : recorder[recAsk];
-      if (rowAsk !== undefined) { rowAsk.face = s.lastDice ?? null; }
-    } else {
-      // ⚠️ B65：用 `pickPlayableCard` 选牌（按效果强度 + 平价优先），不再「取第一张付得起的」。
-      const card = player === undefined ? undefined : pickPlayableCard(player.hand, player.resource);
-      if (card === undefined) {
-        record(s, seat, actionKey({ type: 'MOVE', actor: seat, steps: 0 }));
+    if (!injected) {
+      const roll = s.rng.next();
+      // B12：AI 偶尔发动身份被动（发动成功则**占用本回合行动**，不再行棋/问天/出牌）
+      if (roll < 0.16) {
+        const used = maybeUseAbility(s, seat);
+        if (used !== null) {
+          abilityOps.push(used.op);
+          s = used.state;
+          s = advanceTurn(s, 'standard');
+          continue;
+        }
+      }
+      if (roll < 0.75) {
+        // ⚠️ B56：记录决策点（骰面在**动作执行后**才有 ⇒ 先占位，事后回填）
+        const recMove = record(s, seat, actionKey({ type: 'MOVE', actor: seat, steps: 0 }));
         s = performAction(s, seat, 'move');
+        // ⚠️ 纯 JS（`.mjs` 里不得用 TS 的非空断言 `!` —— E22）
+        const rowMove = recorder === null ? undefined : recorder[recMove];
+        if (rowMove !== undefined) { rowMove.face = s.lastDice ?? null; }
+      } else if (roll < 0.85) {
+        const recAsk = record(s, seat, actionKey({ type: 'ROLL_WHEEL', actor: seat }));
+        s = performAction(s, seat, 'ask');
+        const rowAsk = recorder === null ? undefined : recorder[recAsk];
+        if (rowAsk !== undefined) { rowAsk.face = s.lastDice ?? null; }
       } else {
-        const target = pickTarget(s, seat);
-        // ⚠️ B56：记录决策点（需目标的牌带 target）
-        record(s, seat, actionKey(target === undefined
-          ? { type: 'PLAY_CARD', actor: seat, cardId: card.id }
-          : { type: 'PLAY_CARD', actor: seat, cardId: card.id, target }));
-        s = performAction(s, seat, 'act', target === undefined ? { cardId: card.id } : { cardId: card.id, target });
+        // ⚠️ B65：用 `pickPlayableCard` 选牌（按效果强度 + 平价优先），不再「取第一张付得起的」。
+        const card = player === undefined ? undefined : pickPlayableCard(player.hand, player.resource);
+        if (card === undefined) {
+          record(s, seat, actionKey({ type: 'MOVE', actor: seat, steps: 0 }));
+          s = performAction(s, seat, 'move');
+        } else {
+          const target = pickTarget(s, seat);
+          // ⚠️ B56：记录决策点（需目标的牌带 target）
+          record(s, seat, actionKey(target === undefined
+            ? { type: 'PLAY_CARD', actor: seat, cardId: card.id }
+            : { type: 'PLAY_CARD', actor: seat, cardId: card.id, target }));
+          s = performAction(s, seat, 'act', target === undefined ? { cardId: card.id } : { cardId: card.id, target });
+        }
       }
     }
     s = await advanceWithDuel(s, 'standard', { gateReserve });
@@ -454,5 +555,9 @@ async function playOne(theme, players, seed, gateReserve) {
       return { kind, value: p.counters[counterName] ?? 0, count: identity?.goal.count ?? 1 };
     }).filter((x) => x !== null),
     anomalies,
+    // ⚠️ B70 Task 3：注入计数（缺省 policy ⇒ 恒 `{ calls: 0, fallbacks: 0, emptyCandidates: 0 }`）。
+    //   `calls` = 真的问了策略器的次数；`fallbacks` = 其中回落的次数；
+    //   `emptyCandidates` = 该面一条候选都没有（没问出口 ⇒ 不计入 calls/fallbacks）的次数。
+    injection: counters,
   };
 }

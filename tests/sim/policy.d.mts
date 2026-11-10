@@ -5,6 +5,7 @@
 // ⚠️ 依赖方向同 policy.mjs：本文件**不得**引用 run.mjs。
 
 import type { State } from '../../engine/core/state.ts';
+import type { Action } from '../../engine/core/action.ts';
 import type { RuleMode } from '../../engine/scales.ts';
 import type { Card, ThemePack } from '../../engine/types/theme.ts';
 
@@ -31,6 +32,45 @@ export interface DecisionRecord {
 
 /** 记录器（null = 关闭）。 */
 export type Recorder = DecisionRecord[] | null;
+
+/**
+ * 注入计数的字段形状（`playOne` 返回值的 `injection`）。
+ *
+ * · `calls` —— **真的问了策略器**的次数（候选非空才问得出口）；
+ * · `fallbacks` —— 其中**回落原启发式**的次数（null / 非字符串 / 非法 key / 不在候选集 / 抛错 / 超时）；
+ * · `emptyCandidates` —— 该面**一条候选都没有**的次数（没问出口 ⇒ 既不计 calls 也不计 fallbacks）。
+ */
+export interface InjectionCounters {
+  /** ⚠️ 字段可变：`askPolicy` 就地递增（故**不**声明为 readonly —— 声明成只读就是谎报）。 */
+  calls: number;
+  fallbacks: number;
+  emptyCandidates: number;
+}
+
+/**
+ * B70 Task 3：**单个决策面**的策略注入（默认关闭 —— `playOne` 不传即完全不走这条路）。
+ *
+ * ⚠️ 一次只注入**一个面 + 一个座位**（`face` ∧ `seat` 同时命中才问）⇒ 读数可归因，
+ *   也避免「三面全交给模型 + 每步一次推理」把一局拉到跑不完。
+ * ⚠️ `decide` 的返回类型这里写 `Promise<unknown>` 而不是 `Promise<string | null>`：
+ *   超时用例要交一个**永不 resolve** 的 `new Promise(() => {})`（TS 推成 `Promise<unknown>`），
+ *   收窄到 `string | null` 会让那条常驻用例在门 ① 直接编译不过。
+ *   **契约不受影响**：`askPolicy` 对非字符串一律按回落处理，异常/超时同样回落并计数。
+ */
+export interface FacePolicy {
+  /** 注入哪个决策面。 */
+  readonly face: 'play' | 'council' | 'certify';
+  /** 只接管这一个座位（其余座位恒走原启发式）。 */
+  readonly seat: number;
+  /**
+   * 策略器：拿到**动作执行前**的局面、决策座位、该面的合法候选，返回一个 `actionKey` 或 null。
+   * 只允许读公开信息；禁止集字段（他人手牌 id / 牌堆顺序 / `duel.pickA` / `duel.pickB`）
+   * 由 Task 5 的题面层负责剥离，本层不做序列化。
+   */
+  readonly decide: (state: State, seat: number, candidates: readonly Action[]) => Promise<unknown>;
+  /** 超时（毫秒），缺省 30000。声明得这么短只为让超时用例不必真等 30 秒。 */
+  readonly timeoutMs?: number;
+}
 
 /** `advanceWithDuel` 的透传选项（与 `advanceAuto` 的第三参同形）。 */
 export interface AdvanceOpts {
@@ -60,6 +100,8 @@ export interface SimGameResult {
   readonly rounds: number;
   readonly winners: readonly number[];
   readonly anomalies: readonly string[];
+  /** B70 Task 3 的注入计数（缺省 policy ⇒ 三个 0）。 */
+  readonly injection: InjectionCounters;
   readonly [metric: string]: unknown;
 }
 
@@ -85,11 +127,29 @@ export declare function checkState(s: State, label: string): string[];
  */
 export declare function pickTarget(s: State, seat: number): number | undefined;
 
-/** 山议：每人投给位置最高的对手，然后结算。 */
-export declare function councilTurn(s: State): State;
+/**
+ * 山议：每人投给位置最高的对手，然后结算。
+ * B70 Task 3 起可注入 council 面。后三参**必传**（`playOne` 恒传；缺省 policy 时 `hit` 恒 false
+ * ⇒ 行为与注入前逐字相同）⇒ 这里不写成可选，免得 TS 侧允许出「运行必崩」的调用。
+ */
+export declare function councilTurn(
+  s: State,
+  policy: FacePolicy | undefined,
+  counters: InjectionCounters,
+  hit: (seat: number) => boolean
+): Promise<State>;
 
-/** 认证一轮：签印/质疑 → 判定 → 待认证者复议 → 第三方投票 → 复议裁定。 */
-export declare function certificationTurn(s: State): State;
+/**
+ * 认证一轮：签印/质疑 → 判定 → 待认证者复议 → 第三方投票 → 复议裁定。
+ * B70 Task 3 起可注入 certify 面（只改道「签印/质疑/弃权」三选，判定与复议恒走原逻辑）；
+ * 后三参同 `councilTurn`，**必传**。
+ */
+export declare function certificationTurn(
+  s: State,
+  policy: FacePolicy | undefined,
+  counters: InjectionCounters,
+  hit: (seat: number) => boolean
+): Promise<State>;
 
 /** 从手牌里挑一张**付得起**且优先级最高的牌；无可打牌 ⇒ `undefined`。 */
 export declare function pickPlayableCard(hand: readonly Card[], resource: number): Card | undefined;
@@ -103,14 +163,19 @@ export declare function advanceWithDuel(s: State, mode: RuleMode, opts?: Advance
 /**
  * 跑一局，返回该局的统计与异常。
  *
- * ⚠️ `async` 是为 B70 Task 3 的**可注入策略**铺路（模型调用要 await）；
- *   Task 1 的实现**仍是 4 参签名**，多余实参按 JS 语义被忽略 ⇒ 故第 5 参起以
- *   rest 形声明为「可传、当前无效」，使缺省等价测试（显式传 undefined）在 TS 侧同样成立。
+ * ⚠️ `async` 是为 B70 Task 3 的**可注入策略**铺路（模型调用要 await）。
+ * ⚠️ **形参数是硬契约**：`tests/engine/policy-extraction.test.ts` 断言 `playOne.length === 5`
+ *   ⇒ 实现里第 5 参**不得写默认值**、也不得改成 rest（`Function.length` 遇到第一个带默认值
+ *   或 rest 的形参就停止计数，写了等于那条 arity 守护当场失效）。
+ *   TS 侧仍以可选参数声明（缺省即「不注入」），运行时缺省值是 `undefined` ⇒ `hit` 恒 false
+ *   ⇒ 三处改道分支一次都不进 ⇒ 与注入前**逐字同行为**（门 ⑨ 报告 diff 为空是硬约束）。
+ * ⚠️ 模型臂（注入命中）的 rng 流自**首个分歧**起与基线分叉：改道命中时原决策块被跳过，
+ *   那一次的 `s.rng.next()` 不再消耗。这是策略注入的固有效应，不是 bug。
  */
 export declare function playOne(
   theme: ThemePack,
   players: number,
   seed: number,
   gateReserve?: number,
-  ...reservedForTask3Policy: readonly unknown[]
+  policy?: FacePolicy
 ): Promise<SimGameResult>;
