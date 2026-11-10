@@ -111,8 +111,10 @@ async function councilTurn(s, policy, counters, hit) {
     // ⚠️ B70 Task 3：**council 面注入**（默认关闭 ⇒ hit 恒 false，下面整段是空操作）。
     //   改道命中即投完 `continue`（该循环原本同层就有 `continue` ⇒ 语义等价于「这个人投完了」）；
     //   任何失败（null / 非法 key / 抛错 / 超时 / 引擎拒绝）⇒ 落回下面的 `pickTarget` 启发式。
+    //   ⚠️ B70 评审 N-1（修复轮 2）：本站点声明为 'council' ⇒ `policy.face` 不是 council
+    //     时在**问出口之前**就短路（计 emptyCandidates 后回落），跨面候选不再到达这里。
     if (hit(p.seat)) {
-      const picked = await askPolicy(policy, s, p.seat, counters);
+      const picked = await askPolicy(policy, s, p.seat, counters, 'council');
       if (picked !== null && picked.type === 'VOTE') {
         record(s, p.seat, actionKey(picked));
         const v = castVote(s, p.seat, picked.target);
@@ -140,15 +142,20 @@ async function certificationTurn(s, policy, counters, hit) {
       //   本面**只**改道「签印 / 质疑 / 弃权」三选；下面的判定（`certifyAnswer`）、互签
       //   （`certifyMutualSign`）、复议申请与复议票**一律走原逻辑**。
       //   ⚠️ 改道命中时不再消耗原来那次 `s.rng.next() < 0.2` ⇒ 模型臂随机流自首个分歧起分叉。
-      //   ⚠️ B70 评审 I-1（修复轮 1）：候选**按当前 target 收窄**后才问策略器 —— 本层的记录
-      //     （`actionKey(picked)`）与下面的执行都用同一个 `target` ⇒ 模型/记录/执行三者一致。
-      //     （`pending.length >= 2` 时 `legal.ts` 会对**每个**待认证目标各发三条候选，不收窄就会
-      //     出现「模型想质疑 5、引擎实际质疑 3、JSONL 记下没发生过的事」。council 面本来就忠实
-      //     使用 `picked.target` ⇒ 收窄后两面口径统一。）
+      //   ⚠️ B70 评审 I-1（修复轮 1）+ N-1（修复轮 2）：候选**按当前 target 收窄**，且本站点
+      //     声明为 certify 面（`policy.face !== 'certify'` ⇒ 在问出口**之前**就短路回落）。
+      //     两条一起才让「模型看到的 / JSONL 记的 / 引擎做的」是同一个 target 的同一个动作：
+      //     · 不收窄 ⇒ `pending.length >= 2` 时 `legal.ts` 会对**每个**待认证目标各发三条候选，
+      //       于是「模型想质疑 5、循环此刻 target=3 ⇒ 引擎质疑 3、JSONL 记下没发生过的事」；
+      //     · 不绑面 ⇒ `face: 'play'` 的策略器会在这里拿到该座位的 `PLAY_CARD` 候选（认证人往往
+      //       同时是行动窗口开着的手番玩家），下面的三目 `else` 执行的是 `certifySign`，
+      //       记录的却是 `play:<cardId>-><target>` ⇒ 引擎替该座位签了印、JSONL 记了一张
+      //       从未打出的牌（N-1 的幻影记录）。
+      //     （council 面本来就忠实使用 `picked.target` ⇒ 两面口径统一。）
       //   ⚠️ 候选都经 `getLegalActions` ⇒ `probeAction` 背书，故保持「先 record 后判 ok」的形状，
       //     不需要为 `r.ok === false` 加分支。
       if (hit(p.seat)) {
-        const picked = await askPolicy(policy, s, p.seat, counters, (a) => a.target === target);
+        const picked = await askPolicy(policy, s, p.seat, counters, 'certify', (a) => a.target === target);
         if (picked !== null) {
           record(s, p.seat, actionKey(picked));
           const r = picked.type === 'CERTIFY_CHALLENGE' ? certifyChallenge(s, p.seat, target)
@@ -344,28 +351,44 @@ const FACE_TYPES = {
  * 问一次策略；任何失败都回落（返回 null），并计数。
  * ⚠️ 绝不抛错到调用方：注入失败不得让对局卡死或丢样本。
  *
- * 计数口径：`emptyCandidates` 在「该面**问不到**一条候选」时递增且**不计入 calls**
- * （没问出口，自然没有回落）；`calls` 只统计真的问了策略器的次数。
+ * 计数口径（**只有这三种**，不得新增第四种）：
+ * · `calls` —— **该面被问出口**的次数（站点面 ≡ 策略面 ∧ 拿到候选才算，即简报的语义）；
+ * · `fallbacks` —— 其中问了但回落的次数；
+ * · `emptyCandidates` —— 本站点**问不到候选**的次数（面未登记 / 站点面与策略面不符 /
+ *   该面在该局面没有候选 / certify 面按当前 target 收窄后为空）⇒ 没问出口 ⇒ 既不计 calls 也不计 fallbacks。
+ * ⇒ 不变式：**每个到达注入点的时刻恰好计一次**（`calls + emptyCandidates == 到达次数`），
+ *   既不静默丢弃（否则 Task 5 用 `fallbacks / calls` 读回落率时分母失真）也不重复计数。
  *
  * @param {FacePolicy} policy 注入描述。
  * @param {object} state **动作执行前**的局面。
  * @param {number} seat 决策座位。
  * @param {object} counters 本局计数（就地递增）。
+ * @param {string} stationFace **本站点属于哪个面**（'play' | 'council' | 'certify'）。
+ *   ⚠️ B70 评审 N-1（修复轮 2）：站点面 ≠ `policy.face` ⇒ **在问出口之前**短路回落。
+ *   「此刻该做认证动作还是该出牌」是由**控制流**决定的，局面本身决定不了：`getLegalActions`
+ *   把四族候选混在一张表里返回，而认证循环里那个认证人**往往同时是行动窗口开着的手番玩家**
+ *   ⇒ 拿 `types` 过滤挡不住「在 certify 站点拿到 PLAY_CARD 候选」（反之亦然）。
+ *   只补 `picked.type` 的类型判据更不行：那会把跨面问出口留在 `calls` 里（既没改道也没回落），
+ *   且记录/执行仍会分家 ⇒ 故把「站点 ≡ 面」变成**问出口的前置条件**。
  * @param {(a: object) => boolean} [filter] **可选**的候选收窄（默认全部放行）。
  *   调用点的循环维度比「该座位的全部候选」更细时（certify 面：外层还按待认证 target 逐个人转），
  *   必须用它把候选钉到**当前这一次执行的对象**上 —— 否则策略器选的 target 与循环实际执行的
  *   target 可以不是同一个人，记录（`actionKey(picked)`）与引擎真正发生的动作就会不一致（B70 评审 I-1）。
  *   收窄后为空 ⇒ 与「该面无候选」同一口径：`emptyCandidates += 1` 后回落，**不新增计数种类**。
  */
-async function askPolicy(policy, state, seat, counters, filter) {
-  const keep = filter ?? (() => true);
+async function askPolicy(policy, state, seat, counters, stationFace, filter) {
   const types = FACE_TYPES[policy.face];
-  // ⚠️ 运行时守卫（B70 Task 3 修复轮 1 · 连带修正）：`policy` 由 `.mjs` 调用方直接构造
-  //   （Task 5 的 game-arms.mjs），TS 的字面量联合类型**保护不到它** ⇒ face 拼错时
-  //   `FACE_TYPES[policy.face]` 是 undefined，`types.includes` 会在 try **之外**抛 TypeError
-  //   ⇒ 炸掉整局。按「问不出去」的既有口径处理：记 emptyCandidates 后返回 null 走回落，
-  //   不抛错、不新增第四种计数、不记 fallbacks（Task 5 的读数口径依赖这三条）。
-  if (types === undefined) { counters.emptyCandidates += 1; return null; }
+  // ⚠️ 运行时守卫（B70 Task 3 修复轮 1 · 连带修正 + 修复轮 2 的 N-2）：`policy` 由 `.mjs`
+  //   调用方直接构造（Task 5 的 game-arms.mjs），TS 的字面量联合类型**保护不到它**。
+  //   face 拼成 Object.prototype 的成员名（'toString' / 'constructor' / '__proto__' /
+  //   'hasOwnProperty'）时 `FACE_TYPES[policy.face]` 取到的是**原型链上的值**而非 undefined
+  //   ⇒ 上一轮的 `types === undefined` 挡不住它，`types.includes` 照样在 try **之外**抛
+  //   TypeError 炸掉整局。按「拿到了这一面的类型表」判，一次覆盖 undefined 与原型链两种漏网。
+  //   处理口径不变：记 emptyCandidates 后返回 null 走回落，不抛错、不新增计数种类、不记 fallbacks。
+  if (!Array.isArray(types)) { counters.emptyCandidates += 1; return null; }
+  const keep = filter ?? (() => true);
+  // ⚠️ 站点 ≡ 面 是**问出口的前置条件**（B70 评审 N-1，见上面 stationFace 的说明）。
+  if (stationFace !== policy.face) { counters.emptyCandidates += 1; return null; }
   const candidates = getLegalActions(state, seat).filter((a) => types.includes(a.type) && keep(a));
   if (candidates.length === 0) { counters.emptyCandidates += 1; return null; }
   counters.calls += 1;
@@ -395,6 +418,8 @@ export /** 跑一局，返回该局的统计与异常。 */
 async function playOne(theme, players, seed, gateReserve, policy) {
   // ⚠️ B70 Task 3：**默认关闭**的策略注入。`policy === undefined`（sim CLI 的全部调用）
   //   ⇒ `hit` 恒 false ⇒ 三处改道分支一次都不进 ⇒ 与注入前逐字同行为（门 ⑨ diff 为空是硬约束）。
+  //   ⚠️ `hit` 只认**座位**（简报形状）；「本站点属于哪个面」由每个注入站点各自声明给
+  //   `askPolicy`（B70 评审 N-1）⇒ 跨面问出口在问出口之前就被短路，不会到达 `decide`。
   const counters = { calls: 0, fallbacks: 0, emptyCandidates: 0 };
   const hit = (seat) => policy !== undefined && policy !== null && policy.seat === seat;
   // ⚠️ B56：记录本局上下文（主题 / 人数 / **本局 seed**）⇒ 决策点函数内无需改签名。
@@ -426,7 +451,7 @@ async function playOne(theme, players, seed, gateReserve, policy) {
       //   ⚠️ 现状读数：§7 粗筛在 `pendingCert` 时**不发行动面候选**（`actionWindowOpen` 为假）
       //   ⇒ 锁定分支的 `askPolicy` 目前只会 `emptyCandidates += 1` 后回落，不产生 `calls`。
       if (hit(seat)) {
-        const picked = await askPolicy(policy, s, seat, counters);
+        const picked = await askPolicy(policy, s, seat, counters, 'play');
         if (picked !== null && picked.type === 'PLAY_CARD') {
           const payload = picked.target === undefined ? { cardId: picked.cardId } : { cardId: picked.cardId, target: picked.target };
           record(s, seat, actionKey(picked));
@@ -453,7 +478,7 @@ async function playOne(theme, players, seed, gateReserve, policy) {
     //   原块（含 `s.rng.next()` 的 0.16/0.75/0.85 三段）整块留在 `if (!injected)` 里 ⇒ 回落路径一行未改。
     let injected = false;
     if (hit(seat)) {
-      const picked = await askPolicy(policy, s, seat, counters);
+      const picked = await askPolicy(policy, s, seat, counters, 'play');
       if (picked !== null && picked.type === 'PLAY_CARD') {
         const payload = picked.target === undefined ? { cardId: picked.cardId } : { cardId: picked.cardId, target: picked.target };
         record(s, seat, actionKey(picked));
@@ -580,9 +605,11 @@ async function playOne(theme, players, seed, gateReserve, policy) {
     }).filter((x) => x !== null),
     anomalies,
     // ⚠️ B70 Task 3：注入计数（缺省 policy ⇒ 恒 `{ calls: 0, fallbacks: 0, emptyCandidates: 0 }`）。
-    //   `calls` = 真的问了策略器的次数；`fallbacks` = 其中回落的次数；
-    //   `emptyCandidates` = 该面**问不到**候选（本来就没有 / certify 面按当前 target 收窄后为空
-    //   / 未登记的 face ⇒ 没问出口 ⇒ 不计入 calls/fallbacks）的次数。
+    //   `calls` = **该面**被问出口的次数（站点面 ≡ 策略面 ∧ 拿到候选才算 ⇒ 简报语义）；
+    //   `fallbacks` = 其中回落的次数；
+    //   `emptyCandidates` = 到达注入点但**问不到**候选的次数（面未登记 / 站点面 ≠ 策略面 /
+    //   该面在本局面没有候选 / certify 面按当前 target 收窄后为空 ⇒ 没问出口 ⇒ 不计 calls/fallbacks）。
+    //   不变式：`calls + emptyCandidates` == 该局到达本站点的时刻数（每个到达恰好计一次）。
     injection: counters,
   };
 }

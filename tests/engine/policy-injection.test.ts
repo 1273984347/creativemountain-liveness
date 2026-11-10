@@ -187,3 +187,140 @@ test('policy.face 未登记 ⇒ 不崩局：按「问不到候选」回落，且
   const d = await playOne(theme(), 4, 4242);
   assert.deepEqual(outcome(r), outcome(d), '未登记 face 的对局必须与缺省路径同结局');
 });
+
+// ⚠️ 以上 10 条是修复轮 1 的形状。复审在**新改的那几行**里照出 N-1（`hit` 只认座位不认面 ⇒
+//   跨面问出口）与 N-2（`=== undefined` 挡不住 Object.prototype 成员名），下面 3 条是它们的常驻守卫。
+
+/** 记录行里 `state` 字段（`stateToJson` 的信封）本批断言要读的两处。 */
+type RowState = {
+  players: { seat: number; pendingCert: boolean }[];
+  certification: { pending: number[]; signed: number[]; challenged: number[]; abstained: number[] };
+};
+const rowState = (text: string): RowState => (JSON.parse(text) as { state: RowState }).state;
+/**
+ * 「这一行是在**认证循环**里写下的」——该座位当时是本轮还没用掉机会的认证人
+ * （`certificationTurn` 的循环头判据 `isCertifier ∧ !hasUsedCertificationTurn` 的同款）。
+ * 认证人往往**同时**是行动窗口开着的手番玩家 ⇒ 修复前 `face:'play'` 的策略器正是从这里问出口。
+ */
+const inCertifyCycle = (st: RowState, seat: number): boolean => {
+  const c = st.certification;
+  if (c.pending.length === 0 || c.pending.includes(seat)) { return false; }
+  return !(c.signed.includes(seat) || c.challenged.includes(seat) || c.abstained.includes(seat));
+};
+const CERTIFY_ROW_RE = /^cert:(sign|challenge|abstain):/;
+
+// 本轮取数脚本逐个点名的种子：修复前**每个 seed 各出 1 条**幻影记录（`play:` 写进 JSONL、
+// 引擎做的却是 `certifySign`，且该座位那一轮少一条 `cert:` 行）。
+const PHANTOM_SEEDS = [4249, 4264, 4265, 4276];
+
+test('站点 ≡ 面：face=play 不在认证循环里问出口 ⇒ 无幻影签印、无幻影记录（评审 N-1）', async () => {
+  for (const seed of PHANTOM_SEEDS) {
+    const rows: DecisionRecord[] = [];
+    const chosen: string[] = [];
+    setRecorder(rows);
+    let r: SimGameResult;
+    try {
+      r = await playOne(theme(), 4, seed, undefined, {
+        face: 'play', seat: 0,
+        decide: async (_s, _seat, c) => {
+          const first = c[0];
+          assert.ok(first !== undefined, '候选非空才问得出口');
+          const k = actionKey(first);
+          chosen.push(k);
+          return k;
+        },
+      });
+    } finally { setRecorder(null); }
+    assert.ok(r.injection.calls > 0, `seed ${String(seed)}：play 面必须真的被问到`);
+    assert.equal(r.injection.fallbacks, 0, '交回的是合法 key ⇒ 一次都不许回落');
+    assert.equal(chosen.length, r.injection.calls);
+
+    // ① 幻影记录归零：不得有任何 `play:` 行写在认证循环里（那里被记下的牌从未被打出）。
+    const phantom = rows
+      .filter((x) => x.heuristic.startsWith('play:') && inCertifyCycle(rowState(x.state), x.seat))
+      .map((x) => `seq=${String(x.seq)} seat=${String(x.seat)} ${x.heuristic}`);
+    assert.deepEqual(phantom, [], `seed ${String(seed)}：不得出现跨面幻影记录`);
+
+    // ② 幻影签印归零：改道交回的每个 key 都按序成为该座位的记录，且该座位在认证循环里
+    //    **仍然**逐轮记账（幻影的成因正是「用 certifySign 执行 + 记 play 的 key」⇒ 该轮的
+    //    `cert:` 行被替换掉；归零后该座位的认证记录必须回来）。
+    assert.ok(rows.some((x) => x.seat === 0 && CERTIFY_ROW_RE.test(x.heuristic)),
+      `seed ${String(seed)}：seat 0 必须仍有自己的认证记录（不是靠少记账来消除幻影）`);
+    let cursor = 0;
+    for (const row of rows) {
+      if (row.seat !== 0) { continue; }
+      if (cursor < chosen.length && row.heuristic === chosen[cursor]) { cursor += 1; }
+    }
+    assert.equal(cursor, chosen.length, '交回的 key 必须逐条按序进记录');
+  }
+});
+
+test('反向配平：face=certify/council 时别的站点按「问不到候选」计数，不静默丢弃（评审 N-1 的分母）', async () => {
+  const PREFIX: Record<'certify' | 'council', string[]> = {
+    certify: ['cert:sign:', 'cert:challenge:', 'cert:abstain:'],
+    council: ['vote:'],
+  };
+  // 4463/4710/4827 是本轮取数脚本点名的「certify 面在别的站点被问出口」的种子
+  // （修复前每次问出口被 `picked.type` 判据丢弃 ⇒ 计进 calls 却既不 record 也不 fallback）。
+  const INJECT_SEEDS: Record<'certify' | 'council', number[]> = { certify: [4463, 4710, 4827], council: [4249, 4463] };
+  for (const face of ['certify', 'council'] as const) {
+    // 恒回落臂：`calls + emptyCandidates` == 到达注入点的时刻数（用未登记 face 当测量仪，
+    // 两臂都 100% 回落 ⇒ 轨迹逐字相同 ⇒ 它的 emptyCandidates 就是到达数）。
+    let calls = 0; let arrivals = 0;
+    for (const seed of [4242, 1074, 4249]) {
+      const a = await playOne(theme(), 4, seed, undefined, { face, seat: 0, decide: async () => null });
+      const m = await playOne(theme(), 4, seed, undefined, {
+        face: '未登记' as FacePolicy['face'], seat: 0, decide: async () => null,
+      });
+      assert.equal(m.injection.calls, 0, '未登记 face 不得问出口');
+      assert.equal(a.injection.fallbacks, a.injection.calls);
+      assert.equal(a.injection.calls + a.injection.emptyCandidates, m.injection.emptyCandidates,
+        `seed ${String(seed)}：${face} 面必须「每个到达恰好计一次」`);
+      calls += a.injection.calls;
+      arrivals += m.injection.emptyCandidates;
+    }
+    assert.ok(arrivals > calls, `${face} 面必须真的到达过**别的**站点（否则 emptyCandidates 是摆设）`);
+
+    // 改道臂：每一次 `calls` 都要兑现成该座位的一条本面动作记录 ⇒ 差值就是
+    // 「计进 calls 却既没 record 也没 fallback」的静默丢弃数（修复前 certify 面实测每局 1 次）。
+    for (const seed of INJECT_SEEDS[face]) {
+      const rows: DecisionRecord[] = [];
+      setRecorder(rows);
+      let r: SimGameResult;
+      try {
+        r = await playOne(theme(), 4, seed, undefined, {
+          face, seat: 0,
+          decide: async (_s, _seat, c) => {
+            const first = c[0];
+            assert.ok(first !== undefined, '候选非空才问得出口');
+            return actionKey(first);
+          },
+        });
+      } finally { setRecorder(null); }
+      assert.equal(r.injection.fallbacks, 0, '合法 key 不许回落');
+      const honored = rows.filter((x) => x.seat === 0
+        && PREFIX[face].some((p) => x.heuristic.startsWith(p))).length;
+      assert.equal(honored, r.injection.calls,
+        `seed ${String(seed)} · ${face} 面：每次问出口都要兑现成该座位的本面动作`
+        + `（calls=${String(r.injection.calls)} 兑现=${String(honored)} ⇒ 静默丢弃 ${String(r.injection.calls - honored)} 次）`);
+    }
+  }
+});
+
+test('face 取 Object.prototype 成员名 ⇒ 不崩局：守卫不得只判 === undefined（评审 N-2）', async () => {
+  // `FACE_TYPES['toString']` 取到的是**原型链上的函数**而非 undefined ⇒ 上一轮的
+  // `types === undefined` 挡不住它 ⇒ `types.includes` 在 try **之外**抛 TypeError
+  // ⇒ 整局没样本（Task 5 的一批一起没）。对照用：'Play' 是**没登记**的拼错 face（恒 undefined）。
+  const d = await playOne(theme(), 4, 4242);
+  for (const face of ['toString', 'constructor', '__proto__', 'hasOwnProperty', 'Play']) {
+    const r = await playOne(theme(), 4, 4242, undefined, {
+      face: face as FacePolicy['face'], seat: 0, decide: async () => 'cert:sign:1',
+    });
+    assert.ok(r.rounds > 0, `face='${face}' 必须正常终局（不得抛错）`);
+    assert.deepEqual(r.anomalies ?? [], [], `face='${face}' 不得产生异常`);
+    assert.equal(r.injection.calls, 0, `face='${face}' 不得问出口`);
+    assert.equal(r.injection.fallbacks, 0);
+    assert.ok(r.injection.emptyCandidates > 0, `face='${face}' 必须计入既有的 emptyCandidates`);
+    assert.deepEqual(outcome(r), outcome(d), `face='${face}' 只改计数、不改行为`);
+  }
+});

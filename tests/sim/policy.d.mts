@@ -36,10 +36,14 @@ export type Recorder = DecisionRecord[] | null;
 /**
  * 注入计数的字段形状（`playOne` 返回值的 `injection`）。
  *
- * · `calls` —— **真的问了策略器**的次数（候选非空才问得出口）；
+ * · `calls` —— **该面被问出口**的次数（`askPolicy` 的站点面 ≡ `policy.face` ∧ 拿到候选才算）；
  * · `fallbacks` —— 其中**回落原启发式**的次数（null / 非字符串 / 非法 key / 不在候选集 / 抛错 / 超时）；
- * · `emptyCandidates` —— 该面**问不到候选**的次数（本来就没有 / certify 面按当前 target
- *   收窄后为空 / 未登记的 face ⇒ 没问出口 ⇒ 既不计 calls 也不计 fallbacks）。
+ * · `emptyCandidates` —— 到达注入点但本站点**问不到候选**的次数，四类成因同口径合并：
+ *   未登记的 face / **站点面与 `policy.face` 不符**（B70 评审 N-1：跨面问出口在问出口之前短路）/
+ *   该面在本局面没有候选 / certify 面按当前 target 收窄后为空。
+ *   ⇒ 没问出口 ⇒ 既不计 calls 也不计 fallbacks。
+ * ⚠️ 不变式：`calls + emptyCandidates` == 该局到达注入点的时刻数（每个到达恰好计一次，
+ *   既不静默丢弃也不重复计）—— Task 5 用 `fallbacks / calls` 读回落率的分母靠的就是这条。
  */
 export interface InjectionCounters {
   /** ⚠️ 字段可变：`askPolicy` 就地递增（故**不**声明为 readonly —— 声明成只读就是谎报）。 */
@@ -61,9 +65,15 @@ export interface InjectionCounters {
 export interface FacePolicy {
   /**
    * 注入哪个决策面。
-   * ⚠️ 运行时守卫（B70 Task 3 修复轮 1）：`.mjs` 调用方（Task 5 的评估器）构造的对象拿不到
-   *   这层字面量联合类型的保护 ⇒ 拼错 / 未登记的 face **不抛错**，按「该面问不到候选」处理
-   *   （`emptyCandidates += 1` 后回落原启发式），既不新增计数种类也不影响缺省路径。
+   * ⚠️ 运行时守卫（B70 Task 3 修复轮 1 + 修复轮 2 的 N-1/N-2）：`.mjs` 调用方（Task 5 的
+   *   评估器）构造的对象拿不到这层字面量联合类型的保护，故实现侧两道兜底，**都不抛错**：
+   *   · 面未登记（拼错，或取到 `Object.prototype` 的成员名如 `'toString'`）⇒ 按「问不到候选」
+   *     处理（`emptyCandidates += 1` 后回落）—— 判据是 `Array.isArray(FACE_TYPES[face])`，
+   *     `=== undefined` 挡不住原型链上的值（N-2）；
+   *   · **站点 ≡ 面**：每个注入站点自己声明属于哪个面，与 `policy.face` 不符时在**问出口之前**
+   *     短路（同样只计 `emptyCandidates`）⇒ 不会出现「在 certify 站点拿到 play 候选、
+   *     引擎签了印而 JSONL 记下没打出的牌」（N-1）。
+   *   两条都只改计数、不改行为 ⇒ 与缺省路径逐字同结局。
    */
   readonly face: 'play' | 'council' | 'certify';
   /** 只接管这一个座位（其余座位恒走原启发式）。 */
