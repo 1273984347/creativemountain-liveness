@@ -7,6 +7,8 @@
 //
 // ⚠️ 这些用例会真跑 sim（2 局 × 1 主题 ⇒ 秒级）⇒ 门 ② 可接受。
 // ⚠️ 全部产物写**系统临时目录** ⇒ 共享工作树零写入。
+// ⚠️ 最后一条用 12 局取证（实测 <1s，与门 9 的 30 局、门 12 的 100 局同量级以下）
+//   ⇒ 它要覆盖到「对峙」这条只在少数局里触发的记录路径，2 局的固定 seed 轨迹里对峙桶是空的。
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -14,6 +16,9 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
+
+import { actionKey, actionFromKey } from '../../engine/core/action-key.ts';
+import { normalizeLegacyKey } from '../../tools/laya-probe/key-normalize.mjs';
 
 const ROOT = process.cwd();
 const SIM = resolve(ROOT, 'tests/sim/run.mjs');
@@ -87,6 +92,49 @@ test('sim 决策点记录器：JSONL 行字段恰为 11 个、seq 从 0 开始�
     // ⚠️ `parsed` 的值类型是 `unknown` ⇒ 直接 `?? ''` 后仍是 `{}` ⇒ 须先 `String(...)`（TS2339）。
     const firstHeuristic = String(parsed[0]?.heuristic ?? '');
     assert.ok(firstHeuristic.length > 0, 'heuristic 不得为空');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ⚠️ B70 修复轮 1（评审发现 I-1）：上面三条只钉住「heuristic 是**非空字符串**」——
+//   格式回归（记录器退回手拼 / 换成等价模板串写法）在这里全是绿的。
+//   ⇒ 本条把「**记录器实际写出的每一行 key 都是 actionKey 的规范形**」变成常驻行为断言，
+//   取代此前只做一次的手工取证；它同时是 P6 的立足点：读侧归一化对**新写入的行**必须是空操作。
+test('sim 决策点记录器：写出的 heuristic 逐条是规范形（含对峙桶）', () => {
+  const dir = mkdtempSync(resolve(tmpdir(), 'cm-rec-'));
+  try {
+    const jsonl = resolve(dir, 'on.jsonl');
+    const out = resolve(dir, 'on.md');
+    // 固定 seed 轨迹（`seedBase + g*97 + players*13 + themeSeed`）⇒ 同参数同结果，不是抽奖。
+    const r = runSim([
+      '--themes', 'xianxia2026', '--players', '4', '--games', '12',
+      '--record-decisions', jsonl, '--out', out,
+    ]);
+    assert.equal(r.code, 0, 'sim 必须成功退出');
+    assert.ok(existsSync(jsonl), '带开关时必须产出 JSONL');
+    const keys = readFileSync(jsonl, 'utf8')
+      .split('\n')
+      .filter((l) => l.trim() !== '')
+      .map((l) => String((JSON.parse(l) as Record<string, unknown>).heuristic));
+    assert.ok(keys.length > 100, `取证规模够大才有说服力（实际决策点 ${String(keys.length)}）`);
+
+    // ① 逐条严格往返：能被反解、且反解后重新编码与原文**逐字符相等** ⇒ 规范形。
+    //    手拼的旧形在这一条直接抛错（反解层只认规范形），多余尾段/空段同理。
+    // ② 旧形零残留：任何一行都不得含手拼的下划线形（比①更早、更直白地指出回归种类）。
+    // ③ 读侧归一化对新行必须是**空操作** ⇒ 写读两侧同一把尺，P6 不再靠格式补丁对齐。
+    const duel: string[] = [];
+    for (const k of keys) {
+      assert.equal(actionKey(actionFromKey(k)), k, `记录器写出的 key 必须可严格反解并往返相等：${k}`);
+      assert.equal(k.includes('duel_card'), false, `记录器不得再写出手拼的下划线形：${k}`);
+      assert.equal(normalizeLegacyKey(k), k, `新写入的 key 应已是规范形 ⇒ 归一化必须空操作：${k}`);
+      if (k.startsWith('duel')) { duel.push(k); }
+    }
+    // ④ 对峙桶必须**非空**，否则上面几条对 `duel` 这一族是空转（假绿）。
+    assert.ok(duel.length > 0, '12 局轨迹里必须出现对峙记录，否则本守卫覆盖不到对峙桶');
+    for (const k of duel) {
+      assert.match(k, /^duel:card:[^:]+$/, `对峙记录必须是三段规范形：${k}`);
+    }
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
