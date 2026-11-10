@@ -2,7 +2,8 @@
 
 > 落档时间：2026-11-09（B53 · 阶段 A 收尾）  
 > 上游：`docs/superpowers/plans/2026-11-08-creativemountain-laya-sidecar-continuation.md`（Task 10）  
-> 批次记录：`docs/批次/B15-B16-枚举落地与sidecar预研-执行记录.md`（阶段 A 施工）、`docs/批次/B53-*.md`（本阶段收口）
+> 批次记录：`docs/批次/B15-B16-枚举落地与sidecar预研-执行记录.md`（阶段 A 施工）、`docs/批次/B53-*.md`（本阶段收口）  
+> **B69 复测补档（控制器实测，文档收尾写入）**：§5.1 的 P1/P2/P6 与 §5.2 延迟判定更新为 **B69 修复后两设备现值**，修复前基线保留为对照；新增 §5.5（`CUDA_VISIBLE_DEVICES` 环境陷阱）与 §5.6（B69 缺陷→修复→复测因果链）。**判据未下调**。
 
 ## 1. 本次回归的**判据重裁**（重要：原判据的前提已消失）
 
@@ -364,29 +365,31 @@ Compare-Object docs/balance-report.md <临时目录>/balance-after.md
 
 ### 5.1 P0–P6 七行表（每格填实测值，无空缺）
 
+> **B69 复测补档口径**：P1/P2/P6 的「实测值」列给出**现值（B69 修复后复测）**与**修复前基线（对照，非现值）**两层；判据列逐字未动。
+
 | 读数 | 判据（原文，未下调） | 实测值 | 达标 |
 |---|---|---|---|
 | **P0** | 权重对拍通过 且 `laya-serve` 起得来 且 `/health` 200 | 权重 **643835514 字节 + sha256 前缀 `9d628fd9`** 双双命中；`laya-serve` 起于 `127.0.0.1:8712`（`/health` 200，device=cuda）；候选② 本仓 venv 胜出（torch 2.6.0+cu124 来自 `D:\<local-libs>\torch-cu124`、CUDA true）；**launch 路线 = A** | ✅ |
-| **P1** | `answerRate ≥ 0.99` 且 `illegal = 0` | **answerRate = 1.0**（232/232）；**illegal = 0**；errors = 0；无候选 8 条已分桶（对峙未决 7 + 待认证锁定 1） | ✅ |
-| **P2** | GPU `p95 ≤ 300ms`；CPU `p95 ≤ 1500ms` | GPU 路径实测 **p50 = 50 ms / p95 = 63.45 ms**（n=232）⇒ **GPU 达标**；CPU 路径未测（本次全程走 CUDA） | ✅（GPU） |
-| **P3** | **`dropped` 之和 = 0**（不是 `truncated`） | **`dropped` 之和 = 0**；`maxCandidates = 51`、`meanCandidates = 15.1`；`truncated` 计数 = 0 ⇒ **不需下调 `LEGAL_ACTION_CAP`** | ✅ |
+| **P1** | `answerRate ≥ 0.99` 且 `illegal = 0` | **现值（B69 修复后复测，两设备同输入同 LIMIT=240）**：GPU(cuda) 与 CPU 均 sampled/asked/answered = **240/240/240** ⇒ **answerRate = 1.0**；**illegal = 0**；errors = 0；noLegalActions = 0。**修复前基线（对照，非现值）**：GPU asked=232、answerRate = 1.0（232/232），无候选 8 条已分桶（对峙未决 7 + 待认证锁定 1）；修复前 CPU 那次 answerRate = 0.9526（n=221）、errors = 11（7 条 duel + 4 条 mutual 反解失败）⇒ 已被 B69 修复取代 | ✅ |
+| **P2** | GPU `p95 ≤ 300ms`；CPU `p95 ≤ 1500ms` | **现值（B69 修复后复测）**：GPU(cuda) **p50 = 33.5ms / p95 = 52.15ms**（n=240，≤300ms）；CPU **p50 = 498.5ms / p95 = 703.15ms**（n=240，≤1500ms）⇒ **两设备均达标**。**修复前基线（对照，非现值）**：GPU p50 = 50ms / p95 = 63.45ms（n=232）；修复前 CPU 那次 p50 = 340ms / p95 = 452ms（n=221，**已被取代，不要当作现值**） | ✅（两设备） |
+| **P3** | **`dropped` 之和 = 0**（不是 `truncated`） | **现值（B69 复测，两设备一致）**：`droppedSum = 0`、`maxCandidates = 51`、`meanCandidates = 15.3`、`truncatedCount = 0` ⇒ **不需下调 `LEGAL_ACTION_CAP`**。**修复前基线（对照）**：`meanCandidates = 15.1`，其余同 | ✅ |
 | **P4** | `reachable = true`；否则必须给出失败层次之一 | **reachable = true**（`GET /health` 200、`POST /v1/systemone` 200 且真拿到 `choice=move`、概率 `{move:0.7853, ask:0.2147}`）；`consoleErrors = []`；**服务端留痕确认 CORS 预检**（`[serve] 收到 CORS 预检 OPTIONS /v1/systemone`） | ✅ |
 | **P5** | 输出首词 `SKIP` 且退出码 = 0 | 三种形状**逐一实测**：`SKIP {"reason":"no-sidecar",…}` / `SKIP {"reason":"proxy-says-unavailable","status":503,…}` / `SKIP {"reason":"sidecar-ready","status":200,…}`；**退出码恒 0**；常驻负样本 3/3 绿 | ✅ |
-| **P6** | 仅记录，不设判据 | **agreeRate = 40.52%**（94/232）；分歧前 20 条已列（模型倾向 `play:*`，启发式倾向 `move`/`ask`） | 记录 |
+| **P6** | 仅记录，不设判据 | **现值（B69 复测）**：`agreeRate = 37.08%`（**89/240**，GPU 与 CPU **逐格相同** ⇒ 选型不受设备影响，是确定性的）。**修复前基线（对照）**：40.52%（94/232）——差值来自 B68 补入的对峙候选使可比较样本由 232 增至 240，不是模型变了。分歧画像仍为「模型倾向 `play:*`，启发式倾向 `move`/`ask`」 | 记录 |
 
 ### 5.2 三条判定
 
 | # | 判定 | 结论 |
 |---|---|---|
 | **接线** | 引擎状态能否喂给本地判断模型、再稳定回解成合法动作 | **能**。P1 answerRate = 1.0、illegal = 0 ⇒ 「状态 → 题面 → 模型 → key → 严格反解 → 引擎复核」整条链打通；`probeAction` 复核**零非法提交** |
-| **延迟** | 能否进真人桌局 | **GPU 路径能**（p95 = 63 ms ≪ 300 ms 判据）；CPU 路径**未测** ⇒ 「CPU 能不能进真人桌局」**未结论**（P2 判据的 CPU 分支缺读数） |
+| **延迟** | 能否进真人桌局 | **两条路径都能**（B69 复测，同输入同 LIMIT=240）：GPU p95 = **52.15ms** ≪ 300ms；CPU p95 = **703.15ms** ≤ 1500ms ⇒ P2 的两个分支**都有读数且都达标**，原「CPU 未结论」已解除。CPU 约为 GPU 的 **13.5 倍**耗时，仍在桌局可接受范围 |
 | **浏览器** | `file://` 双击即玩能否叫到本地模型 | **能**（P4 reachable = true，零 CORS/PNA 报错）⇒ 「必须放弃双击即玩」这个结论**不被触发** |
 
 ### 5.3 对 V2 的三条建议
 
 | # | 建议 | 依据 |
 |---|---|---|
-| 1 | **值得做 AI 陪练**（但定位是「陪练/教学演示」，不是竞技对手） | 接线、延迟、浏览器三条判定**全部达标**（GPU 路径 p95 63 ms、`file://` 可达）⇒ 工程可行性成立；但 P6 的 agreeRate 仅 **40.52%** ⇒ 模型的策略与当前启发式**明显不同** ⇒ 强度与体验需另立评估（§2.4 明令本预研不下强度结论） |
+| 1 | **值得做 AI 陪练**（但定位是「陪练/教学演示」，不是竞技对手） | 接线、延迟、浏览器三条判定**全部达标**，且延迟现值为**两设备**（GPU p95 52.15ms、CPU p95 703.15ms）、`file://` 可达 ⇒ 工程可行性成立；但 P6 的 agreeRate 仅 **37.08%（89/240）** ⇒ 模型的策略与当前启发式**明显不同** ⇒ 强度与体验需另立评估（§2.4 明令本预研不下强度结论） |
 | 2 | **需要分层决策**（玩法层 / 模型层分离） | 三条现实约束：① 「离线可用」是**产品承诺** ⇒ sidecar 是**可选增强**，不能成为数字轨的启动依赖（发布包零增量红线）；② 常驻服务（8712 + 8711）与 P5 的降级形状是配套的 ⇒ **降级路径必须与主路径同时设计**；③ P2 的 CPU 分支未测 ⇒ 目标机器若无 GPU，需先补 CPU 读数再定档 |
 | 3 | **B14 关隘并入枚举的剩余成本** | 关隘通道动作（`GATE_RESOLVE` / `BARRIER_RESOLVE`）**已能枚举**，但 `COMPARE`（出牌比对）此前因探针占位分支而不可枚举 ⇒ B53 已修（占位分支删除 + 只读观测回调）⇒ 剩余成本主要在**峙面**：`submitDuelCard` 没有 `Action` 成员（G-f）⇒ 对峙期枚举整表清零 ⇒ 影子决策**无法在峙面对比** ⇒ 若 V2 要让 AI 参与对峙，需**给对峙选牌补 Action 成员**（属引擎契约变更，须走状态契约冻结流程） |
 
@@ -406,10 +409,29 @@ dependencies = {}
 （补充：Python 依赖**零**——`package.json` 的 `dependencies` 为空，`devDependencies` 亦无任何 Python 相关项；
 `tools/laya-sidecar/*` 与 `tools/laya-probe/*` **不被** `esbuild.config.mjs` / `build/build-package.mjs` 引用 ⇒ **发布包零增量**。）
 
-## 4. 阶段 B（B16 · Task 17）已完成 —— 见 §5## 4. 阶段 B（B16 · Task 16–17）仍未开始## 4. 阶段 B（B16 · Task 15–17）仍未开始## 4. 阶段 B（B16 · Task 14–17）仍未开始## 4. 阶段 B（B16 · Task 11–17）仍未开始## 4. 阶段 B（B16 · Task 11–17）仍未开始
+### 5.5 环境陷阱：`CUDA_VISIBLE_DEVICES=""` 不是「关掉 GPU」（B69 实测）
 
-**阻塞**：Task 11 Step 2 需新建 `.laya-venv` + `pip install laya[serve]`（走网络、GB 级磁盘）；
-Task 12 Step 2 起常驻本地服务 ⇒ **两项都必须先取得用户同意**（续作计划 §「外向副作用确认点」）。
+本机（Windows + torch 2.6.0+cu124）实测四种取值：
 
-⇒ P0–P6 读数**全部未跑**；三条可行性判定（接线 / 延迟 / 浏览器）**未出结论**；
-**不得在没有读数时先写结论**。
+| 取值 | `torch.cuda.is_available()` | `device_count()` | 后果 |
+|---|---|---|---|
+| 不设 | True | 1 | 正常走 GPU |
+| `""`（空串） | **True** | **0** | **病态组合**：`launch.py` 判为 cuda，官方 serve 随即抛 `torch.cuda.get_device_capability` 异常，`/health` 显示 `loaded: []` ⇒ 服务看似就绪实则不可推理 |
+| `-1` | False | 0 | 正确走 CPU（本次 CPU 读数即用此值） |
+| `none` / `99` | False | 0 | 亦可用 |
+
+⇒ **要测 CPU 必须用 `CUDA_VISIBLE_DEVICES=-1`**，不能用空串。空串那次已留下失败日志 `docs/预研/data/tmp/up-cpu.log`（含 traceback）作为反证；正确那次的日志是 `up-b69-cpu.log`（`device=cpu`、`checkpoint_devices.multilingual=cpu`、无异常、就绪 17.94s）。
+
+### 5.6 B69：缺陷 → 修复 → 复测的因果链
+
+1. **缺陷**：B68 给 `DUEL_SUBMIT_CARD` 补了编码侧（`duel:card:<id>`）与枚举层，B67 给 `CERTIFY_MUTUAL_SIGN` 补了编码侧（`cert:mutual:<t>`），但两者的**反解侧都没补**，且往返测试对这两个类型覆盖 **0 条** ⇒ 漏检。
+2. **实测后果**：修复前 CPU 跑 232 样本，**11 条反解失败**（7 条 `duel:card:*` + 4 条 `cert:mutual:*`），`answerRate = 0.9526` **低于 0.99 判据**。只补 duel 也只能到 228/232 = 0.9828，仍不达标 ⇒ 两处必须同批修。
+3. **修复**（提交 `1a11429`，独立审查 Approved）：补两个反解分支并保持严格规范形；补样本与畸形 key；加**根因守卫**「`ActionType` 每个成员都必须有往返样本」，成员真值从 `engine/core/action.ts` 源码解析。守卫上线即照出 **4 个**无样本成员，SAMPLES 由 17 增至 21。
+4. **复测**（同输入、同 `LIMIT=240`、两设备）：`asked` 由 232 升至 **240**（B68 补的对峙候选现在真的能问），`answered = 240`、`answerRate = 1.0`、`errors = 0`、`illegal = 0`、`droppedSum = 0`；P6 两设备逐格相同（89/240）⇒ 选型与设备无关。
+5. **口径更正**：`ActionType` 现有 **17** 个成员（不是 13/14）；`tests/engine/action-contract.test.ts` 顶部注释仍写「13 项」属陈旧注释（其数组与断言均为 17）——本次只登记，未改代码。
+
+## 6. 阶段 B 完成状态（取代此前自相矛盾的尾段）
+
+**Task 11–17 全部已完成**，读数见 §5；此处的历史阻塞（新建 `.laya-venv` + `pip install`、起常驻服务）**已获用户批准并执行完毕**，`.laya-venv` 已存在、路线 = A。
+
+> 文档完整性修正：本文件尾部曾有一行把六个互相矛盾的「阶段 B 已完成 / 仍未开始」标题粘在一起，并跟着「P0–P6 全部未跑、未出结论」的旧块，与 §5 的完整读数直接冲突。该损坏来自早期增量编辑，本次收尾已删除并替换为本节。**纪律保留**：不得在没有读数时先写结论——本节所有结论均可回溯到 §5 的实测值与 `docs/预研/data/tmp/` 下的原始 JSON。

@@ -91,6 +91,8 @@ node --test tests/engine/action-key.test.ts     # node exit=1
   Error: 未知认证动作：cert:mutual:0        ← 四条失败都停在这个成员（枚举序在 duel 之前）
 ```
 
+> **独立审查注记（保真度疑点，控制器追加，不改写上面的原转录）**：审查指出 `✖ play 两式互异 + key 自洽` 这一行与交付代码对不上——该测试体（`tests/engine/action-key.test.ts` 的 PLAY_CARD 两式断言）在本批 diff 中**未被改动**，且只涉及 `PLAY_CARD`，对 base 实现不可能因缺 `duel`/`mutual` 反解分支而红；按结构推断 RED 应为 **3 fail**（往返 / 规范形正例 / 根因守卫，均停在 `cert:mutual:0`，与本节自注一致）而非 4 fail。可能来源是中间态测试文件或转录笔误。**待复核**：若要坐实，需在 base 提交 `a5c7127` 上重跑该测试文件并比对输出；本次收尾未做该重跑，故保留原转录并在此标明疑点，不静默改写证据。
+
 针对本批主缺陷的**定点 RED**（同一断言形状，只跑 duel 样本）：
 
 ```bash
@@ -262,7 +264,42 @@ node --test --test-name-pattern="根因守卫" tests/engine/action-key.test.ts  
 
 ## 8. 提交
 
-- 提交（施工 + 测试 + 本记录）：`<hash>` fix(B69): 补 DUEL_SUBMIT_CARD 反解分支 + ActionType 全成员往返守卫
-  - ⚠️ **本行哈希待回填**（提交时无法预知自己的哈希）。按既定口径：**回填并入下一批首个提交，不单独开提交**。
+- 提交（施工 + 测试 + 本记录）：`1a11429` fix(B69): 补 DUEL_SUBMIT_CARD 反解分支 + ActionType 全成员往返守卫
+  - ✅ **哈希已回填**：由控制器的「B69 文档收尾」提交一并纳入（符合既定口径「回填并入下一批首个提交、不单独开提交」——本次文档收尾即该下一批的首个提交）。
   - 显式 pathspec（只 stage 这三条，未用 `git add -A`/`.`）：`engine/core/action-key.ts`、`tests/engine/action-key.test.ts`、`docs/批次/B69-对峙key反解缺口-执行记录.md`。
   - 未改动：`engine/core/action.ts`、`engine/core/legal.ts`、`engine/core/probe.ts`、`web/**`、`tests/sim/run.mjs`、`tools/**`、`.superpowers/sdd/**`、共享任务清单。
+
+## 9. 控制器复测与文档收尾（B69 之后，同批提交）
+
+### 9.1 修复后复测（两设备，同输入、同 `LAYA_PROBE_LIMIT=240`）
+
+| 设备 | sampled/asked/answered | answerRate | illegal | errors | p50 | p95 | droppedSum | agreeRate |
+|---|---|---|---|---|---|---|---|---|
+| GPU(cuda) | 240/240/240 | **1.0** | 0 | 0 | **33.5ms** | **52.15ms** | 0 | **0.3708**（89/240） |
+| CPU | 240/240/240 | **1.0** | 0 | 0 | **498.5ms** | **703.15ms** | 0 | **0.3708**（89/240） |
+
+- 判据：P1 `answerRate ≥ 0.99` 且 `illegal = 0`；P2 GPU p95 ≤300ms、CPU p95 ≤1500ms ⇒ **两设备全部达标**，P2 的 CPU 分支从「未测 ⇒ 未结论」变为有读数且达标。
+- `asked` 由修复前基线的 232 升至 **240**：B68 补的对峙候选现在真的能问（基线那 8 条被分桶为「对峙未决 7 + 待认证锁定 1」）。
+- 两设备 `agreeRate` **逐格相同** ⇒ 模型选型与计算设备无关（确定性交叉验证）。
+- 修复前 CPU 那次（n=221、p50=340ms/p95=452ms、answerRate=0.9526、errors=11）**已被本次取代**，不得当作现值引用。
+- 原始留证（gitignore 内）：`docs/预研/data/tmp/probe-raw-after-B69.json`、`probe-raw-after-B69-CPU.json`、`probe-raw-before-B69.json`、`up-b69.log`、`up-b69-cpu.log`。
+
+### 9.2 环境陷阱（实测，已写进预研报告 §5.5）
+
+本机 `CUDA_VISIBLE_DEVICES=""` ⇒ `torch.cuda.is_available()=True` 且 `device_count()=0` 的**病态组合**：`launch.py` 判为 cuda，官方 serve 抛 `get_device_capability` 异常、`/health` 显示 `loaded: []`（看似就绪实则不可推理）。**必须用 `-1`**（`none`/`99` 亦可）。失败反证日志：`docs/预研/data/tmp/up-cpu.log`。
+
+### 9.3 遗留①「位次偏差」重测结论 ⇒ 降级为文档更正
+
+- 当前代码按默认参数重跑 **24000 局**，生成报告与仓内 `docs/balance-report.md` **逐字一致**（`diff` 无输出）。
+- 独赢口径位次极差（3→8 人）= **5.7 / 2.9 / 3.0 / 3.3 / 4.9 / 6.3 pp**，统计口径判据 **≤8pp** ⇒ 六档全部在阈值内。
+- 门 ⑫（`--position-spread --games 100 --check`，2400 局）**PASS**：最大极差 **10.0pp**（≤14）、最大 RMS **4.40pp**（≤6.5）；7 人档 8.4pp、8 人档 5.2pp。
+- ⇒ `7.8pp / 39.0%` 确认为 **B65 口径的陈旧转引**（B66/B67/B68 均未重测）。**不动得分公式**；已在三份记录的 T1 行就地追加更正注记（保留原文）。
+- 同时修正规格漂移：§5.7 第 5 条、§5.8、§10 汇总表里的「× ⌈山道长度 ÷ 2⌉」改为**逐档 `seatWeight`**（真值源 `engine/scales.ts`：3–8 人 = **12/20/16/20/24/24**，`victory.ts` 的 `rankScore` 直接读它）；v1.6 变更历史条目保留原文并加「已改为逐档标定」注记。
+
+### 9.4 遗留②「AI 对峙选牌」的当前状态（**未做，需独立授权**）
+
+探针侧现在**能**问对峙候选并拿到模型选择（`asked` 232→240 即为证据），但 **sim 与生产路径的选牌仍是 `engine/core/duel.ts` 的 `autoResolveDuel`**（引擎内自动选）⇒「让模型真正驱动选牌」尚未实现。它属启发式/策略质量议题，会动门 ⑨ 基线，需另立批次并单独授权，本批不做。
+
+### 9.5 本批文档收尾改动清单
+
+`docs/预研/2026-11-08-laya-sidecar.md`（P1/P2/P3/P6 现值+基线两层、§5.2 延迟判定、§5.3 建议依据、新增 §5.5 环境陷阱 / §5.6 因果链 / §6 阶段 B 完成状态，并**删除尾部一行粘连六个矛盾标题 + 「全部未跑」旧块**的文档损坏）；主规格 §5.7/§5.8/§10 与 v1.6 历史注记；B66/B67/B68 的 T1 更正注记；本记录 §5.1 审查注记、§8 哈希回填、§9；`docs/沉淀/经验教训索引.md` 追加 E122。
