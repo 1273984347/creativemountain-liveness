@@ -2,8 +2,6 @@
 // ⚠️ 依赖必须单向：run.mjs → policy.mjs → engine/*；本文件**不得** import run.mjs
 //   （run.mjs 有模块级主流程，被 import 就会跑一整轮模拟）。
 // ⚠️ playOne 为 async：Task 3 起可注入需要 await 的模型策略；缺省 policy 时行为与搬移前逐字相同。
-import { readFileSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 
 import { createInitialState } from '../../engine/core/state.ts';
 import { installTheme } from '../../engine/core/setup.ts';
@@ -13,16 +11,12 @@ import {
 import { currentPlayer } from '../../engine/core/round.ts';
 import { GOALS, isGoalAchieved } from '../../engine/goals/registry.ts';
 import { performAbility } from '../../engine/core/abilities.ts';
-import { autoResolveDuel } from '../../engine/core/duel.ts';
 import { advanceAuto } from '../../engine/core/advance.ts';
-import { resolveGate } from '../../engine/core/gate.ts';
-import { computePositionSpread, POSITION_RMS_GATE_LIMIT, POSITION_SPREAD_GATE_LIMIT, TRIAL_PASS_RANGES, tCritical05 } from '../../engine/core/balance.ts';
 import { castVote, resolveCouncil } from '../../engine/core/council.ts';
 import {
   certifySign, certifyChallenge, certifyAnswer, certifyAppeal, certifyAppealVote, certifyMutualSign,
   resolveAppeals, isCertifier, hasUsedCertificationTurn,
 } from '../../engine/core/certification.ts';
-import { SCALES } from '../../engine/scales.ts';
 
 import { stateToJson } from '../../engine/core/serialize.ts';
 import { actionKey } from '../../engine/core/action-key.ts';

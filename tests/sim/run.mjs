@@ -9,6 +9,7 @@
 // 设计要点：
 //   · **确定性**：一切随机都取自 state.rng（固定 seed ⇒ 同结果可复现）
 //   · **走真实引擎**：同一套 performAction / advanceTurn / 认证 / 山议，与玩家对局同规则
+//     （B70 起这些引擎调用与决策函数本体都在 tests/sim/policy.mjs，本文件只组装与读数）
 //   · **覆盖全部机制**：行棋 / 问天 / 出牌（含攻击牌选目标）/ 山议投票 /
 //     签印 / 质疑 / 判定 / 复议 / 复议投票
 //   · **异常即红**：死循环、非法状态、引擎兜底失效 ⇒ 记为异常并计入报告
@@ -18,8 +19,6 @@ import { resolve } from 'node:path';
 
 import { createInitialState } from '../../engine/core/state.ts';
 import { installTheme } from '../../engine/core/setup.ts';
-import { performAction, advanceTurn } from '../../engine/core/turn-runner.ts';
-import { isGoalAchieved } from '../../engine/goals/registry.ts';
 import { resolveGate } from '../../engine/core/gate.ts';
 import { computePositionSpread, POSITION_RMS_GATE_LIMIT, POSITION_SPREAD_GATE_LIMIT, TRIAL_PASS_RANGES, tCritical05 } from '../../engine/core/balance.ts';
 import { SCALES } from '../../engine/scales.ts';
