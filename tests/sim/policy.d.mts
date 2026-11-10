@@ -23,7 +23,7 @@ export interface DecisionRecord {
   readonly phase: string;
   /** 引擎产生的**骰面点数**；无骰面的决策点为 null（动作执行后回填）。 */
   readonly face: number | null;
-  /** 启发式选中的动作（`actionKey`；对峙选牌用 `duel_card:<id>`）。 */
+  /** 启发式选中的动作（`actionKey`；对峙选牌用 `actionKey` 的规范形 `duel:card:<id>`）。 */
   readonly heuristic: string;
   /** `stateToJson(state)` 的**动作执行前**全量局面（⚠️ 含 rng 内部状态 ⇒ 不得直接喂模型）。 */
   readonly state: string;
@@ -39,7 +39,7 @@ export interface AdvanceOpts {
    * ⚠️ **本字段由实现内部占用，调用方传入会被忽略**（B70 评审 I-3 的如实声明）。
    *
    * `tests/sim/policy.mjs` 的 `advanceWithDuel` 在展开 `...opts` **之后**无条件把
-   * `onDuelPick` 覆盖成自己的 `record(stateAtPick, seat, 'duel_card:' + cardId)`
+   * `onDuelPick` 覆盖成自己的 `record(stateAtPick, seat, actionKey({ type: 'DUEL_SUBMIT_CARD', actor: seat, cardId }))`
    * （B56 决策点记录 / B57 对峙面观测口径），因此外部回调永远拿不到选牌时刻。
    * ⇒ 想在此注入自定义回调，必须先改实现（把覆盖改成包装/透传）；但那会动
    *   `advanceAuto`/B56 既有的对局记录路径，与 B70「零行为变更」原则冲突，故未采纳。

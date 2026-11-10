@@ -23,6 +23,7 @@ import { actionFromKey, withActor } from '../../engine/core/action-key.ts';
 import { getLegalActionStats } from '../../engine/core/legal.ts';
 import { probeAction } from '../../engine/core/probe.ts';
 import { buildChoice, describeState } from './state-text.mjs';
+import { normalizeLegacyKey } from './key-normalize.mjs';
 
 const ROOT = process.cwd();
 const DATA_DIR = resolve(ROOT, 'docs/预研/data');
@@ -161,7 +162,7 @@ for (const row of sampled) {
     err: null,
     illegal: false,
     laya: null,
-    heuristic: row.heuristic,
+    heuristic: normalizeLegacyKey(row.heuristic),
     agree: null,
     ms: null,
   };
@@ -196,7 +197,11 @@ for (const row of sampled) {
   const verdict = probeAction(state, action);
   rec.illegal = verdict.ok !== true;
   if (!rec.illegal) {
-    rec.agree = String(asked.choice) === String(row.heuristic);
+    // ⚠️ **B70 读侧归一化**：历史样本的对峙启发式 key 是记录器当年手拼的 `duel_card:<id>`，
+    //   而模型只能输出规范形 `duel:card:<id>`（`actionFromKey` 只认规范形）⇒ 不归一化会把
+    //   **格式差异**算成决策分歧，P6 在对峙样本上恒判 disagree。两侧都取规范形后再比。
+    //   ⚠️ 只在此处（比较前）归一化 ⇒ 历史 JSONL 不改写，`duel_card:` 也不是合法的写侧格式。
+    rec.agree = normalizeLegacyKey(String(asked.choice)) === normalizeLegacyKey(String(row.heuristic));
   }
   results.push(rec);
 }

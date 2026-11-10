@@ -34,7 +34,7 @@ export /**
  *
  * @param {object} state **动作执行前**的局面（探针要重建「当时看到什么」）。
  * @param {number} seat 决策座位。
- * @param {string} heuristic 启发式选中的动作（`actionKey`；对峙选牌用 `duel_card:<id>`）。
+ * @param {string} heuristic 启发式选中的动作（`actionKey`；对峙选牌用 `actionKey` 的规范形 `duel:card:<id>`）。
  * @param {number|null} face 引擎产生的**骰面点数**（无骰面的决策点为 null）。
  * @returns {number} 该条记录的下标（**动作执行后**可回填 `face`；关闭时返回 -1）。
  */
@@ -294,7 +294,7 @@ async function advanceWithDuel(s, mode, opts) {
   const next = advanceAuto(s, mode, {
     ...opts,
     onDuelPick: (seat, cardId, stateAtPick) => {
-      record(stateAtPick, seat, 'duel_card:' + cardId);
+      record(stateAtPick, seat, actionKey({ type: 'DUEL_SUBMIT_CARD', actor: seat, cardId }));
     },
   });
   return next;
