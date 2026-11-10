@@ -219,7 +219,7 @@ export function describeAction(state, action, seat) {
     //   **绝不触碰对手手牌 / duel.pickA / duel.pickB**（预研红线 3）。
     case 'DUEL_SUBMIT_CARD': {
       const card = cardOf(action.cardId);
-      return cut(`对峙锁定亮牌：出「${card.name}` + '」');
+      return cut(`对峙亮牌「${card.name}」（${card.color === 'red' ? '红' : '黑'}·点数${card.rank}）`);
     }
     // ⚠️ **B57 补记**：这两个分支此前**不存在** ⇒ B18 引入关隘/裂隙通道后，
     //   `describeAction` 遇到它们直接抛「未知动作类型」⇒ `buildChoice` 崩 ⇒
@@ -247,8 +247,9 @@ export function describeAction(state, action, seat) {
  * @param {number} seat 决策座位
  */
 export function buildChoice(state, seat) {
+  const actions = getLegalActions(state, seat);
   const criteria = {};
-  for (const a of getLegalActions(state, seat)) {
+  for (const a of actions) {
     const key = actionKey(a);
     if (Object.hasOwn(criteria, key)) {
       throw new Error(`buildChoice：座${String(seat)} 的候选 key「${key}」撞车 ——`
@@ -258,8 +259,14 @@ export function buildChoice(state, seat) {
     }
     criteria[key] = describeAction(state, a, seat);
   }
+  // B70：指令按候选所属面生成。对峙面必须写明比较规则并限定只能选亮牌，
+  //   否则模型只看到牌名 ⇒ 按名字语义猜（实测：13/44 答到关隘面去了）。
+  const onlyDuel = actions.length > 0 && actions.every((a) => a.type === 'DUEL_SUBMIT_CARD');
+  const instructions = onlyDuel
+    ? '对峙规则：红牌胜黑牌；同色则点数大者胜；同点平局各弃一张。亮牌不回手牌；败者退1格并抽1张。只能从下列自己的手牌里选一张锁定，选哪张？'
+    : '现在轮到该玩家行动，应选哪个动作？';
   return {
-    instructions: '现在轮到该玩家行动，应选哪个动作？',
+    instructions,
     criteria,
     noLegalActions: Object.keys(criteria).length === 0,
   };

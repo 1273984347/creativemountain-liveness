@@ -1495,6 +1495,9 @@ const TEMPLATE_WORDS: readonly string[] = [
   'transfer_resource', 'peek_deck',
   // 地形 kind：`TileKind` 是主题契约里的**闭合枚举**（engine/types/theme.ts:168）⇒ 可以逐字列全
   'plain', 'boon', 'hazard', 'rift', 'junction', 'peak',
+  // B70：对峙题面补颜色/点数/规则后引入的公开措辞（逐条实算得出，不得整类放行）
+  '对峙亮牌', '对峙规则', '红牌胜黑牌', '同色则点数大者胜', '同点平局各弃一张',
+  '亮牌不回手牌', '只能从下列自己的手牌里选一张锁定', '选哪张',
 ];
 
 /** 「标签 + 数字」粘连的模板骨架（数字已换成哨兵）。 */
@@ -1505,6 +1508,8 @@ const TEMPLATE_SKELETONS: readonly string[] = [
   //   文案保持原样，词表把这些粘连形状逐条列出来；新增候选文案必须同步补这里）
   `给座${NUM}签印`, `质疑座${NUM}`, `对座${NUM}弃权`, `山议投座${NUM}`,
   `座${NUM}推翻`, `座${NUM}维持`, `判定座${NUM}通过`, `判定座${NUM}不通过`,
+  // B70：对峙描述与规则里的「中文夹数字」形状
+  `点数${NUM}`, `败者退${NUM}格并抽${NUM}张`,
 ];
 
 /** 一个座位视角下的允许词表：静态模板 + 该视角下**确实公开**的数据。 */
@@ -2251,4 +2256,38 @@ test('结构守卫的注释剥离（常驻·评审 7）：判不准就保留整�
     '被可疑引号保护的行必须把 `state.decks` 留在文本里（否则结构守卫能被一行字符串绕过）');
   assert.equal(stripJsComments('x = 1;\n// state.decks 在下一行的注释里').includes('decks'), false,
     '反向钉子：保守不等于「什么都不剥」——纯注释行仍然必须剥掉，否则本仓库的注释写法会全红');
+});
+
+// ---------------------------------------------------------------------------
+// B70（Task 4）：对峙题面补颜色/点数 + 指令按候选面生成
+// ---------------------------------------------------------------------------
+
+test('B70：对峙候选描述含颜色与点数', () => {
+  const s = startDuel(mk(4, 7), 0, 1);
+  const duel = s.duel;
+  assert.ok(duel, 'startDuel 之后对峙必须存在');
+  const seat = duel.seatA;
+  const card = s.players[seat]?.hand[0];
+  assert.ok(card, '前提自查：对峙参与者手牌非空');
+  const text = describeAction(s, { type: 'DUEL_SUBMIT_CARD', actor: seat, cardId: card.id }, seat);
+  assert.ok(text.includes(card.color === 'red' ? '红' : '黑'), `缺颜色：${text}`);
+  assert.ok(text.includes(String(card.rank)), `缺点数：${text}`);
+  assert.ok(text.length <= 40, `超预算：${text.length}`);
+});
+
+test('B70：对峙面 instructions 写明规则并限定只能选亮牌', () => {
+  const s = startDuel(mk(4, 7), 0, 1);
+  const duel = s.duel;
+  assert.ok(duel, 'startDuel 之后对峙必须存在');
+  const q = buildChoice(s, duel.seatA);
+  assert.ok(Object.keys(q.criteria).length > 0, '对峙参与者必须有候选');
+  for (const k of Object.keys(q.criteria)) { assert.ok(k.startsWith('duel:card:'), `混入别面：${k}`); }
+  assert.match(q.instructions, /红/);
+  assert.match(q.instructions, /点数/);
+  assert.match(q.instructions, /只能/);
+});
+
+test('B70：非对峙面 instructions 不含对峙规则（面感知不得污染其它面）', () => {
+  const q = buildChoice(mk(4, 7), 0);
+  assert.doesNotMatch(q.instructions, /红牌胜黑牌/);
 });
