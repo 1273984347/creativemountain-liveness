@@ -24,6 +24,68 @@
 - Git：只 stage 任务列出的确切路径；**禁止** `git add -A`/`.`/`git stash`/`git reset`/`git checkout --`。提交信息 `feat(B70): …` / `fix(B70): …` / `docs(B70): …`（中文）。
 - 不要编辑 `.superpowers/sdd/**` 台账或共享任务清单（控制器负责）；不要派发子代理或审查者。
 
+## 事实来源与干跑证据（可追踪）
+
+本计划的锚点、行号、词表清单**不是推测**，来源如下（新会话可复核）。
+
+⚠️ `docs/预研/data/tmp/**` 被 `.gitignore:23` 忽略（`git check-ignore -v docs/预研/data/tmp/` 可证）⇒ 下面提到的干跑脚本与日志**不入库、随时可能不在**。因此每行的「复核方式」只给**从仓内已提交内容直接重算**的命令，不依赖 tmp 里的一次性脚本；一次性脚本的正文凡是本计划需要的都写在对应 Task 里（落到任意临时路径即可复跑）。行号会随施工漂移，**以锚点字符串为准**。
+
+| 事实 | 首次坐实于 | 复核方式（只需已提交的仓内文件） |
+|---|---|---|
+| 9 个可搬函数、2 个零调用死函数、`run.mjs` 无 ES importer | 只读调研 + 干跑 | `grep -nE "^(export )?function " tests/sim/run.mjs`；`grep -rn "pickDuelCard\|resolveDuelByAI" --include=*.mjs --include=*.ts --include=*.js .`（排除 node_modules）应只有定义行、无调用 |
+| `runCell` 调用点 = 定义 562 + 调用 881/948/1084；`runPositionSpread` 876、`runGateReserveScan` 935、其调用点 1058/1063 | 干跑脚本（tmp，已失效） | `grep -nE "(async )?function (runCell\|runPositionSpread\|runGateReserveScan)\|(await )?runCell\(|runPositionSpread\(|runGateReserveScan\(" tests/sim/run.mjs` |
+| `recorder` 搬出后 `run.mjs` 仍剩代码引用 = 落盘段 `if (args.record !== null && recorder !== null) {` 与 `const lines = recorder.map(...)` | 同上 | 搬移前 `grep -nE "\brecorder\b" tests/sim/run.mjs` 实测 10 命中（50/62/78/80/93/453/458/1050/1094/1095）；其中 1050 与 1094–1095 在搬移后留在 `run.mjs`，必须按 Task 1 Step 3 改写（`setRecorder([])` / `getRecorder()`），否则 `--record-decisions` 运行期 `ReferenceError` |
+| 搬后 22 个 import 绑定零使用 | 同上 | Task 1 Step 4b 的 prune 脚本会打印实际清单（脚本正文在本文件内，可直接复跑） |
+| `councilTurn` 178–190、循环头 `for (const p of alive) {`、`castVote(s, p.seat, t)` | 只读调研 | `sed -n '178,190p' tests/sim/run.mjs` |
+| `certificationTurn` 的 `const challenger = …` 在 198、内层循环头 196；`certifyAbstain` 导出于 `certification.ts:135` 且原 import 列表（32–35）不含它 | 只读调研 | `grep -n "const challenger" tests/sim/run.mjs`（应 1 命中） |
+| `playOne` 锁定分支 421–436、待包裹范围 437–474、475 推进、476–480 firstPending | 只读调研 | `sed -n '421,481p' tests/sim/run.mjs` |
+| `buildChoice` 249–266 含 key 撞车抛错，被 `legal-probe.test.ts:2154` 钉住 | 只读调研 | `sed -n '249,266p' tools/laya-probe/state-text.mjs` |
+| 词表缺失**恰好 10 条**（8 WORDS + 2 SKELETONS） | 实算脚本（tmp，已失效）+ 同名日志 | **不依赖脚本**：按 Task 4 Step 3–4 改完题面后跑 `node --test tests/engine/legal-probe.test.ts`，词表守卫（`scannedText` 1563、`generalize` 1395、`TOKEN_RUN` 1385）会把**实际缺失的 token 逐条打印**，与 Task 4 Step 5 的 10 条清单比对；不一致 ⇒ 以实跑输出为准并在报告里说明差异 |
+| 完整事实汇编（1235 行，含原文片段） | `.superpowers/sdd/2026-11-08-creativemountain-laya-sidecar/b70-hardening-facts.md` | 该目录被 `.superpowers/sdd/.gitignore` 的 `*` 忽略，不入库；丢失时按上表命令重查 |
+
+**干跑已证伪并修正的四条原计划假设**（施工时不得回退到旧写法）：
+1. 只把 `runCell` 改 async ⇒ 881/948 的 `await` 落在同步的 `runPositionSpread`/`runGateReserveScan` 里 ⇒ `SyntaxError: Unexpected reserved word`。**必须三个函数一起 async**。
+2. 漏改落盘段的 `recorder` 引用 ⇒ 带 `--record-decisions` 时 `ReferenceError`，门 ②（`tests/gates/sim-record.test.ts:57/73`）必红。**必须改 `getRecorder()`**。
+3. recorder 注释块首行是 `/**`（44 行），标题在 45 行 ⇒ 「替换首行」会锚错。**必须用 45 行那句作 old_string**。
+4. `buildChoice` 的简化替换体会删掉 key 撞车抛错 ⇒ 常驻用例红。**必须保留该 throw 逐字不动**。
+
+**硬化后的搬移脚本已在沙箱干跑通过**（不碰仓内文件）。复跑步骤（沙箱只是一个临时目录，仓内文件保持不动）：
+
+```bash
+mkdir -p /tmp/b70-sandbox/tests/sim
+cp tests/sim/run.mjs /tmp/b70-sandbox/tests/sim/
+# 把 Task 1 Step 3 的代码块（以 `const P = 'tests/sim/run.mjs'` 开头的那段）
+# 原样存为 /tmp/b70-sandbox/extract.mjs —— 该脚本用相对路径读写，故必须在沙箱目录下执行
+cd /tmp/b70-sandbox && node extract.mjs
+node --check tests/sim/policy.mjs && node --check tests/sim/run.mjs   # 两者均静默通过
+```
+
+再在**沙箱目录**下跑下面这个核验脚本（存为 `/tmp/b70-sandbox/verify.mjs`），11 项必须与实测输出逐字一致：
+
+```js
+import fs from 'node:fs';
+const base = 'tests/sim/';
+const pol = fs.readFileSync(base + 'policy.mjs', 'utf8');
+const run = fs.readFileSync(base + 'run.mjs', 'utf8');
+const want = ['checkState', 'pickTarget', 'councilTurn', 'certificationTurn', 'maybeUseAbility', 'pickPlayableCard', 'playOne', 'advanceWithDuel', 'record'];
+const has = (src, n) => new RegExp('function\\s+' + n + '\\s*\\(').test(src);
+console.log('9 函数都在 policy.mjs:', want.every((n) => has(pol, n)));
+console.log('export 个数:', (pol.match(/^export /gm) || []).length, '(期望 11)');
+console.log('playOne async:', /async\s+function\s+playOne\s*\(/.test(pol), '| advanceWithDuel async:', /async\s+function\s+advanceWithDuel\s*\(/.test(pol));
+console.log('policy 不 import run.mjs:', !/from\s+'[^']*run\.mjs'/.test(pol));
+for (const f of ['runCell', 'runPositionSpread', 'runGateReserveScan']) {
+  console.log(f, 'async:', new RegExp('async\\s+function\\s+' + f + '\\s*\\(').test(run));
+}
+console.log('run.mjs await 次数:', (run.match(/await /g) || []).length);
+console.log('死函数已删:', !/pickDuelCard|resolveDuelByAI/.test(pol + run));
+console.log('getRecorder 接线:', run.includes('const rec = getRecorder();'));
+console.log('run.mjs 仍定义被搬函数:', want.filter((n) => new RegExp('^\\s*(export\\s+)?(async\\s+)?function\\s+' + n + '\\s*\\(', 'm').test(run)));
+console.log('policy.mjs 保留了函数上方注释:', /\/\*\*|\/\//.test(pol.slice(0, pol.indexOf('export'))));
+```
+
+实测输出（11 项全 true / 符合期望）：`9 函数都在 policy.mjs: true`、`export 个数: 11`、`playOne async: true`、`advanceWithDuel async: true`、`policy 不 import run.mjs: true`、`runCell/runPositionSpread/runGateReserveScan async: true`、`run.mjs await 次数: 6`、`死函数已删: true`、`getRecorder 接线: true`、`run.mjs 仍定义被搬函数: []`、`policy.mjs 保留了函数上方注释: true`。
+⚠️ 沙箱内**不能** `import policy.mjs` 做运行时核验（沙箱没有 `engine/`，会 `ERR_MODULE_NOT_FOUND`）⇒ 运行时核验必须在真实仓内按 Task 1 Step 5–7 做；沙箱干跑只证明**文本层面**的搬移正确。
+
 ## 文件结构
 
 | 文件 | 职责 | 动作 |
@@ -139,10 +201,27 @@ function span(name) {
   }
   throw new Error(`括号未配平：${name}`);
 }
-const spans = [...MOVED, ...DEAD].map((n) => ({ n, r: span(n) })).sort((a, b) => a.r[0] - b.r[0]);
+/** 函数体 + 其上方紧邻的注释块（否则注释会留在 run.mjs 成孤儿）。
+ *  遇到分节分隔线（`// ----------` / `// =====`）就停，避免把属于留存代码的节标题搬走。 */
+function spanWithComments(name) {
+  const [s0, e0] = span(name);
+  const pre = src.slice(0, s0).split('\n');
+  let i = pre.length - 2;                       // slice  ending at line start ⇒ 末元素是空串
+  while (i >= 0) {
+    const t = pre[i].trim();
+    if (t === '' ) { break; }
+    if (/^\/\/\s*(-{3,}|={3,})/.test(t)) { break; }
+    if (!/^(\/\/|\/\*|\*\/|\*)/.test(t)) { break; }
+    i -= 1;
+  }
+  const cut = i + 1;
+  const s1 = cut === 0 ? 0 : pre.slice(0, cut).join('\n').length + 1;
+  return [s1, e0];
+}
+const spans = [...MOVED, ...DEAD].map((n) => ({ n, r: spanWithComments(n) })).sort((a, b) => a.r[0] - b.r[0]);
 const bodies = MOVED.map((n) => {
   const s = spans.find((x) => x.n === n);
-  return src.slice(s.r[0], s.r[1]).replace(/^export\s+/, '');
+  return src.slice(s.r[0], s.r[1]).replace(/\bexport\s+function\s+/, 'function ');
 });
 // recorder 三个模块级变量（连同 record 一起搬）
 const recorderBlock = ['let recorder = null;', 'let recordSeq = 0;', 'let recordCtx = null;']
@@ -157,13 +236,23 @@ for (const decl of ['let recorder = null;', 'let recordSeq = 0;', 'let recordCtx
 // run.mjs 顶部补 import 与装配
 const anchor = "import { actionKey } from '../../engine/core/action-key.ts';";
 if (!out.includes(anchor)) { throw new Error('找不到 import 锚点'); }
-out = out.replace(anchor, anchor + "\nimport { playOne, setRecorder } from './policy.mjs';");
+out = out.replace(anchor, anchor + "\nimport { playOne, setRecorder, getRecorder } from './policy.mjs';");
 out = out.replace('if (args.record !== null) { recorder = []; }', 'if (args.record !== null) { setRecorder([]); }');
-// runCell 与其三处调用点 async 化
+// runCell  async 化；**它的两个调用方也必须 async**（干跑实证：只改 runCell 会在 881/948 产生
+// `SyntaxError: Unexpected reserved word`，因为 runPositionSpread/runGateReserveScan 当时仍是同步函数）
 out = out.replace('function runCell(', 'async function runCell(');
+out = out.replace('function runPositionSpread(', 'async function runPositionSpread(');
+out = out.replace('function runGateReserveScan(', 'async function runGateReserveScan(');
 out = out.replace('results.push(playOne(theme, players, seed, gateReserve));', 'results.push(await playOne(theme, players, seed, gateReserve));');
 out = out.replaceAll('runCell(theme, players, args.games, args.seedBase, args.gateReserve)', 'await runCell(theme, players, args.games, args.seedBase, args.gateReserve)');
 out = out.replaceAll('runCell(theme, players, args.games, seedBase, reserve)', 'await runCell(theme, players, args.games, seedBase, reserve)');
+// 这两个调用点在模块顶层（ESM 支持 top-level await），逐字替换即可
+out = out.replace('  runPositionSpread(args);', '  await runPositionSpread(args);');
+out = out.replace('  runGateReserveScan(args);', '  await runGateReserveScan(args);');
+// recorder 残留（干跑实证：原计划漏了这两行 ⇒ 带 --record-decisions 时 ReferenceError，门② 必红）
+out = out.replace('if (args.record !== null && recorder !== null) {\n  const lines = recorder.map((r) => JSON.stringify(r));',
+  'const rec = getRecorder();\nif (args.record !== null && rec !== null) {\n  const lines = rec.map((r) => JSON.stringify(r));');
+if (out.includes('recorder.map') || /&&\s*recorder\s*!==/.test(out)) { throw new Error('recorder 残留未清干净'); }
 writeFileSync(P, out);
 
 // policy.mjs：复制 run.mjs 原有 import 段（路径深度相同，均在 tests/sim/ 下）+ recorder + 9 个函数
@@ -199,28 +288,67 @@ Expected: 两个 `node --check` 均静默通过。若 `run.mjs` 里还有遗漏�
 Run: `grep -nE "\brecorder\b|\brecordSeq\b|\brecordCtx\b" tests/sim/run.mjs`
 Expected: 只剩注释里的字样与 `setRecorder([])` 那一行；任何**代码**引用都要改成 `getRecorder()` 或搬进 `policy.mjs`，并在报告里逐条列出改了什么。
 
-- [ ] **Step 4: 补 run.mjs 里 recorder 说明注释的指向**
+- [ ] **Step 4: 改 recorder 注释块的标题行（确切锚点）**
 
-`run.mjs` 顶部原有一段解释 recorder 的注释（搬移后成了孤儿）。把它的首行改为指向新位置，其余保留：
+搬移后 `run.mjs` 第 44–59 行的 recorder 说明注释成了孤儿。**第 44 行是 `/**`，不是标题**；唯一可命中的标题是第 45 行。用 Edit 做精确替换：
+
+old_string（逐字）：
+```
+ * ---------- 决策点记录器（B56）----------
+```
+new_string（逐字）：
+```
+ * ---------- 决策点记录器（B56；B70 起实体已搬入 tests/sim/policy.mjs）----------
+ * ⚠️ B70：recorder/recordSeq/recordCtx/record 均在 policy.mjs；本文件只通过
+ *   setRecorder([]) 装配、getRecorder() 读取。以下原说明保留作口径依据。
+```
+
+- [ ] **Step 4b: 清掉搬移后零使用的 import 绑定（干跑实测 22 个）**
+
+存为 `docs/预研/data/tmp/prune-imports.mjs` 并运行：
 
 ```js
-// ⚠️ B70：决策点记录器已随决策层搬入 tests/sim/policy.mjs（recorder/recordSeq/recordCtx/record）；
-//   本文件只通过 setRecorder([]) 装配、通过 getRecorder() 读取。以下原说明保留作口径依据。
+// docs/预研/data/tmp/prune-imports.mjs
+import { readFileSync, writeFileSync } from 'node:fs';
+const P = 'tests/sim/run.mjs';
+const src = readFileSync(P, 'utf8');
+// 先把所有 import 语句整体剥掉，只在**剩余代码**里查引用，避免 import 之间互相「证明有用」
+const body = src.replace(/import\s+[\s\S]*?from\s+'[^']+';\n?/g, '');
+const re = /import\s+\{([^}]+)\}\s+from\s+'([^']+';)/g;
+let out = src, m, removed = [];
+while ((m = re.exec(src)) !== null) {
+  const names = m[1].split(',').map((s) => s.trim()).filter((s) => s !== '');
+  const kept = names.filter((n) => new RegExp(`\\b${n}\\b`).test(body));
+  const dead = names.filter((n) => !kept.includes(n));
+  removed.push(...dead);
+  if (kept.length === 0) { out = out.replace(m[0] + '\n', '').replace(m[0], ''); }
+  else if (dead.length > 0) { out = out.replace(m[0], `import { ${kept.join(', ')} } from '${m[2]}`); }
+}
+writeFileSync(P, out);
+console.log(`移除 ${removed.length} 个零使用绑定：${removed.join(', ')}`);
 ```
+
+Run: `node docs/预研/data/tmp/prune-imports.mjs && node --check tests/sim/run.mjs && grep -cE "^import" tests/sim/run.mjs`
+Expected: 打印移除清单（数量应 >0；干跑基线为 22，实际以输出为准并记进批次记录）；`node --check` 静默；import 行数减少。
+⚠️ 若 `node --check` 通过但运行时报 `X is not defined`，说明某个绑定被误删 ⇒ 用 `git diff tests/sim/run.mjs` 找回该 import，并在报告里记下误删原因（通常是该名字只出现在字符串或注释里）。
 
 - [ ] **Step 5: 跑测试确认通过**
 
 Run: `node --test tests/engine/policy-extraction.test.ts`
 Expected: 5/5 PASS
 
-- [ ] **Step 6: 门 ⑨ 逐字等价（本任务的核心验收）**
+- [ ] **Step 6: 门 ⑨ 逐字等价 + 记录器路径可用（本任务的核心验收）**
 
 ```bash
 mkdir -p docs/预研/data/tmp
+node --check tests/sim/run.mjs && node --check tests/sim/policy.mjs && echo "两个文件语法 OK"
 node tests/sim/run.mjs --out docs/预研/data/tmp/balance-after-B70.md > docs/预研/data/tmp/sim-after-B70.log 2>&1
 diff docs/balance-report.md docs/预研/data/tmp/balance-after-B70.md && echo "报告逐字一致"
+node tests/sim/run.mjs --themes xianxia2026 --players 4 --games 2 --record-decisions docs/预研/data/tmp/rec-after-B70.jsonl --out docs/预研/data/tmp/rec-after-B70.md > docs/预研/data/tmp/rec-after-B70.log 2>&1
+node --test tests/gates/sim-record.test.ts
 ```
-Expected: 打印「报告逐字一致」。若有差异：先查 `runCell` 三处调用点是否都加了 `await`（漏一个会让 `cells` 里塞进 Promise 而不是结果），再查是否漏搬 helper；**不得**重生成 `docs/balance-report.md`。
+Expected（四条全部成立）：① 打印「两个文件语法 OK」；② 打印「报告逐字一致」；③ 第三条命令退出码 0 且 `docs/预研/data/tmp/rec-after-B70.jsonl` 行数 >10（证明 `getRecorder()` 接线正确、无 ReferenceError）；④ `sim-record` 测试全绿。
+失败定位顺序（按干跑实证的经验）：`SyntaxError: Unexpected reserved word` ⇒ `runPositionSpread`/`runGateReserveScan` 没加 `async`（`await` 落在同步函数里）；`recorder is not defined` ⇒ 落盘段那两行没改成 `getRecorder()`；`diff` 非空 ⇒ 先查 `runCell` 三处调用点（881/948/1084）是否都加了 `await`（漏一个会让 `cells` 里塞进 Promise 而不是结果），再查是否漏搬 helper。**不得**重生成 `docs/balance-report.md`。
 
 - [ ] **Step 7: 全门禁 + 提交**
 
@@ -461,7 +589,9 @@ async function askPolicy(policy, state, seat, counters) {
       }
 ```
 
-**普通分支**：⚠️ **不得用 `continue`** —— 该分支尾部还有 `s = await advanceWithDuel(...)` 与 `firstPendingSeat` 统计，跳过会让模型臂少记「首个登顶者」传导数据。改用标志位把原决策块整体包起来：
+**普通分支**：⚠️ **不得用 `continue`** —— 该分支尾部还有 `s = await advanceWithDuel(...)` 与 `firstPendingSeat` 统计，跳过会让模型臂少记「首个登顶者」传导数据。改用标志位把原决策块整体包起来。
+
+确切边界（搬移前 `run.mjs` 行号，施工时以锚点字符串复核）：**待认证锁定分支 = 421–436**（434 推进、435 `continue`、436 右花括号）；**要包进 `if (!injected)` 的范围 = 437–474**（即从 `const roll = s.rng.next();` 到三段决策结束）；**475 的 `s = advanceWithDuel(s, 'standard', { gateReserve });` 与 476–480 的 `firstPendingSeat` 统计必须留在包裹之外**（481 是 while 收尾）。形状：
 ```js
     let injected = false;
     if (hit(seat)) {
@@ -482,7 +612,7 @@ async function askPolicy(policy, state, seat, counters) {
 ```
 改道命中时**不消耗** `s.rng.next()`（原决策块被跳过）⇒ 模型臂随机流自首个分歧起与基线分叉，这是策略注入的固有效应，必须写进批次记录。
 
-② **council 面**：`councilTurn(s)` 改为 `async function councilTurn(s, policy, counters, hit)`，在其投票分支前插入：
+② **council 面**：`councilTurn` 现位于 `run.mjs:178–190`（搬移后在 `policy.mjs`，行号会变，**以锚点字符串定位**）。签名改为 `async function councilTurn(s, policy, counters, hit)`；注入点在循环头 `for (const p of alive) {` 内、锚点行 `const t = pickTarget(s, p.seat);` **之前**（该循环同层已有 `continue`，故 `continue` 合法）。插入：
 ```js
     if (hit(p.seat)) {
       const picked = await askPolicy(policy, s, p.seat, counters);
@@ -493,9 +623,13 @@ async function askPolicy(policy, state, seat, counters) {
       }
     }
 ```
-`playOne` 内调用点改为 `s = await councilTurn(s, policy, counters, hit);`
+`playOne` 内调用点（锚点 `if (needsCouncilVote(s)) { s = councilTurn(s); }`）改为 `if (needsCouncilVote(s)) { s = await councilTurn(s, policy, counters, hit); }`。
 
-③ **certify 面**：`certificationTurn(s)` 改为 `async function certificationTurn(s, policy, counters, hit)`，在 `const challenger = p.resource >= 2 && s.rng.next() < 0.2;` **之前**插入：
+③ **certify 面**：`certificationTurn` 签名改为 `async function certificationTurn(s, policy, counters, hit)`。注入锚点 = 逐字唯一的那一行（现 `run.mjs:198`，`grep -c` 应为 1）：
+```js
+      const challenger = p.resource >= 2 && s.rng.next() < 0.2;
+```
+它所在循环头是 `    for (const p of s.players) {`（现 196 行，外层是 `for (const target of targets) {`）。在该锚点行**之前**插入：
 ```js
       if (hit(p.seat)) {
         const picked = await askPolicy(policy, s, p.seat, counters);
@@ -508,9 +642,10 @@ async function askPolicy(policy, state, seat, counters) {
         }
       }
 ```
-`playOne` 内调用点改为 `s = await certificationTurn(s, policy, counters, hit);`
-⚠️ `certifyAbstain` 需加进 `policy.mjs` 的 certification import 列表（原文件只 import 了 sign/challenge/answer/appeal/appealVote/mutualSign）。
+`playOne` 内调用点（锚点 `if (needsCertificationAction(s)) { s = certificationTurn(s); }`）改为 `if (needsCertificationAction(s)) { s = await certificationTurn(s, policy, counters, hit); }`。
+⚠️ **必须补 import**：`certifyAbstain` 已由 `engine/core/certification.ts:135` 导出，但原 `run.mjs:32–35` 的 certification import 列表**不含它** ⇒ 搬移后要在 `policy.mjs` 的该 import 列表里加上 `certifyAbstain`，否则运行时报 `certifyAbstain is not defined`（`node --check` 查不出来）。
 ⚠️ 改道命中时**不再消耗** `s.rng.next()` 的那次 0.2 判定 ⇒ 模型臂的随机流与基线臂从此分叉，这是策略注入的固有效应，**必须在批次记录里写明**，不得声称两臂随机流一致。
+⚠️ 本面只改道「签印/质疑/弃权」三选；`certificationTurn` 后续的判定（`certifyAnswer`）、互签（`certifyMutualSign`）、复议申请与复议票**一律保持原逻辑不动**。
 
 - [ ] **Step 5: 跑测试 + 门 ⑨ 等价 + 全门禁**
 
@@ -600,28 +735,63 @@ Expected: 新增 3 条 FAIL（描述缺颜色/点数、指令不含规则）
     }
 ```
 
-- [ ] **Step 4: 让 `buildChoice` 的面感知指令**
+- [ ] **Step 4: 让 `buildChoice` 的指令面感知（必须保留 key 撞车抛错）**
 
-把 `buildChoice` 里固定的 `instructions` 改为按候选集推导：
+现状 `tools/laya-probe/state-text.mjs:249–266`：循环里有 `if (Object.hasOwn(criteria, key)) { throw new Error(...) }`，**该抛错被 `tests/engine/legal-probe.test.ts:2154` 的常驻用例钉住**，替换体若删掉它必红。只改 `instructions` 的来源，其余逐字保留。把整个函数替换为：
+
 ```js
 export function buildChoice(state, seat) {
   const actions = getLegalActions(state, seat);
   const criteria = {};
-  for (const a of actions) { criteria[actionKey(a)] = describeAction(state, a, seat); }
+  for (const a of actions) {
+    const key = actionKey(a);
+    if (Object.hasOwn(criteria, key)) {
+      throw new Error(`buildChoice：座${String(seat)} 的候选 key「${key}」撞车 ——`
+        + '两条不同动作编出同一个 key，题面会静默少一个选项。'
+        + '要修的是 id 唯一性（主题副本 id 带 #dupN 后缀即为此），不得在这里给 key 加后缀：'
+        + 'key 必须能原样反解回动作。');
+    }
+    criteria[key] = describeAction(state, a, seat);
+  }
+  // B70：指令按候选所属面生成。对峙面必须写明比较规则并限定只能选亮牌，
+  //   否则模型只看到牌名 ⇒ 按名字语义猜（实测：13/44 答到关隘面去了）。
   const onlyDuel = actions.length > 0 && actions.every((a) => a.type === 'DUEL_SUBMIT_CARD');
   const instructions = onlyDuel
     ? '对峙规则：红牌胜黑牌；同色则点数大者胜；同点平局各弃一张。亮牌不回手牌；败者退1格并抽1张。只能从下列自己的手牌里选一张锁定，选哪张？'
     : '现在轮到该玩家行动，应选哪个动作？';
-  return { instructions, criteria, noLegalActions: actions.length === 0 };
+  return {
+    instructions,
+    criteria,
+    noLegalActions: Object.keys(criteria).length === 0,
+  };
 }
 ```
-⚠️ 若原实现的 `noLegalActions` 计算方式不同，保留原语义（等价即可），不得改其含义。
 
-- [ ] **Step 5: 同步封闭词表（不得放宽）**
+Run: `node --test tests/engine/legal-probe.test.ts 2>&1 | tail -6`
+Expected: key 撞车那条常驻用例仍绿；新增的 3 条 B70 用例里「描述含颜色点数」与「面感知」两条转绿，词表那条仍红（Step 5 处理）。
 
-新描述引入了 `对峙亮牌`、`点数`、`·` 等词形。跑测试看词表守卫报哪些 token 不在词表，然后**只把公开集里的词**加进 `TEMPLATE_WORDS`/`TEMPLATE_SKELETONS`：
-Run: `node --test tests/engine/legal-probe.test.ts 2>&1 | grep -A3 "词表外"`
-按输出逐条补词（例如 `对峙亮牌`、`点数`），**不得**为了让测试过而删除断言或把整类 token 放行。补完再跑，禁止集守卫（粘连泄漏 / 解构 / 括号访问）必须仍绿。
+- [ ] **Step 5: 同步封闭词表（确切清单，已实算；不得放宽词表）**
+
+词表校验扫描**四路字符串**：`describeState` 输出、`buildChoice().instructions`、criteria 的 **key 与 value**（`tests/engine/legal-probe.test.ts:1563–1567` 的 `scannedText`）。分词规则 = `TOKEN_RUN`（1385 行，id 字符 ∪ CJK），数字按 `generalize`（1395–1396）换成哨兵 `NUM = '\u0000'`。
+
+新题面引入的 token 已用一次性脚本实算（`docs/预研/data/tmp/b70-vocab-probe.mjs`，输出同名 `.log`），**缺失恰好 10 条**，照下面补：
+
+① `TEMPLATE_WORDS`（1463–1498）末尾、在 `'plain', 'boon', 'hazard', 'rift', 'junction', 'peak',` 那一行**之后**、闭合 `];` 之前插入：
+```ts
+  // B70：对峙题面补颜色/点数/规则后引入的公开措辞（逐条实算得出，不得整类放行）
+  '对峙亮牌', '对峙规则', '红牌胜黑牌', '同色则点数大者胜', '同点平局各弃一张',
+  '亮牌不回手牌', '只能从下列自己的手牌里选一张锁定', '选哪张',
+```
+② `TEMPLATE_SKELETONS`（1501–1508）末尾、在 `` `座${NUM}推翻`, `座${NUM}维持`, `判定座${NUM}通过`, `判定座${NUM}不通过`, `` 那一行**之后**、闭合 `];` 之前插入：
+```ts
+  // B70：对峙描述与规则里的「中文夹数字」形状
+  `点数${NUM}`, `败者退${NUM}格并抽${NUM}张`,
+```
+③ **不需要补**的：牌名（如 `御风`/`缩地`）由 `vocabularyFor` 的 `themeDataWords` 从主题包派生覆盖；`红`/`黑` 已在既有词表里。
+
+Run: `node --test tests/engine/legal-probe.test.ts 2>&1 | tail -6`
+Expected: 全绿（含既有的粘连泄漏、解构/括号访问、key 撞车、40 字符预算四类守卫）。
+若仍报「词表外的 token」：把该 token 原样记进报告，**先判断它是否属于公开集**——是则按上面同样方式逐条补；不是则说明题面泄漏了禁止集，必须改题面而不是补词表。**禁止**删除断言、禁止把整类 token 放行、禁止改 `TOKEN_RUN`。
 
 - [ ] **Step 6: 全门禁 + 提交**
 
@@ -845,12 +1015,20 @@ console.log(`报告 → ${OUT}`);
 
 - [ ] **Step 6: 加脚本键 + 验证 SKIP 与语法**
 
-`package.json` 的 `scripts` 内加一行（不加任何依赖）：
-```json
+`package.json` 现状：`scripts` 共 20 键、**无** `eval:faces`、**无 `dependencies` 键**，末键在第 27 行且**无尾逗号**。用 Edit 精确替换：
+
+old_string（逐字）：
+```
+    "probe:laya:skip": "node tools/laya-probe/skip.mjs"
+```
+new_string（逐字）：
+```
+    "probe:laya:skip": "node tools/laya-probe/skip.mjs",
     "eval:faces": "node tools/laya-probe/game-arms.mjs"
 ```
-Run: `node --check tools/laya-probe/game-arms.mjs && node --check tools/laya-probe/face-stats.mjs && npm run eval:faces; echo "exit=$?"`
-Expected: 两个 `--check` 静默；**服务未起时**输出 `SKIP {"reason":"no-sidecar",...}` 且 `exit=0`
+
+Run: `node --check tools/laya-probe/game-arms.mjs && node --check tools/laya-probe/face-stats.mjs && node -e "const p=require('./package.json');if(p.dependencies)throw new Error('不得新增 dependencies');console.log('eval:faces =',p.scripts['eval:faces'])" && npm run eval:faces; echo "exit=$?"`
+Expected: 两个 `--check` 静默；打印 `eval:faces = node tools/laya-probe/game-arms.mjs`；**服务未起时**输出 `SKIP {"reason":"no-sidecar",...}` 且 `exit=0`。
 
 - [ ] **Step 7: 提交**
 
@@ -871,34 +1049,53 @@ git commit -m "feat(B70): 三面两臂评估器 + McNemar 统计（可复跑、�
 - Create: `docs/批次/B70-决策面评估与题面修正-执行记录.md`
 - Modify: `docs/superpowers/specs/2026-11-07-creative-mountain-liveness-design.md` §7、`README.md`
 
-- [ ] **Step 1: 起服务并跑评估**
+- [ ] **Step 1: 起服务、跑评估、停服务（三段都要留证）**
 
 ```bash
-node tools/laya-sidecar/up.mjs --weights "D:/<local-libs>/laya-multilingual/model.safetensors"   # 前台，另开一个终端跑下一步
-npm run eval:faces
+# ① 后台起两层服务（日志落 gitignore 的 tmp）
+node tools/laya-sidecar/up.mjs --weights "D:/<local-libs>/laya-multilingual/model.safetensors" > docs/预研/data/tmp/up-b70.log 2>&1 &
+# ② 等就绪（最多 180s；就绪标志是日志里出现 READY）
+for i in $(seq 1 60); do grep -q "READY" docs/预研/data/tmp/up-b70.log && break; sleep 3; done
+grep -E "device=|READY|Traceback" docs/预研/data/tmp/up-b70.log | head -3
+# ③ 跑三面评估
+npm run eval:faces 2>&1 | tee docs/预研/data/tmp/eval-b70.log
 ```
-Expected: 三面各打印一行读数；`docs/预研/data/b70-face-arms.json` 与报告生成；三面 `anomalies` 均为 0。跑完 **Ctrl+C 停服务**，并确认端口释放：
+Expected：② 打印 `device=cuda`（或 `cpu`）与 `[up] READY …`，**不得出现 `Traceback`**；③ 三面各打印一行 `[face] 400 局/臂｜座0 …｜b=… c=… χ²=…｜<判定>｜… 分钟`，并生成 `docs/预研/data/b70-face-arms.json` 与 `docs/预研/2026-11-09-b70-face-evaluation.md`；三面 `anomalies` 均为 **0**。
+
+跑完**必须停服务并验证端口释放**（`up.mjs` 是前台设计，后台起的那份要显式结束）：
 ```bash
+pkill -f "tools/laya-sidecar/up.mjs" ; pkill -f "tools/laya-sidecar/launch.py" ; pkill -f "tools/laya-sidecar/serve.mjs"
 for p in 8711 8712; do curl -s -o /dev/null -w "$p → %{http_code}\n" --max-time 2 http://127.0.0.1:$p/health; done
 ```
-Expected: 两个都是 `000`（无响应）。
+Expected: 两行都是 `8711 → 000` 与 `8712 → 000`（无响应）。若仍是 200/503 ⇒ 有残留进程，必须查到并结束，**不得**留着无人看管的常驻服务（B54 教训）。
 
 - [ ] **Step 2: 核对判据未被下调**
 
 Run: `node -e "const r=require('./docs/预研/data/b70-face-arms.json').results; for(const x of r){if(x.gamesPerArm<400)throw new Error(x.face+' 局数不足');} console.log('三面均 ≥400 局/臂')"`
 Expected: 打印「三面均 ≥400 局/臂」。若某面因 30 分钟预算中断 ⇒ 如实登记「未跑满」，**不得**把判定写成达标。
 
-- [ ] **Step 3: 补报告的结论段**
+- [ ] **Step 3: 补报告的结论段（逐项必填，不得留空）**
 
-在生成的报告末尾追加：三面各自的判定（照抄脚本给出的固定措辞）、`b/c/χ²` 与胜率、回落与空候选计数、延迟（若脚本未记则从 sidecar 日志取）、以及「本批只评估不接入」的声明。若某面判为「值得接入」，写明**下一步是另立批次做门 ⑨ 重校准**，不在本批接入。
+脚本已生成读数表；你要在 `docs/预研/2026-11-09-b70-face-evaluation.md` 末尾追加「结论」小节，**每面一段**，每段必须含下列 8 项（全部取自 `docs/预研/data/b70-face-arms.json`，不得手填估计值）：
+1. 判定原文（只能是 `verdictOf` 的三种固定措辞之一）；2. `b` / `c` / `χ²` 与临界 3.841 的比较；3. 座0 胜率基线→模型（百分比，一位小数）；4. 胜者变化率 `changedRate`；5. 模型调用数 `modelCalls` 与延迟 `latencyMs.p50/p95`；6. 回落数 `injection.fallbacks` 与空候选数 `injection.emptyCandidates`；7. 兜底局数与平均回合（基线→模型）；8. `anomalies`（必须 0）。
+
+追加两条固定声明：① 「本批**只评估不接入**：`policy` 缺省 undefined、sim CLI 无新开关、门 ⑨ 基线未动」；② 随机流口径注记（模型臂改道命中时不消耗那次 `s.rng.next()` ⇒ 两臂自首个分歧起分叉；配对比较仍成立，因为同 seed 起点相同）。
+若某面判为「值得接入」，必须写明**下一步是另立批次做门 ⑨ 重校准**，本批不接入。若某面因 30 分钟预算中断，如实写「未跑满 N 局/臂」，**不得**写成达标。
 
 - [ ] **Step 4: 口径同步**
 
 主规格 §7 追加一段：`tests/sim/policy.mjs` 是决策层单一真相源；`playOne` 的第 5 参 `FacePolicy` 默认关闭；评估器 `tools/laya-probe/game-arms.mjs` 不进门禁；对峙选牌保持贪心（引 B70 实测依据）。`README.md` 登记 B70 结论与「模型未接入生产」。
 
-- [ ] **Step 5: 写批次记录**
+- [ ] **Step 5: 写批次记录（七节，逐节必填）**
 
-`docs/批次/B70-决策面评估与题面修正-执行记录.md`，照仓内体例（目标 / 裁定 / 实现 / 验收 / 复盘 / 遗留 / 提交）。必须包含：门 ⑨ `diff` 为空的证据、13 门尾行、三面读数表、随机流分叉的口径注记、两个死函数已删、以及提交哈希按口径写 `<hash>` 待回填（并入下一批首个提交）。
+新建 `docs/批次/B70-决策面评估与题面修正-执行记录.md`，节名与必填内容照此（体例对齐 `docs/批次/B68-对峙选牌接线-执行记录.md`）：
+1. **目标**：修两处缺陷 + 建三面评估器；引 spec 路径与本计划路径。
+2. **裁定**：逐条记本批作出的决定（对峙保持贪心的实测依据、`policy` 默认关闭、只评估不接入、词表只补 10 条不放宽）。
+3. **实现**：搬移的 9 个函数与 recorder、删除的 2 个死函数、async 化的 3 个函数与 5 个 await 点、三个注入点、题面与词表改动、归一化函数。
+4. **验收**：贴 ① 门 ⑨ `diff` 为空的命令与输出；② `node tools/gate.mjs` 尾行 `== PASS：13 门全绿 ==`；③ 各任务新增测试的通过计数；④ `--record-decisions` 路径可用的证据（jsonl 行数）；⑤ 端口释放验证的两行 `000`。
+5. **复盘与经验沉淀**：必须记「干跑证伪的四条假设」（见本计划「事实来源与干跑证据」）；并**必须**往 `docs/沉淀/经验教训索引.md` 追加一条编号条目（编号 = 现有最大 E 编号 + 1，先 `grep -oE "E[0-9]+" docs/沉淀/经验教训索引.md | sort -t E -k2 -n | tail -1` 查出），内容为「跨文件搬移函数时必须连注释一起搬、async 化要顺着调用链一路改到顶、搬移后必须清残留引用与零使用 import」，并引本批干跑证据。
+6. **遗留**：如实登记未做项（模型未接入生产、得分公式未动、G-a…G-h 中本批未触及的条目）。
+7. **提交**：逐条列本批提交 SHA 与主题；**本记录自身的收官哈希写 `<hash>` 待回填**，并按既定口径注明「回填并入下一批首个提交，不单独开提交」。
 
 - [ ] **Step 6: 最终验收 + 提交**
 
