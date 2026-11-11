@@ -26,7 +26,7 @@
 import type { State } from '../engine/core/state.ts';
 import type { Action } from '../engine/core/action.ts';
 import type { CertificationState } from '../engine/core/flow.ts';
-import { cardNeedsTarget, targetCandidates } from '../engine/core/targeting.ts';
+import { cardHasMovement, cardNeedsTarget, targetCandidates } from '../engine/core/targeting.ts';
 import { abilityAvailability, activeAbilityId } from '../engine/core/passives.ts';
 import { actionKey } from '../engine/core/action-key.ts';
 import { isRoundEnd } from '../engine/core/round.ts';
@@ -45,7 +45,7 @@ function actionWindowRefusal(state: State, seat: number): string | null {
   const p = state.players[seat];
   if (p === undefined) { return '该座位不存在（人数档位与存档不一致）。'; }
   if (!p.alive) { return '该玩家已出局。'; }
-  if (p.pendingCert) { return '待认证锁定：你已在峰顶，不能主动移动（只能被质疑后退）。'; }
+  if (p.pendingCert) { return '待认证锁定：不能主动移动，位移类牌与被动不可用（非位移牌仍可打出）。'; }
   if (state.duel !== null) { return '对峙未结算：双方各自锁定亮牌后才能继续行动。'; }
   if (state.phase !== '行动') { return '当前阶段不可行事（先完成山议/认证）。'; }
   if (isRoundEnd(state)) { return '本 round 已走完：等待回合结算。'; }
@@ -126,9 +126,13 @@ export function uiBlockNotice(state: State, seat: number, action: Action): strin
     case 'ROLL_WHEEL':
       return actionWindowRefusal(state, seat);
     case 'PLAY_CARD': {
-      const window = actionWindowRefusal(state, seat);
-      if (window !== null) { return window; }
       const card = me?.hand.find((x) => x.id === action.cardId);
+      // ⚠️ **B71：锁定者仍可打非位移牌**（引擎 `act` 分支只拒位移牌）⇒ 锁定的拒因不适用于这类牌。
+      //   位移牌、以及阶段/本轮未完等其它拒因照旧（`actionWindowRefusal` 原样返回）。
+      const lockedPlayAllowed = me?.pendingCert === true && card !== undefined
+        && !cardHasMovement(card) && state.phase === '行动' && !isRoundEnd(state);
+      const window = actionWindowRefusal(state, seat);
+      if (window !== null && !lockedPlayAllowed) { return window; }
       if (card === undefined) { return '手牌里没有这张牌（可能已被弃掉或不属于你）。'; }
       // ⚠️ **B65：出牌付费（G-a 收口）** —— 引擎 `act` 分支查 `card.cost`，灵枢不足即拒绝。
       //   ⇒ 这里**必须同步**给出同款拒因（规格 §3.1「行事」/§4.3）⇒ 否则玩家点了才发现被拒。
@@ -368,6 +372,24 @@ export function uiCandidates(state: State, seat: number): Action[] {
     if (!isDuelParticipant(state, seat) || duelPicked(state, seat)) { return out; }
     for (const card of me.hand) {
       out.push({ type: 'DUEL_SUBMIT_CARD', actor: seat, cardId: card.id });
+    }
+  } else if (me.pendingCert) {
+    // ⚠️ **B71：锁定者只发非位移牌**（与引擎 `actionPhaseCandidates` 的锁定分支同款）。
+    //   位移族（MOVE / ROLL_WHEEL / ABILITY）不发；阶段 / 本轮未完两条判据照旧。
+    //   ⚠️ 与 `legal.ts` 各自独立写一份是**本文件的设计**（不 import 枚举）——
+    //     两侧集合相等由 `legal-probe.test.ts` 的漂移守卫钉住。
+    //   ⚠️ **不早退**：本函数后面还要追加山议 / 认证面候选（它们不受行动窗口约束）。
+    if (state.phase === '行动' && !isRoundEnd(state)) {
+      for (const card of me.hand) {
+        if (cardHasMovement(card)) { continue; }
+        if (cardNeedsTarget(card)) {
+          for (const target of targetCandidates(state, seat)) {
+            out.push({ type: 'PLAY_CARD', actor: seat, cardId: card.id, target });
+          }
+        } else {
+          out.push({ type: 'PLAY_CARD', actor: seat, cardId: card.id });
+        }
+      }
     }
   } else if (actionWindow(state, seat)) {
     out.push({ type: 'MOVE', actor: seat, steps: 0 });

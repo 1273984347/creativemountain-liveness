@@ -340,10 +340,21 @@ test('§7 行动阶段：枚举出行棋/问天/出牌，且不消耗随机源',
   assert.equal(s.rng.snapshot(), before, '枚举不得消耗随机源');
 });
 
-test('§7 待认证锁定：行动阶段整体无动作（与 UI 禁用行动区一致）', () => {
-  for (const a of getLegalActions(lockedScene(), 0)) {
-    assert.equal(['MOVE', 'ROLL_WHEEL', 'PLAY_CARD', 'ABILITY'].includes(a.type), false, `泄漏 ${a.type}`);
+test('B71 §5.1 待认证锁定：位移族关闭、非位移牌可枚举（与引擎逐条同判）', () => {
+  const s = lockedScene();
+  const me = s.players[0];
+  assert.ok(me !== undefined, '前提：座 0 存在');
+  const actions = getLegalActions(s, 0);
+  for (const a of actions) {
+    assert.equal(['MOVE', 'ROLL_WHEEL', 'ABILITY'].includes(a.type), false, `位移族泄漏 ${a.type}`);
+    if (a.type === 'PLAY_CARD') {
+      const card = me.hand.find((c) => c.id === a.cardId);
+      assert.ok(card !== undefined && !cardHasMovement(card), `位移牌泄漏 ${String(a.cardId)}`);
+    }
   }
+  // 牙齿（E87：空集 ≠ 有效）：锁定者的非位移牌必须真的被枚举出来。
+  assert.ok(actions.some((a) => a.type === 'PLAY_CARD'),
+    '锁定者的非位移牌必须可枚举（B71）—— 否则本条在测一个空集');
 });
 
 test('§7 对峙未决 ⇒ 行动窗口关闭（DuelState 的 pickA/pickB 是可选字段，不写 undefined）', () => {
@@ -591,18 +602,39 @@ test('§7 上限：枚举结果永不超过 LEGAL_ACTION_CAP（含**真的撞上
 // ⚠️ **B66 更新**：原「五处」中的 a（`pendingCert`）已**不再是「粗筛窄于引擎」** —— G-b 已修
 //   （引擎 `act` 分支现查 `pendingCert`）⇒ 引擎与粗筛同判 ⇒ 该条改名为「粗筛与引擎同判·其一」。
 
-test('§7 粗筛与引擎同判·其一（a：pendingCert ⇒ G-b 已修）：引擎按「含位移」分档，枚举不发', () => {
+test('§7 粗筛与引擎同判·其一（a：pendingCert ⇒ B71 起逐条同判）：非位移发、位移拒且不发', () => {
   const locked = lockedScene();
-  const card = locked.players[0]?.hand[0];
-  assert.ok(card !== undefined, '前提自查：锁定者必须有手牌');
-  const r = probeAction(locked, { type: 'PLAY_CARD', actor: 0, cardId: card.id });
-  // ⚠️ **B66 更新（G-b 已修）**：引擎 `act` 分支**现查** `pendingCert` ⇒ **含位移**的牌被拒。
-  //   本行取的是手牌第一张（未必是位移类）⇒ 若它不含位移 ⇒ 引擎**照放行**（规格只禁位移，不禁一切行动）。
-  const isMovement = cardHasMovement(card);
-  assert.equal(r.ok, !isMovement,
-    `引擎侧：G-b 已修 ⇒ 锁定者打${isMovement ? '含位移' : '非位移'}的牌应当${isMovement ? '被拒' : '被放行'}；实际拒因=${r.reason}`);
-  assert.equal(getLegalActions(locked, 0).some((a) => a.type === 'PLAY_CARD'), false,
-    '粗筛侧：pendingCert ⇒ 行动面整体关闭（与 UI 禁用行动区一致）⇒ 故意不发');
+  const me = locked.players[0];
+  assert.ok(me !== undefined, '前提自查：锁定者必须存在');
+  const nonMove = me.hand.find((c) => !cardHasMovement(c));
+  assert.ok(nonMove !== undefined, '前提自查：锁定者手里必须有非位移牌（否则测不到「发」这一侧）');
+
+  // ① 非位移牌：引擎放行 ∧ 枚举发。
+  const okRes = probeAction(locked, { type: 'PLAY_CARD', actor: 0, cardId: nonMove.id });
+  assert.equal(okRes.ok, true, `引擎侧：非位移牌必须被放行；实际拒因=${okRes.reason}`);
+  assert.ok(candidatesOf(locked, 0).some((a) => a.type === 'PLAY_CARD' && a.cardId === nonMove.id),
+    '粗筛侧：非位移牌必须发（B71 与引擎同判）');
+
+  // ② 位移牌：引擎拒 ∧ 枚举不发（用主题里真实存在的位移牌，覆盖 utility / 嵌套形状）。
+  const theme = JSON.parse(readFileSync(resolve('themes/xianxia2026/theme.json'), 'utf8')) as { cards: Card[] };
+  const moveCard = theme.cards.find((c) => cardHasMovement(c));
+  assert.ok(moveCard !== undefined, '前提自查：主题里必须有位移牌');
+  // ⚠️ 不能用 `structuredClone`：它会把 `state.rng` 的类原型剥掉（`snapshot is not a function`）
+  //   ⇒ 手建浅拷贝，只替换座 0 的手牌（rng 等其余引用保持原样）。
+  const withMove: State = {
+    ...locked,
+    players: locked.players.map((p) => (p.seat === 0
+      ? { ...p, hand: [...p.hand, { ...moveCard, id: 'b71_move_probe' }] }
+      : p)),
+  };
+  const target = cardNeedsTarget(moveCard) ? targetCandidates(withMove, 0)[0] : undefined;
+  const moveAction = target === undefined
+    ? { type: 'PLAY_CARD' as const, actor: 0, cardId: 'b71_move_probe' }
+    : { type: 'PLAY_CARD' as const, actor: 0, cardId: 'b71_move_probe', target };
+  const rejRes = probeAction(withMove, moveAction);
+  assert.equal(rejRes.ok, false, '引擎侧：锁定者打位移牌必须被拒（G-b 已修）');
+  assert.equal(candidatesOf(withMove, 0).some((a) => a.type === 'PLAY_CARD' && a.cardId === 'b71_move_probe'), false,
+    '粗筛侧：位移牌不得发（与引擎同判）');
 });
 
 test('§7 粗筛与引擎同判·其二（b：duel !== null ⇒ G-f 已修）：参与者拿到选牌候选，非参与者无候选', () => {

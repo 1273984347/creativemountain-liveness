@@ -412,7 +412,7 @@ function renderActions(): HTMLElement {
     return section('行动', ...body);
   }
   if (player.pendingCert) {
-    body.push(el('span', { class: 'warn', text: '待认证锁定：你已在峰顶，不能主动移动（只能被质疑后退）。' }));
+    body.push(el('span', { class: 'warn', text: '待认证锁定：不能主动移动（位移类牌与被动不可用）；非位移牌仍可打出手牌区打出。' }));
     return section('行动', ...body);
   }
   // ⚠️ B18：停在**未通过的关隘** ⇒ **只显示关隘面板**（回合阻塞，行棋/问天/出牌都暂不可用）。

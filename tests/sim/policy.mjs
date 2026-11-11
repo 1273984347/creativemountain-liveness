@@ -470,8 +470,12 @@ async function playOne(theme, players, seed, gateReserve, policy) {
       const lockedHand = player.hand.filter((c) => c.type !== 'motion');
       // ⚠️ B70 Task 3：**play 面注入（待认证锁定分支）**。该分支原本就以 `advanceWithDuel` +
       //   `continue` 收尾 ⇒ 改道分支自带推进（这里 `continue` 合法且必要）。
-      //   ⚠️ 现状读数：§7 粗筛在 `pendingCert` 时**不发行动面候选**（`actionWindowOpen` 为假）
-      //   ⇒ 锁定分支的 `askPolicy` 目前只会 `emptyCandidates += 1` 后回落，不产生 `calls`。
+      //   ⚠️ **B71 起该注入点真正可达**：§7 粗筛在 `pendingCert` 时改为只发**非位移** `PLAY_CARD`
+      //   （与引擎同判）⇒ `askPolicy` 能拿到候选。此前（B70）粗筛整面关闭 ⇒ 该点恒为
+      //   `emptyCandidates`、模型从未被问到；B70 的 play 读数只覆盖非锁定回合。
+      //   ⚠️ 本分支的**基线启发式**仍是 `type !== 'motion'`（不改成 `cardHasMovement`：
+      //   那会移动门 ⑨ 的基线报告，属另一次 re-baseline 批次的活）⇒ 极少数 utility 位移牌
+      //   仍会被启发式尝试、被引擎拒（G-b）⇒ 该回合空耗。**模型臂**从枚举拿到的都是合法牌。
       if (hit(seat)) {
         const picked = await askPolicy(policy, s, seat, counters, 'play');
         if (picked !== null && picked.type === 'PLAY_CARD') {

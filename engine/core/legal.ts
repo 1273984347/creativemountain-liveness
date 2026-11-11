@@ -10,9 +10,12 @@
 //   `isRoundEnd` / **死亡座位**（a–e 见 `candidatesOf` 的契约表）。
 //   ⚠️ **B68 更新**：`duel !== null` 那条**已移除**（G-f 已修 ⇒ 对峙面改为发选牌候选）。
 //   ⚠️ **B66 更新**：`pendingCert` 那条**已不再**是「粗筛窄于引擎」——G-b 已修（引擎 `act` 分支
-//   现查 `pendingCert` ⇒ 锁定者打位移类牌被引擎拒绝）⇒ 引擎与粗筛**同判** ⇒ 该条从清单移除。
-//   那是 UI 一致性与已登记 gap，**不是**引擎合法性判据，也不是待修的 bug；
-//   `一致性-正向` 对这种「少发候选」完全失明，故五处各有一条专门的取证用例钉住现状。
+//   现查 `pendingCert` ⇒ 锁定者打位移类牌被引擎拒绝）。
+//   ⚠️ **B71 更新**：B66 只把**引擎**改成「只拒位移牌」，枚举仍整面关闭 ⇒ 锁定者的**非位移牌**
+//   引擎放行、枚举却不发（`牌在手里、UI 点不到、模型问不到`）。B71 让枚举**逐条对齐引擎**：
+//   锁定者只发**非位移** `PLAY_CARD`（位移判定用 `cardHasMovement`，与引擎同源）。
+//   ⇒ 该条**不再**是「窄于引擎」，而是「与引擎同判」；其余窄于引擎的只有 `phase` /
+//   `isRoundEnd` / **死亡座位** 三条（见 `candidatesOf` 的契约表）。
 // ⚠️ **B65：费用作为门槛，但由**引擎**判**（G-a 收口）**：出牌**付费**（规格 §3.1「行事」/§4.3）
 //   ⇒ 引擎 `act` 分支查 `card.cost`、灵枢不足即拒绝 ⇒ 本文件的**试跑**（`probeAction`）如实反映该拒绝
 //   ⇒ 粗筛**不必**另写 `cost <= resource` 的镜像判据（那才是第二事实源）。
@@ -30,7 +33,7 @@
 import type { Action } from './action.ts';
 import type { State } from './state.ts';
 import { probeAction } from './probe.ts';
-import { cardNeedsTarget, targetCandidates } from './targeting.ts';
+import { cardHasMovement, cardNeedsTarget, targetCandidates } from './targeting.ts';
 import { abilityAvailability, activeAbilityId } from './passives.ts';
 import { hasUsedCertificationTurn, isCertifier } from './certification.ts';
 import { duelPicked, isDuelParticipant } from './duel.ts';
@@ -42,7 +45,11 @@ import { pendingBarrier } from './barrier.ts';
 export const LEGAL_ACTION_CAP = 64;
 
 /**
- * 行动窗口：存活 ∧ 非待认证锁定 ∧ 无未决对峙 ∧ 阶段为行动 ∧ 本 round 尚未走完。
+ * 行动窗口（**位移 / 问天 / 身份被动**）：存活 ∧ 无未决对峙 ∧ 阶段为行动 ∧ 本 round 尚未走完。
+ *
+ * ⚠️ 待认证锁定（§5.1）**不在**这里返回「整面关闭」的理由：锁定者仍可打**非位移牌**，
+ *   那部分候选由 `actionPhaseCandidates` 的锁定分支发（B71；位移判定与引擎同源
+ *   `cardHasMovement`）。本函数对锁定者返回 false ⇒ 只关位移族（MOVE/ROLL_WHEEL/ABILITY）。
  *
  * ⚠️ 这里**不判**「是不是该座位的手番」：`performAction` 从不看 actor 是否为当前手番
  *   （与 `advanceTurn` 不看 PASS 的 actor 同源，G-c 族），探针据此；
@@ -50,23 +57,32 @@ export const LEGAL_ACTION_CAP = 64;
  * ⚠️ 同样**不判** `duel.pickA/pickB`：`DuelState` 那两个字段是可选的，
  *   「未决」即整体阻塞（`advanceTurn` 开头 `state.duel !== null` 那条早退）。
  *
- * ## 反过来的教训（发现 2）：这五条判据里有**四条让本函数比引擎更严**
+ * ## 反过来的教训（发现 2）：真正**窄于引擎**的判据只剩三条
  *
- * 「枚举不得领先引擎」防的是**多**加判据；但这四条是**有意**多出来的严格，
+ * 「枚举不得领先引擎」防的是**多**加判据；下面三条是**有意**多出来的严格，
  * 属于 UI 一致性 / 已登记 gap，不是引擎合法性判据（完整清单与证据行见 `candidatesOf` 的契约）：
- *   · `p.pendingCert` —— 引擎只在 `move` 分支查它，`act` 分支不查 ⇒ 锁定者出牌**被引擎放行**（G-b）；
- *   · `state.duel !== null` —— 整表清零，而 `submitDuelCard` 此时是活的玩家入口（无 Action 成员，B13 gap）；
  *   · `state.phase !== '行动'` —— `performAction` 从不读 `phase` ⇒ 山议里行棋照样被接受；
- *   · `!isRoundEnd(state)` —— 同样从不看 `turnIndex`/round 进度。
- * ⇒ 改这几条前先读 `candidatesOf` 的表格与那几条取证用例：**行为不动**，要动的是登记口径。
+ *   · `!isRoundEnd(state)` —— 同样从不看 `turnIndex`/round 进度；
+ *   · **死亡座位** —— `performAction` 只查 `player === undefined`，从不查 `alive`。
+ * ⚠️ `p.pendingCert` 与 `state.duel !== null` 两条**曾**是更严的判据，现均已与引擎对齐：
+ *   B66 修好引擎 `act` 分支（只拒**位移**牌）；B68 让对峙面改发选牌候选；B71 让锁定者
+ *   拿到与引擎同判的**非位移**牌候选。
+ * ⇒ 改这三条前先读 `candidatesOf` 的表格与那几条取证用例：**行为不动**，要动的是登记口径。
  */
-export function actionWindowOpen(state: State, seat: number): boolean {
+/** 行动窗口里**与锁定无关**的四条判据（存活 / 无对峙 / 阶段 / 本轮未完）。 */
+function actionWindowOpenExceptLock(state: State, seat: number): boolean {
   const p = state.players[seat];
   if (p === undefined || !p.alive) { return false; }
-  if (p.pendingCert) { return false; }        // §5.1 待认证锁定：整个行动阶段无动作
   if (state.duel !== null) { return false; }  // B13 对峙阻塞
   if (state.phase !== '行动') { return false; }
-  return !isRoundEnd(state);                  // 已行动手番数 < 存活人数 ⇒ 本轮还在进行中
+  return !isRoundEnd(state);
+}
+
+export function actionWindowOpen(state: State, seat: number): boolean {
+  const p = state.players[seat];
+  // §5.1 锁定：只关**位移族**（MOVE / ROLL_WHEEL / ABILITY）；非位移出牌见 `actionPhaseCandidates`。
+  if (p !== undefined && p.pendingCert) { return false; }
+  return actionWindowOpenExceptLock(state, seat);
 }
 
 /** 行动阶段三面：行棋 / 问天 / 出牌(×目标) / 身份被动(×目标)。 */
@@ -114,6 +130,27 @@ function actionPhaseCandidates(state: State, seat: number): Action[] {
     const out: Action[] = [];
     for (const card of p.hand) {
       out.push({ type: 'DUEL_SUBMIT_CARD', actor: seat, cardId: card.id });
+    }
+    return out;
+  }
+  // ⚠️ **B71：待认证锁定者仍可打非位移牌**（规格 §5.1 / §13.4 ③；引擎 `act` 分支自 B66 起只拒位移牌）
+  //   ⇒ 行动面**不再整面关闭**：只发**非位移** `PLAY_CARD`（位移判定用 `cardHasMovement`，
+  //   与引擎 `performAction` 同源 ⇒ 枚举与引擎同判，不再窄于引擎）。
+  //   ⚠️ 位移族（MOVE / ROLL_WHEEL / ABILITY）仍不发 —— 见 `actionWindowOpen` 对锁定者的 false；
+  //   其余四条窗口判据（存活/无对峙/阶段/本轮未完）由 `actionWindowOpenExceptLock` 统一表达，
+  //   **不要**在这里手写镜像（两份判据迟早漂移）。
+  if (p.pendingCert) {
+    if (!actionWindowOpenExceptLock(state, seat)) { return []; }
+    const out: Action[] = [];
+    for (const card of p.hand) {
+      if (cardHasMovement(card)) { continue; }   // 引擎会拒（G-b 已修）⇒ 不发
+      if (cardNeedsTarget(card)) {
+        for (const target of targetCandidates(state, seat)) {
+          out.push({ type: 'PLAY_CARD', actor: seat, cardId: card.id, target });
+        }
+      } else {
+        out.push({ type: 'PLAY_CARD', actor: seat, cardId: card.id });
+      }
     }
     return out;
   }
@@ -232,7 +269,7 @@ function certificationCandidates(state: State, seat: number): Action[] {
  *
  * | # | 粗筛多出来的一条判据 | 引擎现实 | 为什么仍然这么定 | 证据行 |
  * |---|---|---|---|---|
- * | a | ~~`p.pendingCert` ⇒ 行动面整体关闭~~ | ⚠️ **B66 已移除该条**：G-b 已修 ⇒ 引擎 `act` 分支**现查** `pendingCert`（锁定者打**位移类**牌被引擎拒绝）⇒ 引擎与粗筛**同判**，不再是「窄于引擎」 | （原理由：UI 在待认证期禁用整个行动区，给模型一条玩家点不到的动作等于给它一个不存在的选项 —— 该理由仍成立，但已由引擎同判兜住） | `§7 粗筛窄于引擎` 现行四条 · 及其余取证行 |
+ * | a | ~~`p.pendingCert` ⇒ 行动面整体关闭~~ | ⚠️ **B71 起与引擎逐条同判**：引擎 `act` 分支自 B66 起**只拒位移牌**（`cardHasMovement`，含 utility 与嵌套效果），锁定者的**非位移牌被放行** ⇒ 枚举也**只发非位移** `PLAY_CARD`；位移族（MOVE/ROLL_WHEEL/ABILITY）不发 ⇒ 不再窄于引擎 | （原「整面关闭」的理由是 UI 在待认证期禁用整个行动区；B71 改为 UI 与枚举同步只开非位移出牌） | `§7 粗筛与引擎同判·其一`（B71 更新） |
  * | b | ~~`state.duel !== null` ⇒ **整表清零**~~ | ⚠️ **B68 已移除该条**：G-f 已修 ⇒ 引擎枚举层在**对峙面**发 `DUEL_SUBMIT_CARD` 候选（**取代**行动面）⇒ 对峙参与者拿到自己手牌的选牌候选，**非参与者仍无候选** | （原理由：对峙选牌是「隐藏信息」流程、本就打算在门禁层外置 —— 但「门禁层外置」不等于「**枚举整表清零**」：那会让 AI/sidecar 在真人必须选暗牌的时刻拿到**空动作表**） | `§7 粗筛与引擎同判` 现行三条 · 及其余取证行 |
  * | c | `state.phase !== '行动'` ⇒ 不发 MOVE/ROLL_WHEEL/PLAY_CARD | `performAction` **从不读** `state.phase` ⇒ 山议阶段照样接受行棋 | 阶段是流程层的闸门（§3.1 八步），引擎不判不代表玩家可以乱按 | `§7 粗筛窄于引擎五处·其三` |
  * | d | `isRoundEnd(state)` ⇒ 同上关闭 | `performAction` 同样**不看** `turnIndex` 与 round 进度 | 「本 round 已行动过」属手番归属门禁（Task 7），与 c 同族 | `§7 粗筛窄于引擎五处·其四` |
