@@ -46,7 +46,7 @@
 
 | 组件 | 职责 | 硬约束 |
 |---|---|---|
-| `tests/sim/policy.mjs`（新） | 承载从 `run.mjs` **原样搬出**的 9 个函数：`checkState`/`pickTarget`/`councilTurn`/`certificationTurn`/`maybeUseAbility`/`pickPlayableCard`/`playOne`/`advanceWithDuel`/`record`，连同 `recorder`/`recordSeq`/`recordCtx` 三个模块级变量与一个 `setRecorder()` 导出；新增可选 `policy` 参数 | `policy` 缺省 ⇒ 行为**逐字不变**；`playOne` 改 `async`；注入失败一律回落启发式，**绝不卡死回合** |
+| `tests/sim/policy.mjs`（新） | 承载从 `run.mjs` **原样搬出**的 9 个函数：`checkState`/`pickTarget`/`councilTurn`/`certificationTurn`/`maybeUseAbility`/`pickPlayableCard`/`playOne`/`advanceWithDuel`/`record`，连同 `recorder`/`recordSeq`/`recordCtx` 三个模块级变量与一个 `setRecorder()` 导出；新增可选 `policy` 参数 | `policy` 缺省 ⇒ 行为**逐字不变**；`playOne` 改 `async`；注入失败一律回落启发式，**绝不卡死回合**。⚠️ **B72 更新**：锁定分支的启发式过滤由 `type !== 'motion'` 改为 `cardHasMovement`（B71 遗留的两臂差异；旧过滤会挑中引擎必拒的位移牌）⇒ 默认路径**不再**逐字等价，`docs/balance-report.md` 已按 B72 重标定（见 B72 批次记录） |
 | `tests/sim/run.mjs`（改） | 只保留 CLI 解析、跑批（`runCell`/`summarize`）、报告生成与门⑨/⑪/⑫ 的断言；从 `policy.mjs` import 上述函数，`await playOne`，用 `setRecorder()` 装记录器。**`runCell` 随之 async 化，其三处调用点全部加 `await`** | **CLI 不新增开关**；门 ⑨/⑪/⑫ 的命令与默认路径不变。已核实**没有任何外部模块 import `run.mjs`** ⇒ 搬移其导出是安全的 |
 | `tools/laya-probe/game-arms.mjs`（新） | 三面各跑两臂、同 seed 配对、算 McNemar 与附带读数、落 raw JSON + md | 不进 `tools/gate.mjs`；无服务即 `SKIP` 且退出码 0；不引入第三方 npm 依赖 |
 | `tools/laya-probe/state-text.mjs`（改） | `DUEL_SUBMIT_CARD` 描述补颜色/点数；`buildChoice` 指令**按候选所属决策面**生成 | 同步封闭词表与 40 字符预算测试；白名单结构性不得破（禁止集仍不得出现字段访问） |

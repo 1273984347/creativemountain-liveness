@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-11-11T09:37:17.355Z",
+ "generatedAt": "2026-11-11T09:43:25.672Z",
  "proxy": "http://127.0.0.1:8711",
  "results": [
   {
@@ -14,30 +14,30 @@
     "urban-psych"
    ],
    "baselineSeat0Wins": 124,
-   "modelSeat0Wins": 113,
+   "modelSeat0Wins": 116,
    "baselineWinRate": 0.31,
-   "modelWinRate": 0.2825,
+   "modelWinRate": 0.29,
    "improved": false,
    "b": 73,
-   "c": 62,
+   "c": 65,
    "both": 51,
-   "neither": 214,
-   "changed": 135,
+   "neither": 211,
+   "changed": 138,
    "paired": 400,
-   "chi2": 0.740741,
+   "chi2": 0.355072,
    "significant": false,
    "noDiscordant": false,
-   "changedRate": 0.3375,
+   "changedRate": 0.345,
    "preflight": {
     "minGamesPerArm": 400,
     "anomalies": 0,
     "ok": true
    },
    "verdict": "未检出改善",
-   "decideCalls": 866,
+   "decideCalls": 873,
    "latencyMs": {
-    "p50": 44,
-    "p95": 65
+    "p50": 45,
+    "p95": 67
    },
    "fallbackGames": {
     "baseline": 28,
@@ -49,17 +49,17 @@
    },
    "anomalies": 0,
    "injection": {
-    "calls": 866,
+    "calls": 873,
     "fallbacks": 0,
-    "emptyCandidates": 1136,
+    "emptyCandidates": 1132,
     "emptyByReason": {
      "unregisteredFace": 0,
      "stationMismatch": 1041,
-     "noCandidate": 95,
+     "noCandidate": 91,
      "narrowedEmpty": 0
     }
    },
-   "minutes": 0.66
+   "minutes": 0.7
   },
   {
    "face": "council",
@@ -95,8 +95,8 @@
    "verdict": "未检出改善",
    "decideCalls": 400,
    "latencyMs": {
-    "p50": 35,
-    "p95": 44
+    "p50": 47,
+    "p95": 65
    },
    "fallbackGames": {
     "baseline": 28,
@@ -110,15 +110,15 @@
    "injection": {
     "calls": 400,
     "fallbacks": 0,
-    "emptyCandidates": 1339,
+    "emptyCandidates": 1343,
     "emptyByReason": {
      "unregisteredFace": 0,
-     "stationMismatch": 1339,
+     "stationMismatch": 1343,
      "noCandidate": 0,
      "narrowedEmpty": 0
     }
    },
-   "minutes": 0.24
+   "minutes": 0.33
   },
   {
    "face": "certify",
@@ -154,8 +154,8 @@
    "verdict": "未检出改善",
    "decideCalls": 553,
    "latencyMs": {
-    "p50": 30,
-    "p95": 40
+    "p50": 38,
+    "p95": 61
    },
    "fallbackGames": {
     "baseline": 28,
@@ -169,15 +169,15 @@
    "injection": {
     "calls": 553,
     "fallbacks": 0,
-    "emptyCandidates": 1365,
+    "emptyCandidates": 1366,
     "emptyByReason": {
      "unregisteredFace": 0,
-     "stationMismatch": 1365,
+     "stationMismatch": 1366,
      "noCandidate": 0,
      "narrowedEmpty": 0
     }
    },
-   "minutes": 0.29
+   "minutes": 0.39
   }
  ]
 }
