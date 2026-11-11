@@ -434,7 +434,9 @@ async function runPositionSpread(args) {
     + ' · 严格单调档位 = ' + (monoRows.length === 0 ? '无' : monoRows.map((r) => String(r.players) + ' 人').join('、')));
   if (args.check) {
     // ⚠️ B25：**确定性回归锁** —— 固定 seed ⇒ 同结果 ⇒ 零 flake；
-    //   阈值取该固定 seed 的基线 + 余量（基线：极差 8.6pp · RMS 3.38pp）。
+    //   阈值取该固定 seed 的基线 + 余量。
+    //   ⚠️ **B72 重标定**：基线启发式的锁定分支改用 `cardHasMovement`（与引擎同源）⇒
+    //   本门禁同 seed 实测由 8.6pp / 3.38pp 变为 **9.9pp / 4.57pp**（仍低于阈值 14 / 6.5）。
     const problems = [];
     if (worst > POSITION_SPREAD_GATE_LIMIT) {
       problems.push('位次胜率最大极差 ' + worst.toFixed(1) + 'pp 超门禁口径 '

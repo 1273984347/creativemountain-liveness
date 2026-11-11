@@ -9,6 +9,7 @@ import {
   performAction, advanceTurn, needsCouncilVote, needsCertificationAction,
 } from '../../engine/core/turn-runner.ts';
 import { currentPlayer } from '../../engine/core/round.ts';
+import { cardHasMovement } from '../../engine/core/targeting.ts';
 import { GOALS, isGoalAchieved } from '../../engine/goals/registry.ts';
 import { performAbility } from '../../engine/core/abilities.ts';
 import { advanceAuto } from '../../engine/core/advance.ts';
@@ -467,7 +468,9 @@ async function playOne(theme, players, seed, gateReserve, policy) {
     if (player !== undefined && player.pendingCert) {
       // 待认证锁定：不能位移（规格 §5.1），但仍可打非位移牌
       // ⚠️ B65：用 `pickPlayableCard` 选牌（按效果强度 + 平价优先），不再「取第一张付得起的」。
-      const lockedHand = player.hand.filter((c) => c.type !== 'motion');
+      // ⚠️ B72：位移判定用 `cardHasMovement`（与引擎 / 枚举同源），**不再**用 `type !== 'motion'`
+      //   —— 位移可藏在 utility 与嵌套效果里（B66 已证）。旧过滤会让启发式挑中引擎必拒的牌 ⇒ 空耗回合。
+      const lockedHand = player.hand.filter((c) => !cardHasMovement(c));
       // ⚠️ B70 Task 3：**play 面注入（待认证锁定分支）**。该分支原本就以 `advanceWithDuel` +
       //   `continue` 收尾 ⇒ 改道分支自带推进（这里 `continue` 合法且必要）。
       //   ⚠️ **B71 起该注入点真正可达**：§7 粗筛在 `pendingCert` 时改为只发**非位移** `PLAY_CARD`
