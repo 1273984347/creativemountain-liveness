@@ -38,9 +38,10 @@ export type Recorder = DecisionRecord[] | null;
  *
  * · `calls` —— **该面被问出口**的次数（`askPolicy` 的站点面 ≡ `policy.face` ∧ 拿到候选才算）；
  * · `fallbacks` —— 其中**回落原启发式**的次数（null / 非字符串 / 非法 key / 不在候选集 / 抛错 / 超时）；
- * · `emptyCandidates` —— 到达注入点但本站点**问不到候选**的次数，四类成因同口径合并：
+ * · `emptyCandidates` —— **未问出口的到达数**（⚠️ B70 终审 I3：不是「该面无候选的时刻」），
+ *   四类成因同口径合并：
  *   未登记的 face / **站点面与 `policy.face` 不符**（B70 评审 N-1：跨面问出口在问出口之前短路）/
- *   该面在本局面没有候选 / certify 面按当前 target 收窄后为空。
+ *   该面在本局面没有候选 / 按调用点的收窄条件（certify 面：当前 target）过滤后为空。
  *   ⇒ 没问出口 ⇒ 既不计 calls 也不计 fallbacks。
  * ⚠️ 不变式：`calls + emptyCandidates` == 该局到达注入点的时刻数（每个到达恰好计一次，
  *   既不静默丢弃也不重复计）—— Task 5 用 `fallbacks / calls` 读回落率的分母靠的就是这条。
@@ -50,6 +51,21 @@ export interface InjectionCounters {
   calls: number;
   fallbacks: number;
   emptyCandidates: number;
+  /**
+   * `emptyCandidates` 的**按成因拆分**（B70 终审 I3）：四个子字段之和恒等于 `emptyCandidates`。
+   * 它**不是**第四种顶层计数（顶层仍只有 calls / fallbacks / emptyCandidates 三种语义），
+   * 只用于让读者自己算出「其中跨站点到达占多少」。
+   */
+  emptyByReason: {
+    /** `policy.face` 未登记（拼错 / `Object.prototype` 成员名）⇒ 连这一面的类型表都拿不到。 */
+    unregisteredFace: number;
+    /** 站点面 ≠ `policy.face`（在 play/council/certify 某个站点上被另一个面的策略到达）。 */
+    stationMismatch: number;
+    /** 站点面 ≡ 策略面，但该面在本局面**本来就没有候选**（如 play 面在待认证锁定回合）。 */
+    noCandidate: number;
+    /** 该面有候选，但按调用点的收窄条件（certify 面：当前 target）过滤后为空。 */
+    narrowedEmpty: number;
+  };
 }
 
 /**
@@ -185,8 +201,10 @@ export declare function advanceWithDuel(s: State, mode: RuleMode, opts?: Advance
  *   或 rest 的形参就停止计数，写了等于那条 arity 守护当场失效）。
  *   TS 侧仍以可选参数声明（缺省即「不注入」），运行时缺省值是 `undefined` ⇒ `hit` 恒 false
  *   ⇒ 三处改道分支一次都不进 ⇒ 与注入前**逐字同行为**（门 ⑨ 报告 diff 为空是硬约束）。
- * ⚠️ 模型臂（注入命中）的 rng 流自**首个分歧**起与基线分叉：改道命中时原决策块被跳过，
- *   那一次的 `s.rng.next()` 不再消耗。这是策略注入的固有效应，不是 bug。
+ * ⚠️ play 面注入只在**基线本来就要出牌**的那一段（`s.rng.next() >= 0.85`）接管「选哪张牌 + 打谁」
+ *   （B70 终审 C1）：0.16/0.75/0.85 三段行动分段两臂完全相同（`roll` 两臂都恰好消耗一次）。
+ * ⚠️ 模型臂的 rng 流在**第一次打出不同的牌之后**与基线分叉（牌不同 ⇒ 之后的状态与 rng 使用不同）；
+ *   这不是「跳过了一次 rng」，而是同一起点上的状态分叉，是策略注入的固有效应。
  */
 export declare function playOne(
   theme: ThemePack,

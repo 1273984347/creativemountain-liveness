@@ -8,10 +8,23 @@ import { mcnemar, pairWinners, verdictOf, CHI2_CRITICAL } from '../../tools/laya
 test('McNemar 连续性校正与临界值', () => {
   const r = mcnemar(14, 4);
   assert.equal(r.chi2, Number(((Math.abs(14 - 4) - 1) ** 2 / 18).toFixed(6)));
-  assert.equal(r.significant, r.chi2 > 3.841);
   assert.equal(r.significant, true);          // 4.5 > 3.841
   assert.equal(mcnemar(17, 8).significant, false);   // 2.56 < 3.841
   assert.equal(CHI2_CRITICAL, 3.841);
+});
+
+test('判定用未取整的 χ²：临界值两侧各一例（B70 终审 Minor 4/6）', () => {
+  // 3.840909…（差 0.000091）⇒ 不显著
+  const below = mcnemar(29, 15);
+  assert.equal(below.chi2, 3.840909);
+  assert.equal(below.significant, false);
+  // 3.841897…（差 0.000897）⇒ 显著；若先取整到 6 位再比较，临界附近的翻转就会判错
+  const above = mcnemar(407, 352);
+  assert.equal(above.chi2, 3.841897);
+  assert.equal(above.significant, true);
+  // 独立复算（不引用实现）：(|b−c|−1)²/(b+c)
+  assert.ok((Math.abs(407 - 352) - 1) ** 2 / (407 + 352) > CHI2_CRITICAL);
+  assert.ok((Math.abs(29 - 15) - 1) ** 2 / (29 + 15) <= CHI2_CRITICAL);
 });
 
 test('b+c=0 ⇒ 无可配对差异，不得报显著', () => {

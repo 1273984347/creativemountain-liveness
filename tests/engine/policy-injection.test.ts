@@ -63,7 +63,10 @@ test('只有指定座位被问：seat=0 时 decide 收到的 seat 恒为 0', asy
 test('缺省 policy ⇒ injection 计数全 0，且结果与显式 undefined 相同', async () => {
   const a = await playOne(theme(), 4, 4242);
   const b = await playOne(theme(), 4, 4242, undefined, undefined);
-  assert.deepEqual(a.injection, { calls: 0, fallbacks: 0, emptyCandidates: 0 });
+  assert.deepEqual(a.injection, {
+    calls: 0, fallbacks: 0, emptyCandidates: 0,
+    emptyByReason: { unregisteredFace: 0, stationMismatch: 0, noCandidate: 0, narrowedEmpty: 0 },
+  });
   assert.deepEqual(a.winners, b.winners);
   assert.equal(a.reason, b.reason);
 });
@@ -84,7 +87,9 @@ test('合法 key ⇒ 真的改道：fallbacks 恒 0，且记录与结局两处�
   assert.ok(off.injection.calls > 0, '对照组必须真的被问到');
   assert.equal(off.injection.fallbacks, off.injection.calls, '对照组每次都回落');
 
-  // 实验组：交回**候选里第一条**的合法 key ⇒ 每次问出口都必须改道成功。
+  // 实验组：交回**候选里最后一条**的合法 key ⇒ 每次问出口都必须改道成功。
+  //   ⚠️ C1 之后 play 面只在出牌手番问出口，而候选的**第一条**与本 seed 的启发式选牌恰好重合
+  //   （实测 4242：两者打出的牌逐字相同 ⇒ 结局签名不变，无法证明「改道生效」）⇒ 改用最后一条。
   const rowsOn: DecisionRecord[] = [];
   const chosen: string[] = [];
   setRecorder(rowsOn);
@@ -93,9 +98,9 @@ test('合法 key ⇒ 真的改道：fallbacks 恒 0，且记录与结局两处�
     on = await playOne(theme(), 4, 4242, undefined, {
       face: 'play', seat: 0,
       decide: async (_s, _seat, c) => {
-        const first = c[0];
-        assert.ok(first !== undefined, '候选非空才问得出口 ⇒ 第一条必然存在');
-        const k = actionKey(first);
+        const last = c[c.length - 1];
+        assert.ok(last !== undefined, '候选非空才问得出口 ⇒ 最后一条必然存在');
+        const k = actionKey(last);
         chosen.push(k);
         return k;
       },
@@ -114,10 +119,15 @@ test('合法 key ⇒ 真的改道：fallbacks 恒 0，且记录与结局两处�
     if (cursor < chosen.length && row.heuristic === chosen[cursor]) { cursor += 1; }
   }
   assert.equal(cursor, chosen.length, '改道选出的动作必须逐条按序进决策记录');
-  // 反证形状：全回落对照里 seat 0 打出牌的记录条数**远少于**它的问出口数
-  //   ⇒ 上面那条「记录条数 == 问出口数」不是恒成立，回归成恒回落时必红。
-  const playsOff = rowsOff.filter((x) => x.seat === 0 && x.heuristic.startsWith('play:')).length;
-  assert.ok(playsOff < off.injection.calls, `全回落时 seat0 只有少数回合打牌（实际 ${String(playsOff)} / ${String(off.injection.calls)}）`);
+  // 反证形状（C1 后重写）：若注入回归成恒回落，本臂的轨迹与全回落对照逐字相同 ⇒ seat 0 打出的
+  //   牌也逐字相同。⇒ 「改道确实换掉了实际打出的牌」这一条在恒回落时会红。
+  //   （C1 之前这里断言的是「全回落时打牌次数 < 问出口数」—— 注入下沉到出牌分支后两者本就相等，
+  //    那条形状不再有区分力，见 plan/终审 C1。）
+  const playKeys = (rows: DecisionRecord[]): string[] => rows
+    .filter((x) => x.seat === 0 && x.heuristic.startsWith('play:'))
+    .map((x) => x.heuristic);
+  assert.notDeepEqual(playKeys(rowsOn), playKeys(rowsOff),
+    '改道必须真的换掉 seat0 打出的牌（否则「记录跟随注入」与恒回落不可区分）');
 
   // 证据 B（结局侧）：同 seed 下改道局与全回落局必须分歧（rng 流自首个分歧起分叉 ⇒ 结局不同）。
   assert.notDeepEqual(outcome(on), outcome(off), '改道必须留下可观察的结局差异');
@@ -214,7 +224,16 @@ const CERTIFY_ROW_RE = /^cert:(sign|challenge|abstain):/;
 const PHANTOM_SEEDS = [4249, 4264, 4265, 4276];
 
 test('站点 ≡ 面：face=play 不在认证循环里问出口 ⇒ 无幻影签印、无幻影记录（评审 N-1）', async () => {
+  let totalCalls = 0;
+  let seedsWhereSeat0Certifies = 0;
   for (const seed of PHANTOM_SEEDS) {
+    // 基线局（无注入）里 seat 0 是否真的当过认证人 —— C1 之后 play 面的问出口只发生在出牌手番，
+    //   「该座位的 cert 记录必须回来」在不含该座位认证回合的 seed 上是空断言（实测 4276）。
+    const baseRows: DecisionRecord[] = [];
+    setRecorder(baseRows);
+    try { await playOne(theme(), 4, seed); } finally { setRecorder(null); }
+    const seat0Certifies = baseRows.some((x) => x.seat === 0 && CERTIFY_ROW_RE.test(x.heuristic));
+    if (seat0Certifies) { seedsWhereSeat0Certifies += 1; }
     const rows: DecisionRecord[] = [];
     const chosen: string[] = [];
     setRecorder(rows);
@@ -231,7 +250,9 @@ test('站点 ≡ 面：face=play 不在认证循环里问出口 ⇒ 无幻影签
         },
       });
     } finally { setRecorder(null); }
-    assert.ok(r.injection.calls > 0, `seed ${String(seed)}：play 面必须真的被问到`);
+    // ⚠️ C1 之后 play 面的问出口只发生在「基线本来就要出牌」的手番上 ⇒ 单个 seed 可能是 0 次
+    //   （本组 4265/4276 就是 0 次）。改用**整组**非空转前置：至少一个 seed 必须真的被问到。
+    totalCalls += r.injection.calls;
     assert.equal(r.injection.fallbacks, 0, '交回的是合法 key ⇒ 一次都不许回落');
     assert.equal(chosen.length, r.injection.calls);
 
@@ -244,8 +265,10 @@ test('站点 ≡ 面：face=play 不在认证循环里问出口 ⇒ 无幻影签
     // ② 幻影签印归零：改道交回的每个 key 都按序成为该座位的记录，且该座位在认证循环里
     //    **仍然**逐轮记账（幻影的成因正是「用 certifySign 执行 + 记 play 的 key」⇒ 该轮的
     //    `cert:` 行被替换掉；归零后该座位的认证记录必须回来）。
-    assert.ok(rows.some((x) => x.seat === 0 && CERTIFY_ROW_RE.test(x.heuristic)),
-      `seed ${String(seed)}：seat 0 必须仍有自己的认证记录（不是靠少记账来消除幻影）`);
+    if (seat0Certifies) {
+      assert.ok(rows.some((x) => x.seat === 0 && CERTIFY_ROW_RE.test(x.heuristic)),
+        `seed ${String(seed)}：seat 0 必须仍有自己的认证记录（不是靠少记账来消除幻影）`);
+    }
     let cursor = 0;
     for (const row of rows) {
       if (row.seat !== 0) { continue; }
@@ -253,6 +276,8 @@ test('站点 ≡ 面：face=play 不在认证循环里问出口 ⇒ 无幻影签
     }
     assert.equal(cursor, chosen.length, '交回的 key 必须逐条按序进记录');
   }
+  assert.ok(totalCalls > 0, '整组必须至少一个 seed 真的问出口（否则下面的「无幻影」断言空转）');
+  assert.ok(seedsWhereSeat0Certifies > 0, '整组必须至少一个 seed 在基线局里 seat 0 当过认证人（否则 ② 空转）');
 });
 
 test('反向配平：face=certify/council 时别的站点按「问不到候选」计数，不静默丢弃（评审 N-1 的分母）', async () => {

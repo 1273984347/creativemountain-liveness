@@ -5,13 +5,17 @@ export const CHI2_CRITICAL = 3.841;
 
 /**
  * 同 seed 配对的 McNemar 检验（连续性校正）。
+ *
+ * ⚠️ B70 终审 Minor 4：**用未取整的 χ² 判定显著性**，只在返回/展示时取到 6 位小数。
+ *   先四舍五入再与 3.841 比较会让 3.8410001 被判成「不显著」（临界值附近翻转结论）。
+ *
  * @param {number} b 基线赢而模型输的局数
  * @param {number} c 基线输而模型赢的局数
  */
 export function mcnemar(b, c) {
   const n = b + c;
-  const chi2 = n === 0 ? 0 : Number(((Math.abs(b - c) - 1) ** 2 / n).toFixed(6));
-  return { b, c, chi2, significant: chi2 > CHI2_CRITICAL, noDiscordant: n === 0 };
+  const raw = n === 0 ? 0 : (Math.abs(b - c) - 1) ** 2 / n;
+  return { b, c, chi2: Number(raw.toFixed(6)), significant: raw > CHI2_CRITICAL, noDiscordant: n === 0 };
 }
 
 /** winners 数组里是否含该座位。 */

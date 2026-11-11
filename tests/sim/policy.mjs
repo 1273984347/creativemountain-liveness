@@ -348,14 +348,29 @@ const FACE_TYPES = {
 };
 
 /**
+ * 「到达但未问出口」的唯一自增入口（`emptyCandidates` 只在这里加）。
+ *
+ * ⚠️ B70 终审 I3：`emptyCandidates` 的真实口径是**未问出口的到达数**，含四类成因
+ *   （站点≠面 / 面未登记 / 该面确无候选 / 按 filter 收窄后为空）⇒ 另记一份**成因子计数**，
+ *   让读者能从 JSON 自己算出「其中跨站点到达占多少」。子字段之和恒等于 `emptyCandidates`，
+ *   **不新增顶层计数种类**（`calls` / `fallbacks` / `emptyCandidates` 三种语义不变）。
+ */
+function bumpEmpty(counters, reason) {
+  counters.emptyCandidates += 1;
+  counters.emptyByReason[reason] += 1;
+}
+
+/**
  * 问一次策略；任何失败都回落（返回 null），并计数。
  * ⚠️ 绝不抛错到调用方：注入失败不得让对局卡死或丢样本。
  *
- * 计数口径（**只有这三种**，不得新增第四种）：
+ * 计数口径（**顶层只有这三种**，不得新增第四种）：
  * · `calls` —— **该面被问出口**的次数（站点面 ≡ 策略面 ∧ 拿到候选才算，即简报的语义）；
  * · `fallbacks` —— 其中问了但回落的次数；
- * · `emptyCandidates` —— 本站点**问不到候选**的次数（面未登记 / 站点面与策略面不符 /
- *   该面在该局面没有候选 / certify 面按当前 target 收窄后为空）⇒ 没问出口 ⇒ 既不计 calls 也不计 fallbacks。
+ * · `emptyCandidates` —— **未问出口的到达数**：到达了注入点，但（站点面与策略面不符 /
+ *   面未登记 / 该面在该局面没有候选 / 按 filter 收窄后为空）⇒ 既不计 calls 也不计 fallbacks。
+ *   ⚠️ B70 终审 I3：它**不是**「该面无候选的时刻」——四类成因里「站点 ≠ 面」在读数中占绝大多数
+ *   （跨面到达）。成因拆分见 `emptyByReason`（子字段之和恒等于本字段，**不是**第四种顶层计数）。
  * ⇒ 不变式：**每个到达注入点的时刻恰好计一次**（`calls + emptyCandidates == 到达次数`），
  *   既不静默丢弃（否则 Task 5 用 `fallbacks / calls` 读回落率时分母失真）也不重复计数。
  *
@@ -374,7 +389,7 @@ const FACE_TYPES = {
  *   调用点的循环维度比「该座位的全部候选」更细时（certify 面：外层还按待认证 target 逐个人转），
  *   必须用它把候选钉到**当前这一次执行的对象**上 —— 否则策略器选的 target 与循环实际执行的
  *   target 可以不是同一个人，记录（`actionKey(picked)`）与引擎真正发生的动作就会不一致（B70 评审 I-1）。
- *   收窄后为空 ⇒ 与「该面无候选」同一口径：`emptyCandidates += 1` 后回落，**不新增计数种类**。
+ *   收窄后为空 ⇒ 计 `emptyCandidates`（成因记 `narrowedEmpty`）后回落，**不新增顶层计数种类**。
  */
 async function askPolicy(policy, state, seat, counters, stationFace, filter) {
   const types = FACE_TYPES[policy.face];
@@ -384,13 +399,17 @@ async function askPolicy(policy, state, seat, counters, stationFace, filter) {
   //   'hasOwnProperty'）时 `FACE_TYPES[policy.face]` 取到的是**原型链上的值**而非 undefined
   //   ⇒ 上一轮的 `types === undefined` 挡不住它，`types.includes` 照样在 try **之外**抛
   //   TypeError 炸掉整局。按「拿到了这一面的类型表」判，一次覆盖 undefined 与原型链两种漏网。
-  //   处理口径不变：记 emptyCandidates 后返回 null 走回落，不抛错、不新增计数种类、不记 fallbacks。
-  if (!Array.isArray(types)) { counters.emptyCandidates += 1; return null; }
+  //   处理口径不变：记 emptyCandidates 后返回 null 走回落，不抛错、不新增顶层计数种类、不记 fallbacks。
+  if (!Array.isArray(types)) { bumpEmpty(counters, 'unregisteredFace'); return null; }
   const keep = filter ?? (() => true);
   // ⚠️ 站点 ≡ 面 是**问出口的前置条件**（B70 评审 N-1，见上面 stationFace 的说明）。
-  if (stationFace !== policy.face) { counters.emptyCandidates += 1; return null; }
-  const candidates = getLegalActions(state, seat).filter((a) => types.includes(a.type) && keep(a));
-  if (candidates.length === 0) { counters.emptyCandidates += 1; return null; }
+  if (stationFace !== policy.face) { bumpEmpty(counters, 'stationMismatch'); return null; }
+  // ⚠️ 先按「面」取候选，再按 `filter` 收窄 —— 两步分开才能在 `emptyByReason` 里区分
+  //   「该面在本局面本来就没有候选」与「收窄（certify 面的当前 target）之后为空」（B70 终审 I3）。
+  const ofFace = getLegalActions(state, seat).filter((a) => types.includes(a.type));
+  if (ofFace.length === 0) { bumpEmpty(counters, 'noCandidate'); return null; }
+  const candidates = ofFace.filter(keep);
+  if (candidates.length === 0) { bumpEmpty(counters, 'narrowedEmpty'); return null; }
   counters.calls += 1;
   // ⚠️ 超时定时器必须在 finally 里清掉（B70 Task 3 控制器裁定）：
   //   评估器要跑上千次调用，`Promise.race` 里那个 30s timer 若不清，
@@ -420,7 +439,10 @@ async function playOne(theme, players, seed, gateReserve, policy) {
   //   ⇒ `hit` 恒 false ⇒ 三处改道分支一次都不进 ⇒ 与注入前逐字同行为（门 ⑨ diff 为空是硬约束）。
   //   ⚠️ `hit` 只认**座位**（简报形状）；「本站点属于哪个面」由每个注入站点各自声明给
   //   `askPolicy`（B70 评审 N-1）⇒ 跨面问出口在问出口之前就被短路，不会到达 `decide`。
-  const counters = { calls: 0, fallbacks: 0, emptyCandidates: 0 };
+  const counters = {
+    calls: 0, fallbacks: 0, emptyCandidates: 0,
+    emptyByReason: { unregisteredFace: 0, stationMismatch: 0, noCandidate: 0, narrowedEmpty: 0 },
+  };
   const hit = (seat) => policy !== undefined && policy !== null && policy.seat === seat;
   // ⚠️ B56：记录本局上下文（主题 / 人数 / **本局 seed**）⇒ 决策点函数内无需改签名。
   recordCtx = { themeId: theme.meta.id, players, seed };
@@ -472,44 +494,54 @@ async function playOne(theme, players, seed, gateReserve, policy) {
       s = await advanceWithDuel(s, 'standard', { gateReserve });
       continue;
     }
-    // ⚠️ B70 Task 3：**play 面注入（普通分支）**。
-    //   ⚠️ 这里**不得用 `continue`** —— 尾部还有 `advanceWithDuel` 与 `firstPendingSeat` 统计，
-    //   跳过会让模型臂少记「首个登顶者」的传导数据 ⇒ 改用 `injected` 标志位把**原决策块**包起来。
-    //   原块（含 `s.rng.next()` 的 0.16/0.75/0.85 三段）整块留在 `if (!injected)` 里 ⇒ 回落路径一行未改。
-    let injected = false;
-    if (hit(seat)) {
-      const picked = await askPolicy(policy, s, seat, counters, 'play');
-      if (picked !== null && picked.type === 'PLAY_CARD') {
-        const payload = picked.target === undefined ? { cardId: picked.cardId } : { cardId: picked.cardId, target: picked.target };
-        record(s, seat, actionKey(picked));
-        s = performAction(s, seat, 'act', payload);
-        injected = true;
+    // ⚠️ B70 终审 C1（修复）：**play 面注入下沉到出牌分支** —— 规格 §4 的「范围界定」是硬约束：
+    //   本面只决定「出哪张牌 + 打谁」，**不含**「行棋/问天/行事」三选一。⇒ `roll` 在注入**之前**
+    //   消耗（两臂都恰好消耗一次，0.16 / 0.75 / 0.85 三段行动分段两臂完全相同），只有
+    //   `roll >= 0.85`（基线本来就要出牌）才把「选哪张牌 + 打谁」换成模型答案。
+    //   ⚠️ 修复前的形状是「命中即整块决策跳过」⇒ 模型臂变成「能出牌就出牌」，同时改掉了
+    //     出牌频率 / 身份被动 / 行棋与问天比例 ⇒ play 面读数成了双变量对比（终审 C1 实测：
+    //     同一批 seed 座0 出牌次数 2/1/1/4/2 → 6/6/7/8/10、`ability` 恒 0）。
+    //   ⚠️ 随机流口径（C1 后）：两臂在每次手番都消耗同一个 `roll` ⇒ 分叉起点不是「跳过了一次
+    //     rng」，而是「实际打出的牌不同 ⇒ 之后的状态与 rng 使用不同」。
+    const roll = s.rng.next();
+    // B12：AI 偶尔发动身份被动（发动成功则**占用本回合行动**，不再行棋/问天/出牌）
+    if (roll < 0.16) {
+      const used = maybeUseAbility(s, seat);
+      if (used !== null) {
+        abilityOps.push(used.op);
+        s = used.state;
+        s = advanceTurn(s, 'standard');
+        continue;
       }
     }
-    if (!injected) {
-      const roll = s.rng.next();
-      // B12：AI 偶尔发动身份被动（发动成功则**占用本回合行动**，不再行棋/问天/出牌）
-      if (roll < 0.16) {
-        const used = maybeUseAbility(s, seat);
-        if (used !== null) {
-          abilityOps.push(used.op);
-          s = used.state;
-          s = advanceTurn(s, 'standard');
-          continue;
-        }
+    if (roll < 0.75) {
+      // ⚠️ B56：记录决策点（骰面在**动作执行后**才有 ⇒ 先占位，事后回填）
+      const recMove = record(s, seat, actionKey({ type: 'MOVE', actor: seat, steps: 0 }));
+      s = performAction(s, seat, 'move');
+      // ⚠️ 纯 JS（`.mjs` 里不得用 TS 的非空断言 `!` —— E22）
+      const rowMove = recorder === null ? undefined : recorder[recMove];
+      if (rowMove !== undefined) { rowMove.face = s.lastDice ?? null; }
+    } else if (roll < 0.85) {
+      const recAsk = record(s, seat, actionKey({ type: 'ROLL_WHEEL', actor: seat }));
+      s = performAction(s, seat, 'ask');
+      const rowAsk = recorder === null ? undefined : recorder[recAsk];
+      if (rowAsk !== undefined) { rowAsk.face = s.lastDice ?? null; }
+    } else {
+      // 基线本来就要出牌 ⇒ **只有这里**换「选哪张牌 + 打谁」。
+      // ⚠️ 候选在此站点收窄为**只含 `PLAY_CARD`**（`askPolicy` 的第 6 参 filter）—— 规格 §4
+      //   「本面只决定出哪张牌」。`FACE_TYPES` 本身不动（它同时是「面 → 动作类型」的文档）。
+      let injectedCard = null;
+      if (hit(seat)) {
+        const picked = await askPolicy(policy, s, seat, counters, 'play', (a) => a.type === 'PLAY_CARD');
+        if (picked !== null && picked.type === 'PLAY_CARD') { injectedCard = picked; }
       }
-      if (roll < 0.75) {
-        // ⚠️ B56：记录决策点（骰面在**动作执行后**才有 ⇒ 先占位，事后回填）
-        const recMove = record(s, seat, actionKey({ type: 'MOVE', actor: seat, steps: 0 }));
-        s = performAction(s, seat, 'move');
-        // ⚠️ 纯 JS（`.mjs` 里不得用 TS 的非空断言 `!` —— E22）
-        const rowMove = recorder === null ? undefined : recorder[recMove];
-        if (rowMove !== undefined) { rowMove.face = s.lastDice ?? null; }
-      } else if (roll < 0.85) {
-        const recAsk = record(s, seat, actionKey({ type: 'ROLL_WHEEL', actor: seat }));
-        s = performAction(s, seat, 'ask');
-        const rowAsk = recorder === null ? undefined : recorder[recAsk];
-        if (rowAsk !== undefined) { rowAsk.face = s.lastDice ?? null; }
+      if (injectedCard !== null) {
+        // 记录与执行用**同一个**动作（target 来自模型选择，不再用 `pickTarget`）。
+        const payload = injectedCard.target === undefined
+          ? { cardId: injectedCard.cardId }
+          : { cardId: injectedCard.cardId, target: injectedCard.target };
+        record(s, seat, actionKey(injectedCard));
+        s = performAction(s, seat, 'act', payload);
       } else {
         // ⚠️ B65：用 `pickPlayableCard` 选牌（按效果强度 + 平价优先），不再「取第一张付得起的」。
         const card = player === undefined ? undefined : pickPlayableCard(player.hand, player.resource);
@@ -604,11 +636,12 @@ async function playOne(theme, players, seed, gateReserve, policy) {
       return { kind, value: p.counters[counterName] ?? 0, count: identity?.goal.count ?? 1 };
     }).filter((x) => x !== null),
     anomalies,
-    // ⚠️ B70 Task 3：注入计数（缺省 policy ⇒ 恒 `{ calls: 0, fallbacks: 0, emptyCandidates: 0 }`）。
+    // ⚠️ B70 Task 3：注入计数（缺省 policy ⇒ 三个顶层计数恒 0，`emptyByReason` 亦全 0）。
     //   `calls` = **该面**被问出口的次数（站点面 ≡ 策略面 ∧ 拿到候选才算 ⇒ 简报语义）；
     //   `fallbacks` = 其中回落的次数；
-    //   `emptyCandidates` = 到达注入点但**问不到**候选的次数（面未登记 / 站点面 ≠ 策略面 /
-    //   该面在本局面没有候选 / certify 面按当前 target 收窄后为空 ⇒ 没问出口 ⇒ 不计 calls/fallbacks）。
+    //   `emptyCandidates` = **未问出口的到达数**（面未登记 / 站点面 ≠ 策略面 /
+    //   该面在本局面没有候选 / 按 filter 收窄后为空 ⇒ 没问出口 ⇒ 不计 calls/fallbacks）；
+    //   `emptyByReason` = 上面四类成因的**子计数**（之和恒等于 `emptyCandidates`；B70 终审 I3）。
     //   不变式：`calls + emptyCandidates` == 该局到达本站点的时刻数（每个到达恰好计一次）。
     injection: counters,
   };
