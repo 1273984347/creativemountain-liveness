@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-11-11T09:06:19.498Z",
+ "generatedAt": "2026-11-11T09:37:17.355Z",
  "proxy": "http://127.0.0.1:8711",
  "results": [
   {
@@ -14,34 +14,34 @@
     "urban-psych"
    ],
    "baselineSeat0Wins": 124,
-   "modelSeat0Wins": 120,
+   "modelSeat0Wins": 113,
    "baselineWinRate": 0.31,
-   "modelWinRate": 0.3,
+   "modelWinRate": 0.2825,
    "improved": false,
-   "b": 64,
-   "c": 60,
-   "both": 60,
-   "neither": 216,
-   "changed": 124,
+   "b": 73,
+   "c": 62,
+   "both": 51,
+   "neither": 214,
+   "changed": 135,
    "paired": 400,
-   "chi2": 0.072581,
+   "chi2": 0.740741,
    "significant": false,
    "noDiscordant": false,
-   "changedRate": 0.31,
+   "changedRate": 0.3375,
    "preflight": {
     "minGamesPerArm": 400,
     "anomalies": 0,
     "ok": true
    },
    "verdict": "未检出改善",
-   "decideCalls": 666,
+   "decideCalls": 866,
    "latencyMs": {
-    "p50": 47,
-    "p95": 61
+    "p50": 44,
+    "p95": 65
    },
    "fallbackGames": {
     "baseline": 28,
-    "model": 38
+    "model": 43
    },
    "avgRounds": {
     "baseline": 13,
@@ -49,17 +49,17 @@
    },
    "anomalies": 0,
    "injection": {
-    "calls": 666,
+    "calls": 866,
     "fallbacks": 0,
-    "emptyCandidates": 1327,
+    "emptyCandidates": 1136,
     "emptyByReason": {
      "unregisteredFace": 0,
-     "stationMismatch": 1034,
-     "noCandidate": 293,
+     "stationMismatch": 1041,
+     "noCandidate": 95,
      "narrowedEmpty": 0
     }
    },
-   "minutes": 0.54
+   "minutes": 0.66
   },
   {
    "face": "council",
@@ -95,8 +95,8 @@
    "verdict": "未检出改善",
    "decideCalls": 400,
    "latencyMs": {
-    "p50": 45,
-    "p95": 59
+    "p50": 35,
+    "p95": 44
    },
    "fallbackGames": {
     "baseline": 28,
@@ -118,7 +118,7 @@
      "narrowedEmpty": 0
     }
    },
-   "minutes": 0.31
+   "minutes": 0.24
   },
   {
    "face": "certify",
@@ -154,8 +154,8 @@
    "verdict": "未检出改善",
    "decideCalls": 553,
    "latencyMs": {
-    "p50": 38,
-    "p95": 50
+    "p50": 30,
+    "p95": 40
    },
    "fallbackGames": {
     "baseline": 28,
@@ -177,7 +177,7 @@
      "narrowedEmpty": 0
     }
    },
-   "minutes": 0.36
+   "minutes": 0.29
   }
  ]
 }

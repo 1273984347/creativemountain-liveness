@@ -932,20 +932,25 @@ getLegalActions(state: State, playerId: number): Action[]
 | ③ | **四层漂移守卫**：枚举层（`uiAllowedSet == getLegalActions`）、候选层（`uiCandidates == candidatesOf`）、门禁层（候选**之外**的越界形状也要 `uiAllows == probeAction`）、判定形状层（`uiBlockNotice` 的形状矩阵）；**面板层**（山议面板的可投集合 == 引擎 `VOTE` 集合，B53 新增） | `web/legal-gate.ts`（**独立**表达 UI 规则，不借道引擎枚举） | `tests/engine/legal-probe.test.ts`「漂移守卫」各层各一条 |
 | ④ | **候选上限** `LEGAL_ACTION_CAP = 64`；读数四字段 `getLegalActionStats` = `{candidates, enumerated, truncated, dropped}` | `engine/core/legal.ts` | 同文件「上限」用例（`wideHandScene` ⇒ 截断可失败） |
 | ⑤ | **被动标识唯一来源** `activeAbilityId(state, seat)`（`PassiveSpec = Effect` ⇒ 标识只能取 `op`） | `engine/core/passives.ts` | 同文件「§7 被动标识唯一来源」用例 |
-| ⑥ | **不枚举项两条**：`PASS`（UI 无「结束手番」入口）、**对峙选牌**（无 `Action` 成员 ⇒ 整表清零，见 G-f）。⚠️ `COMPARE`（关隘出牌比对）**已可枚举**（B19 接线 UI；B53 修掉探针里未删的 B18 占位分支） | `engine/core/legal.ts` | 同文件「§7 粗筛窄于引擎」各条取证用例 + 关隘面漂移守卫 |
+| ⑥ | **不枚举项一条**：`PASS`（UI 无「结束手番」入口） | `engine/core/legal.ts` | 同文件「§7 粗筛窄于引擎」各条取证用例 + 关隘面漂移守卫 |
 
-**粗筛故意窄于引擎的五条**（登记过的**口径**，不是待修的 bug）：
+**粗筛故意窄于引擎的三条**（登记过的**口径**，不是待修的 bug）：
 
 | # | 粗筛多出的判据 | 引擎现实 | 为什么仍然这么定 |
 |---|---|---|---|
-| a | `p.pendingCert` ⇒ 行动面整体关闭 | `performAction` **只有 `move` 分支**查 `pendingCert`，`act` 分支不查 ⇒ 锁定者出牌被放行（G-b） | UI 在待认证期**禁用整个行动区**，给模型一条玩家点不到的动作等于给它一个不存在的选项 |
-| b | `state.duel !== null` ⇒ **整表清零** | 玩家此刻仍有入口 `submitDuelCard(seat, cardId)`，但它**没有对应的 Action 成员**（G-f） | 对峙选牌是「隐藏信息」流程，本就打算在门禁层外置 |
 | c | `state.phase !== '行动'` ⇒ 不发 MOVE/ROLL_WHEEL/PLAY_CARD | `performAction` **从不读** `state.phase` ⇒ 山议阶段照样接受行棋 | 阶段是流程层的闸门（§3.1 八步），引擎不判不代表玩家可以乱按 |
 | d | `isRoundEnd(state)` ⇒ 同上关闭 | `performAction` 同样**不看** `turnIndex` 与 round 进度 | 「本 round 已行动过」属手番归属门禁，与 c 同族 |
 | e | **死亡座位**（`alive !== true`）⇒ 整表清零 | `performAction` 只查 `player === undefined`，**不查 `alive`** ⇒ 已出局座位的动作仍会被执行 | 出局者的动作**玩家点不到**（UI 只渲染存活座位）⇒ 同 a 的理由：不给模型不存在的选项 |
 
+> ⚠️ **B71 更新（从本表移除 a、b 两条）**：
+> · **a（`p.pendingCert`）**：B66 先修好引擎 `act` 分支（只拒**位移**牌，判据 `cardHasMovement` 含 utility 与嵌套效果）；
+>   B71 再让枚举**只发非位移** `PLAY_CARD`、UI 同步 ⇒ 枚举与引擎**逐条同判**，不再是「窄于引擎」。
+>   （B70 的 play 面锁定分支注入点因此在 B71 起才真正可达；B70 的 play 读数只覆盖非锁定回合。）
+> · **b（`state.duel !== null`）**：B68 起引擎枚举层在**对峙面**发 `DUEL_SUBMIT_CARD` 候选（取代行动面），
+>   非参与者仍无候选 ⇒ 同样不再「整表清零」。
 > ⚠️ **每条「窄于引擎」都必须有可执行取证用例**（引擎侧接受 / 入口可用，但枚举侧缺失）——
-> 共五条，见 `tests/engine/legal-probe.test.ts` 的「§7 粗筛窄于引擎五处·其一～其五」。
+> 共三条，见 `tests/engine/legal-probe.test.ts` 的「§7 粗筛窄于引擎五处·其三～其五」；
+> 已对齐的两条各有「同判」用例（`§7 粗筛与引擎同判·其一/其二`）。
 > ⚠️ **反过来不要据此加判据**：`PASS` 不枚举（`COMPARE` 已可枚举，B19 接线 + B53 修占位分支）、非当前手番不给行棋候选、
 > 需目标的牌不发无目标版本——这些同样是口径，理由在各函数注释里。
 > ⚠️ **B65 更新**：**费用不再「不作门槛」**（G-a 已裁定为出牌付费，见 §3.1「行事」/§4.3）⇒ 粗筛**可以**按 `cost <= resource` 收窄，但**不得**手写成第二份镜像判据 —— 正确做法是**让引擎自己拒**，由试跑如实反映（见契约②）。
