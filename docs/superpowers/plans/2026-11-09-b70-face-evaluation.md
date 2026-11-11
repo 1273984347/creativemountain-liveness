@@ -98,7 +98,7 @@ console.log('policy.mjs 保留了函数上方注释:', /\/\*\*|\/\//.test(pol.sl
 | `tools/laya-probe/game-arms.mjs` | 三面两臂评估器 + McNemar | Create（Task 5） |
 | `tests/engine/policy-extraction.test.ts` | 搬移完整性 / 无循环依赖 / 缺省等价 | Create（Task 1） |
 | `tests/engine/policy-injection.test.ts` | 注入回落 / 面隔离 / 空候选 | Create（Task 3） |
-| `tests/engine/key-normalize.test.ts` | 归一化三条 | Create（Task 2） |
+| `tests/gates/key-normalize.test.ts`（B73 起） | 归一化三条 | Create（Task 2） |
 | `tests/engine/game-arms-stats.test.ts` | McNemar 与配对逻辑（不依赖模型） | Create（Task 5） |
 | `tests/engine/legal-probe.test.ts` | 题面词表 / 预算 / 禁止集同步 | Modify（Task 4） |
 | `package.json` | 加 `eval:faces` | Modify（Task 5） |
@@ -367,7 +367,7 @@ Expected: 13 门全绿；报告里贴 `diff` 为空与门禁尾行作为证据�
 - Modify: `tests/sim/policy.mjs`（`advanceWithDuel` 内的 duel 记录行）
 - Create: `tools/laya-probe/key-normalize.mjs`
 - Modify: `tools/laya-probe/run.mjs`
-- Test: `tests/engine/key-normalize.test.ts`
+- Test: `tests/gates/key-normalize.test.ts`（B73 起）
 
 **Interfaces:**
 - Produces: `normalizeLegacyKey(key: string): string`（`duel_card:<id>` → `duel:card:<id>`；其余原样返回）

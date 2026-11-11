@@ -138,7 +138,7 @@ tools/laya-probe/state-text.mjs              改：题面颜色/点数 + 面感�
 tools/laya-probe/run.mjs                     改：P6 历史 key 归一化
 tests/engine/policy-injection.test.ts        新：§8 的 1–3
 tests/engine/legal-probe.test.ts             改：§8 的 4（词表/预算/禁止集）
-tests/engine/key-normalize.test.ts           新：§8 的 5
+tests/gates/key-normalize.test.ts            新：§8 的 5（B73 起）
 package.json                                 改：加 eval:faces 脚本
 docs/预研/2026-11-09-b70-face-evaluation.md   新：三面读数与判定
 docs/批次/B70-决策面评估与题面修正-执行记录.md  新：批次记录

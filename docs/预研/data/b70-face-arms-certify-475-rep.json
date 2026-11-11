@@ -1,0 +1,70 @@
+{
+ "generatedAt": "2026-11-11T10:59:16.223Z",
+ "proxy": "http://127.0.0.1:8711",
+ "faces": [
+  "certify"
+ ],
+ "tag": "certify-475-rep",
+ "seedBase": 9000,
+ "results": [
+  {
+   "face": "certify",
+   "gamesPerArm": 1900,
+   "seeds": 475,
+   "players": 4,
+   "themes": [
+    "xianxia2026",
+    "scifi-ai",
+    "hybrid",
+    "urban-psych"
+   ],
+   "baselineSeat0Wins": 460,
+   "modelSeat0Wins": 512,
+   "baselineWinRate": 0.2421,
+   "modelWinRate": 0.2695,
+   "improved": true,
+   "b": 140,
+   "c": 192,
+   "both": 320,
+   "neither": 1248,
+   "changed": 332,
+   "paired": 1900,
+   "chi2": 7.834337,
+   "significant": true,
+   "noDiscordant": false,
+   "changedRate": 0.1747,
+   "preflight": {
+    "minGamesPerArm": 400,
+    "anomalies": 0,
+    "ok": true
+   },
+   "verdict": "该面值得接入，另立批次做门 ⑨ 重校准",
+   "decideCalls": 2673,
+   "latencyMs": {
+    "p50": 33,
+    "p95": 56
+   },
+   "fallbackGames": {
+    "baseline": 110,
+    "model": 194
+   },
+   "avgRounds": {
+    "baseline": 13,
+    "model": 13
+   },
+   "anomalies": 0,
+   "injection": {
+    "calls": 2673,
+    "fallbacks": 16,
+    "emptyCandidates": 6070,
+    "emptyByReason": {
+     "unregisteredFace": 0,
+     "stationMismatch": 6070,
+     "noCandidate": 0,
+     "narrowedEmpty": 0
+    }
+   },
+   "minutes": 1.61
+  }
+ ]
+}

@@ -9,7 +9,7 @@ B70 全分支终审列出的非阻塞 Minors 中，价值高的几条已在 B70 
 
 | # | 原发现 | 处置 | 落点 |
 |---|---|---|---|
-| 1 | `key-normalize.mjs` 的 `String(key)` 会把 `undefined` 洗成 `'undefined'`（与仓内纪律相左） | **修**：非字符串抛 `TypeError`；探针两处调用改传原始值；补边界与非字符串用例 | `tools/laya-probe/key-normalize.mjs`、`tools/laya-probe/run.mjs:204`、`tests/engine/key-normalize.test.ts` |
+| 1 | `key-normalize.mjs` 的 `String(key)` 会把 `undefined` 洗成 `'undefined'`（与仓内纪律相左） | **修**：非字符串抛 `TypeError`；探针两处调用改传原始值；补边界与非字符串用例 | `tools/laya-probe/key-normalize.mjs`、`tools/laya-probe/run.mjs:204`、`tests/gates/key-normalize.test.ts`（本批迁移） |
 | 2 | `setRecorder` 归零 `recordSeq` 但不重置 `recordCtx` | **修**：一并归零 + 注释说明 | `tests/sim/policy.mjs` |
 | 3 | 抽模块时丢失 `recordSeq`/`recordCtx` 的注释口径（「跨主题/档位」「playOne 设置」） | **补回**两行注释 | `tests/sim/policy.mjs` |
 | 4 | `policy.d.mts` 的 `AdvanceOpts` 标题写「透传选项」，与「`onDuelPick` 被实现占用」字段注不一致 | **修**：标题改为「转发给 `advanceAuto` 的选项（`onDuelPick` 除外）」 | `tests/sim/policy.d.mts` |

@@ -35,7 +35,7 @@ let recordCtx = null;
 export function setRecorder(value) { recorder = value; recordSeq = 0; recordCtx = null; }
 export function getRecorder() { return recorder; }
 
-export /**
+/**
  * 记一个决策点。
  *
  * @param {object} state **动作执行前**的局面（探针要重建「当时看到什么」）。
@@ -44,7 +44,7 @@ export /**
  * @param {number|null} face 引擎产生的**骰面点数**（无骰面的决策点为 null）。
  * @returns {number} 该条记录的下标（**动作执行后**可回填 `face`；关闭时返回 -1）。
  */
-function record(state, seat, heuristic, face = null) {
+export function record(state, seat, heuristic, face = null) {
   if (recorder === null) { return -1; }
   const ctx = recordCtx;
   recorder.push({
@@ -63,8 +63,8 @@ function record(state, seat, heuristic, face = null) {
   return recorder.length - 1;
 }
 
-export /** 状态合法性体检（跑完一局后逐玩家核对）。 */
-function checkState(s, label) {
+/** 状态合法性体检（跑完一局后逐玩家核对）。 */
+export function checkState(s, label) {
   const problems = [];
   for (const p of s.players) {
     if (!Number.isFinite(p.hp) || p.hp < 0) problems.push(label + ' 座' + p.seat + ' 体力非法 ' + p.hp);
@@ -88,7 +88,7 @@ function checkState(s, label) {
   return problems;
 }
 
-export /**
+/**
  * 挑一个默认出牌目标：除自己外位置最高的存活玩家。
  *
  * ⚠️ 位置并列时**随机**选（用 state.rng ⇒ 仍可复现）。
@@ -97,7 +97,7 @@ export /**
  *   真实对局中攻击目标是**玩家自选**（B10 收尾①），不存在这种座位绑定，
  *   模拟器不该把它引入 —— 否则测的是 AI 的偏置，不是规则的公平性。
  */
-function pickTarget(s, seat) {
+export function pickTarget(s, seat) {
   const others = s.players.filter((p) => p.alive && p.seat !== seat);
   if (others.length === 0) { return undefined; }
   let maxPos = -1;
@@ -109,8 +109,8 @@ function pickTarget(s, seat) {
   return chosen === undefined ? undefined : chosen.seat;
 }
 
-export /** 山议：每人投给位置最高的对手，然后结算。 */
-async function councilTurn(s, policy, counters, hit) {
+/** 山议：每人投给位置最高的对手，然后结算。 */
+export async function councilTurn(s, policy, counters, hit) {
   const alive = s.players.filter((p) => p.alive);
   for (const p of alive) {
     // ⚠️ B70 Task 3：**council 面注入**（默认关闭 ⇒ hit 恒 false，下面整段是空操作）。
@@ -137,8 +137,8 @@ async function councilTurn(s, policy, counters, hit) {
   return rr.ok ? rr.state : s;
 }
 
-export /** 认证一轮：认证人签印/质疑 → 判定 → 待认证者复议 → 第三方投票 → 复议裁定。 */
-async function certificationTurn(s, policy, counters, hit) {
+/** 认证一轮：认证人签印/质疑 → 判定 → 待认证者复议 → 第三方投票 → 复议裁定。 */
+export async function certificationTurn(s, policy, counters, hit) {
   const targets = [...s.certification.pending];
   for (const target of targets) {
     for (const p of s.players) {
@@ -230,7 +230,7 @@ async function certificationTurn(s, policy, counters, hit) {
   return s;
 }
 
-export /**
+/**
  * AI 的**出牌选牌**（B65）——按效果强度选，不是「第一张付得起的牌」。
  *
  * ⚠️ **为什么改（G-a 付费的连带后果）**：出牌改为**付费**后（规格 §3.1「行事」/§4.3），
@@ -252,7 +252,7 @@ export /**
  * @param {number} resource 当前灵枢
  * @returns {object|undefined} 选中的牌（无可打牌 ⇒ undefined）
  */
-function pickPlayableCard(hand, resource) {
+export function pickPlayableCard(hand, resource) {
   const affordable = hand.filter((c) => c.cost <= resource);
   // ⚠️ 无可打牌时返回 **undefined**（不是 null）⇒ 与调用点的 `card === undefined` 判据一致
   //   （返回 null 会让调用点漏判 ⇒ 读 `card.id` 抛 TypeError）。
@@ -290,7 +290,7 @@ function pickPlayableCard(hand, resource) {
   return best;
 }
 
-export /**
+/**
  * AI 偶尔发动身份被动（B12）。
  *
  * ⚠️ **可达性要求**：若 AI 从不发动，被动在真实对局中**永远不会触发** ⇒
@@ -299,7 +299,7 @@ export /**
  * 规则一致性：发动被动**占用本回合的行动**（规格 §3.1 行动三选一）⇒
  *   发动成功后本回合不再行棋/问天/出牌。
  */
-function maybeUseAbility(s, seat) {
+export function maybeUseAbility(s, seat) {
   const passive = s.players[seat]?.flags?.passive;
   if (passive === undefined || passive === null) { return null; }
   const op = String(passive.op);
@@ -323,8 +323,8 @@ function maybeUseAbility(s, seat) {
   return r.ok ? { state: r.state, op } : null;
 }
 
-export /** 推进手番；若结算后进入对峙 ⇒ AI 选牌后继续推进（回合阻塞的闭环）。 */
-async function advanceWithDuel(s, mode, opts) {
+/** 推进手番；若结算后进入对峙 ⇒ AI 选牌后继续推进（回合阻塞的闭环）。 */
+export async function advanceWithDuel(s, mode, opts) {
   // ⚠️ B18：委托引擎层统一出口（对峙 + 关隘闭环都在里面）——
   //   没有关隘闭环时，AI 会在关隘格上反复行棋直到离开 ⇒ **免费穿过关隘**。
   //
@@ -438,8 +438,8 @@ async function askPolicy(policy, state, seat, counters, stationFace, filter) {
   }
 }
 
-export /** 跑一局，返回该局的统计与异常。 */
-async function playOne(theme, players, seed, gateReserve, policy) {
+/** 跑一局，返回该局的统计与异常。 */
+export async function playOne(theme, players, seed, gateReserve, policy) {
   // ⚠️ B70 Task 3：**默认关闭**的策略注入。`policy === undefined`（sim CLI 的全部调用）
   //   ⇒ `hit` 恒 false ⇒ 三处改道分支一次都不进 ⇒ 与注入前逐字同行为（门 ⑨ diff 为空是硬约束）。
   //   ⚠️ `hit` 只认**座位**（简报形状）；「本站点属于哪个面」由每个注入站点各自声明给

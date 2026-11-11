@@ -1,7 +1,7 @@
 // key-normalize.mjs 的类型声明（纯 JS 工具的 TS 侧契约；与 tools/*.d.mts 同法）。
 //
 // ⚠️ 这里**只描述契约**，实现全在 key-normalize.mjs（纯 JS，无类型）。
-//   由 `tests/engine/key-normalize.test.ts` 判定（六条口径：历史形 / 规范形 / 其余不动 / 边界串 / 非字符串抛错 / 与 `actionKey` 逐字符一致）。
+//   由 `tests/gates/key-normalize.test.ts`（B73 起；原在 `tests/engine/`） 判定（六条口径：历史形 / 规范形 / 其余不动 / 边界串 / 非字符串抛错 / 与 `actionKey` 逐字符一致）。
 
 /**
  * 历史样本 key 归一化（**读侧专用**，B70）。

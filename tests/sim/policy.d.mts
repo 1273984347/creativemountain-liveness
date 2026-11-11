@@ -4,7 +4,7 @@
 //   改签名必须同步改 policy.mjs：门 ① 只核对 TS 侧，门 ⑨ 才核对行为。
 // ⚠️ 依赖方向同 policy.mjs：本文件**不得**引用 run.mjs。
 
-import type { State } from '../../engine/core/state.ts';
+import type { LogEntry, State } from '../../engine/core/state.ts';
 import type { Action } from '../../engine/core/action.ts';
 import type { RuleMode } from '../../engine/scales.ts';
 import type { Card, ThemePack } from '../../engine/types/theme.ts';
@@ -120,21 +120,52 @@ export interface AdvanceOpts {
   readonly onDuelPick?: (seat: number, cardId: string, stateAtPick: State) => void;
 }
 
+/** 试炼失败后的归宿（由玩家 flags 推导，逐座位一项）。 */
+export interface TrialFailOutcome {
+  readonly failed: boolean;
+  readonly passedAfterFail: boolean;
+  readonly releasedAfterFail: boolean;
+}
+
+/** 身份目标计数器的实际值分布（`value` = 当前计数，`count` = 目标要求值）。 */
+export interface CounterValue {
+  readonly kind: string;
+  readonly value: number;
+  readonly count: number;
+}
+
 /**
  * 一局的统计与异常（`playOne` 的返回）。
  *
- * ⚠️ B70 只锁定下游**确实消费**的字段；其余平衡指标（`identities` / `factions` /
- *   `turnOrder` / `liveSeats` / `abilityOps` / `trialFailOutcomes` …）以索引签名放行，
- *   取值侧自行收窄 —— 本任务的原则是**零行为变更**，不在此处重新设计读数契约。
+ * ⚠️ B73 收口：字段**逐项具名**（不再用索引签名放行）—— 这样 `.ts` 测试里打错字段名会在
+ *   `tsc` 阶段报错，而不是静默得到 `unknown`。`.mjs` 消费方（评估器）本就不受 TS 保护，
+ *   故本声明只影响测试与 IDE。字段集合以 `policy.mjs` 的 `return {...}` 为准，新增读数必须同步。
  */
 export interface SimGameResult {
   readonly reason: string;
   readonly rounds: number;
   readonly winners: readonly number[];
+  readonly identities: readonly string[];
+  readonly factions: readonly string[];
+  readonly turnOrder: readonly number[];
+  readonly firstPendingSeat: number;
+  readonly firstPendingRound: number;
+  readonly firstPendingPos: number;
+  readonly certRound: number;
+  readonly liveSeats: Readonly<Record<number, number>>;
+  readonly seatTotal: number;
+  readonly abilityOps: readonly string[];
+  readonly trialFailOutcomes: readonly TrialFailOutcome[];
+  readonly duelCount: number;
+  readonly trialEvents: readonly LogEntry[];
+  readonly passiveOps: readonly string[];
+  readonly goalKinds: readonly string[];
+  readonly markCount: number;
+  readonly markKinds: readonly string[];
+  readonly counterValues: readonly CounterValue[];
   readonly anomalies: readonly string[];
   /** B70 Task 3 的注入计数（缺省 policy ⇒ 三个 0）。 */
   readonly injection: InjectionCounters;
-  readonly [metric: string]: unknown;
 }
 
 /**

@@ -11,14 +11,24 @@ import { mcnemar, pairWinners, verdictOf } from './face-stats.mjs';
 
 const ROOT = process.cwd();
 const PROXY = process.env.LAYA_PROXY_URL ?? 'http://127.0.0.1:8711';
-const FACES = ['play', 'council', 'certify'];
+const ALL_FACES = ['play', 'council', 'certify'];
+// ⚠️ B73：可只跑指定面（扩样复验用），默认三面全跑；未知面直接拒绝（不静默跳过）。
+const FACES = (process.env.B70_FACES ?? ALL_FACES.join(',')).split(',').map((x) => x.trim()).filter((x) => x !== '');
+for (const f of FACES) {
+  if (!ALL_FACES.includes(f)) { console.error(`未知面：${f}（可用：${ALL_FACES.join(',')}）`); process.exit(2); }
+}
+// ⚠️ B73：扩样/复验的产物用 `B70_TAG` 分文件，**不覆盖**主表（400 局/臂）与主读数。
+const TAG = process.env.B70_TAG ?? '';
+const SUFFIX = TAG === '' ? '' : '-' + TAG;
 const THEMES = ['xianxia2026', 'scifi-ai', 'hybrid', 'urban-psych'];
 const SEEDS = Number(process.env.B70_SEEDS ?? 100);      // 4 × 100 = 400 局/臂
+// ⚠️ B74：扩样复验用独立 seed 基（默认 7000；复现组用 9000）⇒ 两组样本互不重叠。
+const SEED_BASE = Number(process.env.B70_SEED_BASE ?? 7000);
 const PLAYERS = 4;
 const MODEL_SEAT = 0;
 // ⚠️ B70 终审 I4：生成物**只能**写到这里，不能写评估报告本体 ——
 //   报告里的「结论」段是手写的，脚本覆写会把已入库的人工判断整段冲掉（可复跑与结论文档互不破坏）。
-const OUT = 'docs/预研/data/b70-face-readings.md';
+const OUT = `docs/预研/data/b70-face-readings${SUFFIX}.md`;
 // 规格 §6 的样本下限；不足 ⇒ 判定固定为「样本不足/未跑满」，**不得**输出三种固定措辞之一
 // （B70 终审 Minor 5：`B70_SEEDS` 是环境变量，误设成 20 也会照常出判定）。
 const MIN_GAMES_PER_ARM = 400;
@@ -69,8 +79,9 @@ for (const face of FACES) {
     calls: 0, fallbacks: 0, emptyCandidates: 0,
     emptyByReason: { unregisteredFace: 0, stationMismatch: 0, noCandidate: 0, narrowedEmpty: 0 },
   };
-  for (let i = 0; i < SEEDS; i += 1) {
-    const seed = 7000 + i * 31;
+  let budgetHit = false;
+  for (let i = 0; i < SEEDS && !budgetHit; i += 1) {
+    const seed = SEED_BASE + i * 31;
     for (const theme of themeObjs) {
       const base = await playOne(theme, PLAYERS, seed);
       arms.baseline.push(base);
@@ -78,6 +89,11 @@ for (const face of FACES) {
       arms.model.push(m);
       inj.calls += m.injection.calls; inj.fallbacks += m.injection.fallbacks; inj.emptyCandidates += m.injection.emptyCandidates;
       for (const [k, v] of Object.entries(m.injection.emptyByReason)) { inj.emptyByReason[k] += v; }
+    }
+    // ⚠️ B73：预算检查**在每 200 局之间**做（此前只在该面跑完后检查 ⇒ 中途超时无法止损）。
+    if (((i + 1) * THEMES.length) % 200 === 0 && (Date.now() - t0) > 30 * 60000) {
+      console.error(`面 ${face} 超过 30 分钟预算（已完成 ${String((i + 1) * THEMES.length)} 局/臂），停下报告`);
+      budgetHit = true;
     }
   }
   const minutes = (Date.now() - t0) / 60000;
@@ -117,12 +133,12 @@ for (const face of FACES) {
   results.push(row);
   console.log(`[${face}] ${row.gamesPerArm} 局/臂｜座0 ${row.baselineSeat0Wins}→${row.modelSeat0Wins}｜b=${p.b} c=${p.c} χ²=${stat.chi2}｜${row.verdict}｜${row.minutes} 分钟`);
   if (!preflightOk) { console.error(`面 ${face} 前置自检未通过：局/臂=${String(row.gamesPerArm)}（需 ≥${String(MIN_GAMES_PER_ARM)}）、anomalies=${String(anomalies)}（需 0）`); }
-  if (minutes > 30) { console.error(`面 ${face} 超过 30 分钟预算，停下报告`); break; }
+  if (budgetHit) { break; }
 }
 mkdirSync('docs/预研/data', { recursive: true });
-writeFileSync('docs/预研/data/b70-face-arms.json', JSON.stringify({ generatedAt: new Date().toISOString(), proxy: PROXY, results }, null, 1));
+writeFileSync(`docs/预研/data/b70-face-arms${SUFFIX}.json`, JSON.stringify({ generatedAt: new Date().toISOString(), proxy: PROXY, faces: FACES, tag: TAG, seedBase: SEED_BASE, results }, null, 1));
 const lines = ['# B70 · 三决策面模型评估读数（生成物，勿手改）', '',
-  '> 生成：`npm run eval:faces`｜每面 ' + String(SEEDS) + ' seed × ' + String(THEMES.length) + ' 主题 = ' + String(SEEDS * THEMES.length) + ' 局/臂｜模型座位 = 座' + String(MODEL_SEAT) + '｜配对 McNemar 临界 3.841',
+  '> 生成：`npm run eval:faces`' + (TAG === '' ? '' : '（tag=' + TAG + '，仅面 ' + FACES.join(',') + '）') + '｜每面 ' + String(SEEDS) + ' seed × ' + String(THEMES.length) + ' 主题 = ' + String(SEEDS * THEMES.length) + ' 局/臂｜模型座位 = 座' + String(MODEL_SEAT) + '｜配对 McNemar 临界 3.841',
   '> ⚠️ 本文件由脚本覆写；**结论段**在 `docs/预研/2026-11-09-b70-face-evaluation.md`（手写，不由本脚本生成）。', '',
   '| 面 | 局/臂 | 座0 胜（基线→模型） | 胜率 | b | c | χ² | 判定 | 胜者变化率 | decide 调用 | 延迟 p50/p95 | 回落/空候选 | 异常 | 分钟 |',
   '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|'];
