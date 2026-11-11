@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-11-10T16:07:43.602Z",
+ "generatedAt": "2026-11-11T09:06:19.498Z",
  "proxy": "http://127.0.0.1:8711",
  "results": [
   {
@@ -14,29 +14,34 @@
     "urban-psych"
    ],
    "baselineSeat0Wins": 124,
-   "modelSeat0Wins": 74,
+   "modelSeat0Wins": 120,
    "baselineWinRate": 0.31,
-   "modelWinRate": 0.185,
+   "modelWinRate": 0.3,
    "improved": false,
-   "b": 105,
-   "c": 55,
-   "both": 19,
-   "neither": 221,
-   "changed": 160,
+   "b": 64,
+   "c": 60,
+   "both": 60,
+   "neither": 216,
+   "changed": 124,
    "paired": 400,
-   "chi2": 15.00625,
-   "significant": true,
+   "chi2": 0.072581,
+   "significant": false,
    "noDiscordant": false,
-   "changedRate": 0.4,
-   "verdict": "该面模型劣于启发式，保持贪心",
-   "modelCalls": 2487,
+   "changedRate": 0.31,
+   "preflight": {
+    "minGamesPerArm": 400,
+    "anomalies": 0,
+    "ok": true
+   },
+   "verdict": "未检出改善",
+   "decideCalls": 666,
    "latencyMs": {
-    "p50": 57,
-    "p95": 71
+    "p50": 47,
+    "p95": 61
    },
    "fallbackGames": {
     "baseline": 28,
-    "model": 33
+    "model": 38
    },
    "avgRounds": {
     "baseline": 13,
@@ -44,11 +49,17 @@
    },
    "anomalies": 0,
    "injection": {
-    "calls": 2487,
+    "calls": 666,
     "fallbacks": 0,
-    "emptyCandidates": 3637
+    "emptyCandidates": 1327,
+    "emptyByReason": {
+     "unregisteredFace": 0,
+     "stationMismatch": 1034,
+     "noCandidate": 293,
+     "narrowedEmpty": 0
+    }
    },
-   "minutes": 2.36
+   "minutes": 0.54
   },
   {
    "face": "council",
@@ -76,11 +87,16 @@
    "significant": false,
    "noDiscordant": false,
    "changedRate": 0.3625,
+   "preflight": {
+    "minGamesPerArm": 400,
+    "anomalies": 0,
+    "ok": true
+   },
    "verdict": "未检出改善",
-   "modelCalls": 400,
+   "decideCalls": 400,
    "latencyMs": {
-    "p50": 60,
-    "p95": 69
+    "p50": 45,
+    "p95": 59
    },
    "fallbackGames": {
     "baseline": 28,
@@ -94,9 +110,15 @@
    "injection": {
     "calls": 400,
     "fallbacks": 0,
-    "emptyCandidates": 4859
+    "emptyCandidates": 1339,
+    "emptyByReason": {
+     "unregisteredFace": 0,
+     "stationMismatch": 1339,
+     "noCandidate": 0,
+     "narrowedEmpty": 0
+    }
    },
-   "minutes": 0.41
+   "minutes": 0.31
   },
   {
    "face": "certify",
@@ -124,11 +146,16 @@
    "significant": false,
    "noDiscordant": false,
    "changedRate": 0.1425,
+   "preflight": {
+    "minGamesPerArm": 400,
+    "anomalies": 0,
+    "ok": true
+   },
    "verdict": "未检出改善",
-   "modelCalls": 553,
+   "decideCalls": 553,
    "latencyMs": {
-    "p50": 61,
-    "p95": 68
+    "p50": 38,
+    "p95": 50
    },
    "fallbackGames": {
     "baseline": 28,
@@ -142,9 +169,15 @@
    "injection": {
     "calls": 553,
     "fallbacks": 0,
-    "emptyCandidates": 4876
+    "emptyCandidates": 1365,
+    "emptyByReason": {
+     "unregisteredFace": 0,
+     "stationMismatch": 1365,
+     "noCandidate": 0,
+     "narrowedEmpty": 0
+    }
    },
-   "minutes": 0.57
+   "minutes": 0.36
   }
  ]
 }

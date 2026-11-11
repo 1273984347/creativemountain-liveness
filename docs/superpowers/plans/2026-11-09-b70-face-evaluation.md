@@ -589,10 +589,16 @@ async function askPolicy(policy, state, seat, counters) {
       }
 ```
 
-**普通分支**：⚠️ **不得用 `continue`** —— 该分支尾部还有 `s = await advanceWithDuel(...)` 与 `firstPendingSeat` 统计，跳过会让模型臂少记「首个登顶者」传导数据。改用标志位把原决策块整体包起来。
+**普通分支**：⚠️ **不得用 `continue`** —— 该分支尾部还有 `s = await advanceWithDuel(...)` 与 `firstPendingSeat` 统计，跳过会让模型臂少记「首个登顶者」传导数据。
 
-确切边界（搬移前 `run.mjs` 行号，施工时以锚点字符串复核）：**待认证锁定分支 = 421–436**（434 推进、435 `continue`、436 右花括号）；**要包进 `if (!injected)` 的范围 = 437–474**（即从 `const roll = s.rng.next();` 到三段决策结束）；**475 的 `s = advanceWithDuel(s, 'standard', { gateReserve });` 与 476–480 的 `firstPendingSeat` 统计必须留在包裹之外**（481 是 while 收尾）。形状：
+> ⚠️ **本段已被 B70 终审 C1 推翻（2026-11-11 合并前修复波），施工请按下节「修正后的形状」，不要照抄下面的 `if (!injected)` 包裹**：
+> 把「`roll` + 三段决策」整块包进 `if (!injected)` 会让模型臂**同时改掉**出牌频率 / 身份被动 / 行棋与问天比例
+> ⇒ 违反规格 §4「三段行动分段由 `s.rng.next()` 决定，两臂完全相同」。终审实测：同一批 seed 座0 出牌 2/1/1/4/2 → 6/6/7/8/10、`ability` 恒 0。
+> 修正后的口径见下方「**普通分支（C1 修正后）**」；实现见 `tests/sim/policy.mjs` 的 `playOne`。
+
+确切边界（搬移前 `run.mjs` 行号，施工时以锚点字符串复核）：**待认证锁定分支 = 421–436**（434 推进、435 `continue`、436 右花括号）；**原计划要包进 `if (!injected)` 的范围 = 437–474**（即从 `const roll = s.rng.next();` 到三段决策结束）；**475 的 `s = advanceWithDuel(s, 'standard', { gateReserve });` 与 476–480 的 `firstPendingSeat` 统计必须留在包裹之外**（481 是 while 收尾）。~~形状：~~
 ```js
+    // ❌ 已被终审 C1 推翻（会替换行动分段）—— 仅作历史记录
     let injected = false;
     if (hit(seat)) {
       const picked = await askPolicy(policy, s, seat, counters);
@@ -610,7 +616,34 @@ async function askPolicy(policy, state, seat, counters) {
     s = await advanceWithDuel(s, 'standard', { gateReserve });
     // …原有 firstPendingSeat 统计保持不动…
 ```
-改道命中时**不消耗** `s.rng.next()`（原决策块被跳过）⇒ 模型臂随机流自首个分歧起与基线分叉，这是策略注入的固有效应，必须写进批次记录。
+
+**普通分支（C1 修正后，唯一正确形状）**：`roll` 在注入**之前**消耗（两臂都恰好消耗一次）⇒ 0.16 / 0.75 / 0.85 三段两臂完全相同；
+只有 `roll ≥ 0.85`（基线本来就要出牌）时，才把「选哪张牌 + 打谁」换成模型答案，且候选在 play 站点收窄为 `PLAY_CARD`：
+```js
+    const roll = s.rng.next();
+    if (roll < 0.16) { /* 被动，原样 */ }
+    if (roll < 0.75) { /* 行棋，原样 */ }
+    else if (roll < 0.85) { /* 问天，原样 */ }
+    else {
+      let injectedCard = null;
+      if (hit(seat)) {
+        const picked = await askPolicy(policy, s, seat, counters, 'play', (a) => a.type === 'PLAY_CARD');
+        if (picked !== null && picked.type === 'PLAY_CARD') { injectedCard = picked; }
+      }
+      if (injectedCard !== null) {
+        const payload = injectedCard.target === undefined
+          ? { cardId: injectedCard.cardId }
+          : { cardId: injectedCard.cardId, target: injectedCard.target };
+        record(s, seat, actionKey(injectedCard));
+        s = performAction(s, seat, 'act', payload);
+      } else {
+        /* 原本的 pickPlayableCard + pickTarget + record + performAction，逐字不动 */
+      }
+    }
+    s = await advanceWithDuel(s, 'standard', { gateReserve });
+```
+随机流口径也随之改写：两臂的 `roll` 都消耗 ⇒ 分叉起点是「**实际打出的牌不同** ⇒ 之后的状态与 rng 使用不同」，
+**不是**「改道命中时跳过了一次 rng」。
 
 ② **council 面**：`councilTurn` 现位于 `run.mjs:178–190`（搬移后在 `policy.mjs`，行号会变，**以锚点字符串定位**）。签名改为 `async function councilTurn(s, policy, counters, hit)`；注入点在循环头 `for (const p of alive) {` 内、锚点行 `const t = pickTarget(s, p.seat);` **之前**（该循环同层已有 `continue`，故 `continue` 合法）。插入：
 ```js

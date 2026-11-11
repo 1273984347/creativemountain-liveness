@@ -966,10 +966,10 @@ V1 的新手门槛由 **§6.6 脚本化教学演示** 承担（成本低一个�
 **决策层单一真相源与策略注入（B70 落地）**：
 
 - `tests/sim/policy.mjs` 是 sim 决策层的**单一真相源**（9 个决策函数 + 决策点记录器；依赖单向 `run.mjs → policy.mjs → engine/*`，禁止反向 import）。
-- `playOne` 的第 5 参 `FacePolicy`（`{face: 'play'|'council'|'certify', seat, decide, timeoutMs?}`）**默认关闭**（缺省 undefined ⇒ 行为与无注入逐字相同，门 ⑨ 报告逐字等价）；sim CLI **不新增开关** —— 注入只被评估器使用。
+- `playOne` 的第 5 参 `FacePolicy`（`{face: 'play'|'council'|'certify', seat, decide, timeoutMs?}`）**默认关闭**（缺省 undefined ⇒ 行为与无注入逐字相同，门 ⑨ 报告逐字等价）；sim CLI **不新增开关** —— 注入只被评估器使用。注入面只换**该面自己的决策**：play 面只决定「出哪张牌 + 打谁」，0.16/0.75/0.85 三段行动分段由两臂同一个 `s.rng.next()` 决定（两臂完全相同）。
 - 任何注入失败（返回 null / 非法 key / 抛错 / 超时）都**回落启发式**并计数，对局不得卡死；站点面 ≡ 策略面是问出口的前置条件。
-- 三面模型评估器 `tools/laya-probe/game-arms.mjs`（`npm run eval:faces`）**不进门禁**，无服务即 SKIP（退出码 0）；统计层 `tools/laya-probe/face-stats.mjs`（同 seed 配对 McNemar、连续性校正、临界 3.841、判定措辞固定三种）有常驻单测。
-- **实测结论（2026-11-11 本地，每面 400 局/臂，4 主题 × 100 seed × 4 人局，模型座 0）**：play 面 χ²=15.00625 > 3.841 ⇒ **劣于启发式**（31.0%→18.5%）；council 面 χ²=0.027586、certify 面 χ²=0.631579 ⇒ **未检出改善** ⇒ **对峙选牌与三面决策全部保持贪心**（读数与判定原文见 `docs/预研/2026-11-09-b70-face-evaluation.md`）。
+- 三面模型评估器 `tools/laya-probe/game-arms.mjs`（`npm run eval:faces`）**不进门禁**，无服务即 SKIP（退出码 0）；统计层 `tools/laya-probe/face-stats.mjs`（同 seed 配对 McNemar、连续性校正、临界 3.841、判定措辞固定三种）有常驻单测。读数只写生成物 `docs/预研/data/b70-face-readings.md` 与 `…/b70-face-arms.json`，评估报告的结论段手写（脚本不覆写）。
+- **实测结论（2026-11-11 重跑，每面 400 局/臂，4 主题 × 100 seed × 4 人局，模型座 0）**：play 面 χ²=0.072581、council 面 χ²=0.027586、certify 面 χ²=0.631579 ⇒ **三面全部「未检出改善」**（play 31.0%→30.0%、council 31.0%→30.3%、certify 31.0%→32.8%）⇒ **play/council/certify 三面保持贪心**（读数与判定原文见 `docs/预研/2026-11-09-b70-face-evaluation.md`）。⚠️ **对峙选牌同样保持贪心，但依据不是这三面读数** —— 对峙选牌发生在 `advanceWithDuel → advanceAuto` 的 `onDuelPick`，B70 的三面注入从未触碰它（两臂同为引擎贪心）；依据是本规格 **§1.2 的整局驱动 spike**（b=14/c=4、χ²=4.5 ⇒ 显著变差；44/44 出最强牌的是启发式）。
 
 ---
 
