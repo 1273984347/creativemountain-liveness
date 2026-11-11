@@ -22,6 +22,25 @@
 - **门 ② 令牌纪律**：门 ② 扫整个工作树（gitignore 不豁免）。落进工作树的日志/报告不得逐字出现那两个自检入口令牌；scratch 输出写 `$TEMP`。
 - 模型/主题/死亡复活在本批**不做**（B76–B78）。
 
+## 施工前已核对的事实（避免「对齐」变成「补定义」）
+
+| 计划里的用法 | 已核实 |
+|---|---|
+| `installTheme(state, theme)` | 存在：`engine/core/setup.ts:228` |
+| `createInitialState({ players, seed, deckSize })` | 存在（`tests/sim/policy.mjs` 同款调用） |
+| `CouncilResult` / `fail` / `succeed` | 存在：`engine/core/council.ts:11/17/21` |
+| `topVoted(state)` | 已导出（`b3.test.ts` 已 import） |
+| `byFlag(ok, note, next, from)` | 参数顺序如此（`engine/core/probe.ts:83`） |
+| `checkIrVsTheme(ir, theme): string[]` | 已导出（`tools/parity-check.mjs:17`，`.d.mts` 声明返回 `string[]`） |
+| `record(...)` / `advanceWithDuel(...)` | 均在 `tests/sim/policy.mjs` 内（`playOne` 同文件调用） |
+| `cardHasMovement` | **已在 `tests/sim/policy.mjs` 顶部 import**（B72，第 12 行），Task 7 无需新增 |
+| `Player.counters` 初始形状 | `{}`（`state.ts:271` / `setup.ts:169`）⇒ 未触发的计数器是 `undefined`；断言用 `?? 0` |
+| `Rng.next()` | **可变**（`engine/core/dice.ts:21`）⇒ 不得为决策额外抽随机数 |
+| 门⑤ 失败判据 | `res.status !== 0`（`tools/gate.mjs:105`）⇒ `console.warn` 不阻断 |
+| `actionFromKey` 的严格性 | 反解后重新编码逐字比较（`action-key.ts:52-56`），多余尾段必拒 |
+
+> 行号只作当前快照参考；施工时一律用 `grep -n` 定位（源码会漂移）。
+
 ---
 
 ## 文件结构
@@ -257,6 +276,8 @@ export interface Identity {
 
 - [ ] **Step 6: 跑聚焦测试**
 
+> 门⑤ 只认退出码（`tools/gate.mjs:105`）⇒ `console.warn` 不会阻断；无需把 warning 改成 stdout。
+
 Run: `node --test tests/engine/identity-rights.test.ts && node tools/theme-validate.mjs`
 Expected: 2/2 pass；主题校验 PASS 且无 warning。
 
@@ -280,6 +301,8 @@ git commit -m "feat(B75): 身份 rights 数据驱动授予否决权 + 主题校�
 - Produces: `CouncilState.vetoBy: number | null`；`useCouncilVeto(state, actor): CouncilResult`；`resolveCouncil` 在「否决实际阻止放逐」时写 `vetoCount` 并结算即时目标。
 
 - [ ] **Step 1: 写失败测试**
+
+> 已核实：`CouncilResult` / `topVoted` / `castVote` 均已存在 ⇒ Step 2 的预期失败应是「`useCouncilVeto` 未导出」，不是模块缺失。
 
 Create `tests/engine/council-veto.test.ts`（用 `fixtures.ts` 的 `councilScene()` 与 `castVote` 把票投完；用 `putPassive` 或直接改 `flags.canVeto` 造持权者；`mk()` 的 4 人局）：
 
@@ -338,7 +361,8 @@ test('B75：3 人局不受否决影响（扣灵枢分支）', () => {
   assert.ok(v.ok);
   const res = resolveCouncil(v.state);
   assert.ok(res.ok);
-  assert.equal(res.state.players[0]?.counters.vetoCount, undefined, '3 人局不涉及放逐 ⇒ 不计数');
+  // ⚠️ counters 初始是 `{}`（动态添加）⇒ 未触发时是 undefined；用 `?? 0` 兼容两种初始形状。
+  assert.equal(res.state.players[0]?.counters.vetoCount ?? 0, 0, '3 人局不涉及放逐 ⇒ 不计数');
 });
 
 test('B75：否决后即时目标结算（veto_success 达成发印记）', () => {
@@ -688,12 +712,36 @@ function councilCandidates(state: State, seat: number): Action[] {
   }
 ```
 
+- **先把 `actionWindowRefusal` 改成结构化返回值**（消除对拒因文案的字符串匹配）：
+
+```ts
+type WindowRefusal = {
+  readonly code: 'no_seat' | 'dead' | 'pending_cert' | 'duel' | 'phase' | 'round_end';
+  readonly message: string;
+};
+function actionWindowRefusal(state: State, seat: number): WindowRefusal | null {
+  const p = state.players[seat];
+  if (p === undefined) { return { code: 'no_seat', message: '该座位不存在（人数档位与存档不一致）。' }; }
+  if (!p.alive) { return { code: 'dead', message: '该玩家已出局。' }; }
+  if (p.pendingCert) { return { code: 'pending_cert', message: '待认证锁定：不能主动移动，位移类牌与被动不可用（非位移牌仍可打出）。' }; }
+  if (state.duel !== null) { return { code: 'duel', message: '对峙未结算：双方各自锁定亮牌后才能继续行动。' }; }
+  if (state.phase !== '行动') { return { code: 'phase', message: '当前阶段不可行事（先完成山议/认证）。' }; }
+  if (isRoundEnd(state)) { return { code: 'round_end', message: '本 round 已走完：等待回合结算。' }; }
+  return null;
+}
+```
+
+  `actionWindow` 改为 `return actionWindowRefusal(state, seat) === null;`；
+  `uiBlockNotice` 里既有的 `MOVE` / `ROLL_WHEEL` / `ABILITY` / `PLAY_CARD` 分支把 `return window;` 改为 `return window.message;`（消息逐字不变，既有文案断言不受影响）。
+
 - `uiBlockNotice` 加两个 case：
 
 ```ts
     case 'EQUIP_CARD': {
       const window = actionWindowRefusal(state, seat);
-      if (window !== null) { return window; }
+      // ⚠️ 锁定（pending_cert）**不是**装备的拒因（引擎 equip 分支不查 pendingCert）；
+      //   其余窗口拒因照旧。按 code 判，**不得**匹配 message 文案。
+      if (window !== null && window.code !== 'pending_cert') { return window.message; }
       return me?.hand.some((c) => c.id === action.cardId) ? null : '手牌里没有这张牌（可能已被弃掉或不属于你）。';
     }
     case 'COUNCIL_VETO': {
@@ -704,19 +752,6 @@ function councilCandidates(state: State, seat: number): Action[] {
       const allVoted = state.players.filter((p) => p.alive)
         .every((p) => state.council.votes[p.seat] !== undefined);
       return allVoted ? null : '等待所有玩家投票后才能使用否决。';
-    }
-```
-
-> ⚠️ `EQUIP_CARD` 的窗口拒因复用 `actionWindowRefusal`：它对 `pendingCert` 返回非 null ⇒ **与引擎不一致**。因此这里要**先判 `me.pendingCert`**：锁定下装备允许 ⇒ 若唯一拒因是锁定，则返回 null。实现为：
-
-```ts
-    case 'EQUIP_CARD': {
-      const window = actionWindowRefusal(state, seat);
-      // 锁定不是装备的拒因（引擎 equip 分支不查 pendingCert）；其余窗口拒因照旧。
-      const onlyLock = me?.pendingCert === true && window !== null
-        && window.includes('待认证锁定');
-      if (window !== null && !onlyLock) { return window; }
-      return me?.hand.some((c) => c.id === action.cardId) ? null : '手牌里没有这张牌（可能已被弃掉或不属于你）。';
     }
 ```
 
@@ -831,7 +866,7 @@ export function renderCouncil(
   }
 ```
 
-- `web/main.ts` 的 `renderCouncil` 调用处（约 621 行）补一个回调：
+- `web/main.ts` 的 `renderCouncil` 调用处（先 `grep -n "renderCouncil(" web/main.ts` 定位；当前仅一处）补一个回调：
 
 ```ts
       () => {
@@ -869,6 +904,8 @@ git commit -m "feat(B75): UI 装备模式与山议否决按钮（入口同闸、
 - Produces: `shouldVeto(state, seat): boolean`、`pickEquipCard(state, seat): Card | undefined`（导出供单测）。
 
 - [ ] **Step 1: 写失败测试**
+
+> 已核实：`record` / `advanceWithDuel` 在 `policy.mjs` 内、`cardHasMovement` 已在顶部 import（B72）⇒ 本任务只需新增 `shouldVeto` / `pickEquipCard` 两个导出。
 
 Create `tests/engine/policy-ai.test.ts`：
 
@@ -953,6 +990,8 @@ function rankOf(card) {
 export function pickEquipCard(state, seat) {
   const p = state.players[seat];
   if (p === undefined || p.hand.length < 2) { return undefined; }
+  // ⚠️ 位移判定用 `cardHasMovement`（引擎同源、覆盖 utility 与嵌套效果），**不用** `rankOf(c) < 3`：
+  //   rankOf 只认 4 个位移 op（漏 move_backward / move_to_tile / move_relative_to / conditional / count）。
   const candidates = p.hand.filter((c) => c.cost <= p.resource && !cardHasMovement(c));
   if (candidates.length === 0) { return undefined; }
   return candidates.slice().sort((a, b) => rankOf(a) - rankOf(b))[0];
@@ -970,27 +1009,28 @@ export function shouldVeto(state, seat) {
 }
 ```
 
-- `councilTurn` 在 `resolveCouncil` 之前插入：
+- `councilTurn`（签名 `async function councilTurn(s, policy, counters, hit)`）在**投票循环之后、`const rr = resolveCouncil(s);` 之前**插入：
 
 ```js
-  for (const p of state.players.filter((x) => x.alive)) {
-    if (shouldVeto(state, p.seat)) {
-      const v = useCouncilVeto(state, p.seat);
-      if (v.ok) { state = v.state; }
+  // B75：仲裁者自保否决 —— 所有存活玩家已投完票，且仲裁者本人是最高票之一
+  for (const p of s.players.filter((x) => x.alive)) {
+    if (shouldVeto(s, p.seat)) {
+      const v = useCouncilVeto(s, p.seat);
+      if (v.ok) { s = v.state; }
       break;
     }
   }
 ```
 
-（注意函数里已有变量名；按实际作用域合并，不要重复声明。）
-
 - `playOne` 的 `roll >= 0.85` 分支：在 `pickPlayableCard` **之前**插入：
 
 ```js
       const g = goalOf(s, seat);
+      // ⚠️ Rng.next() 是可变对象（engine/core/dice.ts:21）⇒ **不额外抽随机数**：
+      //   把 0.85–1.0 的出牌带二分（roll < 0.925 ⇒ 装备），随机流零扰动。
       if (g !== null && g.kind === 'equip_count'
         && (s.players[seat]?.counters.equipsTotal ?? 0) < g.count
-        && s.rng.next() < 0.5) {
+        && roll < 0.925) {
         const toEquip = pickEquipCard(s, seat);
         if (toEquip !== undefined) {
           record(s, seat, actionKey({ type: 'EQUIP_CARD', actor: seat, cardId: toEquip.id }));
@@ -1006,7 +1046,7 @@ export function shouldVeto(state, seat) {
 - [ ] **Step 4: 跑测试**
 
 Run: `node --test tests/engine/policy-ai.test.ts tests/engine/policy-injection.test.ts tests/gates/sim-record.test.ts`
-Expected: 全绿（装备/否决的 key 可往返、记录器守卫不回归）。
+Expected: 全绿。**若**有固定 seed 的策略用例因「equip_count 身份改走装备」而红：先确认差异可归因于本批的行为变更（记录器/终局读数），把该用例的期望值随行为一起更新并在批次记录里注明——**不得**为了保绿而关掉装备分支。
 
 - [ ] **Step 5: 提交**
 
@@ -1115,14 +1155,14 @@ git commit -m "feat(B75): IR 透传 rights + 双轨一致性比较（门⑥ 抓�
 
 - [ ] **Step 1: 更正报告生成器的静态注记**
 
-`tests/sim/run.mjs:681` 附近的「`equip_count` 与 `veto_success` 恒为 **0** —— 不是漏写计数器，而是机制缺失」改为：
+先 `grep -n "恒为" tests/sim/run.mjs` 定位「`equip_count` 与 `veto_success` 恒为 **0** —— 不是漏写计数器，而是机制缺失」那一行，改为：
 
 ```js
   lines.push('> ⚠️ `equip_count` / `veto_success` 自 **B75** 起机制已补齐（装备动作 / 仲裁者否决）；');
   lines.push('>   仍为 0 才说明「机制虽接线但不可达」——按计数器最大值分档判读（见下）。');
 ```
 
-`tests/sim/run.mjs:712` 的「本仓 equip/veto 的机制缺失另有独立证据」改为「B75 前」的历史说明。
+再 `grep -n "机制缺失" tests/sim/run.mjs` 定位「本仓 equip/veto 的机制缺失另有独立证据」那一行，改为「B75 前」的历史说明。
 
 - [ ] **Step 2: 重生成平衡报告并核对两目标**
 

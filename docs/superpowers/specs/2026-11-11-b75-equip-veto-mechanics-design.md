@@ -165,7 +165,8 @@ case 'COUNCIL_VETO': { const r = useCouncilVeto(s, action.actor); return byFlag(
 
 ## 7. AI / 模拟器（`tests/sim/policy.mjs`）
 
-- **装备**：在 `roll >= 0.85`（本来要出牌）分支里，若 `goalOf` 的 `kind === 'equip_count'`、`equipsTotal < count`、**手牌数 ≥ 2**，且 `s.rng.next() < 0.5` ⇒ 改走 `equip`（否则照常出牌）。
+- **装备**：在 `roll >= 0.85`（本来要出牌）分支里，若 `goalOf` 的 `kind === 'equip_count'`、`equipsTotal < count`、**手牌数 ≥ 2**，且 `roll < 0.925`（把 0.85–1.0 的出牌带**二分**）⇒ 改走 `equip`（否则照常出牌）。
+  - ⚠️ **不额外调用 `s.rng.next()`**：`Rng.next()` 是**可变**的（`engine/core/dice.ts:21`），多抽一次会改变整条随机流；用同一个 `roll` 二分 ⇒ 随机流零扰动。
   - **装备哪张**：取「按 `pickPlayableCard` 的排序**最不需要打出**的一张」——即先用同款排序取最小优先级者，避免把关键牌（唯一位移/唯一能打的牌）装备掉；手牌只有 1 张时不装备。
   - ⚠️ 多消耗一次 `rng.next()` ⇒ 随机流改变，属**有意的行为变更**（重标定）。
 - **否决**：`councilTurn` 先让所有存活玩家投票，然后（`resolveCouncil` 之前）：若存在存活、`canVeto`、`!vetoUsed` 的玩家，且 `topVoted(s)` 含该玩家 ⇒ 调用 `useCouncilVeto`（自保语义；确定性，保证 `veto_success` 可达），再 `resolveCouncil`。
@@ -228,7 +229,7 @@ case 'COUNCIL_VETO': { const r = useCouncilVeto(s, action.actor); return byFlag(
 | # | 风险 | 处置 |
 |---|---|---|
 | R1 | 否决「白用」（全投完后仍无人可放逐） | 规则明确：使用即消耗，**成功阻止放逐才计数**；UI 文案说明「若本次无人可放逐，否决仍会耗尽」 |
-| R2 | 新增 `rng.next()` 改变模拟随机流 | 属行为变更，随本批重标定；报告注明分叉起点 |
+| R2 | 装备分支改变出牌带的行为分布 | 用同一个 `roll` 二分（不额外抽随机数）⇒ 随机流零扰动；行为变更仍随本批重标定，报告注明 |
 | R3 | 候选增多触及 `LEGAL_ACTION_CAP` | 上限不动；更新「撞上限」用例的断言数据 |
 | R4 | 旧存档缺 `vetoBy` | 读取侧容错为 null；不写迁移 |
 | R5 | `settle.ts` 顶部注释称即时目标「无生产调用点」已过时（B61 已接质疑侧） | 本批顺手更正注释，不改行为 |
