@@ -18,17 +18,21 @@ import {
   certifySign, certifyChallenge, certifyAnswer, certifyAppeal, certifyAppealVote, certifyMutualSign,
   certifyAbstain, resolveAppeals, isCertifier, hasUsedCertificationTurn,
 } from '../../engine/core/certification.ts';
-
 import { getLegalActions } from '../../engine/core/legal.ts';
 import { stateToJson } from '../../engine/core/serialize.ts';
 import { actionKey, actionFromKey, withActor } from '../../engine/core/action-key.ts';
 
+// ⚠️ **禁止并发调用 `playOne`**（B70 复审登记）：recorder / recordSeq / recordCtx 是模块级可变量，
+//   现在靠 `runCell` 串行才安全。改成 `Promise.all` 之类并发会让 JSONL 的 themeId/seed/round 串号；
+//   真要并发，必须先把记录上下文改成显式传参。
 let recorder = null;
+// 记录序号**从 0 开始** ⇒ `seq` 就是 JSONL 行号；跨全部主题与人数档位连续递增。
 let recordSeq = 0;
+// 当前局的记录上下文（`playOne` 设置 ⇒ 决策函数内无需改签名）。
 let recordCtx = null;
 
-/** 由 run.mjs 装配记录器（null = 关闭，record 为空操作）。 */
-export function setRecorder(value) { recorder = value; recordSeq = 0; }
+/** 由 run.mjs 装配记录器（null = 关闭，record 为空操作）；装配时把序号与上下文一起归零。 */
+export function setRecorder(value) { recorder = value; recordSeq = 0; recordCtx = null; }
 export function getRecorder() { return recorder; }
 
 export /**

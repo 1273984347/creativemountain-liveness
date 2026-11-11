@@ -104,7 +104,7 @@ export interface FacePolicy {
   readonly timeoutMs?: number;
 }
 
-/** `advanceWithDuel` 的透传选项（与 `advanceAuto` 的第三参同形）。 */
+/** 转发给 `advanceAuto` 的选项（`onDuelPick` 除外 —— 它由实现内部占用，见下）。 */
 export interface AdvanceOpts {
   readonly gateReserve?: number;
   /**

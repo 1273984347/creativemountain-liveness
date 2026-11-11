@@ -201,7 +201,9 @@ for (const row of sampled) {
     //   而模型只能输出规范形 `duel:card:<id>`（`actionFromKey` 只认规范形）⇒ 不归一化会把
     //   **格式差异**算成决策分歧，P6 在对峙样本上恒判 disagree。两侧都取规范形后再比。
     //   ⚠️ 只在此处（比较前）归一化 ⇒ 历史 JSONL 不改写，`duel_card:` 也不是合法的写侧格式。
-    rec.agree = normalizeLegacyKey(String(asked.choice)) === normalizeLegacyKey(String(row.heuristic));
+    //   ⚠️ B73：两侧都传**原始值**（不再 `String(...)`）—— `normalizeLegacyKey` 已改为非字符串抛错，
+    //     能走到这里的两侧都已被上游反解 / 记录器保证是字符串；传原始值才能让畸形样本大声失败。
+    rec.agree = normalizeLegacyKey(asked.choice) === normalizeLegacyKey(row.heuristic);
   }
   results.push(rec);
 }

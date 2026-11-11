@@ -101,6 +101,10 @@ test('sim 决策点记录器：JSONL 行字段恰为 11 个、seq 从 0 开始�
 //   格式回归（记录器退回手拼 / 换成等价模板串写法）在这里全是绿的。
 //   ⇒ 本条把「**记录器实际写出的每一行 key 都是 actionKey 的规范形**」变成常驻行为断言，
 //   取代此前只做一次的手工取证；它同时是 P6 的立足点：读侧归一化对**新写入的行**必须是空操作。
+// ⚠️ B73：局数与「对峙桶非空」这个前提绑定（实测 12 局恰 12 条对峙；2/4/8 局时为 0/2/6）。
+//   日后任何**合法**的启发式 / 牌池 / seed 公式改动都可能把对峙桶清零 ⇒ 改轨迹时先重估本常量。
+const DUEL_BUCKET_GAMES = 12;
+
 test('sim 决策点记录器：写出的 heuristic 逐条是规范形（含对峙桶）', () => {
   const dir = mkdtempSync(resolve(tmpdir(), 'cm-rec-'));
   try {
@@ -108,7 +112,7 @@ test('sim 决策点记录器：写出的 heuristic 逐条是规范形（含对�
     const out = resolve(dir, 'on.md');
     // 固定 seed 轨迹（`seedBase + g*97 + players*13 + themeSeed`）⇒ 同参数同结果，不是抽奖。
     const r = runSim([
-      '--themes', 'xianxia2026', '--players', '4', '--games', '12',
+      '--themes', 'xianxia2026', '--players', '4', '--games', String(DUEL_BUCKET_GAMES),
       '--record-decisions', jsonl, '--out', out,
     ]);
     assert.equal(r.code, 0, 'sim 必须成功退出');
@@ -131,7 +135,7 @@ test('sim 决策点记录器：写出的 heuristic 逐条是规范形（含对�
       if (k.startsWith('duel')) { duel.push(k); }
     }
     // ④ 对峙桶必须**非空**，否则上面几条对 `duel` 这一族是空转（假绿）。
-    assert.ok(duel.length > 0, '12 局轨迹里必须出现对峙记录，否则本守卫覆盖不到对峙桶');
+    assert.ok(duel.length > 0, `${String(DUEL_BUCKET_GAMES)} 局轨迹里必须出现对峙记录，否则本守卫覆盖不到对峙桶`);
     for (const k of duel) {
       assert.match(k, /^duel:card:[^:]+$/, `对峙记录必须是三段规范形：${k}`);
     }

@@ -16,6 +16,21 @@ test('非对峙 key 一律不动', () => {
     assert.equal(normalizeLegacyKey(k), k);
   }
 });
+// ⚠️ B73：边界与非字符串。旧实现 `String(key)` 会把 `undefined` 洗成 `'undefined'`（仓内纪律禁止），
+//   且 `duel_card:`（无 id）/ `duel_card:a:b`（多段）会被「补前缀」成看着像规范形、实为非法 key 的串。
+test('B73 边界：空串 / 无 id / 多段 —— 只做前缀替换，不做合法性修复', () => {
+  assert.equal(normalizeLegacyKey(''), '');
+  assert.equal(normalizeLegacyKey('duel_card'), 'duel_card');       // 无冒号 ⇒ 原样
+  assert.equal(normalizeLegacyKey('duel_card:'), 'duel:card:');     // 维持字面前缀语义（非法由反解层拒）
+  assert.equal(normalizeLegacyKey('duel_card:a:b'), 'duel:card:a:b');
+  assert.throws(() => actionFromKey('duel:card:'));
+  assert.throws(() => actionFromKey('duel:card:a:b'));
+});
+test('B73 非字符串一律抛错（不得把 undefined 洗成字符串）', () => {
+  for (const bad of [undefined, null, 42, {}, []]) {
+    assert.throws(() => normalizeLegacyKey(bad as unknown as string), TypeError);
+  }
+});
 test('记录器不再手拼 duel_card:（改用 actionKey）', () => {
   const src = readFileSync('tests/sim/policy.mjs', 'utf8');
   assert.doesNotMatch(src, /'duel_card:'\s*\+/);

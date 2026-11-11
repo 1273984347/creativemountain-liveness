@@ -17,11 +17,14 @@ test('policy.mjs 存在且导出全部 9 个被搬函数', async () => {
   assert.equal(typeof mod.setRecorder, 'function');
 });
 
-test('run.mjs 不再保留被搬走的定义（防漏搬/防回流）', () => {
+test('run.mjs 不再保留被搬走的定义（防漏搬/防回流；含箭头函数回流）', () => {
   const src = readFileSync('tests/sim/run.mjs', 'utf8');
   for (const name of MOVED) {
-    assert.equal(new RegExp(`^\\s*(export\\s+)?(async\\s+)?function\\s+${name}\\s*\\(`, 'm').test(src), false,
-      `run.mjs 仍定义 ${name}`);
+    // ⚠️ B73：旧正则只认 `function name(` ⇒ `const name = (...) =>` / `name = function` 这类回流抓不到。
+    const decl = new RegExp(`^\\s*(export\\s+)?(async\\s+)?function\\s+${name}\\s*\\(`, 'm');
+    const assign = new RegExp(
+      `^\\s*(export\\s+)?(const|let|var)?\\s*${name}\\s*=\\s*(async\\s+)?(\\(|function\\b|[A-Za-z_$])`, 'm');
+    assert.equal(decl.test(src) || assign.test(src), false, `run.mjs 仍定义 ${name}`);
   }
 });
 
@@ -31,11 +34,19 @@ test('policy.mjs 不 import run.mjs（防循环依赖 + 防 import 时误跑主�
   assert.doesNotMatch(src, /require\([^)]*run\.mjs/);
 });
 
-test('两个死函数已删除（B18 委托引擎后零调用方）', () => {
+/** 去掉行注释与块注释（B73：`src.includes` 会被注释里提一次名字骗红 ⇒ 只在**代码**里查标识符）。 */
+function stripComments(src: string): string {
+  return src
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+}
+
+test('两个死函数已删除（B18 委托引擎后零调用方；只在代码里查，注释不算）', () => {
   for (const f of ['tests/sim/run.mjs', 'tests/sim/policy.mjs']) {
-    const src = readFileSync(f, 'utf8');
+    const code = stripComments(readFileSync(f, 'utf8'));
     for (const dead of ['pickDuelCard', 'resolveDuelByAI']) {
-      assert.equal(src.includes(dead), false, `${f} 仍含死代码 ${dead}`);
+      const re = new RegExp('\\b' + dead + '\\b');
+      assert.equal(re.test(code), false, `${f} 的代码里仍含 ${dead}`);
     }
   }
 });
