@@ -31,6 +31,10 @@ export function actionKey(a: Action): string {
     case 'CERTIFY_MUTUAL_SIGN': return `cert:mutual:${a.target}`;
     // ⚠️ B68：对峙选牌（§3.3）—— 亮牌对对手不可见 ⇒ key 只含**自己**的牌 id（不含对手任何信息）。
     case 'DUEL_SUBMIT_CARD': return `duel:card:${a.cardId}`;
+    // ⚠️ B75：装备 —— 两段 `equip:<cardId>`（与 `play:` 同款自由文本段，无目标维度：装备只作用于自己）。
+    case 'EQUIP_CARD': return `equip:${a.cardId}`;
+    // ⚠️ B75：否决 —— **单段无冒号**（无参数：投给谁由山议当前的票数榜首决定，不是选择项）。
+    case 'COUNCIL_VETO': return 'council_veto';
   }
 }
 
@@ -153,6 +157,11 @@ function decodeKey(key: string): Action {
       if (kind !== 'card') { throw new Error(`未知对峙动作：${key}`); }
       return { type: 'DUEL_SUBMIT_CARD', actor: -1, cardId: need(parts[2]) };
     }
+    // ⚠️ B75：装备 —— 只认 `equip:<cardId>`；空 id（`equip:`）与缺段（`equip`）由 need 抛错，
+    //   多余尾段（`equip:c_x:junk`）由 actionFromKey 的单射校验拒掉。
+    case 'equip': return { type: 'EQUIP_CARD', actor: -1, cardId: need(parts[1]) };
+    // ⚠️ B75：否决 —— 无冒号单段，head 即整串；带尾段（`council_veto:junk`）同样落在单射校验里。
+    case 'council_veto': return { type: 'COUNCIL_VETO', actor: -1 };
     default: throw new Error(`未知动作 key：${key}`);
   }
 }

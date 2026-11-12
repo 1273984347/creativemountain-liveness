@@ -1,5 +1,7 @@
 // tests/engine/action-key.test.ts
 // 动作 ↔ key 的可逆编码守卫：往返等价、key 互异、非法 key 必抛错（只认规范形，绝不猜）。
+// ⚠️ 23 是当前**样本总数**，不等于 ActionType 的**成员数**（19）：复议票 / 应答各占两条真假样本，
+//   PLAY_CARD 与 ABILITY 各占有无 target 两条。成员数由下方「根因守卫」从源码解析，不手抄。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -31,6 +33,9 @@ const SAMPLES: Action[] = [
   { type: 'BARRIER_RESOLVE', actor: 2, channel: 'place' },
   { type: 'CERTIFY_MUTUAL_SIGN', actor: 1, target: 0 },
   { type: 'DUEL_SUBMIT_CARD', actor: 0, cardId: 'c_windstep' },
+  // ⚠️ B75：装备与否决（spec §4 / §6）—— `equip:<cardId>` 含牌 id 段，`council_veto` 是**单段无冒号**。
+  { type: 'EQUIP_CARD', actor: 0, cardId: 'c_x' },
+  { type: 'COUNCIL_VETO', actor: 0 },
 ];
 
 test('key 往返：withActor(decode(encode(a)), a.actor) 与 a 等价', () => {
@@ -42,9 +47,10 @@ test('key 往返：withActor(decode(encode(a)), a.actor) 与 a 等价', () => {
 test('key 唯一：SAMPLES 互不相同 ⇒ key 集合大小相等（actor 不入 key）', () => {
   const keys = SAMPLES.map((a) => actionKey(a));
   // 样本数钉死：B15 契约修正后复议票（overturn 对）与应答（passed 对）各占两条 = 17 条；
-  // B69 补齐 ActionType 全成员覆盖（关隘通道 / 裂隙通道 / 互签 / 对峙选牌各一条）⇒ 21 条。
+  // B69 补齐 ActionType 全成员覆盖（关隘通道 / 裂隙通道 / 互签 / 对峙选牌各一条）⇒ 21 条；
+  // B75 装备与否决各一条 ⇒ 23 条。
   // 少一条 ⇒ 断言会因 keys.length 同步变小而空转，故必须先固定样本总数。
-  assert.equal(keys.length, 21, '样本被误删，唯一性断言失去覆盖面');
+  assert.equal(keys.length, 23, '样本被误删，唯一性断言失去覆盖面');
   assert.equal(new Set(keys).size, keys.length, `key 撞车：${keys.join(' | ')}`);
 });
 
@@ -71,12 +77,15 @@ test('未知 key 必须抛错，绝不猜', () => {
   // 第 4 组（B69）：新增反解分支的**同款严格规范形**——
   //   `duel:card:`（空 id）/ `duel:card`（缺段）/ `duel:bogus:x`（kind 拼错）/ `duel:card:a:b`（多余尾段）；
   //   互签分支补齐后同样不得放宽：`cert:mutual:`（空座位）/ `cert:mutual:0:junk`（多余尾段）。
+  // 第 5 组（B75）：装备（`equip:<cardId>`）与否决（`council_veto`）的同款严格形——
+  //   空 id / 缺段 / 多余尾段；`council_veto` 是**单段无冒号**，带尾段即非规范形。
   for (const bad of ['bogus:1', 'cert:whatever:0', 'vote:xx', 'play',
     'ability', 'play:', 'cert:answer:0', 'cert:appealvote:0:yes',
     'vote:', 'cert:sign:', 'play:c_fang->', 'gate:x->', 'play:->3', 'move:junk',
     'cert:appealvote:0:overturn:junk',
     'duel:card:', 'duel:card', 'duel:bogus:x', 'duel:card:a:b',
-    'cert:mutual:', 'cert:mutual:0:junk']) {
+    'cert:mutual:', 'cert:mutual:0:junk',
+    'equip', 'equip:', 'equip:c_x:junk', 'council_veto:junk']) {
     assert.throws(() => actionFromKey(bad), /key|动作/, `未抛错：${bad}`);
   }
 });
@@ -101,6 +110,9 @@ test('规范形正例：0 号座位与各文法正形仍是合法 key（收紧�
     ['barrier:resolve:skip', { type: 'BARRIER_RESOLVE', actor: -1, channel: 'skip' }],
     ['cert:mutual:0', { type: 'CERTIFY_MUTUAL_SIGN', actor: -1, target: 0 }],
     ['duel:card:c_windstep', { type: 'DUEL_SUBMIT_CARD', actor: -1, cardId: 'c_windstep' }],
+    // B75：装备两式无（只有带牌 id 一式），否决是**单段**文法。
+    ['equip:c_x', { type: 'EQUIP_CARD', actor: -1, cardId: 'c_x' }],
+    ['council_veto', { type: 'COUNCIL_VETO', actor: -1 }],
   ];
   for (const [key, expected] of CANONICAL) {
     assert.deepEqual(actionFromKey(key), expected, `规范形反解失败：${key}`);

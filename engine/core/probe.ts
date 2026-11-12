@@ -153,5 +153,11 @@ export function probeAction(state: State, action: Action): ProbeResult {
     case 'CERTIFY_MUTUAL_SIGN': { const r = certifyMutualSign(s, action.actor, action.target); return byFlag(r.ok, r.note, r.state, s); }
     // ⚠️ B68：对峙选牌（§3.3）—— 引擎入口 `submitDuelCard` 返回 `{ok, state, note}` 契约。
     case 'DUEL_SUBMIT_CARD': { const r = submitDuelCard(s, action.actor, action.cardId); return byFlag(r.ok, r.note, r.state, s); }
+    // ⚠️ **Task 5 替换本两支**（`case` 标签保留、body 换成真实入口分派）。
+    //   写成**显式 case + 抛错**而不是 `default`，是为了保住本 switch 的穷尽性：
+    //   B67/B68 的教训是「漏接线只能靠测试」，一旦加 default 就把 tsc 的兜底也丢了。
+    //   此刻被调到 = 枚举/UI 提前发了候选 ⇒ 大声失败，不静默拒收。
+    case 'EQUIP_CARD': throw new Error('探针未接线：EQUIP_CARD 待 Task 4 的 performAction(…, "equip") 落地（B75 Task 5）');
+    case 'COUNCIL_VETO': throw new Error('探针未接线：COUNCIL_VETO 待 Task 3 的 useCouncilVeto 落地（B75 Task 5）');
   }
 }

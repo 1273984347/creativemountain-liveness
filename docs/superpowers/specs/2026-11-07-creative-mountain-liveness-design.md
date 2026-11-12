@@ -630,8 +630,14 @@ type Action =
   | { type: 'CERTIFY_APPEAL_VOTE'; actor: number; target: number; overturn: boolean }
   | { type: 'CERTIFY_ANSWER'; actor: number; target: number; passed: boolean }
   | { type: 'CERTIFY_MUTUAL_SIGN'; actor: number; target: number }
-  | { type: 'DUEL_SUBMIT_CARD'; actor: number; cardId: string };
+  | { type: 'DUEL_SUBMIT_CARD'; actor: number; cardId: string }
+  | { type: 'EQUIP_CARD'; actor: number; cardId: string }
+  | { type: 'COUNCIL_VETO'; actor: number };
 ```
+
+> ⚠️ **B75 定案（装备与否决入契约）**：`EQUIP_CARD` = 手牌转常驻装备（B75 设计 §4.1：免费、不占手牌上限、不产生位移，
+> 但**关隘/裂隙暂停中不可用**）；`COUNCIL_VETO` = 仲裁者每局 1 次否决**本次**放逐（B75 设计 §4.2：硬前置是「所有存活玩家都已投票」）。
+> key 文法：`equip:<cardId>` 与单段无冒号的 `council_veto`。
 
 > ⚠️ **B68 定案（对峙选牌接线 · G-f 收口）**：新增 `DUEL_SUBMIT_CARD` —— §3.3 的对峙选牌此前**只有引擎函数、没有动作成员**
 > ⇒ 对峙未决时枚举**整表清零**（粗筛的 `duel !== null` 判据）⇒ 真人必须选暗牌的时刻，AI/sidecar 拿到**空动作表**。

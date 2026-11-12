@@ -21,7 +21,9 @@ export type ActionType =
   | 'CERTIFY_APPEAL_VOTE'
   | 'CERTIFY_ANSWER'
   | 'CERTIFY_MUTUAL_SIGN'
-  | 'DUEL_SUBMIT_CARD';
+  | 'DUEL_SUBMIT_CARD'
+  | 'EQUIP_CARD'
+  | 'COUNCIL_VETO';
 
 /**
  * 声明式动作。`type` 为判别式字段。
@@ -78,4 +80,18 @@ export type Action =
    *   ⇒ 任何一方都拿不到对方的手牌 id（拿不到 ⇒ 无法看到对方将出什么牌）。
    * ⚠️ 引擎 `submitDuelCard` 的守卫同款：非参与者 ⇒ 拒；手牌中无此牌 ⇒ 拒；已锁定 ⇒ 拒。
    */
-  | { readonly type: 'DUEL_SUBMIT_CARD'; readonly actor: number; readonly cardId: string };
+  | { readonly type: 'DUEL_SUBMIT_CARD'; readonly actor: number; readonly cardId: string }
+  /**
+   * 装备（B75 设计 §4.1）：把手牌里的一张牌转为常驻装备，**免费、不占手牌上限、不产生位移**。
+   *
+   * ⚠️ 只在行动阶段可用，且判定**位于关隘/裂隙早退之后**：到达未通过关隘时该手番已暂停
+   *   （通道选择属结算阶段），装备会占用同一手番的行动 ⇒ 暂停中不可装备。
+   */
+  | { readonly type: 'EQUIP_CARD'; readonly actor: number; readonly cardId: string }
+  /**
+   * 仲裁者否决（B75 设计 §4.2）：每局 1 次，令**本次**山议放逐归零。
+   *
+   * ⚠️ 只能由持 `council_veto` 特权者在**所有存活玩家都已投票之后、结算之前**提交
+   *   ——否决的对象是「本次投票结果」，投完票是硬前置。
+   */
+  | { readonly type: 'COUNCIL_VETO'; readonly actor: number };

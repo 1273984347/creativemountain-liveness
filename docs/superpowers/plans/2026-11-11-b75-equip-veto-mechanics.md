@@ -87,6 +87,7 @@
 **Files:**
 - Modify: `engine/core/action.ts`
 - Modify: `engine/core/action-key.ts`
+- Modify: `engine/core/probe.ts`、`web/legal-gate.ts`（仅 Step 4b 的两支显式未接线 `case`，Task 5 替换 body）
 - Modify: `docs/superpowers/specs/2026-11-07-creative-mountain-liveness-design.md`（§6.3 ts 代码块）
 - Test: `tests/engine/action-key.test.ts`、`tests/engine/action-contract.test.ts`
 
@@ -153,6 +154,24 @@ Expected: 编译期/运行期报 `EQUIP_CARD` 不属于 `Action`（TS 侧）或�
 
 同时把 `tests/engine/action-contract.test.ts` 中标题里的「17 项」改为「19 项」，并在标题末尾补「、B75 装备与否决入枚举」。
 
+- [ ] **Step 4b: 保住两处穷尽 switch 可编译（施工时新增，计划原稿缺此步）**
+
+⚠️ 新增 `ActionType` 成员会**立刻**打断 `tsc`：`probeAction`（`engine/core/probe.ts:101`）与
+`uiBlockNotice`（`web/legal-gate.ts:121`）的 switch 判别式是 `action.type` 且返回类型不含 `undefined`
+⇒ 实测 `npm run typecheck` 报两处 TS2366。而它们的**真实 body 分属 Task 3/4/5**（入口尚不存在）。
+
+处置：两支都写成**显式 `case` + 抛错**，**不加 `default`** —— 加 default 等于把「新增成员必须被编译器逼着接线」
+这条 tsc 兜底整条丢掉（正是 B67/B68 漏接线的根因方向）。Task 5 只替换 body、保留 `case` 标签。
+
+```ts
+// engine/core/probe.ts —— 接在 DUEL_SUBMIT_CARD 之后
+case 'EQUIP_CARD': throw new Error('探针未接线：EQUIP_CARD 待 Task 4 的 performAction(…, "equip") 落地（B75 Task 5）');
+case 'COUNCIL_VETO': throw new Error('探针未接线：COUNCIL_VETO 待 Task 3 的 useCouncilVeto 落地（B75 Task 5）');
+```
+
+`web/legal-gate.ts` 的 `uiBlockNotice` 同款两支（`throw new Error('UI 门禁未接线：…（B75 Task 5）')`）。
+行为影响为零：Task 5 之前没有任何入口能发出这两个候选，抛错分支不可达；门 ⑨ 逐字等价实测 diff 为空。
+
 - [ ] **Step 5: 跑聚焦测试与类型检查**
 
 Run: `node --test tests/engine/action-key.test.ts tests/engine/action-contract.test.ts && npm run typecheck`
@@ -161,7 +180,7 @@ Expected: 全绿；`ActionType` 成员 19、规格表成员 19、样本 23。
 - [ ] **Step 6: 提交**
 
 ```bash
-git add engine/core/action.ts engine/core/action-key.ts docs/superpowers/specs/2026-11-07-creative-mountain-liveness-design.md tests/engine/action-key.test.ts tests/engine/action-contract.test.ts
+git add engine/core/action.ts engine/core/action-key.ts engine/core/probe.ts web/legal-gate.ts docs/superpowers/specs/2026-11-07-creative-mountain-liveness-design.md tests/engine/action-key.test.ts tests/engine/action-contract.test.ts
 git commit -m "feat(B75): 动作契约新增 EQUIP_CARD 与 COUNCIL_VETO（key 规范形 + 19 成员守卫）"
 ```
 
@@ -681,7 +700,7 @@ function councilCandidates(state: State, seat: number): Action[] {
 }
 ```
 
-- `probe.ts` 的 switch 加：
+- `probe.ts` 的 switch：**Task 1 已放好两支 `case` 标签（body 是抛错的「未接线」占位）**，本步把 body 换成真实分派，并确认两支占位抛错全部消失（`grep -n "未接线" engine/core/probe.ts web/legal-gate.ts` 应为空）：
 
 ```ts
     case 'EQUIP_CARD': return byRef(performAction(s, action.actor, 'equip', { cardId: action.cardId }), s);

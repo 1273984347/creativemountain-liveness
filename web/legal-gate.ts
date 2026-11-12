@@ -264,6 +264,11 @@ export function uiBlockNotice(state: State, seat: number, action: Action): strin
       if (b === null) { return '你当前不在可放印的裂隙格上，无需选择。'; }
       return null;
     }
+    // ⚠️ **Task 5 替换本两支的 body**（`case` 标签保留）：写成显式 case 而不是 `default`，
+    //   与 `probe.ts` 同款理由 —— 保住 switch 对 `Action['type']` 的穷尽性，
+    //   新增动作成员时仍由 tsc 逼出 UI 侧接线（B67/B68 只能靠测试兜的根因）。
+    case 'EQUIP_CARD': throw new Error('UI 门禁未接线：EQUIP_CARD（B75 Task 5）');
+    case 'COUNCIL_VETO': throw new Error('UI 门禁未接线：COUNCIL_VETO（B75 Task 5）');
   }
 }
 
