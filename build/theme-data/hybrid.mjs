@@ -48,7 +48,7 @@ export default {
     { name: '开路者', passiveText: '每回合首次位移 +1 格。', flavor: '双修之人，先走那条没人敢走的路。' },
     { name: '器师', passiveText: '每场限 1 次免费造物。', flavor: '炉火与电弧，在我都认。' },
     { name: '观天者', passiveText: '每回合可看道箓库顶 1 张。', flavor: '我看得见命数，也看得见电路。' },
-    { name: '仲裁者', passiveText: '山议中可投 2 票。', flavor: '仙门与议会，都认我的印。' },
+    { name: '仲裁者', passiveText: '山议中可投 2 票；每局可否决 1 次放逐。', flavor: '仙门与议会，都认我的印。' },
     { name: '守关人', passiveText: '回合结束获得 1 点护盾。', flavor: '我不封顶，我只守门。' },
     { name: '窃火者', passiveText: '每回合可偷取 1 枚灵能。', flavor: '你的灵能，也是我的。' },
     { name: '织符者', passiveText: '每回合 1 次改 1 个判定结果。', flavor: '符可改命，也可改数。' },

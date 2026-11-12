@@ -67,8 +67,12 @@ export function assignIdentitiesAndFactions(state: State, theme: ThemePack): Sta
     const goalFlags = identity?.goal !== undefined
       ? { goal: { kind: identity.goal.kind, count: identity.goal.count ?? 1 } }
       : {};
+    // ⚠️ B75：否决权由**身份数据**的 `rights` 授予（不硬编码 `identityId === 'arbiter'` ⇒
+    //   主题包可以把权限给任何身份，引擎只看权限位）。整局有效（`advanceRound` 不清 flags）；
+    //   「本局是否已用过」由 `council.vetoUsed` 记录 ⇒ 这里只授予**资格**。
+    const rightFlags = (identity?.rights ?? []).includes('council_veto') ? { canVeto: true } : {};
     // ⚠️ 键顺序保持与 B12 原实现一致（extraVotes → passive）⇒ 只在**末尾**追加 goal
-    //   ⇒ flags 的**既有键序不变**（新增的 `goal` 键排在末尾）。
+    //   ⇒ flags 的**既有键序不变**（新增的 `goal` 键排在末尾；B75 的 `canVeto` 排在其后）。
     const flags: Record<string, unknown> = {
       ...p.flags,
       ...(granted.extraVotes > 0
@@ -76,6 +80,7 @@ export function assignIdentitiesAndFactions(state: State, theme: ThemePack): Sta
         : {}),
       ...passiveFlags,
       ...goalFlags,
+      ...rightFlags,
     };
     return {
       ...p,

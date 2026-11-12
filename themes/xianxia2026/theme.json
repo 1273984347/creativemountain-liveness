@@ -157,7 +157,10 @@
       "flavor": "我看得见牌库的顶，因为那是唯一确定的事。"
     },
     {
-      "passiveText": "山议中可投 2 票。",
+      "passiveText": "山议中可投 2 票；每局可否决 1 次放逐。",
+      "rights": [
+        "council_veto"
+      ],
       "id": "arbiter",
       "name": "仲裁者",
       "passive": {

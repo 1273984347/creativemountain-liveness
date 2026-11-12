@@ -191,6 +191,8 @@ git commit -m "feat(B75): 动作契约新增 EQUIP_CARD 与 COUNCIL_VETO（key �
 **Files:**
 - Modify: `engine/types/theme.ts`、`engine/core/setup.ts`、`tools/theme-validate.mjs`
 - Modify: `themes/xianxia2026/theme.json`、`themes/scifi-ai/theme.json`、`themes/hybrid/theme.json`、`themes/urban-psych/theme.json`
+- Modify: `build/theme-data/{scifi-ai,hybrid,urban-psych}.mjs`（arbiter 的 `passiveText` 与 theme.json 同源，必须同改）
+- Modify: `build/build-themes.mjs`（身份装配继承基准 `rights`，见 Step 3b）
 - Test: `tests/engine/identity-rights.test.ts`（Create）
 
 **Interfaces:**
@@ -267,16 +269,24 @@ export interface Identity {
 
 - [ ] **Step 4: setup 授予 flags**
 
-`engine/core/setup.ts` 的 `flags` 组装处（`...goalFlags` 之前）加：
+`engine/core/setup.ts` 的 `flags` 组装处（`assignIdentitiesAndFactions`，非 `createInitialState`）加，并**排在 `...goalFlags` 之后**（施工时改：原计划写「之前」，
+但同处注释立着「只在末尾追加、既有键序不变」的纪律 ⇒ 追加到末尾才自洽）：
 
 ```ts
     // B75：否决权由身份数据授予（不硬编码 identityId）；整局有效，是否已用由 council.vetoUsed 记录。
-    ...((identity?.rights ?? []).includes('council_veto') ? { canVeto: true } : {}),
+    const rightFlags = (identity?.rights ?? []).includes('council_veto') ? { canVeto: true } : {};
+```
+
+```ts
+      ...goalFlags,
+      ...rightFlags,
 ```
 
 - [ ] **Step 5: 主题校验（白名单 + 软警告）**
 
-`tools/theme-validate.mjs` 在身份循环内加：
+`tools/theme-validate.mjs` 在身份循环内（`goal` 校验之后）加。⚠️ 口径不一致走**文件已有的 `warn()` 通道**
+（施工时改：它已把 warnings 汇总成 stdout 的 `WARN [id] …`，且 `gate.mjs:105` 只认退出码 ⇒ 既非阻塞、也不必自己 `console.warn`）；
+未知 `rights` 值走 `err()`（写错字面量会静默失权，必须拦）。
 
 ```js
     const RIGHTS = new Set(['council_veto']);
@@ -289,9 +299,26 @@ export interface Identity {
     const textHasVeto = typeof id.passiveText === 'string' && id.passiveText.includes('否决');
     const dataHasVeto = Array.isArray(id.rights) && id.rights.includes('council_veto');
     if (textHasVeto !== dataHasVeto) {
-      console.warn(`⚠️ 身份 ${id.id}：passiveText 与 rights 的否决口径不一致（文本=${textHasVeto} rights=${dataHasVeto}）`);
+      warn(`身份 ${id.id}：passiveText 与 rights 的否决口径不一致（文本=${textHasVeto} rights=${dataHasVeto}）`);
     }
 ```
+
+- [ ] **Step 5b: 重生成实体轨产物（施工时新增，否则门 ⑦ 必红）**
+
+⚠️ 门 ⑦ 的 `parity-check` 比对的是 **`print/<themeId>/ir.json`** 与 `themes/<id>/theme.json`，
+而 `print/*` 被 gitignore（除 `规则书综述.md`）⇒ 改了 `passiveText` 后本地产物是**旧的**，
+门禁直接判「身份 arbiter 的 passiveText 不一致」×4。⇒ 跑门禁前先 `npm run print`（= `build:ir` + `build:print`，会重写四套 `ir.json` / 规则书 / SVG / PDF）。
+
+- [ ] **Step 5c: `build-themes.mjs` 的 `rights` 继承（施工时新增）**
+
+实测该生成器**已与现实脱节**（基准棋盘 36 格 > `theme-data` 的地名数 ⇒ `node build/build-themes.mjs` 当场抛「地名数少于基准」，
+B20 起三套 `theme.json` 实为手工维护）。仍按「换名不换效果是机械保证的」同一纪律补上继承，别留第二个坑：
+
+```js
+      ...(b.rights === undefined ? {} : { rights: [...b.rights] }),
+```
+
+> 登记：生成器修复不属于 B75（不在完成定义里，且会牵动四套主题的卡名映射）；本批只保证「若有人修好它，`rights` 不会静默丢失」。
 
 - [ ] **Step 6: 跑聚焦测试**
 
@@ -303,9 +330,14 @@ Expected: 2/2 pass；主题校验 PASS 且无 warning。
 - [ ] **Step 7: 提交**
 
 ```bash
-git add engine/types/theme.ts engine/core/setup.ts tools/theme-validate.mjs themes/xianxia2026/theme.json themes/scifi-ai/theme.json themes/hybrid/theme.json themes/urban-psych/theme.json tests/engine/identity-rights.test.ts
+git add engine/types/theme.ts engine/core/setup.ts tools/theme-validate.mjs build/build-themes.mjs \
+  build/theme-data/scifi-ai.mjs build/theme-data/hybrid.mjs build/theme-data/urban-psych.mjs \
+  themes/xianxia2026/theme.json themes/scifi-ai/theme.json themes/hybrid/theme.json themes/urban-psych/theme.json \
+  tests/engine/identity-rights.test.ts docs/superpowers/plans/2026-11-11-b75-equip-veto-mechanics.md
 git commit -m "feat(B75): 身份 rights 数据驱动授予否决权 + 主题校验白名单与软警告"
 ```
+
+> `print/` 是 gitignore 的产物目录 ⇒ 不进 stage 清单（门 ⑦ 读本地最新产物，重生成即可）。
 
 ---
 

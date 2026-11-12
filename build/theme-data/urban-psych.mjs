@@ -48,7 +48,7 @@ export default {
     { name: '开路者', passiveText: '每回合首次位移 +1 格。', flavor: '楼顶只有一扇门，总得有人先踹开。' },
     { name: '改造者', passiveText: '每场限 1 次免费造物。', flavor: '我改的不是自己，是我身上的东西。' },
     { name: '窥视者', passiveText: '每回合可看异能库顶 1 张。', flavor: '我能看见还没发生的那一张。' },
-    { name: '仲裁者', passiveText: '山议中可投 2 票。', flavor: '在天台上，我的话算两票。' },
+    { name: '仲裁者', passiveText: '山议中可投 2 票；每局可否决 1 次放逐。', flavor: '在天台上，我的话算两票。' },
     { name: '守夜人', passiveText: '回合结束获得 1 点护盾。', flavor: '我不登顶，我只是站着。' },
     { name: '窃能者', passiveText: '每回合可偷取 1 枚异能点。', flavor: '你的异能点，也是我的。' },
     { name: '编织者', passiveText: '每回合 1 次改 1 个判定结果。', flavor: '记忆能改，结局凭什么不能？' },

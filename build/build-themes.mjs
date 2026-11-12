@@ -120,6 +120,10 @@ export function buildTheme(base, data) {
       passive: remapEffect(b.passive),
       goal: { ...b.goal },
       passiveText: d.passiveText,
+      // ⚠️ B75：`rights` 与 id/goal 同族 —— 是**结构**，从基准**继承**（不靠各主题手抄）；
+      //   只有 `passiveText` 是风味文本，由 theme-data 提供。漏掉这一行 ⇒ 重新生成会把
+      //   三套主题的否决权**静默清零**（与「换名不换效果是机械保证的」同一纪律）。
+      ...(b.rights === undefined ? {} : { rights: [...b.rights] }),
       ...(d.flavor === undefined ? {} : { flavor: d.flavor }),
     };
   });

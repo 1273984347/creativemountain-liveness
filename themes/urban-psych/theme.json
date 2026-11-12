@@ -167,7 +167,10 @@
         "kind": "veto_success",
         "count": 1
       },
-      "passiveText": "山议中可投 2 票。",
+      "passiveText": "山议中可投 2 票；每局可否决 1 次放逐。",
+      "rights": [
+        "council_veto"
+      ],
       "flavor": "在天台上，我的话算两票。"
     },
     {

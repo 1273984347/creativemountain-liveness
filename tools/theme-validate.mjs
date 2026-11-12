@@ -83,6 +83,26 @@ export function validateTheme(theme, schema) {
         err(`身份 ${id.id} 的 goal.count 必须是正整数`);
       }
     }
+    // ---------- B75：权限位 rights ----------
+    // ⚠️ 未知值**判红**：`setup.ts` 只认白名单里的 right，写错一枚字面量会静默失权
+    //   （玩家读了规则书却按不到按钮）⇒ 与其等人工发现，不如门禁拦下。
+    const RIGHTS = new Set(['council_veto']);
+    if (id.rights !== undefined) {
+      if (!Array.isArray(id.rights)) { err(`身份 ${id.id} 的 rights 必须是数组`); }
+      else {
+        for (const r of id.rights) {
+          if (!RIGHTS.has(r)) { err(`身份 ${id.id} 的 rights 未知值：${String(r)}`); }
+        }
+      }
+    }
+    // ⚠️ 文本与权限口径**软警告**（不阻断）：passiveText 是要印进规则书的，
+    //   写了「否决」却没给 rights（或反之）都是**内容事故**而非格式事故 ⇒
+    //   门 ⑤ 只认退出码，警告进 stdout 供人工核对，不因主题作者改文案就红一片。
+    const textHasVeto = typeof id.passiveText === 'string' && id.passiveText.includes('否决');
+    const dataHasVeto = Array.isArray(id.rights) && id.rights.includes('council_veto');
+    if (textHasVeto !== dataHasVeto) {
+      warn(`身份 ${id.id}：passiveText 与 rights 的否决口径不一致（文本=${textHasVeto} rights=${dataHasVeto}）`);
+    }
   }
   // ---------- 卡牌 ----------
   const cardIds = new Set();

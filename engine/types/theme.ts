@@ -284,7 +284,17 @@ export interface Identity {
    * ⚠️ **必须存在**：ir.json 的文本一律从 theme.json **搬运**，不在渲染期现编。
    */
   readonly passiveText: string;
+  /**
+   * 引擎可判定的**权限位**（B75）——与 `passive`（效果树）分属两回事：
+   *   · `passive` 由 `grantedFlags` / `flags.passive` 在结算里触发；
+   *   · `rights` 只回答「这个人**被允许做**哪个动作」（`council_veto` ⇒ 开局授予 `flags.canVeto`）。
+   * 缺省 = 无特权 ⇒ 老主题包不必改；`tools/theme-validate.mjs` 按白名单校验未知值。
+   */
+  readonly rights?: readonly IdentityRight[];
 }
+
+/** 身份权限位（B75；`council_veto` = 山议否决，规格 §9.3）。 */
+export type IdentityRight = 'council_veto';
 
 /** 卡牌（规格 §6.5；`rank` 见 §3.3 点数比较规则）。 */
 export interface Card {

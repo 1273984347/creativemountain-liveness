@@ -84,7 +84,7 @@ export default {
     { name: '先行者', passiveText: '每回合首次位移 +1 格。', flavor: '轨道上没有回头路，只有更远的下一站。' },
     { name: '工程师', passiveText: '每场限 1 次免费造物。', flavor: '我造的不是工具，是活下去的概率。' },
     { name: '深空观测者', passiveText: '每回合可看指令库顶 1 张。', flavor: '信号那头是谁不重要，信号还在就行。' },
-    { name: '仲裁官', passiveText: '山议中可投 2 票。', flavor: '算法不投票，我投。' },
+    { name: '仲裁官', passiveText: '山议中可投 2 票；每局可否决 1 次放逐。', flavor: '算法不投票，我投。' },
     { name: '守闸人', passiveText: '回合结束获得 1 点护盾。', flavor: '我不登顶，我只让闸门多开一次。' },
     { name: '窃电者', passiveText: '每回合可偷取 1 枚算力。', flavor: '你的算力，也是我的算力。' },
     { name: '织码者', passiveText: '每回合 1 次改 1 个判定结果。', flavor: '结果未定？那就把它改成定的。' },
