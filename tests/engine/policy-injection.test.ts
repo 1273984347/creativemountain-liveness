@@ -138,11 +138,14 @@ test('合法 key ⇒ 真的改道：fallbacks 恒 0，且记录与结局两处�
 });
 
 test('certify 面候选按**当前待认证 target** 收窄 ⇒ 模型/记录/执行三者同一 target（评审 I-1）', async () => {
-  // seed 1074 / 4 人会走到 §5.5 双人互验（`pending.length >= 2`）⇒ `legal.ts` 对**每个**
+  // seed 1156 / 4 人会走到 §5.5 双人互验（`pending.length >= 2`）⇒ `legal.ts` 对**每个**
   // 待认证目标各发三条候选。收窄前策略器会一次拿到 6 条（两个 target），于是
   // 「模型想质疑 A、循环此刻 target=B ⇒ 引擎质疑 B，JSONL 记下没发生过的事」。
+  // ⚠️ B75.2 换 seed（E127「换样本不换判据」）：原 seed 1074 在追goal分支接线后，
+  //   轨迹改变 ⇒ 该 seed 不再走到双人互验（「本局必须走到双人互验」前提断言红）。
+  //   扫 1074–3000 取 **1156**（互验出现、每个问出口恰 3 条候选、calls=2、fallbacks=0，实测；1082 有质疑不可用的 2 候选窗口，不满足「恰三条」判据）；判据本身一字未改。
   const seen: { pending: readonly number[]; keys: string[] }[] = [];
-  const r = await playOne(theme(), 4, 1074, undefined, {
+  const r = await playOne(theme(), 4, 1156, undefined, {
     face: 'certify', seat: 0,
     decide: async (s, _seat, c) => {
       const keys = c.map((a) => actionKey(a));

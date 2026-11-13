@@ -417,11 +417,12 @@ export function goalPursuit(s, seat) {
     for (const x of others) { if (best !== undefined && (x.resource ?? 0) > (best.resource ?? 0)) { best = x; } }
     if (best === undefined) { return null; }
     const r = performAbility(s, seat, best.seat);
-    return r.ok ? { state: r.state, op: String(passive.op) } : null;
+    // ⚠️ `target` 一并返回：调用方（playOne）记录决策点时要写真实动作（与 maybeUseAbility 同形状）
+    return r.ok ? { state: r.state, op: String(passive.op), target: best.seat } : null;
   }
   if (goal.kind === 'reroll_count' && passive.op === 'modify_judgement') {
     if ((counters.rerollCount ?? 0) >= goal.count) { return null; }
-    // 织梦者：目标缺省 = 自己（abilities.ts 的 case 分支内部传 `target: seat`）
+    // 织梦者：目标缺省 = 自己（abilities.ts 的 case 分支内部传 `target: seat`）⇒ 不带 target 字段
     const r = performAbility(s, seat);
     return r.ok ? { state: r.state, op: String(passive.op) } : null;
   }
@@ -620,6 +621,25 @@ export async function playOne(theme, players, seed, gateReserve, policy) {
     //   ⚠️ 随机流口径（C1 后）：两臂在每次手番都消耗同一个 `roll` ⇒ 分叉起点不是「跳过了一次
     //     rng」，而是「实际打出的牌不同 ⇒ 之后的状态与 rng 使用不同」。
     const roll = s.rng.next();
+    // ⚠️ B75.2：目标感知追goal（reroll_count / steal_count）——放在**行动带之前**、
+    //   `roll` 消耗**之后**：保持「每手番恰消耗一次 roll」的 C1 不变量，追goal回合 roll 值弃用。
+    //   `goalPursuit` 自身零随机消耗（决策由状态决定）；达阈即停。
+    //   待认证锁定分支在上方 `continue`，天然不会走到这里（goalPursuit 对 pendingCert
+    //   也返回 null，双保险）。
+    //   ⚠️ **时序策略（B75.2 实测后定）**：只在**下半局**追goal（`round > ⌈limit/2⌉`）。
+    //     动机：追goal必然占手番（窃火者阈值 5 = 3 人局 45% 的手番），上半局追会把
+    //     「先登顶 → 先认证 → 先封顶」的级联整体后移，实测把门 ⑫ 的位次极差从基线
+    //     10.7pp 推到 16.3pp（破 14pp 锁）；改为下半局追后回到 13.2pp（锁内，且 3 人局的
+    //     严格单调是 HEAD 基线既有的形状，非本批引入）。代价：印记来得晚——占位启发式
+    //     不追求最优（同 B75.1 §6 声明），只保证目标真实可达。
+    const pursuit = s.round > Math.ceil((s.scales?.globalRoundLimit ?? 0) / 2) ? goalPursuit(s, seat) : null;
+    if (pursuit !== null) {
+      record(s, seat, actionKey({ type: 'ABILITY', actor: seat, abilityId: pursuit.op, ...(pursuit.target === undefined ? {} : { target: pursuit.target }) }));
+      abilityOps.push(pursuit.op);
+      s = pursuit.state;
+      s = advanceTurn(s, 'standard');
+      continue;
+    }
     // B12：AI 偶尔发动身份被动（发动成功则**占用本回合行动**，不再行棋/问天/出牌）
     if (roll < 0.16) {
       const used = maybeUseAbility(s, seat);

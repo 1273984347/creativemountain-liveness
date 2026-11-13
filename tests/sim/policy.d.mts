@@ -240,7 +240,7 @@ export declare function maybeUseAbility(s: State, seat: number): { state: State;
  * `performAbility` 失败（每回合闸门 / 目标灵枢不足 / 待认证锁定）⇒ `null`，调用方回落行动带。
  * ⚠️ 占位启发式，非最优打法，也不代表人类玩家的追goal行为（同 B75.1 §6 的声明）。
  */
-export declare function goalPursuit(s: State, seat: number): { state: State; op: string } | null;
+export declare function goalPursuit(s: State, seat: number): { state: State; op: string; target?: number } | null;
 
 /** 推进手番；若结算后进入对峙 ⇒ AI 选牌后继续推进（回合阻塞 + 关隘的闭环）。 */
 export declare function advanceWithDuel(s: State, mode: RuleMode, opts?: AdvanceOpts): Promise<State>;
