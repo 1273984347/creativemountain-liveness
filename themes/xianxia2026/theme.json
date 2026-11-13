@@ -1127,7 +1127,7 @@
       "suit": "stone",
       "rank": 11,
       "rankLabel": "洪",
-      "text": "将下次掷骰点数设为 10。",
+      "text": "修改一次判定结果。",
       "effects": [
         {
           "op": "modify_judgement", "target": 0

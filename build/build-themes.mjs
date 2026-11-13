@@ -10,9 +10,16 @@
 // 其中标志卡的 effects 是**全新效果**，由 tools/theme-diff-check.mjs（第 8 道门）机械核对。
 //
 // 用法：node build/build-themes.mjs
+//
+// ⚠️ B75.2（遗留清收）：本生成器在 B21（36 格扩盘）/ B12（改运卡改 op）/ B22（试炼文本）三波
+//   手工维护中与入库 theme.json 脱节，一度跑不动。本批已追平，并由
+//   `tests/build/themes-generated.test.ts` 的常驻一致性门钉住「生成器输出 == 入库文件」
+//   ⇒ 今后改基准或 theme-data 而不重生成（或反之）即红。CLI 用 `isMain` 守卫
+//   （对齐 tools/theme-validate.mjs 的惯例）⇒ 测试可安全 import 纯函数 `buildTheme`。
 
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import { renderCardText } from './theme-render.mjs';
 import scifiAi from './theme-data/scifi-ai.mjs';
@@ -28,8 +35,8 @@ const BASE = JSON.parse(readFileSync(BASE_PATH, 'utf8'));
 /** 卡牌类型 → id 中的类型字符。 */
 const TYPE_CHAR = { motion: 'm', attack: 'a', defense: 'd', utility: 'u' };
 
-/** 主题数据表。 */
-const THEME_DATA = [scifiAi, hybrid, urbanPsych];
+/** 主题数据表（⚠️ B75.2 起导出：一致性门从同一处取清单，不另抄一份主题 id 列表）。 */
+export const THEME_DATA = [scifiAi, hybrid, urbanPsych];
 
 /** 由基准与主题数据装配出一套完整主题包。 */
 export function buildTheme(base, data) {
@@ -212,24 +219,29 @@ export function buildTheme(base, data) {
 }
 
 // ---------- CLI ----------
-const written = [];
-for (const data of THEME_DATA) {
-  const theme = buildTheme(BASE, data);
-  const dir = resolve(ROOT, 'themes', data.id);
-  mkdirSync(dir, { recursive: true });
-  const outPath = resolve(dir, 'theme.json');
-  writeFileSync(outPath, JSON.stringify(theme, null, 2) + '\n', 'utf8');
-  written.push({
-    id: theme.meta.id,
-    name: theme.meta.name,
-    cards: theme.cards.length,
-    flags: Object.values(data.flagCards ?? {}).flatMap((m) => Object.values(m)).length,
-    path: `themes/${data.id}/theme.json`,
-  });
+// ⚠️ B75.2：`isMain` 守卫（对齐 tools/theme-validate.mjs:543 的仓库惯例）——
+//   仅直接运行本文件时才执行写盘；被测试 import 时只暴露纯函数 `buildTheme`。
+const isMain = process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isMain) {
+  const written = [];
+  for (const data of THEME_DATA) {
+    const theme = buildTheme(BASE, data);
+    const dir = resolve(ROOT, 'themes', data.id);
+    mkdirSync(dir, { recursive: true });
+    const outPath = resolve(dir, 'theme.json');
+    writeFileSync(outPath, JSON.stringify(theme, null, 2) + '\n', 'utf8');
+    written.push({
+      id: theme.meta.id,
+      name: theme.meta.name,
+      cards: theme.cards.length,
+      flags: Object.values(data.flagCards ?? {}).flatMap((m) => Object.values(m)).length,
+      path: `themes/${data.id}/theme.json`,
+    });
+  }
+  for (const w of written) {
+    console.log(
+      `OK  ${w.path}  ${w.name}  卡牌 ${w.cards} 张（其中标志卡 ${w.flags} 张）`,
+    );
+  }
+  console.log(`\n共生成 ${written.length} 套主题包。`);
 }
-for (const w of written) {
-  console.log(
-    `OK  ${w.path}  ${w.name}  卡牌 ${w.cards} 张（其中标志卡 ${w.flags} 张）`,
-  );
-}
-console.log(`\n共生成 ${written.length} 套主题包。`);
