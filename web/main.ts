@@ -5,12 +5,12 @@
 import { createInitialState, type State } from '../engine/core/state.ts';
 import { currentPlayer, isRoundEnd } from '../engine/core/round.ts';
 import { performAction, advanceTurn, needsCouncilVote, needsCertificationAction } from '../engine/core/turn-runner.ts';
-import { castVote, resolveCouncil } from '../engine/core/council.ts';
+import { castVote, resolveCouncil, useCouncilVeto } from '../engine/core/council.ts';
 import { certifySign, certifyChallenge, certifyAbstain, certifyAnswer, certifyAppeal, certifyAppealVote, certifyMutualSign } from '../engine/core/certification.ts';
 import { stateToJson, stateFromJson } from '../engine/core/serialize.ts';
 import { installTheme } from '../engine/core/setup.ts';
 import type { Action } from '../engine/core/action.ts';
-import { uiAllows, uiBlockNotice, uiHasLegalTarget, pendingGateHere, pendingBarrierHere } from './legal-gate.ts';
+import { uiAllows, uiBlockNotice, uiHasLegalTarget, uiCandidates, pendingGateHere, pendingBarrierHere } from './legal-gate.ts';
 import { resolveGate, resolveCompareGate } from '../engine/core/gate.ts';
 import { resolveBarrier } from '../engine/core/barrier.ts';
 import { THEMES, themeById } from './theme.ts';
@@ -39,6 +39,12 @@ interface Ui {
   pendingAbility: boolean;
   /** B19-c：关隘出牌比对 —— 已选定的对手座位号（null = 未进入比对选择） */
   pendingCompareTarget: number | null;
+  /**
+   * B75：装备模式 —— 开启后「点一张手牌」= 装备它（而不是打出它）。
+   * ⚠️ 与 `pendingTargetCardId` / `pendingCompareTarget` 互斥：进入任一模式都要清掉另两个，
+   *   否则同一个点击被两条入口各认一次（装备模式 + 比对模式 = 点一张牌做两件事）。
+   */
+  equipMode: boolean;
   /** 一次性提示（发动结果 / 失败原因） */
   notice: string | null;
 }
@@ -95,6 +101,7 @@ const ui: Ui = {
   pendingTargetCardId: null,
   pendingAbility: false,
   pendingCompareTarget: null,
+  equipMode: false,
   notice: null,
 };
 
@@ -238,6 +245,30 @@ function renderToolbar(): HTMLElement {
   bar.append(button('导入', () => { importSave(); }));
   bar.append(button('教学演示', () => { showTutorial(); }));
   return bar;
+}
+
+/**
+ * B75：装备一张手牌（手牌 → 装备区，免费、不占手牌上限）。
+ *
+ * ⚠️ 与出牌同款「先问闸再提交」：判据只有 `web/legal-gate.ts` 与引擎两处，UI 不再自己判窗口；
+ *   被拒时把 `uiBlockNotice` 的拒因写进 notice（拒绝不沉默），并**退出装备模式**——
+ *   留在模式里会让下一次点击继续撞同一堵墙。
+ */
+function equipCard(cardId: string): void {
+  const seat = ui.seat;
+  ui.pendingTargetCardId = null;
+  ui.pendingCompareTarget = null;
+  const action: Action = { type: 'EQUIP_CARD', actor: seat, cardId };
+  if (!uiAllows(ui.state, seat, action)) {
+    ui.notice = uiBlockNotice(ui.state, seat, action) ?? '当前不可装备该牌。';
+    ui.equipMode = false;
+    render();
+    return;
+  }
+  ui.state = performAction(ui.state, seat, 'equip', { cardId });
+  ui.state = advanceTurn(ui.state, ui.mode);   // 装备占掉本手番的唯一行动（B75 设计 §4.1）
+  ui.equipMode = false;
+  render();
 }
 
 /**
@@ -532,11 +563,34 @@ function renderActions(): HTMLElement {
   if (ui.notice !== null) {
     body.push(el('div', { class: 'warn', text: ui.notice }));
   }
+  // ⚠️ B75：装备入口 —— 按钮**只在枚举真的发出装备候选时**出现（不自己判窗口，判据仍在 legal-gate），
+  //   点击后进入「装备模式」，由手牌点击承担选牌；被闸挡下时给出拒因（门禁:拒绝不沉默）。
+  if (ui.equipMode) {
+    body.push(el('div', { class: 'warn', text: '装备模式：点击下方一张手牌装备它（免费、不占手牌上限，本手番就此用掉）。' }));
+    body.push(button('取消装备模式', () => {
+      ui.equipMode = false;
+      ui.notice = '已退出装备模式。';
+      render();
+    }));
+  } else if (uiCandidates(ui.state, seat).some((a) => a.type === 'EQUIP_CARD')) {
+    body.push(button('装备手牌（点一张牌）', () => {
+      ui.equipMode = true;
+      ui.pendingTargetCardId = null;
+      ui.pendingCompareTarget = null;
+      render();
+    }));
+    if (player.pendingCert) {
+      body.push(el('div', { class: 'muted', text: '等待认证期间仍可装备手牌（装备不产生位移，不受锁定影响）。' }));
+    }
+  }
   body.push(el('div', { class: 'muted', text: '出牌：点击手牌中的卡牌（费用自动结算）。攻击类牌需要**再点一名对手**选定目标。' }));
   if (ui.pendingTargetCardId !== null) {
     body.push(el('div', { class: 'warn', text: '选择目标：点击下方一名对手（点自己或再次点该牌取消）。' }));
   }
   body.push(renderHand(ui.state, theme, seat, (cardId) => {
+    // ⚠️ B75：装备模式下的点击=装备（**只在这一支拦截**：关隘比对支与对峙亮牌支各有自己的语义，
+    //   在那里拦截会把「选比对牌 / 锁亮牌」偷换成装备）。选牌权交给玩家，判据交给闸。
+    if (ui.equipMode) { equipCard(cardId); return; }
     // 已在选目标模式且再次点同一张牌 ⇒ 取消
     if (ui.pendingTargetCardId === cardId) {
       ui.pendingTargetCardId = null;
@@ -634,6 +688,14 @@ function render(): void {
         render();
       },
       () => { const r = resolveCouncil(s); ui.state = r.ok ? r.state : s; render(); },
+      // ⚠️ B75：否决 —— 入口只有引擎的 `useCouncilVeto` 一处；被拒时把 note 交出去（拒绝不沉默）。
+      //   面板上的按钮本身已由 `uiAllows` 把关，这里再核一次是**提交路径**的闸（与投票同款双保险）。
+      () => {
+        const r = useCouncilVeto(s, ui.seat);
+        if (r.ok) { ui.state = r.state; ui.notice = '仲裁者否决：结算时本次放逐作废（每局 1 次）。'; }
+        else { ui.notice = r.note ?? '当前不可使用否决。'; }
+        render();
+      },
     ));
   }
   // 认证面板

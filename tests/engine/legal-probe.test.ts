@@ -2411,7 +2411,22 @@ test('B75：否决的 UI 拒因矩阵（拒绝不沉默，且与引擎同判）'
   }
 });
 
+test('B75：装备与否决入口必须走同一道闸（uiAllows / uiBlockNotice）', () => {
+  // 源码接线守卫（与既有 R-1 同法）：UI 是**消费者**，判据仍由 Task 5 的两套独立实现提供；
+  // 本条只钉「入口存在且先问闸」——绕过闸门的入口正是 B53 那类破口的形状。
+  const src = readFileSync('web/main.ts', 'utf8');
+  const councilSrc = readFileSync('web/ui/council.ts', 'utf8');
+  assert.match(src, /performAction\([^)]*'equip'/, '装备必须走 performAction(..., \'equip\') 这一条入口');
+  assert.match(src, /'EQUIP_CARD'[\s\S]{0,400}uiAllows/, '装备入口必须先过 uiAllows（拒绝不得沉默）');
+  assert.match(src, /uiBlockNotice/, '装备入口被拒时要给出 uiBlockNotice 的理由');
+  assert.match(src, /useCouncilVeto/, '否决按钮必须调用引擎唯一入口 useCouncilVeto');
+  assert.match(councilSrc, /uiAllows\([^)]*'COUNCIL_VETO'/, '山议面板的否决按钮同样先过闸');
+  // 不得在 UI 侧另写一份否决/装备判据（判据只有 legal-gate 与引擎两处）
+  assert.equal(/canVeto\s*===?\s*true/.test(src), false, 'main.ts 不得自己判 canVeto（那是 legal-gate 的判据）');
+});
+
 test('B75：装备的 UI 拒因（锁定不拒、牌不在手才拒、不看资源）', () => {
+
   const s = mk(4, 7);
   const card = s.players[0]!.hand[0]!;
   assert.equal(uiBlockNotice(s, 0, { type: 'EQUIP_CARD', actor: 0, cardId: card.id }), null);

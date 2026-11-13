@@ -41,6 +41,7 @@ export function renderCouncil(
   seat: number,
   onVote: (target: number) => void,
   onResolve: () => void,
+  onVeto: () => void,
 ): HTMLElement {
   const c = state.council;
   const alive = state.players.filter((p) => p.alive);
@@ -78,6 +79,14 @@ export function renderCouncil(
   body.push(tally);
   if (alive.length === 3) {
     body.push(el('div', { class: 'warn', text: '3 人局：山议不淘汰人，得票最高者扣 2 ' + theme.glossary.resource + '（并列各扣 1）。' }));
+  }
+  // ⚠️ B75：仲裁者否决 —— 可点性只问 `uiAllows`（本文件不自算判据，口径在 legal-gate/引擎两处）。
+  //   非持权者**整行不出现**（否决不是他的事，不必告诉他「你没有特权」）；
+  //   用过后写一句静态说明，免得玩家以为按钮坏了（拒绝不得沉默的静态版本）。
+  if (uiAllows(state, seat, { type: 'COUNCIL_VETO', actor: seat })) {
+    body.push(el('div', { class: 'btn-row' }, button('使用否决（每局 1 次，阻止本次放逐）', () => { onVeto(); })));
+  } else if (state.council.vetoUsed === true) {
+    body.push(el('div', { class: 'muted', text: '本局否决已使用。' }));
   }
   body.push(el('div', { class: 'btn-row' }, button('结算山议', () => { onResolve(); })));
   return section('山议（匿名投票）', ...body);
