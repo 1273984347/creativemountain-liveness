@@ -321,12 +321,38 @@ export function createInitialState(opts: InitialStateOptions): State {
 }
 
 /**
- * 回合末清零：把所有玩家的 `turn` 临时状态整体替换为空。
+ * 回合末清零：把所有玩家的 `turn` 临时状态复位（「本回合」语义的字段归零）。
  *
- * 规格 §6.2：`moveBonus` / `usedAsk` / `movedThisTurn` 是「本回合」语义，回合末一并清零。
- * 整体替换而非逐字段清零——避免漏清某个字段。
+ * 规格 §6.2：`usedAsk` / `movedThisTurn` / `abilityUsedThisTurn` 是「本回合」语义，回合末清零。
+ * ⚠️ **`moveBonus` 例外（B75.2 定案）**：保留不清 —— 指令 17「本回合移动 +2 格」在
+ *   「一回合一行动」节奏下（§3.1：问天的同一手番不可能再移动）只能**跨手番**生效，
+ *   回合末清零会让它 100% 失效（死指令）。现行语义是**用后清零**
+ *   （`ops/registry.ts` 的 `move_forward` / `move_by_dice` 消费点置 0）。
+ *   —— 与 B17 删除「失去本回合剩余行动」子句同一款裁定：规格措辞按现行节奏校准。
+ *
+ * ⚠️ **B75.2 接线**：本函数自 B1 起存在但**从未被调用**（只写不读的死代码）⇒
+ *   「每回合 1 次」类被动（观星者 / 窃火者 / 织梦者）实际整局只能用 1 次、
+ *   开拓者「每回合首次移动 +1」实际每局只有首次 ⇒ `reroll_count` / `steal_count`
+ *   在策略层面根本不可达（B75 遗留「阈值/策略未达标」的真正根因）。
+ *   现由回合末流程（`turn-runner.ts` 的 `endRound`）调用。
  */
 export function clearTurnStates(state: State): State {
-  const players = state.players.map((p) => (p.turn === EMPTY_TURN ? p : { ...p, turn: EMPTY_TURN }));
+  const players = state.players.map((p) => {
+    const t = p.turn;
+    if (t.usedAsk === false && t.movedThisTurn === false
+      && t.abilityUsedThisTurn !== true && t.finished !== true) {
+      return p;   // 已是干净状态（moveBonus 不参与判断）⇒ 原样返回，保持引用稳定
+    }
+    return {
+      ...p,
+      turn: {
+        moveBonus: t.moveBonus,   // ⚠️ 例外：用后清零（见上），回合末不清
+        usedAsk: false,
+        movedThisTurn: false,
+        abilityUsedThisTurn: false,
+        finished: false,
+      },
+    };
+  });
   return { ...state, players };
 }

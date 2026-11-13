@@ -23,7 +23,7 @@ import { resolveVictory } from './victory.ts';
 import { settleRoundEndGoals } from '../goals/settle.ts';
 import type { RuleMode } from '../scales.ts';
 import type { Effect } from '../types/theme.ts';
-import type { State } from './state.ts';
+import { clearTurnStates, type State } from './state.ts';
 
 /** 流程运行结果。 */
 export interface StepResult {
@@ -431,8 +431,11 @@ export function finishTurn(state: State, seat: number): State {
     next = applyEffect({ state: next, actor: seat }, { op: 'shield', amount: passive.amount, target: seat }).state;
     next = { ...next, log: [...next.log, { round: next.round, turnIndex: next.turnIndex, actor: seat, kind: 'passive', message: '[被动:shield] 守夜人：回合结束获得 ' + String(passive.amount) + ' 点护盾' }] };
   }
-  // 昼夜是**回合内**状态：回合末复位（否则 set_phase 一次就整局都是夜）
-  next = { ...next, phaseValue: 'day' };
+  // ⚠️ B75.2 更正：昼夜复位**不在**手番末 —— 规格 §6.5 的天机牌「本回合为夜」的
+  //   「回合」= round（§3.1 术语：所有存活玩家各行动一次），手番末复位会让夜间
+  //   只覆盖首个手番（其余玩家在白天行动）。此前夜间可达性全靠 `turn.finished`
+  //   泄漏（跳过 finishTurn ⇒ 复位被跳过）撑着——B75.2 修复该泄漏后此缺口暴露。
+  //   复位点移到 `endRound`（每 round 一次，天机牌在下一 round 开局重翻）。
   return next;
 }
 
@@ -527,6 +530,16 @@ function endRound(next: State, mode: RuleMode): State {
   }
   // ---- 公开亮牌离场（规格 §3.3：两张牌留在场上公开，直至本 round 结束）----
   next = { ...next, publicCards: [] };
+  // ---- 回合末清零（规格 §6.2：Player.turn 的「本回合」语义）----
+  // ⚠️ B75.2 补接线：`clearTurnStates` 自 B1 起存在但从未被调用（只写不读）⇒
+  //   `abilityUsedThisTurn` 整局不清 ⇒「每回合 1 次」类被动实际每局 1 次
+  //   （reroll_count / steal_count 不可达的真正根因）；`movedThisTurn` 同病（开拓者）；
+  //   `finished` 同病（被暂停过的手番会让下一 round 跳过 finishTurn 的结算/收入）。
+  //   位置：认证结算**之后**、跨 round **之前** ⇒ 本回合内无人再读这些标志。
+  //   ⚠️ `moveBonus` 不清（用后清零，见 state.ts 的 clearTurnStates 注释）。
+  next = clearTurnStates(next);
+  // ---- 昼夜复位（每 round 一次；天机牌「本回合为夜」覆盖整个 round，见 finishTurn 注释）----
+  next = { ...next, phaseValue: 'day' };
   // ---- 跨 round ----
   next = advanceRound(next);
   // **下一回合**的第 1 步：天机（翻开一张天机牌，对全场生效）

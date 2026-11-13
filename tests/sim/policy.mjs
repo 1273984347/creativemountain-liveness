@@ -574,6 +574,14 @@ export async function playOne(theme, players, seed, gateReserve, policy) {
     if (needsCertificationAction(s)) { s = await certificationTurn(s, policy, counters, hit); }
     const seat = currentPlayer(s);
     if (seat < 0) { break; }
+    // ⚠️ B75.2：对峙未决 ⇒ 本手番的唯一义务是亮牌（§3.3：选牌对对手不可见、结算期阻塞）。
+    //   启发式带（行棋/问天/出牌）**不得**绕过对峙阻塞 —— 此前无守卫，同一玩家在冻结的
+    //   turnIndex 下反复行动（实测一回合连走 4 次），对峙永不结算时全场死锁。
+    //   AI 的选牌由 `advanceWithDuel` 内的 `autoResolveDuel` 处理（含空手判负，B75.2 补结算时点语义）。
+    if (s.duel !== null) {
+      s = await advanceWithDuel(s, 'standard', { gateReserve });
+      continue;
+    }
     const player = s.players[seat];
     if (player !== undefined && player.pendingCert) {
       // 待认证锁定：不能位移（规格 §5.1），但仍可打非位移牌
@@ -626,17 +634,22 @@ export async function playOne(theme, players, seed, gateReserve, policy) {
     //   `goalPursuit` 自身零随机消耗（决策由状态决定）；达阈即停。
     //   待认证锁定分支在上方 `continue`，天然不会走到这里（goalPursuit 对 pendingCert
     //   也返回 null，双保险）。
-    //   ⚠️ **时序策略（B75.2 实测后定）**：只在**下半局**追goal（`round > ⌈limit/2⌉`）。
-    //     动机：追goal必然占手番（窃火者阈值 5 = 3 人局 45% 的手番），上半局追会把
-    //     「先登顶 → 先认证 → 先封顶」的级联整体后移，实测把门 ⑫ 的位次极差从基线
-    //     10.7pp 推到 16.3pp（破 14pp 锁）；改为下半局追后回到 13.2pp（锁内，且 3 人局的
-    //     严格单调是 HEAD 基线既有的形状，非本批引入）。代价：印记来得晚——占位启发式
-    //     不追求最优（同 B75.1 §6 声明），只保证目标真实可达。
-    const pursuit = s.round > Math.ceil((s.scales?.globalRoundLimit ?? 0) / 2) ? goalPursuit(s, seat) : null;
-    if (pursuit !== null) {
-      record(s, seat, actionKey({ type: 'ABILITY', actor: seat, abilityId: pursuit.op, ...(pursuit.target === undefined ? {} : { target: pursuit.target }) }));
-      abilityOps.push(pursuit.op);
-      s = pursuit.state;
+    //   ⚠️ **时序与概率（B75.2 实测后定，两轮扫描）**：**全程**可追、每回合以 **0.2** 概率追。
+    //     · 下半局限定（时序门）是在「回合末清零未接线」的旧引擎上测的（追goal每局至多
+    //       打 1 次），接线后其前提消失；实测全程低概率把追goal手番摊薄，门 ⑫ 回到 10.1pp
+    //       （锁内，且 3 人局的严格单调清零——旧基线本有）。
+    //     · 确定性追goal实测达成率 ~89%（印记几乎必发），窃火者为 5 次偷取烧掉 ~31% 手番
+    //       ⇒ 胜率崩到 3.8%；p=0.2 把达成率压回健康带（steal 27% / reroll 68%），
+    //       窃火者回到 ~7%（每 1 回合追goal ≈ −2.7pp，代价由达成率加权摊薄）。
+    //       ⚠️ 0.2 无经验依据（占位，同 B75.1 §6 的 0.15 声明）；若要调，必须连同重标定一起做。
+    //   ⚠️ **随机流**：`goalPursuit` 保持纯函数（零随机消耗，有专测）；概率判定在接线层，
+    //     仅在「追goal可达」的回合**额外**消耗一次 `s.rng.next()`（B75.1 shouldVeto 同款先例，
+    //     随机流分叉起点如实登记）。不命中 ⇒ 落回正常行动带（roll 已消耗，口径不变）。
+    const gotPursuit = goalPursuit(s, seat);
+    if (gotPursuit !== null && s.rng.next() < 0.2) {
+      record(s, seat, actionKey({ type: 'ABILITY', actor: seat, abilityId: gotPursuit.op, ...(gotPursuit.target === undefined ? {} : { target: gotPursuit.target }) }));
+      abilityOps.push(gotPursuit.op);
+      s = gotPursuit.state;
       s = advanceTurn(s, 'standard');
       continue;
     }

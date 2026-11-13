@@ -9,9 +9,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createInitialState, clearTurnStates, EMPTY_TURN, type State } from '../../engine/core/state.ts';
+import { performAction, advanceTurn } from '../../engine/core/turn-runner.ts';
+import { currentPlayer } from '../../engine/core/round.ts';
 // B75：council.vetoBy 的读取侧容错要用真实山议局面与真实结算入口。
 import { castVote, resolveCouncil } from '../../engine/core/council.ts';
-import { councilScene } from './fixtures.ts';
+import { councilScene, mk } from './fixtures.ts';
 
 test('State 契约：Player 带 turn 回合内临时状态，初始为 EMPTY_TURN', () => {
   const s = createInitialState({ players: 3, seed: 1, deckSize: 40 });
@@ -23,19 +25,28 @@ test('State 契约：Player 带 turn 回合内临时状态，初始为 EMPTY_TUR
   }
 });
 
-test('State 契约：回合末清零 —— moveBonus/usedAsk/movedThisTurn 一并归零', () => {
+test('State 契约：回合末清零 —— usedAsk/movedThisTurn/abilityUsedThisTurn 归零，moveBonus 保留（B75.2 定案）', () => {
   const s = createInitialState({ players: 3, seed: 1, deckSize: 40 });
   // 模拟一回合内的状态污染
   const dirty: typeof s = {
     ...s,
     players: s.players.map((p, i) =>
       i === 0
-        ? { ...p, turn: { moveBonus: 2, usedAsk: true, movedThisTurn: true } }
+        ? { ...p, turn: { moveBonus: 2, usedAsk: true, movedThisTurn: true, abilityUsedThisTurn: true } }
         : p
     ),
   };
   const cleared = clearTurnStates(dirty);
-  assert.deepEqual(at(cleared.players, 0).turn, EMPTY_TURN, '回合末必须一并清零');
+  const t = at(cleared.players, 0).turn;
+  // ⚠️ B75.2 裁定：moveBonus **不**随回合末清零 —— 指令 17 在「一回合一行动」节奏下
+  //   只能跨手番生效（问天的同一手番没有行动机会再移动），清了它指令 17 就是死指令；
+  //   现行语义是「用后清零」（registry.ts 的 move_forward/move_by_dice 消费点）。
+  //   其余「本回合」标志（usedAsk / movedThisTurn / abilityUsedThisTurn）回合末归零。
+  assert.equal(t.moveBonus, 2, 'moveBonus 用后清零（指令 17 跨手番生效），回合末保留');
+  assert.equal(t.usedAsk, false);
+  assert.equal(t.movedThisTurn, false);
+  assert.equal(t.abilityUsedThisTurn, false);
+  assert.equal(t.finished, false);
 });
 
 test('State 契约：清零不影响玩家其他状态（不可误伤）', () => {
@@ -56,7 +67,32 @@ test('State 契约：清零不影响玩家其他状态（不可误伤）', () =>
   assert.equal(p.position, 12, '位置不得被清零影响');
   assert.equal(p.hasMark, true, '印记不得被清零影响');
   assert.equal(p.pendingCert, true, '待认证标记不得被清零影响');
-  assert.deepEqual(p.turn, EMPTY_TURN, '只有 turn 应被清零');
+  assert.equal(p.turn.moveBonus, 5, 'moveBonus 保留');
+  assert.equal(p.turn.usedAsk, false, 'usedAsk 清零');
+  assert.equal(p.turn.movedThisTurn, false, 'movedThisTurn 清零');
+});
+
+test('B75.2 回归：跨 round 后「每回合」类 turn 标志必须复位（B1 契约接线——clearTurnStates 此前零调用方）', () => {
+  // ⚠️ 这是 B75.2 的立项级发现：规格 §6.2 一直要求回合末清零，clearTurnStates 也一直存在，
+  //   但**从未被任何回合末流程调用** ⇒ 「每回合 1 次」类被动实际整局只能用 1 次
+  //   （实测：窃火者第 2 回合追goal被拒「本回合已发动过被动」）⇒ reroll_count / steal_count
+  //   在策略层面根本不可达。本用例钉住接线本身：改 clearTurnStates 而不接线，这里照样红。
+  let s = mk(4, 7);
+  s = { ...s, players: s.players.map((p, i) => (i === 0
+    ? { ...p, turn: { ...p.turn, abilityUsedThisTurn: true, movedThisTurn: true, usedAsk: true, moveBonus: 2 } }
+    : p)) };
+  // 把 turnIndex 推到 round 末，让下一手番跨 round（默认棋盘全 plain，无暂停路径）
+  s = { ...s, turnIndex: s.turnOrder.length - 1 };
+  const cur = currentPlayer(s);
+  assert.ok(cur >= 0, '前提：round 末存在当前手番玩家');
+  s = performAction(s, cur, 'move');
+  s = advanceTurn(s, 'standard');
+  assert.equal(s.round, 2, `前提：已跨入第 2 回合（实际 ${s.round}）`);
+  const p0 = at(s.players, 0);
+  assert.equal(p0.turn.abilityUsedThisTurn, false, '每回合 1 次类被动的闸门必须复位（否则 = 每局 1 次）');
+  assert.equal(p0.turn.movedThisTurn, false, '开拓者「每回合首次移动 +1」的基准必须复位');
+  assert.equal(p0.turn.usedAsk, false, 'usedAsk 复位');
+  assert.equal(p0.turn.moveBonus, 2, 'moveBonus 跨手番保留（用后清零）');
 });
 
 // 局部取值辅助（noUncheckedIndexedAccess 下 arr[i] 是 T | undefined）

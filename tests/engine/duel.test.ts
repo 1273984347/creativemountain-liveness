@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 
 import type { Card } from '../../engine/types/theme.ts';
 import { createInitialState, type State } from '../../engine/core/state.ts';
-import { compareCards, startDuel, submitDuelCard, duelPicked, duelOpponent } from '../../engine/core/duel.ts';
+import { compareCards, startDuel, submitDuelCard, duelPicked, duelOpponent, autoResolveDuel } from '../../engine/core/duel.ts';
 import { finishTurn, advanceTurn } from '../../engine/core/turn-runner.ts';
 
 /** 造一张牌。 */
@@ -136,4 +136,45 @@ test('B13：公开亮牌在 round 末清空', () => {
   const atEnd: State = { ...st, turnIndex: 3 };
   const after = advanceTurn(atEnd, 'standard');
   assert.equal(after.publicCards.length, 0, 'round 末公开亮牌应清空');
+});
+
+// ---------- B75.2：创建后手牌变空的对峙必须仍能结算（§3.3 第 5 条的结算时点语义） ----------
+//
+// ⚠️ 实测死锁（urban-psych 8 人 seed 7910）：对峙创建后、亮牌前，参与者的手牌可能变空
+//   （平局「各弃 1 张」正是触发器——先创对峙、autoResolve 双双选牌、平局各弃、
+//   下一轮对峙再创建时一方已空手？不对——直接形状：创建时双方有牌 ⇒ 创建合法；
+//   **结算时点**一方已无牌可亮）。`startDuel` 只在**创建时**判空手，
+//   `autoResolveDuel` 的 pick 失败会**静默跳过提交** ⇒ 对峙永不终结 ⇒
+//   `advanceTurn` 的 duel 检查阻塞所有后续手番 ⇒ 全场死锁（门 ⑨ 实测 2/720 死循环）。
+//   规格语义是**结算时点**：「任一方手牌为空（无法亮牌）→ 该方自动落败」——
+//   `settleDuel` 的无牌分支早已实现，只是 autoResolveDuel 永远走不到它。
+
+test('B75.2：创建后手牌变空 ⇒ autoResolveDuel 仍须结算（空手方自动落败，不挂死）', () => {
+  const red5 = card('r5', 'red', 5);
+  const blk9 = card('b9', 'black', 9);
+  let s = scene([red5], [blk9]);
+  s = startDuel(s, 0, 1);
+  assert.ok(s.duel !== null, '前提：对峙已创建');
+  // 模拟「创建后手牌变空」（平局各弃 1 张 / 任何出牌消费都可能造成）
+  s = { ...s, players: s.players.map((p) => (p.seat === 0 ? { ...p, hand: [] } : p)) };
+  const next = autoResolveDuel(s);
+  assert.equal(next.duel, null, '对峙必须被结算（此前：永久挂起 ⇒ advanceTurn 全场阻塞）');
+  assert.equal(next.players[0]!.position, 4, '空手方（座 0）按第 5 条被推后 1 格');
+  assert.equal(next.players[1]!.position, 5, '胜者不移动');
+  assert.ok(next.log.some((l) => l.message.includes('自动落败')), '日志必须写明自动落败');
+});
+
+test('B75.2：对方已锁定、自己手牌变空 ⇒ 同样自动落败（pickB 已在的挂起形状）', () => {
+  // 实测死锁的精确形状：duel = { seatA, seatB, pickB } 而 seatA 手牌为空
+  const red5 = card('r5', 'red', 5);
+  const blk9 = card('b9', 'black', 9);
+  let s = scene([red5], [blk9]);
+  s = startDuel(s, 0, 1);
+  const sub = submitDuelCard(s, 1, blk9.id);
+  assert.ok(sub.ok, '前提：座 1 锁定亮牌');
+  s = sub.state;
+  s = { ...s, players: s.players.map((p) => (p.seat === 0 ? { ...p, hand: [] } : p)) };
+  const next = autoResolveDuel(s);
+  assert.equal(next.duel, null, 'pickB 已在 + pickA 空手 ⇒ 仍须结算');
+  assert.equal(next.players[0]!.position, 4, '座 0 自动落败被推后');
 });

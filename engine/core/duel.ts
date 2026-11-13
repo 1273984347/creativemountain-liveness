@@ -135,6 +135,16 @@ export function autoResolveDuel(
     onPick?.(d.seatB, pb, next);
     next = submitDuelCard(next, d.seatB, pb).state;
   }
+  // ⚠️ **B75.2（§3.3 第 5 条的结算时点语义）**：任一方**手牌为空**（无法亮牌）⇒
+  //   仍必须走到结算 —— `settleDuel` 的「无牌可亮」分支就是空手自动落败；
+  //   此前 pick 失败会静默跳过提交并原样返回 ⇒ 对峙永不终结 ⇒
+  //   `advanceTurn` 的 duel 检查阻塞所有后续手番 ⇒ 全场死锁
+  //   （实测：urban-psych 8 人 seed 7910，门 ⑨ 死循环 2/720；
+  //     触发器是平局「各弃 1 张」让参与者在创建后变空手）。
+  //   `startDuel` 只在**创建时**判空手；这里补的是**结算时点**。
+  if (next.duel !== null && (pa === null || pb === null)) {
+    next = settleDuel(next, d.seatA, d.seatB, next.duel.pickA, next.duel.pickB);
+  }
   return next;
 }
 

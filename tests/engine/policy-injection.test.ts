@@ -82,7 +82,7 @@ test('合法 key ⇒ 真的改道：fallbacks 恒 0，且记录与结局两处�
   setRecorder(rowsOff);
   let off: SimGameResult;
   try {
-    off = await playOne(theme(), 4, 9001, undefined, { face: 'play', seat: 0, decide: async () => null });
+    off = await playOne(theme(), 4, 9002, undefined, { face: 'play', seat: 0, decide: async () => null });
   } finally { setRecorder(null); }
   assert.ok(off.injection.calls > 0, '对照组必须真的被问到');
   assert.equal(off.injection.fallbacks, off.injection.calls, '对照组每次都回落');
@@ -94,12 +94,15 @@ test('合法 key ⇒ 真的改道：fallbacks 恒 0，且记录与结局两处�
   //   轨迹随之改变；4242 这个 seed 的两臂（改道 / 全回落）**撞到同一个结局签名**（实测 seats/[2]/13 逐字相同）
   //   ⇒ 「结局必须分歧」这条断言在该 seed 上失去区分力。9001 实测：问出口 2 次、回落 0、胜者座 3 → 座 0
   //   ⇒ 分歧可观察。**换的是样本不是判据**（判据仍是「记录跟随注入 + 结局分歧」两条）。
+  //   ⚠️ **B75.2 再换（9001 → 9002）**：回合末清零接线 + 追goal分支 + 对峙空手判负三处行为变更
+  //   再次改变轨迹 ⇒ 9001 的两臂撞到同一个结局签名（E127「换样本不换判据」同款处置）。
+  //   9002 实测：问出口 2 次、改道 2 次、回落 0、liveSeats off={"0":1} vs on={} ⇒ 分歧可观察。
   const rowsOn: DecisionRecord[] = [];
   const chosen: string[] = [];
   setRecorder(rowsOn);
   let on: SimGameResult;
   try {
-    on = await playOne(theme(), 4, 9001, undefined, {
+    on = await playOne(theme(), 4, 9002, undefined, {
       face: 'play', seat: 0,
       decide: async (_s, _seat, c) => {
         const last = c[c.length - 1];
@@ -138,14 +141,15 @@ test('合法 key ⇒ 真的改道：fallbacks 恒 0，且记录与结局两处�
 });
 
 test('certify 面候选按**当前待认证 target** 收窄 ⇒ 模型/记录/执行三者同一 target（评审 I-1）', async () => {
-  // seed 1156 / 4 人会走到 §5.5 双人互验（`pending.length >= 2`）⇒ `legal.ts` 对**每个**
+  // seed 1111 / 4 人会走到 §5.5 双人互验（`pending.length >= 2`）⇒ `legal.ts` 对**每个**
   // 待认证目标各发三条候选。收窄前策略器会一次拿到 6 条（两个 target），于是
   // 「模型想质疑 A、循环此刻 target=B ⇒ 引擎质疑 B，JSONL 记下没发生过的事」。
-  // ⚠️ B75.2 换 seed（E127「换样本不换判据」）：原 seed 1074 在追goal分支接线后，
-  //   轨迹改变 ⇒ 该 seed 不再走到双人互验（「本局必须走到双人互验」前提断言红）。
-  //   扫 1074–3000 取 **1156**（互验出现、每个问出口恰 3 条候选、calls=2、fallbacks=0，实测；1082 有质疑不可用的 2 候选窗口，不满足「恰三条」判据）；判据本身一字未改。
+  // ⚠️ B75.2 两次换 seed（E127「换样本不换判据」）：原 seed 1074 在追goal分支接线后
+  //   不再走到双人互验 ⇒ 换 1156；回合末清零接线（B1 契约补全）再次改变轨迹 ⇒
+  //   1156 失稳，再扫取 **1111**（互验出现、每个问出口恰 3 条候选、calls=2、fallbacks=0，实测）。
+  //   判据本身一字未改。
   const seen: { pending: readonly number[]; keys: string[] }[] = [];
-  const r = await playOne(theme(), 4, 1156, undefined, {
+  const r = await playOne(theme(), 4, 1111, undefined, {
     face: 'certify', seat: 0,
     decide: async (s, _seat, c) => {
       const keys = c.map((a) => actionKey(a));
