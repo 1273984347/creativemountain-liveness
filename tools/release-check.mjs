@@ -21,9 +21,10 @@ const argOf = (name, dflt) => {
 /** 重扫产物路径（默认生成物，已被 `.gitignore`）。 */
 const SCAN_PATH = argOf('scan', 'docs/trial-reserve-scan.json');
 /** 基线快照路径（默认入库快照）。 */
-// ⚠️ B74：默认基线更新为 B74 快照（B65 出牌付费 / B67 互验 / B72 锁定启发式等行为变更后，
-//   旧 B34 快照已过时 ⇒ 显式重生成并留痕；B34 快照保留给门 ⑬ 与负样本测试用）。
-const BASELINE_PATH = argOf('baseline', 'docs/baselines/trial-reserve-scan-B75.1.json');
+// ⚠️ B75.2：默认基线更新为 B75.2 快照（B1 契约回合末清零接线 / 追goal分支 / 对峙空手判负
+//   三处行为变更 ⇒ 随机流与决策分布均变，按 B35 流程显式重生成并留痕；
+//   B75.1 / B75 / B74 / B34 快照保留给门 ⑬ 与负样本测试用）。
+const BASELINE_PATH = argOf('baseline', 'docs/baselines/trial-reserve-scan-B75.2.json');
 /** 门禁脚本路径（默认 `tools/gate.mjs`）—— 注入点供**负样本测试**用。 */
 const GATE_PATH = argOf('gate', 'tools/gate.mjs');
 /** 模拟器路径（默认 `tests/sim/run.mjs`）—— 注入点供**负样本测试**用。 */
