@@ -1211,9 +1211,10 @@ git commit -m "feat(B75): IR 透传 rights + 双轨一致性比较（门⑥ 抓�
 ### Task 9: 重标定、文档与批次记录
 
 **Files:**
-- Modify: `tests/sim/run.mjs`（静态注记）
+- Modify: `tests/sim/run.mjs`（静态注记 + 门⑫ 实测留痕注释）
 - Modify: `docs/balance-report.md`（重生成）
-- Create: `docs/baselines/trial-reserve-scan-B75.json`、`docs/批次/B75-装备与否决机制补齐-执行记录.md`
+- Create: `tests/engine/goals-reachability.test.ts`（施工时补：文件表列为 Create，但 T1–T8 都没有它的步骤 ⇒ 三环取证的「判定/发奖」环）、`docs/批次/B75-装备与否决机制补齐-执行记录.md`
+- Create: `docs/baselines/trial-reserve-scan-B75.json`
 - Modify: `tools/release-check.mjs`、`docs/沉淀/compare-scan-baseline.mjs`（默认基线）
 - Modify: `README.md`、主规格 §4.1/§5.6/§6.2/§6.4、`docs/沉淀/经验教训索引.md`、`docs/沉淀/批次导航.md`
 

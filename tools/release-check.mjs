@@ -23,7 +23,7 @@ const SCAN_PATH = argOf('scan', 'docs/trial-reserve-scan.json');
 /** 基线快照路径（默认入库快照）。 */
 // ⚠️ B74：默认基线更新为 B74 快照（B65 出牌付费 / B67 互验 / B72 锁定启发式等行为变更后，
 //   旧 B34 快照已过时 ⇒ 显式重生成并留痕；B34 快照保留给门 ⑬ 与负样本测试用）。
-const BASELINE_PATH = argOf('baseline', 'docs/baselines/trial-reserve-scan-B74.json');
+const BASELINE_PATH = argOf('baseline', 'docs/baselines/trial-reserve-scan-B75.json');
 /** 门禁脚本路径（默认 `tools/gate.mjs`）—— 注入点供**负样本测试**用。 */
 const GATE_PATH = argOf('gate', 'tools/gate.mjs');
 /** 模拟器路径（默认 `tests/sim/run.mjs`）—— 注入点供**负样本测试**用。 */

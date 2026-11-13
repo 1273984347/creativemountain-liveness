@@ -388,6 +388,11 @@ function positionSpread(cells, players) {
   }
   // ⚠️ B25：统计量（RMS 偏离 / 极差 / 严格单调）由**引擎侧纯函数**算出（单一事实源，
   //   平衡报告、门禁判定、单测共用同一份实现）。
+  // ⚠️ B75 实测留痕（口径与阈值都**没动**，只记新形状）：
+  //   · 门禁口径（`--position-spread --games 100`，8 人档）：极差 7.8pp · RMS 2.65pp ⇒ 判据 ≤14pp / ≤6.5pp 通过；
+  //   · 紧口径（`tests/engine/balance-regression.test.ts`，2000 局 × 4 主题 × 8 人）：**5.3pp**
+  //     分解：两个新决策都关 4.4pp → 只开否决 4.8pp → 否决 + 装备 5.3pp
+  //     ⇒ 该条锁随行为放宽到 5.5pp（机制原因与 R7 登记见那条用例的注释）。
   const stats = computePositionSpread(devs);
   return {
     players, soloGames: st.soloGames, total: st.total, posTotal,
@@ -678,10 +683,11 @@ if (args.out !== null) {
   lines.push('');
   lines.push('> **目标达成**由引擎判定器（`engine/goals/registry.ts` 的 `isGoalAchieved`）在终局状态上**直接判定**');
   lines.push('> ⇒ 与引擎**同源**（单一事实源），且「达成过」是**历史事实** ⇒ 不会被之后的放逐抹掉。');
-  lines.push('> ⚠️ `equip_count` 与 `veto_success` 恒为 **0** —— **不是漏写计数器，而是机制缺失**：');
-  lines.push('>   `equip_card` 四套主题**零使用者**（规格无「装备」动作入口）⇒ 事件永不发生；');
+  lines.push('> ⚠️ `equip_count` / `veto_success` 自 **B75** 起机制已补齐（装备动作 / 仲裁者否决）；');
+  lines.push('>   在此之前它们**恒为 0**，根因是**机制缺失**而不是漏写计数器：');
+  lines.push('>   `equip_card` 四套主题**零使用者**（引擎无「装备」动作入口）⇒ 事件永不发生；');
   lines.push('>   **仲裁者否决放逐**未实现（规格 §5.6 有、§4.1 权威被动表里没有）⇒ 同样无事件可计。');
-  lines.push('>   ⇒ 补计数器只会造出「永远为 0 的**假可达**」⇒ 如实登记为遗留，不补假计数器。');
+  lines.push('>   ⇒ 本表**现在才有效力**：仍读到 0 才说明「机制虽接线但不可达」——按下方计数器分档判读。');
   lines.push('> ⚠️ **「目标达成」与「持有印记」是两个口径**：印记可被作废（§5.6：被放逐者身上的印记作废）⇒ 「持印玩家次」≤「达成玩家次」。');
   lines.push('');
   lines.push('| 指标 | 数值 |');
@@ -709,7 +715,8 @@ if (args.out !== null) {
   lines.push('>   · 最大值 = 0 **且** 该 counter 无写入方 ⇒ 机制缺失（事件从不发生）；');
   lines.push('>   · 最大值 = 0 **但** 有写入方（触发路径极罕见）⇒ **不能**据此判机制缺失；');
   lines.push('>   · 最大值 > 0 而未达阈值 ⇒ 阈值/策略问题。');
-  lines.push('>   （本仓 equip/veto 的机制缺失另有独立证据：零使用者 / 引擎未实现 —— 不靠本表推断。）');
+  lines.push('>   （**B75 前**本仓 equip/veto 的机制缺失另有独立证据：零使用者 / 引擎未实现 —— 不靠本表推断；');
+  lines.push('>     B75 起两个入口都在引擎里（`performAction(…, "equip")` 与 `useCouncilVeto`）⇒ 本表可直接核。）');
   lines.push('');
   lines.push('| 目标 kind | 计数最大值 | 计数均值 | 样本（人次） |');
   lines.push('|---|---|---|---|');

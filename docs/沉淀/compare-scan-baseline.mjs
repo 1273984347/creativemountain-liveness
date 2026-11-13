@@ -13,7 +13,7 @@ const argOf = (name, dflt) => {
   const hit = argv.find((x) => x.startsWith('--' + name + '='));
   return hit === undefined ? dflt : hit.slice(name.length + 3);
 };
-const baselinePath = resolve(process.cwd(), argOf('baseline', 'docs/baselines/trial-reserve-scan-B74.json'));
+const baselinePath = resolve(process.cwd(), argOf('baseline', 'docs/baselines/trial-reserve-scan-B75.json'));
 const scanPath = resolve(process.cwd(), argOf('scan', 'docs/trial-reserve-scan.json'));
 
 /** 逐组比对的指标（全部原始统计量）。 */
