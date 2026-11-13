@@ -2,7 +2,7 @@
 // ⚠️ 只测**导出的纯函数**；`playOne` 的带二分与 `councilTurn` 的接线由门 ⑨ 的重标定读数覆盖。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { shouldVeto, pickEquipCard } from '../../tests/sim/policy.mjs';
+import { shouldVeto, pickEquipCard, goalPursuit } from '../../tests/sim/policy.mjs';
 import { castVote, topVoted, useCouncilVeto } from '../../engine/core/council.ts';
 import { cardHasMovement } from '../../engine/core/targeting.ts';
 import { councilScene, mk } from './fixtures.ts';
@@ -107,4 +107,82 @@ test('B75：pickEquipCard 付不起时不装备（与出牌同看资源）', () 
   if (card !== undefined) {
     assert.equal(card.cost <= 0, true, '资源为 0 时只能装备免费牌');
   }
+});
+
+// ---------- B75.2：goalPursuit（目标感知追goal）----------
+//
+// ⚠️ 只测导出的纯函数（文件头纪律）；playOne 的接线由门 ⑨ 的重标定读数覆盖。
+//   语义：达阈即停 / 不抽随机数 / 失败回落 / 只服务 steal_count 与 reroll_count 两类目标。
+
+/** 给座 `seat` 挂上身份被动规格并设置资源（追goal测试的夹具）。 */
+function withPassiveAndGoal(
+  state: State,
+  seat: number,
+  passive: unknown,
+  kind: string,
+  count: number,
+): State {
+  return {
+    ...state,
+    players: state.players.map((p) => (p.seat === seat
+      ? { ...p, flags: { ...p.flags, passive, goal: { kind, count } } }
+      : p)),
+  };
+}
+
+test('B75.2：窃火者追goal —— 偷最富的对手（deterministic，不抽随机数）', () => {
+  let s = withPassiveAndGoal(mk(4, 7), 0, { op: 'transfer_resource', amount: 1 }, 'steal_count', 5);
+  // 座 1 有 3、座 2 有 5 ⇒ 必须偷座 2（最富者）
+  s = { ...s, players: s.players.map((p) => (p.seat === 1 ? { ...p, resource: 3 } : p.seat === 2 ? { ...p, resource: 5 } : p)) };
+  const rngBefore = s.rng.snapshot();
+  const got = goalPursuit(s, 0);
+  assert.ok(got !== null, '目标未达成且有可偷目标 ⇒ 必须追');
+  assert.equal(got.op, 'transfer_resource', '动作是偷取被动');
+  assert.equal(got.state.players[2]!.resource, 4, '最富者（座 2）被偷 1 枚');
+  assert.equal(got.state.players[0]!.resource, (s.players[0]!.resource ?? 0) + 1, '自己 +1');
+  assert.equal(got.state.players[0]!.counters.stolenTotal, 1, '计数器 +1');
+  assert.deepEqual(got.state.rng.snapshot(), rngBefore, '追goal不得推进随机流');
+});
+
+test('B75.2：达阈即停 —— stolenTotal ≥ count ⇒ 不再追（不无限占行动）', () => {
+  let s = withPassiveAndGoal(mk(4, 7), 0, { op: 'transfer_resource', amount: 1 }, 'steal_count', 5);
+  s = { ...s, players: s.players.map((p) => (p.seat === 0
+    ? { ...p, counters: { ...p.counters, stolenTotal: 5 } } : p)) };
+  assert.equal(goalPursuit(s, 0), null, '已偷满 5 枚 ⇒ 追goal结束，回到正常行动带');
+});
+
+test('B75.2：无目标可偷 ⇒ 回落 null（对手灵枢全部 < amount）', () => {
+  let s = withPassiveAndGoal(mk(4, 7), 0, { op: 'transfer_resource', amount: 1 }, 'steal_count', 5);
+  s = { ...s, players: s.players.map((p) => (p.alive && p.seat !== 0 ? { ...p, resource: 0 } : p)) };
+  assert.equal(goalPursuit(s, 0), null, '没人有灵枢 ⇒ 追不动，回落正常行动带');
+});
+
+test('B75.2：织梦者追goal —— 改判挂标记并计数；达阈即停', () => {
+  let s = withPassiveAndGoal(mk(4, 7), 0, { op: 'modify_judgement', target: 0 }, 'reroll_count', 3);
+  const rngBefore = s.rng.snapshot();
+  const got = goalPursuit(s, 0);
+  assert.ok(got !== null, '改判数未达标 ⇒ 必须追');
+  assert.equal(got.op, 'modify_judgement', '动作是改判被动');
+  assert.equal(got.state.players[0]!.flags.judgementModified, true, '挂上改判定标记');
+  assert.equal(got.state.players[0]!.counters.rerollCount, 1, '改判计数 +1');
+  assert.deepEqual(got.state.rng.snapshot(), rngBefore, '追goal不得推进随机流');
+  // 达阈
+  const done = { ...s, players: s.players.map((p) => (p.seat === 0
+    ? { ...p, counters: { ...p.counters, rerollCount: 3 } } : p)) };
+  assert.equal(goalPursuit(done, 0), null, '已改判 3 次 ⇒ 追goal结束');
+});
+
+test('B75.2：非追goal目标 / 无被动 / 待认证锁定 ⇒ 一律 null', () => {
+  // equip_count 目标由 B75 的装备分支服务，追goal分支不得叠用
+  const equipGoal = withPassiveAndGoal(mk(4, 7), 0, { op: 'create_card', cardId: 'x' }, 'equip_count', 3);
+  assert.equal(goalPursuit(equipGoal, 0), null, 'equip_count 不归追goal分支');
+  // 没有被动（旧存档形状）⇒ null
+  let noPassive = withPassiveAndGoal(mk(4, 7), 0, { op: 'transfer_resource', amount: 1 }, 'steal_count', 5);
+  noPassive = { ...noPassive, players: noPassive.players.map((p) => (p.seat === 0
+    ? { ...p, flags: { ...p.flags, passive: undefined } } : p)) };
+  assert.equal(goalPursuit(noPassive, 0), null, '无被动规格 ⇒ 追不动');
+  // 待认证锁定 ⇒ null（锁定分支在 playOne 更早处 continue，天然不经过追goal）
+  const locked = withPassiveAndGoal(mk(4, 7), 0, { op: 'transfer_resource', amount: 1 }, 'steal_count', 5);
+  const lockedState: State = { ...locked, players: locked.players.map((p) => (p.seat === 0 ? { ...p, pendingCert: true } : p)) };
+  assert.equal(goalPursuit(lockedState, 0), null, '待认证锁定者不追goal');
 });

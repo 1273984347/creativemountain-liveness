@@ -6,6 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { performAction } from '../../engine/core/turn-runner.ts';
+import { performAbility } from '../../engine/core/abilities.ts';
 import { castVote, resolveCouncil, useCouncilVeto } from '../../engine/core/council.ts';
 import { goalOf, settleRoundEndGoals, settleImmediateGoals } from '../../engine/goals/settle.ts';
 import { councilScene, mk } from './fixtures.ts';
@@ -87,4 +88,63 @@ test('B75：settleImmediateGoals 是全局结算（不只给否决者发奖）',
   s = { ...s, players: s.players.map((p) => (p.seat === 2 ? { ...p, counters: { ...p.counters, vetoCount: 1 } } : p)) };
   const after = settleImmediateGoals(s);
   assert.equal(after.players[2]!.hasMark, true, '他人已达成的 immediate 目标同样要在同一次全局结算里发奖');
+});
+
+// ---------- B75.2：reroll_count / steal_count 的三环链（计数 → 结算 → 发奖） ----------
+//
+// ⚠️ 计数写入环在 B61 已由 goals.test.ts 的 LAYER-E2/E3 钉住；这里补的是**后两环**
+//   （回合末结算触发判定、判定通过发【印记】）——与 B75 给 equip/veto 补链的理由同款：
+//   只测「counter +1」证明不了目标真的可达（判定/发奖环断掉时 counter 照样在涨）。
+
+/** 给座 `seat` 挂上身份被动规格（与 passive-abilities.test.ts 的 withPassive 同法）。 */
+function withPassive(state: State, seat: number, passive: unknown): State {
+  return {
+    ...state,
+    players: state.players.map((p) => (p.seat === seat
+      ? { ...p, flags: { ...p.flags, passive } }
+      : p)),
+  };
+}
+
+test('B75.2：reroll_count —— 改判入计数，回合末结算发印记（不在改判那一刻发）', () => {
+  let s = withGoal(withPassive(mk(4, 7), 0, { op: 'modify_judgement', target: 0 }), 0, 'reroll_count', 1);
+  assert.deepEqual(goalOf(s, 0), { kind: 'reroll_count', count: 1 }, '前提：目标已派生');
+  const r = performAbility(s, 0);
+  assert.ok(r.ok, '前提：织梦者发动改判必须成功：' + String(r.note));
+  s = r.state;
+  assert.equal(s.players[0]!.counters.rerollCount, 1, '改判必须真的写计数器（被改判者 = 自己）');
+  assert.equal(s.players[0]!.hasMark, false, '改判那一刻**不发**印记（发奖只在 round_end 结算点）');
+  s = settleRoundEndGoals(s);
+  assert.equal(s.players[0]!.hasMark, true, '改判够数 ⇒ 回合末发印记');
+});
+
+test('B75.2：reroll_count —— 没够数不发印记（防把「有目标」当「达成」）', () => {
+  let s = withGoal(withPassive(mk(4, 7), 0, { op: 'modify_judgement', target: 0 }), 0, 'reroll_count', 2);
+  const r = performAbility(s, 0);
+  assert.ok(r.ok, '前提：发动成功：' + String(r.note));
+  s = settleRoundEndGoals(r.state);
+  assert.equal(s.players[0]!.hasMark, false, '1 < 2 ⇒ 不得发印记');
+});
+
+test('B75.2：steal_count —— 偷取入**偷取者**的计数，回合末结算发印记', () => {
+  let s = withGoal(withPassive(mk(4, 7), 0, { op: 'transfer_resource', amount: 1 }), 0, 'steal_count', 1);
+  const victim = s.players[1];
+  assert.ok(victim !== undefined && victim.resource >= 1, '前提：目标须有灵枢');
+  assert.deepEqual(goalOf(s, 0), { kind: 'steal_count', count: 1 }, '前提：目标已派生');
+  const r = performAbility(s, 0, 1);
+  assert.ok(r.ok, '前提：窃火者发动偷取必须成功：' + String(r.note));
+  s = r.state;
+  assert.equal(s.players[0]!.counters.stolenTotal, 1, '偷取必须写**偷取者**的计数器');
+  assert.equal(s.players[1]!.counters.stolenTotal, undefined, '受害者不得被写计数器（B61 口径）');
+  assert.equal(s.players[0]!.hasMark, false, '偷取那一刻**不发**印记（发奖只在 round_end 结算点）');
+  s = settleRoundEndGoals(s);
+  assert.equal(s.players[0]!.hasMark, true, '偷取够数 ⇒ 回合末发印记');
+});
+
+test('B75.2：steal_count —— 没够数不发印记（防把「有目标」当「达成」）', () => {
+  let s = withGoal(withPassive(mk(4, 7), 0, { op: 'transfer_resource', amount: 1 }), 0, 'steal_count', 2);
+  const r = performAbility(s, 0, 1);
+  assert.ok(r.ok, '前提：发动成功：' + String(r.note));
+  s = settleRoundEndGoals(r.state);
+  assert.equal(s.players[0]!.hasMark, false, '1 < 2 ⇒ 不得发印记');
 });

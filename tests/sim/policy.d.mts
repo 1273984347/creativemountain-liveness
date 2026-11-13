@@ -234,6 +234,14 @@ export declare function shouldVeto(state: State, seat: number): boolean;
 /** 约 1/4 的行动机会发动被动；未发动 ⇒ `null`（发动成功带回新 state 与 op）。 */
 export declare function maybeUseAbility(s: State, seat: number): { state: State; op: string } | null;
 
+/**
+ * B75.2：目标感知追goal —— `steal_count`（窃火者偷最富对手）与 `reroll_count`（织梦者改判）。
+ * **达阈即停**（`counters ≥ goal.count` ⇒ `null`）；**不抽随机数**（决策由状态决定，零随机流扰动）；
+ * `performAbility` 失败（每回合闸门 / 目标灵枢不足 / 待认证锁定）⇒ `null`，调用方回落行动带。
+ * ⚠️ 占位启发式，非最优打法，也不代表人类玩家的追goal行为（同 B75.1 §6 的声明）。
+ */
+export declare function goalPursuit(s: State, seat: number): { state: State; op: string } | null;
+
 /** 推进手番；若结算后进入对峙 ⇒ AI 选牌后继续推进（回合阻塞 + 关隘的闭环）。 */
 export declare function advanceWithDuel(s: State, mode: RuleMode, opts?: AdvanceOpts): Promise<State>;
 

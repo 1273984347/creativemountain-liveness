@@ -386,6 +386,48 @@ export function maybeUseAbility(s, seat) {
   return r.ok ? { state: r.state, op } : null;
 }
 
+/**
+ * B75.2：目标感知追goal —— `reroll_count` / `steal_count` 两目标的「策略调优」收口
+ * （B75 批次记录 §7 遗留 4：两目标此前「阈值/策略未达标」——AI 被动使用率 ~4%/手番，
+ *   阈值 5/3 在整局尺度上不可达 ⇒ 平衡报告达成 0 人次）。
+ *
+ * 语义（与 B75 装备分支同一范式）：
+ *   · **达阈即停**：`counters ≥ goal.count` ⇒ null（不无限占行动、不拖慢全局节奏）；
+ *   · **不抽随机数**：决策由状态决定（`Rng.next()` 可变 ⇒ 零扰动，见 equip 分支同款注释）；
+ *   · **失败回落**：`performAbility` 失败（每回合闸门 / 目标灵枢不足）⇒ null，调用方回落行动带；
+ *   · **只服务两类目标**：`equip_count` 归 B75 装备分支，本函数不叠用。
+ *
+ * ⚠️ 这是**占位启发式**（非最优、人类玩家行为未建模 —— 同 B75.1 §6 的声明）：
+ *   窃火者「有目标就偷最富者、偷满为止」；织梦者「未达标就改判、改满为止」。
+ */
+export function goalPursuit(s, seat) {
+  const goal = goalOf(s, seat);
+  if (goal === null || goal === undefined) { return null; }
+  const p = s.players[seat];
+  if (p === undefined || !p.alive || p.pendingCert) { return null; }
+  const passive = p.flags?.passive;
+  if (passive === undefined || passive === null) { return null; }
+  const counters = p.counters ?? {};
+  if (goal.kind === 'steal_count' && passive.op === 'transfer_resource') {
+    if ((counters.stolenTotal ?? 0) >= goal.count) { return null; }
+    const amount = passive.amount ?? 1;
+    // 窃火者：选灵枢最多的对手偷（与 maybeUseAbility 的选择器同口径：平手取序靠前）
+    const others = s.players.filter((x) => x.alive && x.seat !== seat && (x.resource ?? 0) >= amount);
+    let best = others[0];
+    for (const x of others) { if (best !== undefined && (x.resource ?? 0) > (best.resource ?? 0)) { best = x; } }
+    if (best === undefined) { return null; }
+    const r = performAbility(s, seat, best.seat);
+    return r.ok ? { state: r.state, op: String(passive.op) } : null;
+  }
+  if (goal.kind === 'reroll_count' && passive.op === 'modify_judgement') {
+    if ((counters.rerollCount ?? 0) >= goal.count) { return null; }
+    // 织梦者：目标缺省 = 自己（abilities.ts 的 case 分支内部传 `target: seat`）
+    const r = performAbility(s, seat);
+    return r.ok ? { state: r.state, op: String(passive.op) } : null;
+  }
+  return null;
+}
+
 /** 推进手番；若结算后进入对峙 ⇒ AI 选牌后继续推进（回合阻塞的闭环）。 */
 export async function advanceWithDuel(s, mode, opts) {
   // ⚠️ B18：委托引擎层统一出口（对峙 + 关隘闭环都在里面）——
