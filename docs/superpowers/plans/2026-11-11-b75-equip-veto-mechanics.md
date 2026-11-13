@@ -1099,12 +1099,29 @@ export function shouldVeto(state, seat) {
 Run: `node --test tests/engine/policy-ai.test.ts tests/engine/policy-injection.test.ts tests/gates/sim-record.test.ts`
 Expected: 全绿。**若**有固定 seed 的策略用例因「equip_count 身份改走装备」而红：先确认差异可归因于本批的行为变更（记录器/终局读数），把该用例的期望值随行为一起更新并在批次记录里注明——**不得**为了保绿而关掉装备分支。
 
+> ⚠️ **施工时新增（计划缺口 #7）**：本任务把两个决策接进 AI 后，`tests/engine/balance-regression.test.ts`
+> 的两条平衡锁当场判红（该文件不在本任务的文件表里）：
+> 同一固定样本（2000 局 × 4 主题 × 8 人）实测分解 ⇒ 位次极差 4.4（两决策关）→ 4.8（只开否决）→ 5.3（都开）；
+> 身份极差 18.6pp（仲裁者 24.3–27.6%，最弱身份 ≈9%）。
+> ⇒ 按用户裁定：**本批不改否决语义**，两条锁放宽为 位次 <5.5pp、身份 <20pp，机制原因与分解写进注释，
+> 并把「否决强度过高」登记为后续调平衡议题（B75 设计 §13 R7 三条候选补偿）。
+> 因此 Task 9 的「阈值不动」只适用于**门 ⑫/⑪ 的 CLI 判据**，两条**测试内锁**已在本任务随行为一起改。
+> ⚠️ 测量纪律：不得用 `sed 's/roll < 0.925/…/'` 这类全文替换切变体 —— 同一文件里 `0.85/0.925` 出现在
+>   多个 band 边界上，会连带改掉问天带（实测踩过：一度把 `else if (roll < 0.85)` 改成 `0.925`，
+>   装备分支随之变成死代码，四组读数全废）。变体测量只用带唯一上下文的编辑器改**那一行**。
+
 - [ ] **Step 5: 提交**
 
 ```bash
-git add tests/sim/policy.mjs tests/engine/policy-ai.test.ts
+git add tests/sim/policy.mjs tests/sim/policy.d.mts tests/engine/policy-ai.test.ts \
+  tests/engine/balance-regression.test.ts \
+  docs/superpowers/specs/2026-11-11-b75-equip-veto-mechanics-design.md \
+  docs/superpowers/plans/2026-11-11-b75-equip-veto-mechanics.md
 git commit -m "feat(B75): 模拟器 AI —— equip_count 身份概率装备、仲裁者自保否决"
 ```
+
+> 施工时补：`.mjs` 的新导出必须同步 `tests/sim/policy.d.mts`（否则 门① tsc 判红 —— 项目既有约定）；
+> 两条平衡锁与 R7 登记随本任务一起改（原因见 Step 4 的缺口 #7 注记）。
 
 ---
 
@@ -1232,7 +1249,13 @@ node tests/sim/run.mjs --position-spread --games 100 --check
 node docs/沉淀/verify-trial-reserve-critical.mjs
 ```
 
-Expected: 三条 PASS；把门⑫ 的实测极差/RMS 写进 `tests/sim/run.mjs` 的注释（阈值**不动**）。
+Expected: 三条 PASS；把门⑫ 的实测极差/RMS 写进 `tests/sim/run.mjs` 的注释（CLI 判据的阈值不动；
+`balance-regression.test.ts` 的两条**测试内锁**已在 Task 7 按实测放宽并登记 R7，本任务不得再动它们）。
+
+- [ ] **Step 3b: 复核两条平衡锁与实测仍然相容**
+
+重生成报告后 `node --test tests/engine/balance-regression.test.ts` 必须全绿；若位次极差再涨过 5.5pp 或身份极差涨过 20pp，
+**停下报告**（那是机制强度问题，属 R7 的调平衡批次，不在本批范围内自行放宽）。
 
 - [ ] **Step 4: 更新发布基线（B35 流程）**
 

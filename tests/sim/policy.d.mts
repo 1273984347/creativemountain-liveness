@@ -217,6 +217,18 @@ export declare function certificationTurn(
 /** 从手牌里挑一张**付得起**且优先级最高的牌；无可打牌 ⇒ `undefined`。 */
 export declare function pickPlayableCard(hand: readonly Card[], resource: number): Card | undefined;
 
+/**
+ * B75：要装备哪张手牌（取「最不需要打出」的可支付、非位移牌）。
+ * 手牌 < 2 或无可装备牌 ⇒ `undefined`。位移判定与引擎同源（`cardHasMovement`）。
+ */
+export declare function pickEquipCard(state: State, seat: number): Card | undefined;
+
+/**
+ * B75：仲裁者是否应在**本次**山议使用否决（存活 ∧ 持权 ∧ 未用过 ∧ 票已齐 ∧ 本人被最高票）。
+ * 判据与引擎 `useCouncilVeto` 逐条一致 —— 不一致就是「启发式多发一次必拒动作」。
+ */
+export declare function shouldVeto(state: State, seat: number): boolean;
+
 /** 约 1/4 的行动机会发动被动；未发动 ⇒ `null`（发动成功带回新 state 与 op）。 */
 export declare function maybeUseAbility(s: State, seat: number): { state: State; op: string } | null;
 

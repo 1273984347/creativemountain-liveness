@@ -13,7 +13,9 @@ import { cardHasMovement } from '../../engine/core/targeting.ts';
 import { GOALS, isGoalAchieved } from '../../engine/goals/registry.ts';
 import { performAbility } from '../../engine/core/abilities.ts';
 import { advanceAuto } from '../../engine/core/advance.ts';
-import { castVote, resolveCouncil } from '../../engine/core/council.ts';
+import { castVote, resolveCouncil, topVoted, useCouncilVeto } from '../../engine/core/council.ts';
+// ⚠️ B75：装备分支只给 `equip_count` 目标的身份用 ⇒ 需要读**运行时目标**（flags.goal 由 setup 派生）。
+import { goalOf } from '../../engine/goals/settle.ts';
 import {
   certifySign, certifyChallenge, certifyAnswer, certifyAppeal, certifyAppealVote, certifyMutualSign,
   certifyAbstain, resolveAppeals, isCertifier, hasUsedCertificationTurn,
@@ -132,6 +134,16 @@ export async function councilTurn(s, policy, counters, hit) {
     record(s, p.seat, actionKey({ type: 'VOTE', actor: p.seat, target: t }));
     const r = castVote(s, p.seat, t);
     if (r.ok) { s = r.state; }
+  }
+  // ⚠️ B75：仲裁者自保否决 —— 位置在**投票循环之后、结算之前**（引擎的硬前置就是「票已齐」）。
+  //   最多一人使用（`vetoUsed` 每局一次 ⇒ 循环里成功一次就 break）；否决不写决策记录器：
+  //   记录器的 council 面口径是「投票」，把否决混进去会让 B70 那类读数变成两种语义共用一个键空间。
+  for (const p of s.players.filter((x) => x.alive)) {
+    if (shouldVeto(s, p.seat)) {
+      const v = useCouncilVeto(s, p.seat);
+      if (v.ok) { s = v.state; }
+      break;
+    }
   }
   const rr = resolveCouncil(s);
   return rr.ok ? rr.state : s;
@@ -252,35 +264,76 @@ export async function certificationTurn(s, policy, counters, hit) {
  * @param {number} resource 当前灵枢
  * @returns {object|undefined} 选中的牌（无可打牌 ⇒ undefined）
  */
+/**
+ * 牌的启发式优先级（3=位移 / 2=压制 / 1=其它）。
+ *
+ * ⚠️ B75：从 `pickPlayableCard` 内部提到模块级 —— **装备选牌要用同一把尺反向取「最不需要打出」的一张**；
+ *   留在函数内部就得再抄一份判据（两份尺子迟早漂移）。行为与提出前逐字相同。
+ */
+function rankOf(card) {
+  const ops = new Set();
+  const collect = (list) => {
+    for (const eff of list) {
+      ops.add(eff.op);
+      if (eff.op === 'sequence' && Array.isArray(eff.effects)) { collect(eff.effects); }
+    }
+  };
+  collect(card.effects);
+  // 位移类（推进登顶 ⇒ 影响活人席归属）
+  for (const op of ['move_forward', 'move_by_dice', 'teleport', 'swap_position']) {
+    if (ops.has(op)) { return 3; }
+  }
+  // 压制类（削弱对手）
+  for (const op of ['damage', 'poison', 'slow', 'silence', 'skip_turn']) {
+    if (ops.has(op)) { return 2; }
+  }
+  return 1;
+}
+
+/**
+ * B75：要装备哪张手牌 —— 取「最不需要打出」的一张可支付、非位移牌。
+ *
+ * ⚠️ 手牌 < 2 时**不装备**：留一张牌才有事可做（装备掉唯一的手牌会把行动面变成空集）。
+ * ⚠️ 位移判定用 `cardHasMovement`（引擎/枚举同源，覆盖 utility 与嵌套效果），
+ *   **不用** `rankOf(c) < 3` —— rankOf 只认 4 个位移 op，会漏 `move_backward` / `move_to_tile` /
+ *   `move_relative_to` 以及 conditional / count 的嵌套 ⇒ 判据更弱就不是同一个口径。
+ * ⚠️ 资源：装备本身免费，但**付不起的牌一旦装备就永远打不出去** ⇒ 只在付得起的牌里挑
+ *   （与出牌共用「能不能支付」这条现实约束）。
+ */
+export function pickEquipCard(state, seat) {
+  const p = state.players[seat];
+  if (p === undefined || p.hand.length < 2) { return undefined; }
+  const candidates = p.hand.filter((c) => c.cost <= p.resource && !cardHasMovement(c));
+  if (candidates.length === 0) { return undefined; }
+  return candidates.slice().sort((a, b) => rankOf(a) - rankOf(b))[0];
+}
+
+/**
+ * B75：仲裁者是否应在**本次**山议使用否决 —— 自保口径（自己被顶上最高票）。
+ *
+ * ⚠️ 判据与引擎 `useCouncilVeto` 逐条一致（含「所有存活玩家都已投票」的 `every` 判据）：
+ *   启发式在这里多发一次「引擎必拒」的尝试不是错误，但会白耗一次决策记录 ⇒ 前置对齐更省。
+ */
+export function shouldVeto(state, seat) {
+  const c = state.council;
+  if (c.resolved || c.vetoUsed || (c.vetoBy ?? null) !== null) { return false; }
+  const p = state.players[seat];
+  if (p === undefined || !p.alive || p.flags.canVeto !== true) { return false; }
+  const allVoted = state.players.filter((x) => x.alive).every((x) => c.votes[x.seat] !== undefined);
+  if (!allVoted) { return false; }
+  return topVoted(state).includes(seat);
+}
+
 export function pickPlayableCard(hand, resource) {
   const affordable = hand.filter((c) => c.cost <= resource);
   // ⚠️ 无可打牌时返回 **undefined**（不是 null）⇒ 与调用点的 `card === undefined` 判据一致
   //   （返回 null 会让调用点漏判 ⇒ 读 `card.id` 抛 TypeError）。
   if (affordable.length === 0) { return undefined; }
-  const rank = (card) => {
-    const ops = new Set();
-    const collect = (list) => {
-      for (const eff of list) {
-        ops.add(eff.op);
-        if (eff.op === 'sequence' && Array.isArray(eff.effects)) { collect(eff.effects); }
-      }
-    };
-    collect(card.effects);
-    // 位移类（推进登顶 ⇒ 影响活人席归属）
-    for (const op of ['move_forward', 'move_by_dice', 'teleport', 'swap_position']) {
-      if (ops.has(op)) { return 3; }
-    }
-    // 压制类（削弱对手）
-    for (const op of ['damage', 'poison', 'slow', 'silence', 'skip_turn']) {
-      if (ops.has(op)) { return 2; }
-    }
-    return 1;
-  };
   let best = null;
   let bestRank = 0;
   let bestCost = Infinity;
   for (const card of affordable) {
-    const r = rank(card);
+    const r = rankOf(card);
     if (r > bestRank || (r === bestRank && card.cost < bestCost)) {
       best = card;
       bestRank = r;
@@ -538,6 +591,22 @@ export async function playOne(theme, players, seed, gateReserve, policy) {
       const rowAsk = recorder === null ? undefined : recorder[recAsk];
       if (rowAsk !== undefined) { rowAsk.face = s.lastDice ?? null; }
     } else {
+      // ⚠️ B75：`equip_count` 身份的装备分支 —— 把 0.85–1.0 的出牌带**二分**（`roll < 0.925` ⇒ 装备）。
+      //   ⚠️ **不额外抽随机数**：`Rng.next()` 是可变对象（engine/core/dice.ts），
+      //      再掷一次会移动整条 rng 轨迹 ⇒ 门 ⑨ 的固定 seed 读数与配对比较全部失真。
+      //      用同一个 `roll` 划带 ⇒ 随机流零扰动，只是这半段的选择从「出牌」变成「装备」。
+      //   ⚠️ 本分支自带 `advanceWithDuel` + `continue`（与待认证锁定分支同款），**不得**再落回出牌块。
+      const goal = goalOf(s, seat);
+      const equipped = s.players[seat]?.counters.equipsTotal ?? 0;
+      if (goal !== null && goal.kind === 'equip_count' && equipped < goal.count && roll < 0.925) {
+        const toEquip = pickEquipCard(s, seat);
+        if (toEquip !== undefined) {
+          record(s, seat, actionKey({ type: 'EQUIP_CARD', actor: seat, cardId: toEquip.id }));
+          s = performAction(s, seat, 'equip', { cardId: toEquip.id });
+          s = await advanceWithDuel(s, 'standard', { gateReserve });
+          continue;
+        }
+      }
       // 基线本来就要出牌 ⇒ **只有这里**换「选哪张牌 + 打谁」。
       // ⚠️ 候选在此站点收窄为**只含 `PLAY_CARD`**（`askPolicy` 的第 6 参 filter）—— 规格 §4
       //   「本面只决定出哪张牌」。`FACE_TYPES` 本身不动（它同时是「面 → 动作类型」的文档）。
