@@ -15,6 +15,8 @@ import { judgeBarrier, pendingBarrier } from './barrier.ts';
 import { startDuel } from './duel.ts';
 import { drawCards, discardDownToLimit } from './hand.ts';
 import { gainResource, spendResource } from './resource.ts';
+// ⚠️ B75：计数写入的唯一出处（不得在分支里手写 `(p.counters.X ?? 0) + 1`）。
+import { bumpCounterOf } from './counters.ts';
 import { openCouncil, resolveCouncil, shouldHoldCouncil } from './council.ts';
 import { advanceCertificationRound, enterPendingCertification } from './certification.ts';
 import { resolveVictory } from './victory.ts';
@@ -195,7 +197,7 @@ function retarget(effect: Effect, target: number | undefined): Effect {
 export function performAction(
   state: State,
   seat: number,
-  action: 'move' | 'ask' | 'act',
+  action: 'move' | 'ask' | 'act' | 'equip',
   payload: { readonly cardId?: string; readonly target?: number } = {},
 ): State {
   const player = state.players[seat];
@@ -284,6 +286,31 @@ export function performAction(
         next = applyEffect({ state: next, actor: seat, sourceCard: card }, retarget(eff, payload.target)).state;
       }
       next = { ...next, log: [...next.log, { round: next.round, turnIndex: next.turnIndex, actor: seat, kind: 'card', message: `行事：打出「${card.name}」` }] };
+      break;
+    }
+    case 'equip': {
+      // ⚠️ B75（设计 §4.1）：装备 = 把手牌**转为常驻装备**（公开可见、无被动效果、免费、不占手牌上限）。
+      //   本分支**必须**位于上面两条早退（`pendingGate` / `pendingBarrier`）之后：
+      //   规格 §3.5 / §3.4 说「到达未通过的关隘 / 可放印裂隙时该手番已暂停」（通道选择属**结算阶段**，
+      //   不是行动阶段）⇒ 这一手番的行动已在「到达」时用掉 ⇒ 不得再装备（提到早退之前就等于同一手番两次行动）。
+      //   反之**不查** `pendingCert`：装备不产生位移（§5.1 只禁位移），锁定期间仍该能装备。
+      const cardId = payload.cardId;
+      if (cardId === undefined) { return state; }   // ⚠️ 引用相等 = `probeAction` 认得的拒绝信号
+      if (!player.alive) { return state; }
+      const card = player.hand.find((c) => c.id === cardId);
+      if (card === undefined) { return state; }
+      next = {
+        ...state,
+        players: state.players.map((p) => (p.seat === seat
+          ? { ...p, hand: p.hand.filter((c) => c.id !== cardId), equipment: [...p.equipment, card] }
+          : p)),
+      };
+      // 计数走唯一出处（`equipsTotal` 是规格 §6.4 的内建计数器，`equip_count` 目标的判据）
+      next = bumpCounterOf(next, seat, 'equipsTotal', 1);
+      next = {
+        ...next,
+        log: [...next.log, { round: next.round, turnIndex: next.turnIndex, actor: seat, kind: 'equip', message: `装备「${card.name}」` }],
+      };
       break;
     }
   }
