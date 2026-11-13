@@ -224,8 +224,10 @@ export declare function pickPlayableCard(hand: readonly Card[], resource: number
 export declare function pickEquipCard(state: State, seat: number): Card | undefined;
 
 /**
- * B75：仲裁者是否应在**本次**山议使用否决（存活 ∧ 持权 ∧ 未用过 ∧ 票已齐 ∧ 本人被最高票）。
- * 判据与引擎 `useCouncilVeto` 逐条一致 —— 不一致就是「启发式多发一次必拒动作」。
+ * B75.1：仲裁者是否应在**本次**山议使用否决 —— 只可救他人、不可自救（规则禁止自救）。
+ * 前置与引擎 `useCouncilVeto` 逐条一致（存活 ∧ 持权 ∧ 未用过 ∧ 票已齐 ∧ 自己不在最高票里）；
+ * 前置全部成立时按 **0.15 的占位概率**决定是否使用（会消耗一次 `state.rng.next()` ⇒ 随机流有分叉，
+ * 详见函数注释与批次记录）。⚠️ 占位策略，不代表最优打法，也不代表人类玩家的否决行为。
  */
 export declare function shouldVeto(state: State, seat: number): boolean;
 

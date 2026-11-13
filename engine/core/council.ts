@@ -81,6 +81,11 @@ export function useCouncilVeto(state: State, actor: number): CouncilResult {
   if (c.vetoUsed) { return fail(state, '本局否决已使用'); }
   const allVoted = state.players.filter((x) => x.alive).every((x) => c.votes[x.seat] !== undefined);
   if (!allVoted) { return fail(state, '等待所有玩家投票后才能使用否决'); }
+  // ⚠️ B75.1（R7 裁定 · 方案 3）：否决**只可救他人，不可自救**。
+  //   本条把「自己被顶上最高票 ⇒ 每局一次的放逐免疫」这条最强的自保线抽掉 ⇒
+  //   仲裁者的胜率从 24–28% 回落，同时保留「救他人」的战术价值（放逐谁仍然改变席位分布）。
+  //   ⚠️ 判据用 `topVoted`（含**并列**最高票的全部座位）⇒ 并列时也不许自救。
+  if (topVoted(state).includes(actor)) { return fail(state, '你不能为自己使用否决（只可救他人）'); }
   return succeed({ ...state, council: { ...c, vetoUsed: true, vetoBy: actor } }, '仲裁者否决（每局 1 次）');
 }
 

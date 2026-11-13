@@ -31,6 +31,9 @@ import { abilityAvailability, activeAbilityId } from '../engine/core/passives.ts
 import { actionKey } from '../engine/core/action-key.ts';
 import { isRoundEnd } from '../engine/core/round.ts';
 import { duelPicked, isDuelParticipant } from '../engine/core/duel.ts';
+// ⚠️ B75.1：计票真值只有一份（`topVoted` 与引擎 `useCouncilVeto` 共用）；本文件不 import `legal.ts`
+//   ——「UI 门禁的独立实现」这条红线针对的是**枚举层**，不是引擎的规则函数。
+import { topVoted } from '../engine/core/council.ts';
 
 /**
  * 行动窗口的**拒因**（null = 窗口开着）：
@@ -294,6 +297,10 @@ export function uiBlockNotice(state: State, seat: number, action: Action): strin
       if (me === undefined || !me.alive) { return '你已出局。'; }
       if (me.flags.canVeto !== true) { return '你没有否决特权。'; }
       if (state.council.vetoUsed === true) { return '本局否决已使用。'; }
+      // ⚠️ B75.1：不自救。放在「等待投票」之前是有意的排序差（玩家最该先听到的是「这条规则不为你开」）；
+      //   引擎 `useCouncilVeto` 把它排在 allVoted 之后 —— 顺序只决定先说哪一句，布尔结果两处一致
+      //   （这条纪律见本文件头部；三层同判由 legal-probe 的候选集合相等与判定形状层钉住）。
+      if (topVoted(state).includes(seat)) { return '你不能为自己使用否决（只可救他人）。'; }
       const allVoted = state.players.filter((p) => p.alive)
         .every((p) => state.council.votes[p.seat] !== undefined);
       return allVoted ? null : '等待所有玩家投票后才能使用否决。';
@@ -464,7 +471,9 @@ export function uiCandidates(state: State, seat: number): Action[] {
     }
     const allVoted = state.players.filter((p) => p.alive)
       .every((p) => state.council.votes[p.seat] !== undefined);
-    if (allVoted && state.council.vetoUsed !== true && me.flags.canVeto === true) {
+    // ⚠️ B75.1：自救不发候选（与引擎 `useCouncilVeto` / 枚举 `councilCandidates` 同判据）。
+    if (allVoted && state.council.vetoUsed !== true && me.flags.canVeto === true
+      && !topVoted(state).includes(seat)) {
       out.push({ type: 'COUNCIL_VETO', actor: seat });
     }
   }

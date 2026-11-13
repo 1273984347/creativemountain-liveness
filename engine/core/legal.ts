@@ -37,6 +37,8 @@ import { cardHasMovement, cardNeedsTarget, targetCandidates } from './targeting.
 import { abilityAvailability, activeAbilityId } from './passives.ts';
 import { hasUsedCertificationTurn, isCertifier } from './certification.ts';
 import { duelPicked, isDuelParticipant } from './duel.ts';
+// ⚠️ B75.1：否决的「不自救」判据与引擎 `useCouncilVeto` 同源（同一份 `topVoted`，不另写计票）。
+import { topVoted } from './council.ts';
 import { isRoundEnd } from './round.ts';
 import { pendingGate } from './gate.ts';
 import { pendingBarrier } from './barrier.ts';
@@ -208,7 +210,9 @@ function councilCandidates(state: State, seat: number): Action[] {
   }
   const allVoted = state.players.filter((p) => p.alive)
     .every((p) => state.council.votes[p.seat] !== undefined);
-  if (allVoted && state.council.vetoUsed !== true && me.flags.canVeto === true) {
+  // ⚠️ B75.1：自救被引擎拒 ⇒ 粗筛也不得发（发了就是死选项，且会让「枚举的每条都被引擎接受」红）。
+  if (allVoted && state.council.vetoUsed !== true && me.flags.canVeto === true
+    && !topVoted(state).includes(seat)) {
     out.push({ type: 'COUNCIL_VETO', actor: seat });
   }
   return out;

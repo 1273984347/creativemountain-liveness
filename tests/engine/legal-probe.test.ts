@@ -6,7 +6,7 @@ import { resolve } from 'node:path';
 import { isolatedState, probeAction } from '../../engine/core/probe.ts';
 import { advanceTurn, performAction } from '../../engine/core/turn-runner.ts';
 import { startDuel, submitDuelCard } from '../../engine/core/duel.ts';
-import { castVote, openCouncil, resolveCouncil } from '../../engine/core/council.ts';
+import { castVote, openCouncil, resolveCouncil, topVoted as topVotedOf } from '../../engine/core/council.ts';
 import { currentPlayer, isRoundEnd } from '../../engine/core/round.ts';
 import {
   appealedScene, challengedScene, councilScene, exiledScene, gatePayOnlyScene, gateScene, lockedScene, mk, pendingScene, putPending,
@@ -870,6 +870,8 @@ function driftScenes(seed: number): State[] {
     challengedThenPendingScene(), coPendingAppealScene(),
     starvedCertScene(seed), appealVoteCastScene(seed),
     exiledCouncilAppealScene(seed), councilVotedActionPanelScene(seed),
+    // ⚠️ B75.1：否决的「自救不发 / 救他人要发」两条形状都进守卫（只进前者 ⇒ 两侧同空集，等于没测）
+    councilVetoSelfRescueScene(seed), councilVetoSaveOtherScene(seed),
     // ⚠️ B53：加入**关隘局面** ⇒ 「COMPARE 是否枚举」那一面不再恒为空集（E87）
     gateScene(4, seed),
   ];
@@ -1093,6 +1095,49 @@ function councilVotedActionPanelScene(seed: number): State {
     '引擎侧：座 0 已投过票 ⇒ 不再给 VOTE');
   assert.ok(getLegalActions(s, 1).some((a) => a.type === 'VOTE'),
     '对照：座 1 未投票 ⇒ VOTE 仍在（本局面不是「全员投完」）');
+  return s;
+}
+
+/**
+ * B75.1：否决的两种形状各进一次漂移守卫（只进「自救」那一条的话，两侧同为空集 ⇒ 守卫失去覆盖面，E87）。
+ *
+ * · `councilVetoSelfRescueScene` —— 持权者**自己**被最高票 ⇒ 两侧都必须**不**发 `COUNCIL_VETO`；
+ * · `councilVetoSaveOtherScene` —— 持权者**别人**被最高票 ⇒ 两侧都必须发（证明上一条不是「整面关掉」蒙对的）。
+ * 两个都由**引擎入口**构造（投票一律走 `castVote`），只挂 `flags.canVeto`（夹具，生产走身份 `rights`）。
+ */
+function councilVetoSceneWithTop(seed: number, holder: number, top: number): State {
+  let s = councilScene(4, seed);
+  s = { ...s, players: s.players.map((p) => (p.seat === holder ? { ...p, flags: { ...p.flags, canVeto: true } } : p)) };
+  for (const p of s.players.filter((x) => x.alive)) {
+    // 被提名者自己也必须投票（票齐是前置）⇒ 投给除自己外的任意存活座位
+    const others = s.players.filter((x) => x.alive && x.seat !== p.seat).map((x) => x.seat);
+    const to = p.seat === top ? (others[0] ?? 0) : top;
+    const r = castVote(s, p.seat, to);
+    assert.ok(r.ok, `councilVetoScene(${holder},${top})：座 ${String(p.seat)} 投票必须成功：` + noteOf(r.note));
+    s = r.state;
+  }
+  // 后置：局面名承诺的形状必须真的成立，否则下面的集合比较是空对空。
+  assert.equal(s.council.resolved, false, 'councilVetoScene：必须是「山议进行中」');
+  for (const p of s.players.filter((x) => x.alive)) {
+    assert.notEqual(s.council.votes[p.seat], undefined, 'councilVetoScene：全员（存活）必须都已投票 ⇒ 前置条件不能悄悄不成立');
+  }
+  return s;
+}
+
+function councilVetoSelfRescueScene(seed: number): State {
+  const s = councilVetoSceneWithTop(seed, 0, 0);
+  assert.ok(topVotedOf(s).includes(0), 'councilVetoSelfRescueScene：座 0 必须真的被最高票（否则测的是别的判据）');
+  assert.equal(getLegalActions(s, 0).some((a) => a.type === 'COUNCIL_VETO'), false,
+    '引擎侧：自救必须被拒 ⇒ 不得进最终候选（发了就是死选项）');
+  return s;
+}
+
+function councilVetoSaveOtherScene(seed: number): State {
+  const s = councilVetoSceneWithTop(seed, 0, 1);
+  assert.ok(topVotedOf(s).includes(1) && !topVotedOf(s).includes(0),
+    'councilVetoSaveOtherScene：被最高票的必须是**别人**（座 1），且座 0 不在最高票里');
+  assert.ok(getLegalActions(s, 0).some((a) => a.type === 'COUNCIL_VETO'),
+    '引擎侧：救他人的否决候选必须真的在册（否则上一条「自救不发」可能是整面关掉蒙对的）');
   return s;
 }
 

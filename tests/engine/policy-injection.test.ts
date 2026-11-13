@@ -82,20 +82,24 @@ test('合法 key ⇒ 真的改道：fallbacks 恒 0，且记录与结局两处�
   setRecorder(rowsOff);
   let off: SimGameResult;
   try {
-    off = await playOne(theme(), 4, 4242, undefined, { face: 'play', seat: 0, decide: async () => null });
+    off = await playOne(theme(), 4, 9001, undefined, { face: 'play', seat: 0, decide: async () => null });
   } finally { setRecorder(null); }
   assert.ok(off.injection.calls > 0, '对照组必须真的被问到');
   assert.equal(off.injection.fallbacks, off.injection.calls, '对照组每次都回落');
 
   // 实验组：交回**候选里最后一条**的合法 key ⇒ 每次问出口都必须改道成功。
   //   ⚠️ C1 之后 play 面只在出牌手番问出口，而候选的**第一条**与本 seed 的启发式选牌恰好重合
-  //   （实测 4242：两者打出的牌逐字相同 ⇒ 结局签名不变，无法证明「改道生效」）⇒ 改用最后一条。
+  //   （实测：两者打出的牌逐字相同 ⇒ 结局签名不变，无法证明「改道生效」）⇒ 改用最后一条。
+  //   ⚠️ **B75.1 换 seed（4242 → 9001）**：仲裁者否决改为「救他人 + 0.15 概率」后会在山议里消耗一次 rng，
+  //   轨迹随之改变；4242 这个 seed 的两臂（改道 / 全回落）**撞到同一个结局签名**（实测 seats/[2]/13 逐字相同）
+  //   ⇒ 「结局必须分歧」这条断言在该 seed 上失去区分力。9001 实测：问出口 2 次、回落 0、胜者座 3 → 座 0
+  //   ⇒ 分歧可观察。**换的是样本不是判据**（判据仍是「记录跟随注入 + 结局分歧」两条）。
   const rowsOn: DecisionRecord[] = [];
   const chosen: string[] = [];
   setRecorder(rowsOn);
   let on: SimGameResult;
   try {
-    on = await playOne(theme(), 4, 4242, undefined, {
+    on = await playOne(theme(), 4, 9001, undefined, {
       face: 'play', seat: 0,
       decide: async (_s, _seat, c) => {
         const last = c[c.length - 1];

@@ -309,10 +309,17 @@ export function pickEquipCard(state, seat) {
 }
 
 /**
- * B75：仲裁者是否应在**本次**山议使用否决 —— 自保口径（自己被顶上最高票）。
+ * B75.1：仲裁者是否应在**本次**山议使用否决 —— 自救被规则禁止后，只剩「救他人」这一种形状。
  *
- * ⚠️ 判据与引擎 `useCouncilVeto` 逐条一致（含「所有存活玩家都已投票」的 `every` 判据）：
- *   启发式在这里多发一次「引擎必拒」的尝试不是错误，但会白耗一次决策记录 ⇒ 前置对齐更省。
+ * ⚠️ 判据与引擎 `useCouncilVeto` 逐条一致（含「所有存活玩家都已投票」的 `every` 判据与 `!topVoted.includes(seat)`）：
+ *   不一致 ⇒ 启发式白白发一次引擎必拒的动作，还多耗一次随机数。
+ * ⚠️ **策略是占位、不是最优**：自救禁了以后，「放逐别人」对仲裁者并无直接收益 ⇒ 纯自利 AI 的最优解是**永远不用**；
+ *   但那样 `veto_success` 又归零（违反完成定义「达成次数 > 0」）。这里取「以 0.15 概率救他人」模拟人类
+ *   「留一个弱的当靶子 / 看不下去」的非理性行为；批次记录里注明**人类玩家的否决行为未建模**。
+ * ⚠️ **随机流代价（如实登记）**：`state.rng.next()` 是可变对象 ⇒ 本条会在「持权者活着 ∧ 票已齐 ∧ 自己不是最高票」时
+ *   消耗一次 rng ⇒ B75.1 的分叉起点就是这里（装备带那条复用同一个 roll，零扰动）。
+ *   判据顺序刻意把 `canVeto` / `vetoUsed` / `allVoted` 都放在抽签**之前** ⇒ 不含权、未票齐的座位一律不消耗，
+ *   每次山议至多多耗一次（只有持权者走到抽签）。
  */
 export function shouldVeto(state, seat) {
   const c = state.council;
@@ -321,7 +328,10 @@ export function shouldVeto(state, seat) {
   if (p === undefined || !p.alive || p.flags.canVeto !== true) { return false; }
   const allVoted = state.players.filter((x) => x.alive).every((x) => c.votes[x.seat] !== undefined);
   if (!allVoted) { return false; }
-  return topVoted(state).includes(seat);
+  const tops = topVoted(state);
+  if (tops.includes(seat)) { return false; }   // B75.1：自救禁止（与引擎同判）
+  if (tops.length === 0) { return false; }     // 无人得票 ⇒ 本次本就不会放逐，白用
+  return state.rng.next() < 0.15;
 }
 
 export function pickPlayableCard(hand, resource) {

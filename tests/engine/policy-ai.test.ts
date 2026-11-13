@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { shouldVeto, pickEquipCard } from '../../tests/sim/policy.mjs';
-import { castVote } from '../../engine/core/council.ts';
+import { castVote, topVoted, useCouncilVeto } from '../../engine/core/council.ts';
 import { cardHasMovement } from '../../engine/core/targeting.ts';
 import { councilScene, mk } from './fixtures.ts';
 import type { State } from '../../engine/core/state.ts';
@@ -23,15 +23,39 @@ function voted(seat: number, target: number, players = 4): State {
   return s;
 }
 
-test('B75：仲裁者被最高票且票已齐 ⇒ shouldVeto 为真', () => {
-  assert.equal(shouldVeto(voted(0, 0), 0), true);
+test('B75.1：自己被最高票 ⇒ shouldVeto 为假（自救禁止，与引擎同判）', () => {
+  // 座 0 持权且被全员投给 ⇒ 引擎会拒自救，AI 也必须跟着不用（否则白耗一次决策记录）
+  assert.equal(shouldVeto(voted(0, 0), 0), false, '自救形状必须为假');
+  assert.equal(useCouncilVeto(voted(0, 0), 0).ok, false, '引擎同判：自救被拒');
 });
 
-test('B75：非持权 / 不是最高票 / 已用过 ⇒ shouldVeto 为假', () => {
+test('B75.1：救他人形状下按固定概率触发（命中与不命中都要出现过 ⇒ 0.15 是真判据，不是恒真/恒假）', () => {
+  // ⚠️ 不硬编码「第几号 seed 必命中」：那等于把 rng 游标写进断言，随机流一改就红。
+  //   改为跨 seed 扫描，要求同时出现 true 与 false ⇒ 既证明 `veto_success` 仍有来源，也证明不是每次都触发。
+  const seen = new Set<boolean>();
+  for (let seed = 7; seed <= 80 && seen.size < 2; seed += 1) {
+    // 座 0 持权、全员将票投给座 1 ⇒ 「救他人」形状（自救已被规则排除）
+    let s: State = { ...councilScene(4, seed) };
+    s = { ...s, players: s.players.map((p) => (p.seat === 0 ? { ...p, flags: { ...p.flags, canVeto: true } } : p)) };
+    for (const p of s.players.filter((x) => x.alive)) {
+      const others = s.players.filter((x) => x.alive && x.seat !== p.seat).map((x) => x.seat);
+      const r = castVote(s, p.seat, p.seat === 1 ? (others[0] ?? 0) : 1);
+      assert.ok(r.ok, `前提：seed=${seed} 座 ${String(p.seat)} 投票必须成功：` + String(r.note));
+      s = r.state;
+    }
+    assert.deepEqual(topVoted(s), [1], `前提：seed=${seed} 时被最高票的必须是座 1（持权者座 0 不自救）`);
+    seen.add(shouldVeto(s, 0));
+  }
+  assert.equal(seen.has(true), true, 'seed 7–80 内必须至少出现一次「用否决」⇒ 否则 veto_success 不可达');
+  assert.equal(seen.has(false), true, '也必须至少出现一次「不用」⇒ 否则概率被写成了恒真');
+});
+
+test('B75：非持权 / 已用过 ⇒ shouldVeto 为假（两条都在抽签之前，判定确定）', () => {
   assert.equal(shouldVeto(voted(0, 0), 2), false, '座 2 不持权');
-  assert.equal(shouldVeto(voted(0, 1), 0), false, '持权但自己不是最高票');
   const used = { ...voted(0, 0), council: { ...voted(0, 0).council, vetoUsed: true, vetoBy: 0 } };
   assert.equal(shouldVeto(used, 0), false, '每局一次');
+  // ⚠️ B75.1 后「自己不是最高票」**不再**推出 false —— 那正是唯一可能用否决的形状（概率决定）；
+  //   原来那条断言已随规则改写进上面两条 B75.1 用例，这里不再重复。
 });
 
 test('B75：票未齐 ⇒ shouldVeto 为假（引擎同判，不发不可达的候选）', () => {

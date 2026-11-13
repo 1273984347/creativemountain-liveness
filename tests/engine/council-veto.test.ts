@@ -2,7 +2,10 @@
 // ⚠️ 测试里直接改 `flags.canVeto` 是**夹具**手段；生产路径由 Task 2 的 `setup` 按身份 `rights` 授予。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { castVote, useCouncilVeto, resolveCouncil } from '../../engine/core/council.ts';
+import { castVote, useCouncilVeto, resolveCouncil, topVoted as topVotedOf } from '../../engine/core/council.ts';
+import { candidatesOf } from '../../engine/core/legal.ts';
+import { uiAllows, uiBlockNotice, uiCandidates } from '../../web/legal-gate.ts';
+import type { Action } from '../../engine/core/action.ts';
 import { councilScene } from './fixtures.ts';
 import type { State } from '../../engine/core/state.ts';
 
@@ -73,23 +76,58 @@ test('B75：否决已用但本次本就不会放逐 ⇒ 不计数', () => {
 });
 
 test('B75：3 人局不受否决影响（扣灵枢分支）', () => {
-  let s = grantVeto(councilScene(3, 7), 0);
+  // ⚠️ B75.1：持权者不能是被最高票的那个（否则测的是「自救被拒」）⇒ 座 2 持权、座 0 被最高票。
+  let s = grantVeto(councilScene(3, 7), 2);
   for (const p of s.players) {
-    const r = castVote(s, p.seat, p.seat === 0 ? 1 : 0);
+    const others = s.players.filter((x) => x.alive && x.seat !== p.seat).map((x) => x.seat);
+    const r = castVote(s, p.seat, p.seat === 0 ? (others[0] ?? 1) : 0);
     assert.ok(r.ok, '前提：3 人局投票必须成功：' + String(r.note));
     s = r.state;
   }
+  assert.deepEqual(topVotedOf(s), [0], '前提：被最高票的是座 0（持权者座 2 不自救）');
   const before = s.players[0]?.resource;
-  const v = useCouncilVeto(s, 0);
-  assert.ok(v.ok);
+  const v = useCouncilVeto(s, 2);
+  assert.ok(v.ok, '前提：救他人形状的否决必须可用：' + String(v.note));
   const res = resolveCouncil(v.state);
   assert.ok(res.ok);
   // ⚠️ counters 初始是 `{}`（动态添加）⇒ 未触发时是 undefined；用 `?? 0` 兼容两种初始形状。
-  assert.equal(res.state.players[0]?.counters.vetoCount ?? 0, 0, '3 人局不涉及放逐 ⇒ 不计数');
+  assert.equal(res.state.players[2]?.counters.vetoCount ?? 0, 0, '3 人局不涉及放逐 ⇒ 不计数');
   assert.equal(res.state.players[0]?.resource, Math.max(0, (before ?? 0) - 2), '3 人局仍走扣灵枢裁定');
 });
 
+test('B75.1：不能为自己使用否决（只可救他人）—— 引擎与 UI 三层同判', () => {
+  // 全员投给座 0（座 0 自己投给别人 ⇒ 票齐），座 0 持权且是最高票 ⇒ 这正是被禁掉的「自救」形状。
+  let s = grantVeto(councilScene(4, 7), 0);
+  for (const p of s.players.filter((x) => x.alive)) {
+    const r = castVote(s, p.seat, p.seat === 0 ? 1 : 0);
+    assert.ok(r.ok, `前提：座 ${String(p.seat)} 投票必须成功：` + String(r.note));
+    s = r.state;
+  }
+  const r = useCouncilVeto(s, 0);
+  assert.equal(r.ok, false, '自救必须被拒');
+  assert.match(String(r.note), /只可救他人/);
+  assert.equal(s.council.vetoUsed, false, '被拒不得消耗「每局一次」（否则白挨一次）');
+  // 三层同步：UI 门禁同一句、两侧候选都不发 ⇒ 自救形状不会变成「按钮亮着但按不动」的死选项
+  const veto: Action = { type: 'COUNCIL_VETO', actor: 0 };
+  assert.equal(uiBlockNotice(s, 0, veto), '你不能为自己使用否决（只可救他人）。');
+  assert.equal(uiAllows(s, 0, veto), false);
+  assert.equal(candidatesOf(s, 0).some((a) => a.type === 'COUNCIL_VETO'), false, '引擎粗筛不得发自救候选');
+  assert.equal(uiCandidates(s, 0).some((a) => a.type === 'COUNCIL_VETO'), false, 'UI 粗筛不得发自救候选');
+  // 反证：同一个「票齐 + 持权」的形状改成**救他人**（持权者是座 1，被最高票的是座 0）⇒ 必须可用
+  let other = grantVeto(councilScene(4, 7), 1);
+  for (const p of other.players.filter((x) => x.alive)) {
+    const others = other.players.filter((x) => x.alive && x.seat !== p.seat).map((x) => x.seat);
+    const to = p.seat === 0 ? (others[0] ?? 1) : 0;
+    const v = castVote(other, p.seat, to);
+    assert.ok(v.ok, `前提：座 ${String(p.seat)} 投票必须成功：` + String(v.note));
+    other = v.state;
+  }
+  assert.deepEqual(topVotedOf(other), [0], '前提：被最高票的必须是座 0（持权者座 1 不在最高票里）');
+  assert.equal(useCouncilVeto(other, 1).ok, true, '被最高票的是别人 ⇒ 否决仍然可用（战术价值保留）');
+});
+
 test('B75：否决后即时目标结算（veto_success 达成发印记）', () => {
+
   let s = readyVeto();
   s = {
     ...s,
