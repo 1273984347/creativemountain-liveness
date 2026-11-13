@@ -143,6 +143,9 @@ function actionPhaseCandidates(state: State, seat: number): Action[] {
     if (!actionWindowOpenExceptLock(state, seat)) { return []; }
     const out: Action[] = [];
     for (const card of p.hand) {
+      // ⚠️ B75：装备**不限位移**（引擎 equip 分支不查 pendingCert ⇒ 锁定期间照样能装备）；
+      //   必须排在 `cardHasMovement` 的 continue **之前**，否则位移牌被跳过的同时也跳过了装备。
+      out.push({ type: 'EQUIP_CARD', actor: seat, cardId: card.id });
       if (cardHasMovement(card)) { continue; }   // 引擎会拒（G-b 已修）⇒ 不发
       if (cardNeedsTarget(card)) {
         for (const target of targetCandidates(state, seat)) {
@@ -160,6 +163,10 @@ function actionPhaseCandidates(state: State, seat: number): Action[] {
     { type: 'ROLL_WHEEL', actor: seat },
   ];
   for (const card of p.hand) {
+    // ⚠️ B75：每张手牌都追加一条装备候选（与 PLAY_CARD 并列，装备免费 ⇒ 不看资源）。
+    //   ⚠️ 候选数由此**按手牌数线性增长** ⇒ `LEGAL_ACTION_CAP=64` 更容易撞上，
+    //   撞上限是**如实截断**（stats.truncated=true），不得放宽上限来「让用例好看」。
+    out.push({ type: 'EQUIP_CARD', actor: seat, cardId: card.id });
     if (cardNeedsTarget(card)) {
       // 需目标的牌**只**按候选目标展开（不给无目标版本：引擎在 `act` 分支原样返回）。
       for (const target of targetCandidates(state, seat)) {
@@ -181,14 +188,30 @@ function actionPhaseCandidates(state: State, seat: number): Action[] {
   return out;
 }
 
-/** 山议投票（§5.6）：未结算 ∧ 本人未投过 ∧ 存活 ⇒ 除自己外的每个存活玩家一票。 */
+/**
+ * 山议面候选（§5.6 + B75 设计 §5.1）。
+ *
+ * · 投票：未结算 ∧ 本人未投过 ∧ 存活 ⇒ 除自己外的每个存活玩家一票。
+ * · 否决（B75）：未结算 ∧ 本人存活 ∧ 持 `canVeto` ∧ 本局未用过 ∧ **所有存活玩家都已投票**。
+ *   ⚠️ 「票齐」用存活者的 `every`，**不用**「票数 ≥ 存活数」——出局者的旧票会残留在 `votes` 里，
+ *     后者会在还有人没投时提前放行（与引擎 `useCouncilVeto` 同款判据，三层不得各写一套口径）。
+ */
 function councilCandidates(state: State, seat: number): Action[] {
-  if (state.council.resolved === true || state.council.votes[seat] !== undefined) { return []; }
+  if (state.council.resolved === true) { return []; }
   const me = state.players[seat];
   if (me === undefined || !me.alive) { return []; }
-  return state.players
-    .filter((p) => p.alive && p.seat !== seat)
-    .map((p): Action => ({ type: 'VOTE', actor: seat, target: p.seat }));
+  const out: Action[] = [];
+  if (state.council.votes[seat] === undefined) {
+    for (const p of state.players) {
+      if (p.alive && p.seat !== seat) { out.push({ type: 'VOTE', actor: seat, target: p.seat }); }
+    }
+  }
+  const allVoted = state.players.filter((p) => p.alive)
+    .every((p) => state.council.votes[p.seat] !== undefined);
+  if (allVoted && state.council.vetoUsed !== true && me.flags.canVeto === true) {
+    out.push({ type: 'COUNCIL_VETO', actor: seat });
+  }
+  return out;
 }
 
 /**

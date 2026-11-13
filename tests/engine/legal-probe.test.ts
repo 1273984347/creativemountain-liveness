@@ -830,7 +830,11 @@ function wideHandScene(handSize: number, players = 4, seed = 7): State {
  */
 function overCapCornerScene(): State {
   const pendingSeats = [1, 2, 3, 4, 5, 6, 7];
-  const wide = withWideHand(putPending(mk(8, 23), pendingSeats), LEGAL_ACTION_CAP - 20);
+  // ⚠️ B75：宽手牌现在**每张产生两条候选**（`play:` + `equip:`，装备免费 ⇒ 连资源归零也照收）
+  //   ⇒ 沿用 `CAP - 20`（=44 张）会把接受数推到正好等于上限，break 真的执行 ⇒ 本角落不再成立。
+  //   取半（44/2 = 22 张 ⇒ 实测 candidates=67 > 64、enumerated=60 < 64、dropped=0）回到同一个角落；
+  //   ⚠️ 只许改**断言数据**，`LEGAL_ACTION_CAP` 本身不得为了用例好看而上调。
+  const wide = withWideHand(putPending(mk(8, 23), pendingSeats), Math.floor((LEGAL_ACTION_CAP - 20) / 2));
   return { ...wide, players: wide.players.map((p) => (p.seat === 0 ? { ...p, resource: 0 } : p)) };
 }
 
@@ -1515,9 +1519,15 @@ const TEMPLATE_WORDS: readonly string[] = [
   // ⚠️ **B67/B68 补记**：新动作的 key 字面段与语义模板词
   //   （`cert:mutual:<座>` ⇒ 'mutual'；`duel:card:<牌id>` ⇒ 'duel' + 'card'）。
   'mutual', 'duel', 'card',
+  // ⚠️ B75：`equip:<牌id>` 与单段 `council_veto` —— 新增的 key 头段必须同步进词表，
+  //   否则封闭世界判据会把「新动作已正确公开」误判成泄漏（这条红过一次，就是 B75 的 equip）。
+  'equip', 'council_veto',
   // 语义模板里的固定词
   '行棋', '掷骰前进', '问天', '掷指令骰', '结束手番', '过隘', '以试炼牌闯关', '入口待', 'B19', '出',
   '发动被动', '山议投座', '给座', '签印', '质疑座', '对座', '弃权', '自己申请复议', '资源',
+  // ⚠️ B75 新增候选文案（`describeAction` 的 EQUIP_CARD / COUNCIL_VETO 两支）⇒ 必须同步进词表，
+  //   否则「封闭世界」判据会把**合规实现**误判为泄漏（词表白名单是硬约束，不是约定）。
+  '装备', '否决本次放逐',
   '复议票', '判定座', '通过', '不通过',
   // ⚠️ **B57 补记**：`describeAction` 补上了 B18 的关隘/裂隙通道分支
   //   （此前缺这两个类型 ⇒ `buildChoice` 遇到它们直接抛错 ⇒ 探针在 8 人局崩）。
@@ -2323,3 +2333,114 @@ test('B70：非对峙面 instructions 不含对峙规则（面感知不得污染
   const q = buildChoice(mk(4, 7), 0);
   assert.doesNotMatch(q.instructions, /红牌胜黑牌/);
 });
+
+// ---------- B75：装备与否决的三层同步（枚举层 / 候选层 / 判定形状层） ----------
+
+test('B75：行动面每张手牌都有一条装备候选，且枚举出的装备必被引擎接受', () => {
+  const s = mk(4, 7);
+  const hand = s.players[0]!.hand;
+  assert.ok(hand.length > 0, '前提：座 0 必须有手牌');
+  assert.equal(candidatesOf(s, 0).filter((a) => a.type === 'EQUIP_CARD').length, hand.length,
+    '粗筛必须按手牌逐张发装备候选');
+  const equipped = getLegalActions(s, 0).filter((a) => a.type === 'EQUIP_CARD');
+  assert.equal(equipped.length, hand.length, '装备候选不得被试跑层误删（引擎 equip 会接受）');
+  for (const a of equipped) {
+    assert.equal(probeAction(s, a).ok, true, `枚举出的装备必须被引擎接受：${actionKey(a)}`);
+  }
+  // 候选层三层同形：UI 的候选集合与引擎粗筛逐条相等
+  assert.deepEqual(uiCandidates(s, 0).filter((a) => a.type === 'EQUIP_CARD').map(actionKey).sort(),
+    candidatesOf(s, 0).filter((a) => a.type === 'EQUIP_CARD').map(actionKey).sort());
+});
+
+test('B75：待认证锁定仍发装备候选（装备不是位移，与引擎同判）', () => {
+  const s = lockedScene();
+  assert.equal(s.players[0]!.pendingCert, true, '前提：夹具必须是锁定局面');
+  const hand = s.players[0]!.hand;
+  // ⚠️ 关键方向：锁定分支里**位移牌也照样能装备** ⇒ 装备候选数 = 手牌数，
+  //   而 PLAY_CARD 候选会因位移判定而变少 ⇒ 两个数量不相等正是本用例要钉住的差别。
+  assert.equal(candidatesOf(s, 0).filter((a) => a.type === 'EQUIP_CARD').length, hand.length);
+  const plays = candidatesOf(s, 0).filter((a) => a.type === 'PLAY_CARD');
+  assert.ok(plays.length <= hand.length, '锁定面的出牌候选只会更少（位移牌被拒）');
+  assert.equal(getLegalActions(s, 0).filter((a) => a.type === 'EQUIP_CARD').length, hand.length,
+    '锁定面的装备候选不得被试跑层误删');
+});
+
+/** 山议面：座 0 持否决权，`allVoted` 决定是否票齐。 */
+function vetoScene(allVoted: boolean): State {
+  let s = { ...councilScene(4, 7) };
+  s = { ...s, players: s.players.map((p) => (p.seat === 0 ? { ...p, flags: { ...p.flags, canVeto: true } } : p)) };
+  for (const p of s.players.filter((x) => x.alive)) {
+    if (!allVoted && p.seat === 2) { continue; }   // 留一个存活者没投 ⇒ 测「未投完」
+    const r = castVote(s, p.seat, p.seat === 1 ? 0 : 1);
+    assert.ok(r.ok, `前提：座 ${String(p.seat)} 投票必须成功：` + String(r.note));
+    s = r.state;
+  }
+  return s;
+}
+
+test('B75：山议面只给持权者发否决候选，且必须所有存活玩家都投完票', () => {
+  const notAll = vetoScene(false);
+  assert.equal(candidatesOf(notAll, 0).some((a) => a.type === 'COUNCIL_VETO'), false,
+    '存活者还有票没投 ⇒ 不得发否决候选');
+  const s = vetoScene(true);
+  assert.equal(candidatesOf(s, 0).some((a) => a.type === 'COUNCIL_VETO'), true, '持权且票齐 ⇒ 必须发');
+  assert.equal(candidatesOf(s, 2).some((a) => a.type === 'COUNCIL_VETO'), false, '非持权者不发');
+  assert.equal(getLegalActions(s, 0).some((a) => a.type === 'COUNCIL_VETO'), true, '试跑层必须放行否决');
+  assert.equal(probeAction(s, { type: 'COUNCIL_VETO', actor: 0 }).ok, true);
+  // 已用过 ⇒ 三层同时收掉（枚举 / UI 候选 / 引擎）
+  const used = { ...s, council: { ...s.council, vetoUsed: true, vetoBy: 0 } };
+  assert.equal(candidatesOf(used, 0).some((a) => a.type === 'COUNCIL_VETO'), false, '每局一次');
+  assert.equal(candidatesOf(used, 2).some((a) => a.type === 'COUNCIL_VETO'), false, '非持权者即便票齐也不发');
+});
+
+test('B75：否决的 UI 拒因矩阵（拒绝不沉默，且与引擎同判）', () => {
+  const veto: Action = { type: 'COUNCIL_VETO', actor: 0 };
+  const s = vetoScene(true);
+  assert.equal(uiAllows(s, 0, veto), true);
+  assert.equal(uiBlockNotice(s, 0, veto), null);
+  assert.equal(uiBlockNotice(s, 2, veto), '你没有否决特权。');
+  assert.equal(uiBlockNotice(vetoScene(false), 0, veto), '等待所有玩家投票后才能使用否决。');
+  const used = { ...s, council: { ...s.council, vetoUsed: true, vetoBy: 0 } };
+  assert.equal(uiBlockNotice(used, 0, veto), '本局否决已使用。');
+  const closed = { ...s, council: { ...s.council, resolved: true } };
+  assert.equal(uiBlockNotice(closed, 0, veto), '山议未在进行中。');
+  // 判定形状层：UI 允许 ⇔ 探针接受（逐条，不只上面这一条）
+  for (const [st, seat] of [[s, 0], [s, 2], [vetoScene(false), 0], [used, 0], [closed, 0]] as Array<[State, number]>) {
+    assert.equal(uiAllows(st, seat, veto), probeAction(st, { ...veto, actor: seat }).ok,
+      `UI 与引擎在座 ${String(seat)} 的否决判定漂移`);
+  }
+});
+
+test('B75：装备的 UI 拒因（锁定不拒、牌不在手才拒、不看资源）', () => {
+  const s = mk(4, 7);
+  const card = s.players[0]!.hand[0]!;
+  assert.equal(uiBlockNotice(s, 0, { type: 'EQUIP_CARD', actor: 0, cardId: card.id }), null);
+  assert.equal(uiBlockNotice(s, 0, { type: 'EQUIP_CARD', actor: 0, cardId: 'no_such_card' }),
+    '手牌里没有这张牌（可能已被弃掉或不属于你）。');
+  // ⚠️ 装备**免费**：即便把资源清零也照样能装备（与出牌不同，不看 cost）——
+  //   反向用例（资源不足 ⇒ 出牌被拒）已在 B65 的用例里钉住。
+  const broke = { ...s, players: s.players.map((p) => (p.seat === 0 ? { ...p, resource: 0 } : p)) };
+  assert.equal(uiBlockNotice(broke, 0, { type: 'EQUIP_CARD', actor: 0, cardId: card.id }), null);
+  // 锁定不是拒因（结构化 code，不匹配文案）
+  const locked = lockedScene();
+  const lc = locked.players[0]!.hand[0]!;
+  assert.equal(uiAllows(locked, 0, { type: 'EQUIP_CARD', actor: 0, cardId: lc.id }), true);
+  assert.equal(probeAction(locked, { type: 'EQUIP_CARD', actor: 0, cardId: lc.id }).ok, true);
+});
+
+test('B75：枚举层与 UI 门禁在装备/否决上逐条同形（漂移守卫的新面）', () => {
+  for (const [label, s, seat] of [
+    ['行动面', mk(4, 7), 0],
+    ['锁定面', lockedScene(), 0],
+    ['山议面（票齐）', vetoScene(true), 0],
+    ['山议面（票齐，非持权）', vetoScene(true), 2],
+    ['山议面（未票齐）', vetoScene(false), 0],
+  ] as Array<[string, State, number]>) {
+    const engine = candidatesOf(s, seat).filter((a) => a.type === 'EQUIP_CARD' || a.type === 'COUNCIL_VETO')
+      .map(actionKey).sort();
+    const ui = uiCandidates(s, seat).filter((a) => a.type === 'EQUIP_CARD' || a.type === 'COUNCIL_VETO')
+      .map(actionKey).sort();
+    assert.deepEqual(ui, engine, `${label}：UI 候选与引擎粗筛漂移`);
+  }
+});
+

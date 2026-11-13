@@ -221,6 +221,15 @@ export function describeAction(state, action, seat) {
       const card = cardOf(action.cardId);
       return cut(`对峙亮牌「${card.name}」（${card.color === 'red' ? '红' : '黑'}·点数${card.rank}）`);
     }
+    // ⚠️ B75：装备 —— 只涉及**自己手牌**的一张（cardOf 已强制绑定 actor ⇒ 不泄露他人手牌）。
+    //   文案必须与「出「X」…」区分开：同一个 key 空间里 `equip:<id>` 与 `play:<id>` 是两个不同选择，
+    //   写成同一句话模型就无从分辨「打出」和「装备」。
+    case 'EQUIP_CARD': {
+      const card = cardOf(action.cardId);
+      return cut(`装备「${card.name}」`);
+    }
+    // ⚠️ B75：否决 —— 无参数动作；语义是「让**本次**山议不放逐任何人」（每局 1 次）。
+    case 'COUNCIL_VETO': return cut('否决本次放逐');
     // ⚠️ **B57 补记**：这两个分支此前**不存在** ⇒ B18 引入关隘/裂隙通道后，
     //   `describeAction` 遇到它们直接抛「未知动作类型」⇒ `buildChoice` 崩 ⇒
     //   **影子决策探针在 8 人局（关隘更常出现）整个崩掉**。

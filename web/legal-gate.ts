@@ -41,14 +41,26 @@ import { duelPicked, isDuelParticipant } from '../engine/core/duel.ts';
  * 这里用共享低层原语 `isRoundEnd` 表达「本 round 还没走完」，而不是抄 `turnIndex < 存活数`
  * （写死会与 B9 修正后的 `isRoundEnd` 口径分叉）。
  */
-function actionWindowRefusal(state: State, seat: number): string | null {
+/**
+ * 行动窗口的**结构化**拒因（B75）。
+ *
+ * ⚠️ 为什么不再只返回文案：调用方需要按「哪一条拒的」分支（装备不认 `pending_cert`，
+ *   出牌只认位移牌例外）⇒ 匹配文案字符串等于把判据押在措辞上，改一个字就漂。
+ *   ⇒ 判据用 `code`，**文案只是给人看的那一句**（逐字沿用原有的）。
+ */
+type WindowRefusal = {
+  readonly code: 'no_seat' | 'dead' | 'pending_cert' | 'duel' | 'phase' | 'round_end';
+  readonly message: string;
+};
+
+function actionWindowRefusal(state: State, seat: number): WindowRefusal | null {
   const p = state.players[seat];
-  if (p === undefined) { return '该座位不存在（人数档位与存档不一致）。'; }
-  if (!p.alive) { return '该玩家已出局。'; }
-  if (p.pendingCert) { return '待认证锁定：不能主动移动，位移类牌与被动不可用（非位移牌仍可打出）。'; }
-  if (state.duel !== null) { return '对峙未结算：双方各自锁定亮牌后才能继续行动。'; }
-  if (state.phase !== '行动') { return '当前阶段不可行事（先完成山议/认证）。'; }
-  if (isRoundEnd(state)) { return '本 round 已走完：等待回合结算。'; }
+  if (p === undefined) { return { code: 'no_seat', message: '该座位不存在（人数档位与存档不一致）。' }; }
+  if (!p.alive) { return { code: 'dead', message: '该玩家已出局。' }; }
+  if (p.pendingCert) { return { code: 'pending_cert', message: '待认证锁定：不能主动移动，位移类牌与被动不可用（非位移牌仍可打出）。' }; }
+  if (state.duel !== null) { return { code: 'duel', message: '对峙未结算：双方各自锁定亮牌后才能继续行动。' }; }
+  if (state.phase !== '行动') { return { code: 'phase', message: '当前阶段不可行事（先完成山议/认证）。' }; }
+  if (isRoundEnd(state)) { return { code: 'round_end', message: '本 round 已走完：等待回合结算。' }; }
   return null;
 }
 
@@ -124,7 +136,7 @@ export function uiBlockNotice(state: State, seat: number, action: Action): strin
   switch (action.type) {
     case 'MOVE':
     case 'ROLL_WHEEL':
-      return actionWindowRefusal(state, seat);
+      return actionWindowRefusal(state, seat)?.message ?? null;
     case 'PLAY_CARD': {
       const card = me?.hand.find((x) => x.id === action.cardId);
       // ⚠️ **B71：锁定者仍可打非位移牌**（引擎 `act` 分支只拒位移牌）⇒ 锁定的拒因不适用于这类牌。
@@ -132,7 +144,7 @@ export function uiBlockNotice(state: State, seat: number, action: Action): strin
       const lockedPlayAllowed = me?.pendingCert === true && card !== undefined
         && !cardHasMovement(card) && state.phase === '行动' && !isRoundEnd(state);
       const window = actionWindowRefusal(state, seat);
-      if (window !== null && !lockedPlayAllowed) { return window; }
+      if (window !== null && !lockedPlayAllowed) { return window.message; }
       if (card === undefined) { return '手牌里没有这张牌（可能已被弃掉或不属于你）。'; }
       // ⚠️ **B65：出牌付费（G-a 收口）** —— 引擎 `act` 分支查 `card.cost`，灵枢不足即拒绝。
       //   ⇒ 这里**必须同步**给出同款拒因（规格 §3.1「行事」/§4.3）⇒ 否则玩家点了才发现被拒。
@@ -168,7 +180,7 @@ export function uiBlockNotice(state: State, seat: number, action: Action): strin
     }
     case 'ABILITY': {
       const window = actionWindowRefusal(state, seat);
-      if (window !== null) { return window; }
+      if (window !== null) { return window.message; }
       const avail = abilityAvailability(state, seat);
       if (!avail.usable) { return '被动不可发动：' + avail.reason; }
       if (action.abilityId !== activeAbilityId(state, seat)) {
@@ -267,8 +279,25 @@ export function uiBlockNotice(state: State, seat: number, action: Action): strin
     // ⚠️ **Task 5 替换本两支的 body**（`case` 标签保留）：写成显式 case 而不是 `default`，
     //   与 `probe.ts` 同款理由 —— 保住 switch 对 `Action['type']` 的穷尽性，
     //   新增动作成员时仍由 tsc 逼出 UI 侧接线（B67/B68 只能靠测试兜的根因）。
-    case 'EQUIP_CARD': throw new Error('UI 门禁未接线：EQUIP_CARD（B75 Task 5）');
-    case 'COUNCIL_VETO': throw new Error('UI 门禁未接线：COUNCIL_VETO（B75 Task 5）');
+    case 'EQUIP_CARD': {
+      // ⚠️ 装备的三个「不看」：**不看 pendingCert**（装备不产生位移，锁定期间照样能装备）、
+      //   **不看资源**（装备免费）、**不看牌类**（位移牌也能装备）。
+      //   其余窗口拒因照旧 ⇒ 按 `code` 判，**不得**匹配 message 文案。
+      const window = actionWindowRefusal(state, seat);
+      if (window !== null && window.code !== 'pending_cert') { return window.message; }
+      return me?.hand.some((c) => c.id === action.cardId)
+        ? null : '手牌里没有这张牌（可能已被弃掉或不属于你）。';
+    }
+    case 'COUNCIL_VETO': {
+      // ⚠️ 判据与引擎 `useCouncilVeto` 逐条同形（顺序决定先说哪一句，不改变布尔结果）。
+      if (state.council.resolved) { return '山议未在进行中。'; }
+      if (me === undefined || !me.alive) { return '你已出局。'; }
+      if (me.flags.canVeto !== true) { return '你没有否决特权。'; }
+      if (state.council.vetoUsed === true) { return '本局否决已使用。'; }
+      const allVoted = state.players.filter((p) => p.alive)
+        .every((p) => state.council.votes[p.seat] !== undefined);
+      return allVoted ? null : '等待所有玩家投票后才能使用否决。';
+    }
   }
 }
 
@@ -386,6 +415,8 @@ export function uiCandidates(state: State, seat: number): Action[] {
     //   ⚠️ **不早退**：本函数后面还要追加山议 / 认证面候选（它们不受行动窗口约束）。
     if (state.phase === '行动' && !isRoundEnd(state)) {
       for (const card of me.hand) {
+        // ⚠️ B75：装备不限位移 ⇒ 必须排在 `cardHasMovement` 的 continue **之前**。
+        out.push({ type: 'EQUIP_CARD', actor: seat, cardId: card.id });
         if (cardHasMovement(card)) { continue; }
         if (cardNeedsTarget(card)) {
           for (const target of targetCandidates(state, seat)) {
@@ -400,6 +431,8 @@ export function uiCandidates(state: State, seat: number): Action[] {
     out.push({ type: 'MOVE', actor: seat, steps: 0 });
     out.push({ type: 'ROLL_WHEEL', actor: seat });
     for (const card of me.hand) {
+      // ⚠️ B75：与引擎 `actionPhaseCandidates` 同款 —— 每张手牌并列一条装备候选。
+      out.push({ type: 'EQUIP_CARD', actor: seat, cardId: card.id });
       if (cardNeedsTarget(card)) {
         for (const target of targetCandidates(state, seat)) {
           out.push({ type: 'PLAY_CARD', actor: seat, cardId: card.id, target });
@@ -420,10 +453,19 @@ export function uiCandidates(state: State, seat: number): Action[] {
       }
     }
   }
-  // ---- 山议投票面 ----
-  if (state.council.resolved === false && state.council.votes[seat] === undefined) {
-    for (const p of state.players) {
-      if (p.alive && p.seat !== seat) { out.push({ type: 'VOTE', actor: seat, target: p.seat }); }
+  // ---- 山议面：投票 + 否决（B75）----
+  //   ⚠️ 结构从「已投票 ⇒ 整面为空」改为「未投票发 VOTE；**票齐后**持权且未用 ⇒ 发 COUNCIL_VETO」，
+  //   与引擎 `councilCandidates` 逐条同形（判据用存活者的 `every`，不用票数 ≥ 存活数）。
+  if (state.council.resolved === false) {
+    if (state.council.votes[seat] === undefined) {
+      for (const p of state.players) {
+        if (p.alive && p.seat !== seat) { out.push({ type: 'VOTE', actor: seat, target: p.seat }); }
+      }
+    }
+    const allVoted = state.players.filter((p) => p.alive)
+      .every((p) => state.council.votes[p.seat] !== undefined);
+    if (allVoted && state.council.vetoUsed !== true && me.flags.canVeto === true) {
+      out.push({ type: 'COUNCIL_VETO', actor: seat });
     }
   }
   // ---- 认证面 ----
