@@ -84,6 +84,11 @@ export function validateIr(ir, theme, scales) {
     if (i.passiveText !== src2.passiveText) { err('身份 ' + i.id + ' 的 passiveText 与 theme.json 不一致'); }
     if (i.goalKind !== src2.goal.kind) { err('身份 ' + i.id + ' 的 goalKind 与 theme.json 不一致'); }
     if (i.goalCount !== (src2.goal.count ?? 1)) { err('身份 ' + i.id + ' 的 goalCount 与 theme.json 不一致'); }
+    // ⚠️ B75：权限位也要「搬运不失真」——`rights` 决定否决按钮可达性，IR 与 theme 不同步时
+    //   规则书会印出引擎给不了的能力。数组先 JSON 化再逐字比（直接 !== 比引用永远不等）。
+    if (JSON.stringify(i.rights ?? []) !== JSON.stringify(src2.rights ?? [])) {
+      err('身份 ' + i.id + ' 的 rights 与 theme.json 不一致');
+    }
   }
   const themeCard = new Map((theme.cards ?? []).map((c) => [c.id, c]));
   for (const c of ir.cards) {

@@ -118,6 +118,10 @@ export function buildIr(theme, scales) {
       goalKind: i.goal.kind,
       goalCount: i.goal.count ?? 1,
       goalText: goalText(i.goal.kind, i.goal.count ?? 1, terms),
+      // ⚠️ B75：权限位**原样搬运**（缺省空数组 ⇒ 老主题不必声明）；确定性输出要求形状稳定，
+      //   所以不能写成 `...(i.rights === undefined ? {} : { rights: i.rights })`：
+      //   parity-check 会拿「键不存在」与「空数组」当两种一致状态，比较判据就得跟着分叉。
+      rights: [...(i.rights ?? [])],
       ...(i.flavor === undefined ? {} : { flavor: i.flavor }),
     })),
     cards: theme.cards.map((c) => ({

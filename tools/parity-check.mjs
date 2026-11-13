@@ -51,6 +51,10 @@ export function checkIrVsTheme(ir, theme) {
       ['goalKind', o.goalKind, i.goal.kind],
       ['goalCount', o.goalCount, i.goal.count ?? 1],
       ['flavor', o.flavor, i.flavor],
+      // ⚠️ B75：权限位是**数组** ⇒ 逐字比较前先 JSON 化（`['council_veto'] !== ['council_veto']`
+      //   在 JS 里恒真，直接比会**永远判不一致**；反过来不比较又会放过漂移）。
+      //   缺省都按空数组看 ⇒ 老 IR（没有该键）与 theme 未声明 rights 仍是「一致」。
+      ['rights', JSON.stringify(o.rights ?? []), JSON.stringify(i.rights ?? [])],
     ];
     for (const [label, a, b] of pairs) {
       if (a !== b && !(label === 'flavor' && i.flavor === undefined && o.flavor === undefined)) {

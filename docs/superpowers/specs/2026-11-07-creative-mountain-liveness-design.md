@@ -865,7 +865,7 @@ export interface CardFilter {
   "identities":   [ { "id": "...", "name": "开拓者",
                       "passiveText": "每回合首次移动 +1 格。",
                       "goalKind": "pass_gates", "goalCount": 3,
-                      "goalText": "最先通过 3 座关隘", "flavor": "..." } ],
+                      "goalText": "最先通过 3 座关隘", "rights": ["council_veto"], "flavor": "..." } ],
   "cards":        [ { "id": "...", "name": "御风", "type": "motion", "cost": 1,
                       "color": "red", "suit": "wind", "rank": 9, "rankLabel": "风",
                       "text": "前进 3 格。" } ],
@@ -1221,6 +1221,8 @@ Chromium 生成的 PDF **字节级不可直接比对**——实测同一份 HTML
 1. **结构**：顶层键与 `engine/types/ir.ts` 的 `IrDocument` 逐字段一致（多一个少一个都判红）。
 2. **数值溯源**：每个规模数值都带 `src` 路径，路径格式合法、人数与所在行一致、字段名属于 §8 契约，且**值与 `engine/scales.ts` 当前常量相等**。
 3. **文本可追溯**：ir 的每段文本与 theme.json 对应字段**逐字相等**（阵营 abilityText/wheelText、身份 passiveText、卡牌 text、天机牌 text、试炼牌 text、认证题 prompt）。
+   - ⚠️ **B75 补充**：身份的 `rights`（权限位数组）同样逐项比较（`parity-check` 主比对 + `ir-validate` 各一遍）——
+     它不是文本，但决定「这个身份能不能按否决按钮」，与印在规则书上的 `passiveText` 必须同进同退。
 4. **引用完整性**：关隘引用的试炼牌、造物牌引用的卡牌都存在；棋盘格数与 `length` 一致；指令表恰好 20 条。
 
 > **这是 B7 的前置**：parity-check 的主比对对象就是 ir.json，ir.json 自身若已偏离 theme.json，parity-check 再准也白搭。

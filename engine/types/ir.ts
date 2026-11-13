@@ -75,6 +75,16 @@ export interface IrIdentity {
   readonly goalCount: number;
   readonly goalText: string;
   readonly flavor?: string;
+  /**
+   * 身份权限位（B75，从 theme.json 的 `rights` **原样透传**，缺省空数组）。
+   *
+   * ⚠️ 为什么要进 IR：`rights` 决定「这个身份能不能按否决按钮」，而规则书印的是
+   *   `passiveText` ⇒ 两条轨一旦不同步，玩家读到「可否决」而引擎不给权限（或反之）。
+   *   ⇒ `parity-check` 主比对逐项比较（不是软警告），`ir-validate` 再核一遍 theme↔IR。
+   * ⚠️ 用 `readonly string[]` 而不是 `IdentityRight`：IR 是**产物契约**，不做语义校验
+   *   （未知权限值由 `theme-validate` 的白名单拦），此处只保证「搬运不失真」。
+   */
+  readonly rights: readonly string[];
 }
 
 /** 卡牌（搬运；效果结构不进入 IR）。 */
