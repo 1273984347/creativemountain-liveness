@@ -6,6 +6,9 @@
 
 import type { State } from './state.ts';
 import { councilInterval, type RuleMode } from '../scales.ts';
+// ⚠️ B75：计数的「怎么加」只有 `counters.ts` 一个出处；即时目标结算只有 `goals/settle.ts` 一个出处。
+import { bumpCounterOf } from './counters.ts';
+import { settleImmediateGoals } from '../goals/settle.ts';
 
 /** 山议操作结果。 */
 export interface CouncilResult {
@@ -59,6 +62,28 @@ export function castVote(state: State, actor: number, target: number): CouncilRe
   const next: State = { ...state, council: { ...c, votes } };
   return succeed(next, `投票给座位 ${target}`);
 }
+/**
+ * 仲裁者否决（B75，规格 §9.3 + 设计 §4.2）。每局 1 次。
+ *
+ * ⚠️ **硬前置：所有存活玩家都已投票**。否决的语义是「否决**本次**放逐」⇒
+ *   必须先看到本次投票结果；这也顺带消除了「投票未结束但结果已定」的中间态。
+ * ⚠️ 判据用 `every` 而不是「票数 ≥ 存活数」：出局者的旧票会残留在 `votes` 里，
+ *   后者会在还有人没投的时候提前放行。
+ * ⚠️ 本函数**只记录使用**，不写 `vetoCount` —— 「用没用」和「有没有阻止住放逐」是两回事，
+ *   后者要到 `resolveCouncil` 才算得出来（见设计 §4.3）。
+ */
+export function useCouncilVeto(state: State, actor: number): CouncilResult {
+  const c = state.council;
+  if (c.resolved) { return fail(state, '山议未在进行中'); }
+  const p = state.players[actor];
+  if (p === undefined || !p.alive) { return fail(state, '你已出局'); }
+  if (p.flags.canVeto !== true) { return fail(state, '你没有否决特权'); }
+  if (c.vetoUsed) { return fail(state, '本局否决已使用'); }
+  const allVoted = state.players.filter((x) => x.alive).every((x) => c.votes[x.seat] !== undefined);
+  if (!allVoted) { return fail(state, '等待所有玩家投票后才能使用否决'); }
+  return succeed({ ...state, council: { ...c, vetoUsed: true, vetoBy: actor } }, '仲裁者否决（每局 1 次）');
+}
+
 /**
  * 投票权重 = 1 + 该玩家的**额外投票数**。
  *
@@ -143,8 +168,24 @@ export function resolveCouncil(state: State): CouncilResult {
     exiled.push(seat);
     remaining -= 1;
   }
+  // ⚠️ B75：否决在**名单已算出、尚未落地**时应用（设计 §4.3 的实现顺序：
+  //   算 tops/exiled → 应用否决 → 写计数与即时目标 → 更新 players）。
+  //   只有「本来会有人被放逐」才算**成功否决** ⇒ 才写 `vetoCount`；
+  //   下限/凭证本来就没人被放逐时，否决属于**白用** ⇒ 只说明、不计数。
+  const vetoBy = next.council.vetoBy ?? null;
+  const vetoed = exiled.length > 0 && next.council.vetoUsed === true && vetoBy !== null;
+  if (vetoed) { exiled.length = 0; }
   if (exiled.length === 0) {
-    return succeed(next, '山议：无人被放逐（下限保护 / 凭证 / 否决）');
+    if (vetoed && vetoBy !== null) {
+      // 计数写在结算即时目标**之前** ⇒ `veto_success` 这一局就能看到自己的计数器；
+      // `settleImmediateGoals` 是**全局**的（检查所有玩家的 immediate 目标，不只否决者）。
+      return succeed(settleImmediateGoals(bumpCounterOf(next, vetoBy, 'vetoCount', 1)),
+        '山议裁定：仲裁者否决，本次无人被放逐');
+    }
+    if (next.council.vetoUsed === true && vetoBy !== null) {
+      return succeed(next, '山议：无人被放逐（下限保护 / 凭证；本局否决已使用但未阻止放逐）');
+    }
+    return succeed(next, '山议：无人被放逐（下限保护 / 凭证）');
   }
   // ⚠️ B60：被放逐者**身上的印记作废**（规格 §5.6：「被放逐者失去认证印资格，其身上的印记作废」）。
   //   为什么由**放逐侧**负责、而不是靠「判定时跳过出局者」：山议在本回合末只被**开启**

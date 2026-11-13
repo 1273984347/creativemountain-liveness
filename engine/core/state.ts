@@ -309,7 +309,7 @@ export function createInitialState(opts: InitialStateOptions): State {
       validityVotes: {},
       validityDecided: false,
     },
-    council: { heldCount: 0, lastRound: 0, votes: {}, resolved: true, vetoUsed: false },
+    council: { heldCount: 0, lastRound: 0, votes: {}, resolved: true, vetoUsed: false, vetoBy: null },
     outcome: { finished: false, winners: [], reason: 'no_winner' },
     extraSignaturesRequired: 0,
     liveSeats: {},

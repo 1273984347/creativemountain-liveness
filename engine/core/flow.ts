@@ -50,6 +50,13 @@ export interface CouncilState {
   readonly resolved: boolean;
   /** 本局已使用仲裁者否决（每局 1 次） */
   readonly vetoUsed: boolean;
+  /**
+   * 本局**使用**否决的座位（未使用为 null）。
+   *
+   * ⚠️ 与 `vetoUsed` 分开记：`vetoUsed` 是「每局一次」的闸门，`vetoBy` 是「计数该给谁」。
+   *   旧存档可能没有本字段 ⇒ 读取侧一律 `?? null` 容错（规格 §13 R4：不写迁移）。
+   */
+  readonly vetoBy: number | null;
 }
 
 /**

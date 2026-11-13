@@ -10,9 +10,9 @@
 // ⚠️ **判定时机由 `GOALS[kind].timing` 决定**（唯一事实源，不在本文件另立一张表）：
 //   · `round_end`  ⇒ 回合末统一检查（`settleRoundEndGoals`）；
 //   · `terminal`   ⇒ 终局判定时一次性检查（`settleTerminalGoals`）；
-//   · `immediate`  ⇒ 即时结算（否决生效时 / 质疑成功时）—— **无生产调用点**：
-//   该时机的两个 kind（`veto_success` / `successful_challenge`）的计数器尚无写入方
-//   ⇒ 判定恒为 false ⇒ 行为等价；登记见 `docs/批次/B60-*.md` §7 T3 与 `README.md` G-i。
+//   · `immediate`  ⇒ 即时结算（两个接线点：B61 的「质疑判不通过」处、B75 的「仲裁者否决实际阻止放逐」处）；
+//     B75 前该时机的 `veto_success` 因**没有否决机制**而恒为 false（登记见 `docs/批次/B60-*.md` §7 T3 与 `README.md` G-i），
+//     `vetoCount` 的写入点自 B75 起才存在 ⇒ 本时机**已有生产调用方**。
 //
 // ⚠️ **目标从哪来**：State **不持有主题包引用**（§6.2 契约冻结）⇒ 身份的
 //   `goal { kind, count }` 由 `setup.ts` 在**开局分配身份时**派生到 `player.flags.goal`。

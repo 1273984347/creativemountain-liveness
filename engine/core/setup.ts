@@ -207,7 +207,7 @@ function resetForNewGame(state: State): State {
       validityVotes: {},
       validityDecided: false,
     },
-    council: { heldCount: 0, lastRound: 0, votes: {}, resolved: true, vetoUsed: false },
+    council: { heldCount: 0, lastRound: 0, votes: {}, resolved: true, vetoUsed: false, vetoBy: null },
     outcome: { finished: false, winners: [], reason: 'no_winner' },
     log: [...state.log, { round: 1, turnIndex: 0, actor: -1, kind: 'setup', message: '新开一局' }],
   };
