@@ -242,6 +242,17 @@ export declare function maybeUseAbility(s: State, seat: number): { state: State;
  */
 export declare function goalPursuit(s: State, seat: number): { state: State; op: string; target?: number } | null;
 
+/**
+ * B76：力竭自恢的占位决策（p=0.5）。**前置过滤在抽签之前**：非力竭 / 灵枢不足 ⇒ false 且零 rng 消耗。
+ * 占位启发式，非最优，也不代表人类玩家的自恢行为（同 B75.1 §6 声明）；消耗一次 `state.rng.next()`。
+ */
+export declare function selfRecuperateChoice(s: State, seat: number): boolean;
+
+/**
+ * B76：力竭救援的占位决策（p=0.10）。同款前置过滤（自己不力竭 ∧ 存体力竭他人）；目标 = hp 最低的力竭者。
+ */
+export declare function rescueChoice(s: State, seat: number): { fire: boolean; target: number };
+
 /** 推进手番；若结算后进入对峙 ⇒ AI 选牌后继续推进（回合阻塞 + 关隘的闭环）。 */
 export declare function advanceWithDuel(s: State, mode: RuleMode, opts?: AdvanceOpts): Promise<State>;
 

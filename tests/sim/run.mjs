@@ -111,6 +111,7 @@ function summarize(cells) {
   let soloGames = 0;
   // B13：对峙次数统计
   let duelTotal = 0;
+  let exhaustedTotal = 0; let recuperateSelf = 0; let recuperateRescue = 0; let naturalRecovery = 0;
   let duelGames = 0;
   const certRounds = new Map();
   // B23：关隘试炼统计（每张试炼牌 → 抽取次数 / 通过次数 / 触发过的局数）
@@ -213,6 +214,11 @@ function summarize(cells) {
     const dc = c.duelCount ?? 0;
     duelTotal += dc;
     if (dc > 0) { duelGames += 1; }
+    // ⚠️ B76：力竭四计数器（触发 / 自恢 / 救援 / 自然恢复——message 契约见 policy-ai 守卫测试）。
+    exhaustedTotal += c.exhaustedTotal ?? 0;
+    recuperateSelf += c.recuperateSelf ?? 0;
+    recuperateRescue += c.recuperateRescue ?? 0;
+    naturalRecovery += c.naturalRecovery ?? 0;
     for (const w of c.winners) {
       const id = c.identities[w];
       const f = c.factions[w];
@@ -235,6 +241,7 @@ function summarize(cells) {
     avgRounds: total > 0 ? roundSum / total : 0,
     avgSeats: total > 0 ? seatTotalSum / total : 0,
     gamesWithoutSeat, seatDist, champSeatDist, abilityOps, abilityGames, duelTotal, duelGames,
+    exhaustedTotal, recuperateSelf, recuperateRescue, naturalRecovery,
     markGames, markPlayers, goalAchieved, goalGames, goalPlayers, markAchieved,
     counterMax, counterSum, counterSamples,
     trialDraws, trialPasses, trialGames, trialFailed, failButPassed, failReleased,
@@ -662,6 +669,8 @@ if (args.out !== null) {
   lines.push('| **每局平均席位数** | **' + summary.avgSeats.toFixed(2) + '** |');
   lines.push('| **对峙次数** | **' + summary.duelTotal + '**（每百局 ' + ((summary.duelTotal / Math.max(1, summary.total)) * 100).toFixed(2) + '） |');
   lines.push('| 无席位局数 | ' + summary.gamesWithoutSeat + ' |');
+  lines.push('| **力竭触发** | **' + summary.exhaustedTotal + '** 人次（每百局 ' + ((summary.exhaustedTotal / Math.max(1, summary.total)) * 100).toFixed(2) + '） |');
+  lines.push('| 解除：自恢 / 救援 / 自然 | ' + summary.recuperateSelf + ' / ' + summary.recuperateRescue + ' / ' + summary.naturalRecovery + ' 人次 |');
   lines.push('| **异常条数** | **' + summary.anomalies + '**（门槛 0） |');
   lines.push('');
   lines.push('## 分主题 · 分人数档');

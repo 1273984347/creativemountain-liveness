@@ -429,6 +429,33 @@ export function goalPursuit(s, seat) {
   return null;
 }
 
+/**
+ * B76：力竭自恢的占位决策（p=0.5）——**前置过滤在抽签之前**（r2 评审 🔴3）：
+ * 非力竭 / 灵枢不足的座位**零 rng 消耗**。占位声明同 B75.1 §6：非最优、人类行为未建模、消耗一次 rng。
+ */
+export function selfRecuperateChoice(s, seat) {
+  const p = s.players[seat];
+  if (p === undefined || !p.alive) { return false; }
+  if ((p.exhaustedRounds ?? 0) === 0 || (p.resource ?? 0) < 2) { return false; }
+  return s.rng.next() < 0.5;
+}
+
+/**
+ * B76：力竭救援的占位决策（p=0.10）——同款前置过滤（自己不力竭、存在力竭他人才抽签）。
+ * 目标选择：hp 最低者先救（占位启发式，非最优）。
+ */
+export function rescueChoice(s, seat) {
+  const me = s.players[seat];
+  if (me === undefined || !me.alive) { return { fire: false, target: -1 }; }
+  if ((me.exhaustedRounds ?? 0) > 0 || (me.resource ?? 0) < 1) { return { fire: false, target: -1 }; }
+  const targets = s.players.filter((x) => x.alive && x.seat !== seat && (x.exhaustedRounds ?? 0) > 0);
+  if (targets.length === 0) { return { fire: false, target: -1 }; }
+  if (s.rng.next() >= 0.10) { return { fire: false, target: -1 }; }
+  let best = targets[0];
+  for (const t of targets) { if (best !== undefined && t.hp < best.hp) { best = t; } }
+  return best === undefined ? { fire: false, target: -1 } : { fire: true, target: best.seat };
+}
+
 /** 推进手番；若结算后进入对峙 ⇒ AI 选牌后继续推进（回合阻塞的闭环）。 */
 export async function advanceWithDuel(s, mode, opts) {
   // ⚠️ B18：委托引擎层统一出口（对峙 + 关隘闭环都在里面）——
@@ -588,6 +615,13 @@ export async function playOne(theme, players, seed, gateReserve, policy) {
       // ⚠️ B65：用 `pickPlayableCard` 选牌（按效果强度 + 平价优先），不再「取第一张付得起的」。
       // ⚠️ B72：位移判定用 `cardHasMovement`（与引擎 / 枚举同源），**不再**用 `type !== 'motion'`
       //   —— 位移可藏在 utility 与嵌套效果里（B66 已证）。旧过滤会让启发式挑中引擎必拒的牌 ⇒ 空耗回合。
+      // ⚠️ B76：力竭的待认证者可自恢（恢复不是位移；占本手番行动——与出牌同款收尾）。
+      if ((player.exhaustedRounds ?? 0) > 0 && player.resource >= 2 && s.rng.next() < 0.5) {
+        record(s, seat, actionKey({ type: 'RECUPERATE', actor: seat }));
+        s = performAction(s, seat, 'recuperate', {});
+        s = await advanceWithDuel(s, 'standard', { gateReserve });
+        continue;
+      }
       const lockedHand = player.hand.filter((c) => !cardHasMovement(c));
       // ⚠️ B70 Task 3：**play 面注入（待认证锁定分支）**。该分支原本就以 `advanceWithDuel` +
       //   `continue` 收尾 ⇒ 改道分支自带推进（这里 `continue` 合法且必要）。
@@ -645,6 +679,21 @@ export async function playOne(theme, players, seed, gateReserve, policy) {
     //   ⚠️ **随机流**：`goalPursuit` 保持纯函数（零随机消耗，有专测）；概率判定在接线层，
     //     仅在「追goal可达」的回合**额外**消耗一次 `s.rng.next()`（B75.1 shouldVeto 同款先例，
     //     随机流分叉起点如实登记）。不命中 ⇒ 落回正常行动带（roll 已消耗，口径不变）。
+    // ⚠️ B76：力竭恢复占位分支（自恢优先于救援；前置过滤 ⇒ 非目标座位零 rng 消耗；
+    //   恢复占掉本手番行动，roll 已消耗、值弃用——与追goal分支同款口径）。
+    if (selfRecuperateChoice(s, seat)) {
+      record(s, seat, actionKey({ type: 'RECUPERATE', actor: seat }));
+      s = performAction(s, seat, 'recuperate', {});
+      s = advanceTurn(s, 'standard');
+      continue;
+    }
+    const rescuePick = rescueChoice(s, seat);
+    if (rescuePick.fire) {
+      record(s, seat, actionKey({ type: 'RECUPERATE', actor: seat, target: rescuePick.target }));
+      s = performAction(s, seat, 'recuperate', { target: rescuePick.target });
+      s = advanceTurn(s, 'standard');
+      continue;
+    }
     const gotPursuit = goalPursuit(s, seat);
     if (gotPursuit !== null && s.rng.next() < 0.2) {
       record(s, seat, actionKey({ type: 'ABILITY', actor: seat, abilityId: gotPursuit.op, ...(gotPursuit.target === undefined ? {} : { target: gotPursuit.target }) }));
@@ -764,6 +813,11 @@ export async function playOne(theme, players, seed, gateReserve, policy) {
     // B12：被动触发**统一从日志提取**（主动型 + 自动型同格式 `[被动:<op>]`）
     // B13：对峙次数（kind='duel' 的日志条数）—— 对峙可达性证据
     duelCount: s.log.filter((l) => l.kind === 'duel').length,
+    // ⚠️ B76：力竭四计数器（message 契约由 policy-ai 的守卫测试钉住）。
+    exhaustedTotal: s.log.filter((l) => l.kind === 'exhaustion' && l.message.startsWith('力竭：')).length,
+    recuperateSelf: s.log.filter((l) => l.kind === 'exhaustion' && l.message.includes('（自恢）')).length,
+    recuperateRescue: s.log.filter((l) => l.kind === 'exhaustion' && l.message.includes('（救援）')).length,
+    naturalRecovery: s.log.filter((l) => l.kind === 'exhaustion' && l.message.includes('（自然）')).length,
     // B23：试炼事件（**结构化字段** ⇒ 不解析文案；`trialId` / `trialPassed` 由引擎写入）
     trialEvents: s.log
       .filter((l) => l.kind === 'trial' && typeof l.trialId === 'string')

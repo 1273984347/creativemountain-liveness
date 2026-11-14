@@ -186,3 +186,82 @@ test('B75.2：非追goal目标 / 无被动 / 待认证锁定 ⇒ 一律 null', (
   const lockedState: State = { ...locked, players: locked.players.map((p) => (p.seat === 0 ? { ...p, pendingCert: true } : p)) };
   assert.equal(goalPursuit(lockedState, 0), null, '待认证锁定者不追goal');
 });
+
+// ---------- B76：力竭恢复的占位 AI（自恢 p=0.5 / 救援 p=0.10）----------
+//
+// ⚠️ 只测导出的纯函数（文件头纪律）。占位声明同 B75.1 §6：非最优、人类行为未建模、
+//   会消耗 rng（前置过滤：非力竭座位 / 无力竭目标的座位**零消耗**——r2 评审 🔴3）。
+import { selfRecuperateChoice, rescueChoice } from '../../tests/sim/policy.mjs';
+import { triggerExhaustion, recoverFromExhaustion } from '../../engine/core/exhaustion.ts';
+
+/** 夹具：座 seat 力竭 + 灵枢置值；座 victim 力竭归零。 */
+function exhaustedShape(s: State, self: number, resource: number, victim?: number): State {
+  return { ...s, players: s.players.map((p) => {
+    if (p.seat === self) { return { ...p, exhaustedRounds: 2, resource, hp: 0 }; }
+    if (victim !== undefined && p.seat === victim) { return { ...p, exhaustedRounds: 2, resource: 0, hp: 0 }; }
+    return p;
+  }) };
+}
+
+test('B76：自恢占位概率——力竭 + 灵枢≥2 跨 seed 扫描 seen 两值（0.5 真判据）', () => {
+  const seen = new Set<boolean>();
+  for (let seed = 7; seed < 80 && seen.size < 2; seed++) {
+    seen.add(selfRecuperateChoice(exhaustedShape(mk(4, seed), 0, 3), 0));
+  }
+  assert.equal(seen.has(true), true, '必须有命中（否则自恢不可达）');
+  assert.equal(seen.has(false), true, '必须有不命中（否则恒真）');
+});
+
+test('B76：非力竭座位 ⇒ selfRecuperateChoice 恒 false 且零 rng 消耗（r2 🔴3）', () => {
+  const s = mk(4, 7);
+  const before = s.rng.snapshot();
+  assert.equal(selfRecuperateChoice(s, 0), false);
+  assert.deepEqual(s.rng.snapshot(), before, '前置过滤不过 ⇒ 不抽签');
+});
+
+test('B76：力竭但灵枢不足 ⇒ false 且零 rng 消耗', () => {
+  const s = exhaustedShape(mk(4, 7), 0, 1);
+  const before = s.rng.snapshot();
+  assert.equal(selfRecuperateChoice(s, 0), false);
+  assert.deepEqual(s.rng.snapshot(), before);
+});
+
+test('B76：救援占位——存在力竭他人跨 seed 两值；无力竭他人恒 false 零消耗', () => {
+  // ⚠️ 救援形状：**自己不力竭**（座 0 有灵枢）、他人（座 1）力竭——
+  //   首版夹具把自己也置力竭 ⇒ 「力竭者不能救援」正确早退 ⇒ 测试 vacuous（自纠）。
+  const rescueShape = (seed: number): State => {
+    const s0 = mk(4, seed);
+    return { ...s0, players: s0.players.map((p) => (p.seat === 1 ? { ...p, exhaustedRounds: 2, resource: 0, hp: 0 } : p.seat === 0 ? { ...p, resource: 3 } : p)) };
+  };
+  const seen = new Set<boolean>();
+  for (let seed = 7; seed < 120 && seen.size < 2; seed++) {
+    const r = rescueChoice(rescueShape(seed), 0);
+    seen.add(r.fire);
+    if (r.fire) { assert.equal(r.target, 1, '命中时目标是力竭者'); }
+  }
+  assert.equal(seen.has(true), true, 'p=0.10 在 113 个 seed 里必须至少命中一次');
+  assert.equal(seen.has(false), true);
+  const none = mk(4, 7);
+  const before = none.rng.snapshot();
+  assert.equal(rescueChoice(none, 0).fire, false);
+  assert.deepEqual(none.rng.snapshot(), before, '无力竭他人 ⇒ 零 rng 消耗');
+});
+
+test('B76：力竭者不能救援 ⇒ 早退且零 rng 消耗（设计规格 §3：恢复是主动动作，力竭封锁）', () => {
+  const s = exhaustedShape(mk(4, 7), 0, 3, 1);
+  const before = s.rng.snapshot();
+  assert.equal(rescueChoice(s, 0).fire, false);
+  assert.deepEqual(s.rng.snapshot(), before, '力竭者早退 ⇒ 零消耗');
+});
+
+test('B76：报告计数器的 message 契约（Task 2 触发 / 解除格式与 T8 扫描谓词钉死）', () => {
+  const s0 = mk(4, 7);
+  const hit = triggerExhaustion(s0, 0);
+  assert.ok(hit.log.some((l) => l.kind === 'exhaustion' && l.message.startsWith('力竭：')), '触发前缀 = 力竭：');
+  const rec = recoverFromExhaustion(hit, 0, '自然');
+  assert.ok(rec.log.some((l) => l.kind === 'exhaustion' && l.message.includes('（自然）')), '自然恢复含（自然）');
+  const rec2 = recoverFromExhaustion(hit, 0, '自恢');
+  assert.ok(rec2.log.some((l) => l.kind === 'exhaustion' && l.message.includes('（自恢）')));
+  const rec3 = recoverFromExhaustion(hit, 0, '救援');
+  assert.ok(rec3.log.some((l) => l.kind === 'exhaustion' && l.message.includes('（救援）')));
+});
