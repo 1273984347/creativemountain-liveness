@@ -24,6 +24,8 @@ import { settleRoundEndGoals } from '../goals/settle.ts';
 import type { RuleMode } from '../scales.ts';
 import type { Effect } from '../types/theme.ts';
 import { clearTurnStates, type State } from './state.ts';
+// B77 家族 B：状态结算的唯一出处（力竭递减仍留在 endRound，两者不同锚，见规格 §4）。
+import { tickPlayerStatuses } from './statuses.ts';
 import { recoverFromExhaustion, triggerExhaustion } from './exhaustion.ts';
 
 /** 流程运行结果。 */
@@ -471,6 +473,11 @@ export function finishTurn(state: State, seat: number): State {
   //   只覆盖首个手番（其余玩家在白天行动）。此前夜间可达性全靠 `turn.finished`
   //   泄漏（跳过 finishTurn ⇒ 复位被跳过）撑着——B75.2 修复该泄漏后此缺口暴露。
   //   复位点移到 `endRound`（每 round 一次，天机牌在下一 round 开局重翻）。
+  // 家族 B 状态结算（规格 B77 §4）：地形结算 / 收入 / 护盾都在上面，本行**必须**在它们之后 ——
+  // poison 触发的力竭要赶上本 round 末的家族 A 递减，两条触发路径才等长（§3.1）。
+  // ⚠️ 锚点是手番而非 round：每人每 round 只有一个手番，挂 round 末会让状态在其下次
+  //   行动前被抹平（r3 的立项理由，反证见 tests/engine/status-anchor.test.ts）。
+  next = tickPlayerStatuses(next, seat);
   return next;
 }
 

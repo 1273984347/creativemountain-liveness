@@ -9,6 +9,8 @@ import { councilInterval, type RuleMode } from '../scales.ts';
 // ⚠️ B75：计数的「怎么加」只有 `counters.ts` 一个出处；即时目标结算只有 `goals/settle.ts` 一个出处。
 import { bumpCounterOf } from './counters.ts';
 import { settleImmediateGoals } from '../goals/settle.ts';
+// B77：放逐侧的状态收口（immunity_ 前缀的知识只存在 statuses.ts 一份）。
+import { withoutImmunityFlags } from './statuses.ts';
 
 /** 山议操作结果。 */
 export interface CouncilResult {
@@ -200,7 +202,12 @@ export function resolveCouncil(state: State): CouncilResult {
   //   效果上等价（印记只减半签印门槛，而放逐者已退出 `certification.pending` ⇒ 永不可能认证），
   //   但不收掉的话 UI 会给已出局者显示「印记」徽章，且「目标达成」统计会被虚高。
   const players = next.players.map((p) => (exiled.includes(p.seat)
-    ? { ...p, alive: false, hasMark: false, exhaustedRounds: 0 }   // ⚠️ B76 最终审查 I2：身上的力竭状态随放逐作废（与 hasMark 同款 §5.6 语义）
+    // ⚠️ B76 最终审查 I2：身上的力竭状态随放逐作废（与 hasMark 同款 §5.6 语义）
+    // ⚠️ B77：负面状态与免疫窗一并收口——死者不得带着状态离场。
+    //   读数侧的防御（tickPlayerStatuses 跳过死者）在这里不够：状态值若留着，
+    //   UI 会给已出局者显示徽章、报告的多计数器也会把他的残留算进"仍存在"。
+    //   flags 只摘 immunity_ 前缀，其余是历史事实（B60 口径），一律保留。
+    ? { ...p, alive: false, hasMark: false, exhaustedRounds: 0, statuses: {}, flags: withoutImmunityFlags(p.flags) }
     : p));
   next = { ...next, players };
   // 被放逐者若处于待认证 → 认证终止（§5.6）

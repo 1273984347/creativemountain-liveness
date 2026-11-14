@@ -10,8 +10,9 @@
 //   封口弃牌复用 discard_self（首位），都不许在别处再写一遍。
 import type { NegativeStatus } from '../types/common.ts';
 import { applyEffect } from '../ops/registry.ts';
+import { triggerExhaustion } from './exhaustion.ts';
 import { aliveTarget, fail, ok, withLog, withPlayer, type OpContext, type OpResult } from '../ops/context.ts';
-import type { State } from './state.ts';
+import type { Player, State } from './state.ts';
 
 /** `flags` 里免疫窗的键前缀（immunity 寄居 flags 而不迁容器的理由见规格 §3.5）。 */
 export const IMMUNITY_FLAG_PREFIX = 'immunity_';
@@ -27,6 +28,18 @@ export function statusOf(state: State, seat: number, kind: NegativeStatus): numb
 /** 读免疫窗剩余回合数。 */
 export function immunityOf(state: State, seat: number, kind: NegativeStatus): number {
   return (state.players[seat]?.flags[IMMUNITY_FLAG_PREFIX + kind] as number | undefined) ?? 0;
+}
+
+/**
+ * 摘掉 flags 里所有 `immunity_` 前缀键（放逐侧收口用，规格 §4 附带项）。
+ *
+ * ⚠️ 只摘免疫窗：其余 flag（`gate_<格号>` 已通过、`canVeto` 否决权、`goal` 目标态…）是
+ *   **历史事实**，B60 的口径是「达成过不会被之后的放逐抹掉」⇒ 一律保留。
+ * 前缀知识只在 statuses.ts 里存在一份 ⇒ 这个函数由 `council.ts` 调用，而不是让放逐侧
+ * 自己重抄 `'immunity_'` 字面量（同一口径两份实现必漂移，E94）。
+ */
+export function withoutImmunityFlags(flags: Player['flags']): Player['flags'] {
+  return Object.fromEntries(Object.entries(flags).filter(([k]) => !k.startsWith(IMMUNITY_FLAG_PREFIX)));
 }
 
 /** 置「本手番授予过」标记 —— 家族 B 递减豁免的依据（规格 §4 豁免条）。 */
@@ -86,4 +99,64 @@ export function grantImmunity(ctx: OpContext, seat: number, status: NegativeStat
   next = markGranted(next, t.seat);
   return ok(withLog(next, { state: next, actor: t.seat }, LOG_KIND,
     `免疫 ${status} ${String(amount)} 回合：座位 ${String(t.seat)}`));
+}
+
+/** 家族 B 的衰减对象（③④⑤：poison 的衰减在 ② 内联处理，扣完血才减）。 */
+const DECAY_ORDER: readonly NegativeStatus[] = ['slow', 'silence', 'skip_turn'];
+/** 免疫窗的衰减对象（⑥：四类都可能被免疫，逐个查窗）。 */
+const IMMUNITY_TICK: readonly NegativeStatus[] = ['poison', 'slow', 'silence', 'skip_turn'];
+
+/** 某状态 −1（下限 0）。不写日志——衰减本身由 ② 的扣血日志代表，避免噪声翻倍。 */
+function decStatus(state: State, seat: number, kind: NegativeStatus): State {
+  const p = state.players[seat]!;
+  return withPlayer(state, seat, { statuses: { ...p.statuses, [kind]: Math.max(0, (p.statuses?.[kind] ?? 0) - 1) } });
+}
+
+/**
+ * 家族 B 的**唯一**结算处（规格 B77 §4：② poison 扣血 → ③④⑤ 衰减 → ⑥ 免疫衰减）。
+ *
+ * ⚠️ 为什么锚在**该玩家自己的手番末**而不是 round 末：每人每 round 恰好一个手番
+ *   （`round.ts:17-27` 的 `aliveOrder[turnIndex % len]` + `isRoundEnd` 的 `turnIndex >= aliveCount`），
+ *   而 skip/silence/immunity 的写入点全在该玩家自己 手番内 ⇒ round 末递减会在其下次行动
+ *   **之前**把状态抹平（「停 1 回合」停不到、禁言永不生效、免疫窗恒为 0）。
+ *   力竭是**另一回事**：它是 round 级计数器，留在 `endRound` 不动（B76 r1.2 定稿）。
+ * ⚠️ 死者（`alive === false`，唯一通道 = 放逐）整体跳过：不扣血、不衰减、不写日志（B76 I2）。
+ *   写入侧的对应收口在 `council.ts` 的放逐分支——两侧都要有。
+ *
+ * @param seat 刚结束手番的那个座位（**不是**全场循环）。
+ */
+export function tickPlayerStatuses(state: State, seat: number): State {
+  const p0 = state.players[seat];
+  if (p0 === undefined || !p0.alive) { return state; }
+  const granted = p0.turn.statusGrantedThisTurn === true;
+  let next = state;
+
+  // ② poison：先按层数扣血（clamp 0）⇒ 归零走 triggerExhaustion（家族 A 的入口）⇒ 再 −1 层。
+  const layers = statusOf(next, seat, 'poison');
+  if (layers > 0) {
+    const p = next.players[seat]!;
+    const hp = Math.max(0, p.hp - layers);
+    next = withPlayer(next, seat, { hp });
+    next = withLog(next, { state: next, actor: seat }, LOG_KIND,
+      `中毒扣血：座位 ${String(seat)}（-${String(layers)}）`);
+    // 力竭的置值与日志一律交给 exhaustion.ts —— 本模块不碰 exhaustedRounds（E94）。
+    if (hp === 0) { next = triggerExhaustion(next, seat); }
+    next = decStatus(next, seat, 'poison');
+  }
+
+  // ③–⑥：授予当回合整体豁免（不吃刚挂上的那一拍），段末无条件自清标记。
+  if (!granted) {
+    for (const kind of DECAY_ORDER) {
+      if (statusOf(next, seat, kind) > 0) { next = decStatus(next, seat, kind); }
+    }
+    for (const kind of IMMUNITY_TICK) {
+      const left = immunityOf(next, seat, kind);
+      if (left > 0) {
+        const q = next.players[seat]!;
+        next = withPlayer(next, seat, { flags: { ...q.flags, [IMMUNITY_FLAG_PREFIX + kind]: left - 1 } });
+      }
+    }
+  }
+  const last = next.players[seat]!;
+  return withPlayer(next, seat, { turn: { ...last.turn, statusGrantedThisTurn: false } });
 }
