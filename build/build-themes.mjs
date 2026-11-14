@@ -22,6 +22,7 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { renderCardText } from './theme-render.mjs';
+import { isDerivable, renderTrialText } from './trial-text.mjs';
 import scifiAi from './theme-data/scifi-ai.mjs';
 import hybrid from './theme-data/hybrid.mjs';
 import urbanPsych from './theme-data/urban-psych.mjs';
@@ -164,13 +165,20 @@ export function buildTheme(base, data) {
     return { id: b.id, name: d.name, text: d.text, effects: b.effects };
   });
 
-  // ---- 试炼牌：结构沿用基准，文本主题化 ----
-  const trials = base.trials.map((b, i) => {
-    const text = data.trials[i];
-    if (text === undefined) {
-      throw new Error(`主题 ${data.id} 的试炼牌数少于基准（${base.trials.length}）`);
-    }
-    return { id: b.id, text, ...(b.effects === undefined ? {} : { effects: b.effects }) };
+  // ---- 试炼牌：判定沿用基准，**题面派生**（B77 规格 §6.1）----
+  // 这一段原来是 `data.trials[i]` 手抄文本：判定在基准、文本在 theme-data ⇒ 两份真相各自
+  // 演化，B26 加难后四套印出过 9–10/12 条「牌面写的条件 ≠ 引擎判的条件」，而 IR 只带 text，
+  // 印刷链路查不出来。现在题面与卡牌一样只有一个来源。
+  const trials = base.trials.map((b) => {
+    const conditional = (b.effects ?? []).find((e) => e.op === 'conditional');
+    const derivable = isDerivable(conditional?.pred);
+    return {
+      id: b.id,
+      text: derivable ? renderTrialText(conditional, data.terms) : b.text,
+      // 白名单外的判定才留手写题面，并显式标出来给守卫放行（§6.3：fallback 总数钉死为 0）
+      ...(derivable ? {} : { fallback: true }),
+      ...(b.effects === undefined ? {} : { effects: b.effects }),
+    };
   });
 
   // ---- 造物牌：cardId 需映射到新卡池的 defense 卡 ----
@@ -204,6 +212,14 @@ export function buildTheme(base, data) {
       deckName: data.deckName,
     },
     glossary: { ...data.glossary },
+    // 词表落进 theme.json（B77 规格 §6.2）：守卫与生成器**同读主题数据** ⇒ 不起第二事实源，
+    // 也让基准从此可自证（题面 == 判定这条断言，基准过去根本没有词表可查）。
+    // ⚠️ 逐层浅拷：`types`/`colors` 是嵌套表，共享引用会让 theme-data 的常量被下游改写。
+    terms: {
+      ...data.terms,
+      types: { ...data.terms.types },
+      colors: { ...data.terms.colors },
+    },
     counts: { ...base.counts },
     factions,
     identities,

@@ -22,6 +22,22 @@
     "gate": "关隘",
     "player": "修士"
   },
+  "terms": {
+    "hp": "灵力",
+    "deck": "符箓",
+    "resource": "灵枢",
+    "gate": "关隘",
+    "types": {
+      "motion": "位移",
+      "attack": "攻击",
+      "defense": "防御",
+      "utility": "功能"
+    },
+    "colors": {
+      "red": "红",
+      "black": "黑"
+    }
+  },
   "counts": {
     "handStart": 5,
     "deckTotal": 48,
@@ -134,7 +150,8 @@
       "id": "artisan",
       "name": "匠师",
       "passive": {
-        "op": "create_card", "cardId": "c_talisman"
+        "op": "create_card",
+        "cardId": "c_talisman"
       },
       "goal": {
         "kind": "equip_count",
@@ -206,7 +223,8 @@
       "id": "weaver",
       "name": "织梦者",
       "passive": {
-        "op": "modify_judgement", "target": 0
+        "op": "modify_judgement",
+        "target": 0
       },
       "goal": {
         "kind": "reroll_count",
@@ -405,7 +423,7 @@
       "effects": [
         {
           "op": "swap_position",
-                "target": 0
+          "target": 0
         }
       ]
     },
@@ -1130,7 +1148,8 @@
       "text": "修改一次判定结果。",
       "effects": [
         {
-          "op": "modify_judgement", "target": 0
+          "op": "modify_judgement",
+          "target": 0
         }
       ]
     },
@@ -1286,7 +1305,11 @@
         "name": "落雁关",
         "gate": {
           "fee": 3,
-          "trialIds": ["t_mirror", "t_sword", "t_oath"]
+          "trialIds": [
+            "t_mirror",
+            "t_sword",
+            "t_oath"
+          ]
         }
       },
       {
@@ -1338,11 +1361,18 @@
         "kind": "plain",
         "name": "孤松"
       },
-            {
+      {
         "index": 14,
         "kind": "gate",
         "name": "朝元关",
-        "gate": { "fee": 4, "trialIds": ["t_wind", "t_sutra", "t_stone"] }
+        "gate": {
+          "fee": 4,
+          "trialIds": [
+            "t_wind",
+            "t_sutra",
+            "t_stone"
+          ]
+        }
       },
       {
         "index": 15,
@@ -1385,7 +1415,11 @@
         "name": "云梦渡",
         "gate": {
           "fee": 4,
-          "trialIds": ["t_mantra", "t_silent", "t_vital"]
+          "trialIds": [
+            "t_mantra",
+            "t_silent",
+            "t_vital"
+          ]
         }
       },
       {
@@ -1413,23 +1447,54 @@
         "kind": "plain",
         "name": "封顶台前"
       },
-            {
+      {
         "index": 28,
         "kind": "plain",
         "name": "第 28 段"
       },
-      { "index": 29, "kind": "plain", "name": "第 29 段" },
+      {
+        "index": 29,
+        "kind": "plain",
+        "name": "第 29 段"
+      },
       {
         "index": 30,
         "kind": "gate",
         "name": "镇岳关",
-        "gate": { "fee": 5, "trialIds": ["t_empty", "t_star", "t_toll"] }
+        "gate": {
+          "fee": 5,
+          "trialIds": [
+            "t_empty",
+            "t_star",
+            "t_toll"
+          ]
+        }
       },
-      { "index": 31, "kind": "plain", "name": "第 31 段" },
-      { "index": 32, "kind": "plain", "name": "第 32 段" },
-      { "index": 33, "kind": "plain", "name": "第 33 段" },
-      { "index": 34, "kind": "plain", "name": "第 34 段" },
-      { "index": 35, "kind": "plain", "name": "第 35 段" },
+      {
+        "index": 31,
+        "kind": "plain",
+        "name": "第 31 段"
+      },
+      {
+        "index": 32,
+        "kind": "plain",
+        "name": "第 32 段"
+      },
+      {
+        "index": 33,
+        "kind": "plain",
+        "name": "第 33 段"
+      },
+      {
+        "index": 34,
+        "kind": "plain",
+        "name": "第 34 段"
+      },
+      {
+        "index": 35,
+        "kind": "plain",
+        "name": "第 35 段"
+      },
       {
         "index": 36,
         "kind": "peak",
@@ -1543,7 +1608,7 @@
   "trials": [
     {
       "id": "t_mirror",
-      "text": "展示任意 1 张手牌（手里要有移动牌）。",
+      "text": "展示手里 2 张红色牌——通过后抽 1 张符箓（未通过则本关改为付费）。",
       "effects": [
         {
           "op": "conditional",
@@ -1566,7 +1631,7 @@
     },
     {
       "id": "t_sword",
-      "text": "展示 2 张同色手牌（手里要有红牌）。",
+      "text": "展示手里 2 张黑色牌——通过后抽 1 张符箓（未通过则本关改为付费）。",
       "effects": [
         {
           "op": "conditional",
@@ -1589,7 +1654,7 @@
     },
     {
       "id": "t_oath",
-      "text": "立誓：本关通过后免疫封口 1 回合（身上至少 2 枚灵枢）。",
+      "text": "展示手里 2 张位移牌——通过后免疫封口 1 回合（未通过则本关改为付费）。",
       "effects": [
         {
           "op": "conditional",
@@ -1613,7 +1678,7 @@
     },
     {
       "id": "t_wind",
-      "text": "顺风：掷指令骰 ≥ 6，本关通过后额外获得 1 枚灵枢。",
+      "text": "掷 20 面骰，点数 ≥ 6——通过后获得 1 枚灵枢（未通过则本关改为付费）。",
       "effects": [
         {
           "op": "conditional",
@@ -1634,7 +1699,7 @@
     },
     {
       "id": "t_sutra",
-      "text": "抄经：本关通过后抽 1 张牌（手里要有攻击牌）。",
+      "text": "展示手里 2 张防御牌——通过后抽 1 张符箓（未通过则本关改为付费）。",
       "effects": [
         {
           "op": "conditional",
@@ -1657,7 +1722,7 @@
     },
     {
       "id": "t_stone",
-      "text": "养石：本关通过后恢复 1 点体力（体力不低于 5）。",
+      "text": "展示手里 2 张功能牌——通过后恢复 1 点灵力（未通过则本关改为付费）。",
       "effects": [
         {
           "op": "conditional",
@@ -1680,7 +1745,7 @@
     },
     {
       "id": "t_mantra",
-      "text": "持咒：本关通过后获得 1 点护盾（手里要有黑牌）。",
+      "text": "展示手里 2 张功能牌——通过后获得 1 点护盾（未通过则本关改为付费）。",
       "effects": [
         {
           "op": "conditional",
@@ -1703,7 +1768,7 @@
     },
     {
       "id": "t_silent",
-      "text": "缄默：本关通过后免疫减速 1 回合（手里要有防御牌）。",
+      "text": "展示手里 2 张红色位移牌——通过后免疫减速 1 回合（未通过则本关改为付费）。",
       "effects": [
         {
           "op": "conditional",
@@ -1728,7 +1793,7 @@
     },
     {
       "id": "t_vital",
-      "text": "固元：本关通过后免疫中毒 1 回合（手里要有功能牌）。",
+      "text": "展示手里 2 张黑色功能牌——通过后免疫中毒 1 回合（未通过则本关改为付费）。",
       "effects": [
         {
           "op": "conditional",
@@ -1753,7 +1818,7 @@
     },
     {
       "id": "t_empty",
-      "text": "空过：身上至少 3 枚灵枢才能过关——通过后额外获得 1 枚灵枢。",
+      "text": "展示手里 2 张黑色攻击牌——通过后获得 1 枚灵枢（未通过则本关改为付费）。",
       "effects": [
         {
           "op": "conditional",
@@ -1777,7 +1842,7 @@
     },
     {
       "id": "t_star",
-      "text": "掷指令骰，点数 ≥ 12 即通过。",
+      "text": "掷 20 面骰，点数 ≥ 12——通过后获得 1 枚灵枢（未通过则本关改为付费）。",
       "effects": [
         {
           "op": "conditional",
@@ -1798,7 +1863,7 @@
     },
     {
       "id": "t_toll",
-      "text": "出示 4 枚资源（不足则本关改为付费）。",
+      "text": "展示手里 2 张红色防御牌——通过后抽 1 张符箓（未通过则本关改为付费）。",
       "effects": [
         {
           "op": "conditional",

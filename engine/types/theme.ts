@@ -363,6 +363,14 @@ export interface TrialCard {
   readonly id: string;
   readonly text: string;
   readonly effects?: readonly Effect[];
+  /**
+   * 题面**不是**派生的（B77 规格 §6.3）。
+   *
+   * 只有一种情况该出现：`pred.kind` 不在渲染器白名单里（将来真要加非机械判定）。
+   * 带此标记的条目，门 ⑤ 只查 `text` 非空、不查「题面 == 判定」；
+   * 四套的标记总数必须等于 `EXPECTED_FALLBACK_COUNT`（今天是 0）⇒ 放宽必须显式改代码。
+   */
+  readonly fallback?: true;
 }
 
 /**
@@ -408,10 +416,41 @@ export interface Counts {
   readonly certTotal: number;
 }
 
+/**
+ * 派生文本的词表（B77 规格 §6.2）：四个通用词 + 四个牌类 + 两个牌色 = **十叶**。
+ *
+ * `types` / `colors` 的键必须是 `CardType` / `CardColor` 的枚举值 ——
+ * 题面派生拿判定谓词的 filter 直接查这张表，键写错就拼出 `undefined`。
+ */
+export interface ThemeTerms {
+  readonly hp: string;
+  readonly deck: string;
+  readonly resource: string;
+  readonly gate: string;
+  readonly types: {
+    readonly motion: string;
+    readonly attack: string;
+    readonly defense: string;
+    readonly utility: string;
+  };
+  readonly colors: {
+    readonly red: string;
+    readonly black: string;
+  };
+}
+
 /** 主题包完整结构。 */
 export interface ThemePack {
   readonly meta: ThemeMeta;
   readonly glossary: Glossary;
+  /**
+   * 派生文本的词表正身（B77 规格 §6.2；十叶齐备由门 ⑤ 校验）。
+   *
+   * ⚠️ 与 `glossary` 的分工：glossary 是**界面与规则书的名词对照**（含 hand/peak/seal 等），
+   *   `terms` 是**渲染器的取词表**——卡面（`renderEffect`）与试炼题面（`renderTrialText`）
+   *   从这里取词，所以它必须逐主题齐备；不进 IR（IR 只搬运落盘文本）。
+   */
+  readonly terms?: ThemeTerms;
   readonly counts: Counts;
   readonly factions: readonly Faction[];
   readonly identities: readonly Identity[];
