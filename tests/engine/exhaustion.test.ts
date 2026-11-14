@@ -136,7 +136,7 @@ test('B76：力竭 ⇒ 手牌上限 = ceil(hpMax/2)（7 ⇒ 4）', () => {
 test('B76：旧存档缺 exhaustedRounds ⇒ handLimitOf 按 0 处理（不 NaN）', () => {
   const s = mk(4, 7);
   const legacy: Player = JSON.parse(JSON.stringify(s.players[0]));
-  delete (legacy as Record<string, unknown>).exhaustedRounds;
+  delete (legacy as unknown as Record<string, unknown>).exhaustedRounds;
   assert.equal(handLimitOf(legacy), legacy.hpMax, '缺字段按未力竭处理（Read Focus #1）');
 });
 
