@@ -63,8 +63,22 @@ export function withoutImmunityFlags(flags: Player['flags']): Player['flags'] {
   return Object.fromEntries(Object.entries(flags).filter(([k]) => !k.startsWith(IMMUNITY_FLAG_PREFIX)));
 }
 
-/** 置「本手番授予过」标记 —— 家族 B 递减豁免的依据（规格 §4 豁免条）。 */
+/**
+ * 置「本手番内授予过」标记 —— 家族 B 递减豁免的依据（规格 §4 豁免条）。
+ *
+ * ⚠️ **只在授予发生在受害者自己手番内时置位**（B77 r5，用户裁定乙案）：
+ *   豁免的本意是救「在自己手番里刚挂上的状态，还没轮到下一次行动就被同一拍吃掉」
+ *   （r3 的病：免疫 1 回合恒为 0、封口给了就永不生效）。
+ *   若**无条件**打标记，别人手番里给的封口 / 停手番也会顺带豁免掉受害者下一个手番末的
+ *   那一拍 ⇒ 「N 个手番」实测吃掉 **N+1**（模拟器 4800 局对账：失手 1192 / 授予 996 = 1.20、
+ *   停手番 3806 / 3272 = 1.16，而 amount 全是 1）⇒ 与主规格 §6.4 和规则书印的「N 个手番」不符。
+ *   口径现由 `tests/engine/status-duration.test.ts` 钉死：**N 个手番 = 接下来 N 个完整手番**，
+ *   自己手番内授予时当前手番的剩余部分也被封（状态 >0 ⇒ 引擎与枚举同判），但**不消耗额度**。
+ *   读 `turnOrder[turnIndex]` 而不是 import `currentPlayer` —— 本模块被 legal/turn-runner 引用，
+ *   反向 import 回合模块会绕成环（判据只有一行，不值得为它引入依赖方向问题）。
+ */
 function markGranted(state: State, seat: number): State {
+  if (state.turnOrder[state.turnIndex] !== seat) { return state; }
   const p = state.players[seat];
   if (p === undefined) { return state; }
   return withPlayer(state, seat, { turn: { ...p.turn, statusGrantedThisTurn: true } });

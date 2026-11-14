@@ -64,7 +64,12 @@ test('B77 豁免：本手番授予的状态不吃这一拍（否则 immunity(1) 
 });
 
 test('B77 豁免标记经 applyStatus 真实置位，并被同手番末的结算读到', () => {
-  const s0 = mk(4, 7);
+  // ⚠️ B77 r5：授予必须发生在**受害者自己的手番内**才会置豁免位（别人手番内授予不打标记，
+  //   否则「N 个手番」会吃掉 N+1 个 ⇒ 由 tests/engine/status-duration.test.ts 钉死两种时机）。
+  //   ⇒ 这里把当前手番指到座 1，再让他给自己开免疫窗（真实场景就是 t_oath 试炼奖励）。
+  const idx1 = mk(4, 7).turnOrder.indexOf(1);
+  assert.ok(idx1 >= 0, '前提：座 1 在行动顺序里');
+  const s0 = { ...mk(4, 7), turnIndex: idx1 };
   const s1 = applyEffect({ state: s0, actor: 1 }, { op: 'immunity', status: 'poison', amount: 1 }).state;
   assert.equal(s1.players[1]!.turn.statusGrantedThisTurn, true, '授予方必须置标记（否则豁免只存在于纸面）');
   assert.equal(immunityOf(tickPlayerStatuses(s1, 1), 1, 'poison'), 1, '当回合不衰减 ⇒ 窗口完整覆盖授予那一个手番');
