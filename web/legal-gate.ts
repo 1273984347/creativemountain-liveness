@@ -34,6 +34,10 @@ import { duelPicked, isDuelParticipant } from '../engine/core/duel.ts';
 // ⚠️ B75.1：计票真值只有一份（`topVoted` 与引擎 `useCouncilVeto` 共用）；本文件不 import `legal.ts`
 //   ——「UI 门禁的独立实现」这条红线针对的是**枚举层**，不是引擎的规则函数。
 import { topVoted } from '../engine/core/council.ts';
+// B77：封锁布尔与拒因的**唯一**出处（与引擎 `performAction` 同一函数 ⇒ 三层同判）。
+//   ⚠️ 共享的是"判据"，不是"面的组装"——本文件的候选合成本来就独立于 legal.ts，
+//   这样 `legal-probe.test.ts` 的漂移守卫才量得出两侧真的不等。
+import { blockedNotice, isActionBlocked, statusOf } from '../engine/core/statuses.ts';
 
 /**
  * 行动窗口的**拒因**（null = 窗口开着）：
@@ -136,6 +140,10 @@ function targetRefusal(state: State, seat: number, target: number | undefined, l
 export function uiBlockNotice(state: State, seat: number, action: Action): string | null {
   const c = state.certification;
   const me = state.players[seat];
+  // B77：封锁类拒因**先于**各 case 自己的窗口判据给出 —— 规格 §3.6 要求三层不只布尔一致，
+  //   **先说哪一句也要一致**（引擎先判 skip、UI 却先报 pendingCert，玩家会照着错的那句去试）。
+  //   判据只有 statuses 一份：`isActionBlocked` 判布尔、`blockedNotice` 出那句话。
+  if (isActionBlocked(state, seat, action.type)) { return blockedNotice(state, seat) ?? '当前不能执行该行动。'; }
   switch (action.type) {
     // ⚠️ B76：力竭恢复——占位拒因（恢复动作不受行动窗口限制：力竭/待认证下仍可用），Task 7 充实。
     case 'RECUPERATE': {
@@ -257,8 +265,13 @@ export function uiBlockNotice(state: State, seat: number, action: Action): strin
         ? null
         : '没有可复议的失败判定（唯一的「判不通过」正是你所判 ⇒ 当事人回避）。';
     }
-    case 'PASS':
-      return 'PASS（结束手番）在数字轨没有 UI 入口。';
+    case 'PASS': {
+      // B77：此前登记为「PASS 在数字轨没有 UI 入口」；`skip_turn` 生效后它有了**唯一**入口
+      //   ——被停手番者无事可做，但仍要能把手番交出去（否则行动面空转、推进卡死）。
+      //   判据与引擎同源：`performAction('pass')` 也只在 skip 生效时接受。
+      if (statusOf(state, seat, 'skip_turn') > 0) { return null; }
+      return '没人封你的行动：本手番要行棋 / 问天 / 出牌，不能只结束。';
+    }
     case 'COMPARE': {
       // ⚠️ B19：关隘出牌比对通道（规格 §3.5 B19 定案）——判据与 probeAction 对齐。
       if (pendingGateHere(state, seat) === null) { return '你当前不在未通过的关隘格上，无需比对。'; }
@@ -428,6 +441,11 @@ export function uiCandidates(state: State, seat: number): Action[] {
     for (const card of me.hand) {
       out.push({ type: 'DUEL_SUBMIT_CARD', actor: seat, cardId: card.id });
     }
+  } else if (statusOf(state, seat, 'skip_turn') > 0) {
+    // B77：被停手番 ⇒ 行动面只剩「结束手番」。
+    //   ⚠️ 分支顺序 = 优先级：排在 pendingCert **之前** ⇒ skip 支配锁定（与引擎同款，
+    //   引擎的短路在 `legal.ts` 的 pendingCert 分支之前）。**不早退**：山议 / 认证面照常追加。
+    out.push({ type: 'PASS', actor: seat });
   } else if (me.pendingCert) {
     // ⚠️ **B71：锁定者只发非位移牌**（与引擎 `actionPhaseCandidates` 的锁定分支同款）。
     //   位移族（MOVE / ROLL_WHEEL / ABILITY）不发；阶段 / 本轮未完两条判据照旧。
@@ -438,10 +456,15 @@ export function uiCandidates(state: State, seat: number): Action[] {
     if (state.phase === '行动' && !isRoundEnd(state)) {
     pushRecuperateCandidatesUi(state, seat, out);
 
+      // B77：封口对锁定者同样生效（silence 封的是出牌/被动，与位移无关）。
+      const silencedLocked = isActionBlocked(state, seat, 'PLAY_CARD');
       for (const card of me.hand) {
         // ⚠️ B75：装备不限位移 ⇒ 必须排在 `cardHasMovement` 的 continue **之前**。
-        out.push({ type: 'EQUIP_CARD', actor: seat, cardId: card.id });
+        if (!isActionBlocked(state, seat, 'EQUIP_CARD')) {
+          out.push({ type: 'EQUIP_CARD', actor: seat, cardId: card.id });
+        }
         if (cardHasMovement(card)) { continue; }
+        if (silencedLocked) { continue; }   // 引擎会拒（封口）⇒ 不发死选项
         if (cardNeedsTarget(card)) {
           for (const target of targetCandidates(state, seat)) {
             out.push({ type: 'PLAY_CARD', actor: seat, cardId: card.id, target });
@@ -456,9 +479,14 @@ export function uiCandidates(state: State, seat: number): Action[] {
     out.push({ type: 'ROLL_WHEEL', actor: seat });
     // ⚠️ B76：力竭恢复候选（自恢 / 救援）——与引擎候选同判（独立实现，漂移守卫钉相等）。
     pushRecuperateCandidatesUi(state, seat, out);
+    // B77：封口 ⇒ 不出牌候选（装备不视为发言 ⇒ 照发；与引擎 SILENCE_BLOCKED 同判）。
+    const silenced = isActionBlocked(state, seat, 'PLAY_CARD');
     for (const card of me.hand) {
       // ⚠️ B75：与引擎 `actionPhaseCandidates` 同款 —— 每张手牌并列一条装备候选。
-      out.push({ type: 'EQUIP_CARD', actor: seat, cardId: card.id });
+      if (!isActionBlocked(state, seat, 'EQUIP_CARD')) {
+        out.push({ type: 'EQUIP_CARD', actor: seat, cardId: card.id });
+      }
+      if (silenced) { continue; }
       if (cardNeedsTarget(card)) {
         for (const target of targetCandidates(state, seat)) {
           out.push({ type: 'PLAY_CARD', actor: seat, cardId: card.id, target });
@@ -468,7 +496,8 @@ export function uiCandidates(state: State, seat: number): Action[] {
       }
     }
     const avail = abilityAvailability(state, seat);
-    if (avail.usable) {
+    // B77：封口同样封被动（与引擎 `avail.usable && !isActionBlocked(..., 'ABILITY')` 同判）。
+    if (avail.usable && !isActionBlocked(state, seat, 'ABILITY')) {
       const abilityId = activeAbilityId(state, seat);
       if (avail.needsTarget) {
         for (const target of targetCandidates(state, seat)) {

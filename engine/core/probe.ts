@@ -111,15 +111,22 @@ export function probeAction(state: State, action: Action): ProbeResult {
       return byRef(performAction(s, action.actor, 'act', payload), s);
     }
     case 'PASS': {
-      const r = advanceTurn(s, MODE);
+      // B77：PASS 从此是**有语义的动作**（被停手番者的唯一出口）⇒ 判据两步，与引擎同源：
+      //   ① `performAction('pass')` 必须被接受（引用相等 = 引擎拒 = 没人封你，枚举不该发它）；
+      //   ② 随后的推进必须真的换人 / 立起对峙。
+      //   ⚠️ 原来只跑 ② ：`advanceTurn` 对任何正常手番都会推进 ⇒ 没被封锁时探针也会判"接受"，
+      //      这正是 PASS 此前"UI 登记无入口、探针却判可行"的三层各执一词。
       // 判据**只有字段这一条**（理由见文件头通道 ③）：手番推进 = 接受；
       // 本次调用立起对峙 = 也接受，只是推进挂起。
       // ⚠️ 不再判 `r !== s`：`turnIndex` / `round` / `duel` 都随不可变更新一起换对象，
       //   引用相同时它们必然逐字相同 ⇒ 「引用是否变化」永远不可能改变判定结果
       //   （变异实测：加不加它，用例集全绿）。留着只会误导读者以为单判字段不够。
-      const advanced = r.turnIndex !== s.turnIndex || r.round !== s.round;
+      const acted = performAction(s, action.actor, 'pass');
+      if (acted === s) { return reject('没人封你的行动：本手番不能只结束而不行动'); }
+      const r = advanceTurn(acted, MODE);
+      const advanced = r.turnIndex !== acted.turnIndex || r.round !== acted.round;
       // 「本次调用把对峙从无到有立起来」——只有这里能区分「结算已完成、推进等对峙」。
-      const duelOpened = s.duel === null && r.duel !== null;
+      const duelOpened = acted.duel === null && r.duel !== null;
       if (advanced) { return { ok: true, reason: '' }; }
       if (duelOpened) {
         return {

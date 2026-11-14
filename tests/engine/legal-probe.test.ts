@@ -89,35 +89,47 @@ test('试跑：COMPARE 在**关隘格上**被引擎接受（B53：出牌比对�
   assert.equal(r.ok, true, `停在关隘格上时出牌比对必须被引擎接受；实际拒因=${r.reason}`);
 });
 
-test('试跑：PASS 判据＝引擎是否接受——mk() 上 PASS 合法（计划里那条拒因经实测不成立）', () => {
+/**
+ * B77：给座 `seat` 挂 `n` 层 `skip_turn`。
+ *
+ * ⚠️ 为什么下面几条 PASS oracle 都要先套它：B77 起 `performAction('pass')` 只在**被停手番**时
+ *   接受 —— 依据是规格 §3.1「行动三选一」（没有"自愿什么都不做"这条），且
+ *   `skip_turn_applied` 计数器靠「停手番：」日志计数 ⇒ 若引擎允许主动 PASS，
+ *   那个计数器就会被自愿跳过灌水、不再等于"手番真被跳过"。
+ *   ⇒ 本文件这几条 oracle 的**意图不变**（探针必须如实报告引擎接受与否），变的只是期望值。
+ */
+const skipOn = (s: import('../../engine/core/state.ts').State, seat = 0, n = 1) => ({
+  ...s,
+  players: s.players.map((p) => (p.seat === seat ? { ...p, statuses: { ...p.statuses, skip_turn: n } } : p)),
+});
+
+test('试跑：PASS 判据＝引擎是否接受——B77 起"未被封"即拒，"被封"即接受', () => {
   const s = mk();
-  // ⚠️ 计划 Task 4 Step 1 写的是 `probeAction(mk(), {type:'PASS', actor:0}).ok === false`，
-  //   理由「座 0 不是当前手番 ⇒ 不推进」。**两条都不成立**：
-  //   · `createInitialState` 的 `turnOrder` 就是座位序、`turnIndex` 为 0
-  //     ⇒ `currentPlayer(mk()) === 0`（下面自查钉住）；
-  //   · 更根本的是 **`advanceTurn(state, mode)` 没有 actor 参数**，
-  //     「谁提交 PASS」引擎从不看，所以「不是当前手番」在引擎里根本不是一个可拒绝的理由。
-  //   实测 `advanceTurn(mk(), 'standard')` 把 turnIndex 从 0 推到 1 ⇒ PASS **合法**。
-  //   断言因此改成「合法（手番确实推进）」，另用下面一条钉住**真·被拒**的两条路径
-  //   与「结算时立起对峙＝合法但推进挂起」这条本轮修正的假阴性。
-  assert.equal(currentPlayer(s), 0, '前提自查：mk() 的当前手番就是座 0（计划的拒因以此为反而不成立）');
-  const r = probeAction(s, { type: 'PASS', actor: 0 });
-  assert.equal(r.ok, true, `手番确实推进 ⇒ PASS 合法；实际拒因=${r.reason}`);
+  // ⚠️ 保留本轮原有两条知识（它们与 B77 无关，仍然成立）：
+  //   · `createInitialState` 的 `turnOrder` 就是座位序、`turnIndex` 为 0 ⇒ `currentPlayer(mk()) === 0`；
+  //   · `advanceTurn(state, mode)` **没有 actor 参数** ⇒「谁提交 PASS」在引擎里根本不是一个可拒绝的理由。
+  //   B77 新增的是第三条：PASS 的合法性判据是 `skip_turn > 0`，不是"手番能不能推进"。
+  assert.equal(currentPlayer(s), 0, '前提自查：mk() 的当前手番就是座 0');
+  const free = probeAction(s, { type: 'PASS', actor: 0 });
+  assert.equal(free.ok, false, '没被停手番 ⇒ 行动三选一，不存在"自愿跳过"');
+  assert.match(free.reason, /没人封你/, `拒因要说人话：实际=${free.reason}`);
+  const sealed = probeAction(skipOn(s), { type: 'PASS', actor: 0 });
+  assert.equal(sealed.ok, true, `被封 ⇒ PASS 是唯一出口且手番确实推进；实际拒因=${sealed.reason}`);
   // ⚠️ 这里**不写**「原 state 的 turnIndex / duel 没被试跑改写」：`isolatedState` 返回新的顶层对象
   //   且引擎全程不可变更新 ⇒ 那两条恒真、任何实现都改不红（本轮变异实测确认）。
   //   「试跑不改写原 state」的真判据是随机源：见文件顶部常驻隔离用例 + 表驱动 loop 的逐条 rng 比对。
 });
 
-test('试跑：PASS 的两条真·被拒路径 + 结算立对峙必须算合法（本轮修正的假阴性）', () => {
+test('试跑：PASS 的两条真·被拒路径 + 结算立对峙必须算合法（本轮修正的假阴性，B77 起一律在被封局面下测）', () => {
   // ① B13：**已有一场对峙未结算** ⇒ `advanceTurn` 开头 `state.duel !== null` 那条早退直接 `return state`。
   //    对峙用真实入口 startDuel 造，不手拼 duel 字段。
-  const dueling = startDuel(mk(), 0, 1);
+  const dueling = skipOn(startDuel(mk(), 0, 1));
   assert.ok(dueling.duel !== null, '前提自查：startDuel 必须真的立起对峙，否则这条用例是空的');
   const blocked = probeAction(dueling, { type: 'PASS', actor: 0 });
-  assert.equal(blocked.ok, false, 'duel !== null ⇒ 手番不推进 ⇒ PASS 被拒');
-  assert.match(blocked.reason, /手番未推进/, `拒因要说清是「没推进」：实际=${blocked.reason}`);
+  assert.equal(blocked.ok, false, 'duel !== null ⇒ 手番不推进 ⇒ PASS 被拒（即便已被封）');
+  assert.match(blocked.reason, /手番未推进/, `拒因要说清是「没推进」而不是「没人封你」：实际=${blocked.reason}`);
   // ② 无当前手番：`currentPlayer` 返回 -1 ⇒ `advanceTurn` 的 `seat < 0` 早退同样原样返回。
-  const noActor = probeAction(noActorScene(), { type: 'PASS', actor: 0 });
+  const noActor = probeAction(skipOn(noActorScene()), { type: 'PASS', actor: 0 });
   assert.equal(noActor.ok, false, '全员出局 ⇒ 没有手番可推进 ⇒ PASS 被拒');
   assert.match(noActor.reason, /手番未推进/);
   // ③ 最阴的一条，也是本轮修正的那条：**手番结算时才立起对峙**
@@ -125,7 +137,7 @@ test('试跑：PASS 的两条真·被拒路径 + 结算立对峙必须算合法�
   //    此时 `finishTurn` 已跑、`turn.finished` 已置、`duel` 对象已生成 ⇒ **引擎确实接受了这次 PASS**，
   //    只是手番推进要挂起，等双方各自锁定亮牌后再走一次 `advanceTurn`（B13）。
   //    旧实现在这里报 `ok:false`，把一条合法 PASS 判成被拒 ⇒ 对 Task 5 是**错误的合法性 oracle**。
-  const settleIntoDuel = settleIntoDuelScene();
+  const settleIntoDuel = skipOn(settleIntoDuelScene());
   // 前提自查：本局面必须真的走「换了对象、duel 立起、但 turnIndex 一格没动」那条分支，
   //   否则下面这条 ok=true 就成了在测一个不存在的分支（引擎一改就能悄悄失效）。
   const raw = advanceTurn(settleIntoDuel, 'standard');
@@ -290,11 +302,13 @@ const PROBE_CASES: readonly ProbeCase[] = [
   { label: 'CERTIFY_ANSWER@未质疑', scene: pendingScene, action: { type: 'CERTIFY_ANSWER', actor: 1, target: 0, passed: true }, ok: false, reasonRe: /未发起质疑/ },
   { label: 'CERTIFY_APPEAL_VOTE@复议中', scene: appealedScene, action: { type: 'CERTIFY_APPEAL_VOTE', actor: 3, target: 0, overturn: true }, ok: true },
   { label: 'CERTIFY_APPEAL_VOTE@无人复议', scene: pendingScene, action: { type: 'CERTIFY_APPEAL_VOTE', actor: 1, target: 0, overturn: true }, ok: false, reasonRe: /未申请复议/ },
-  // ---- 通道 ③：PASS 以「引擎是否接受」裁决（手番推进 or 结算时立起对峙）----
-  { label: 'PASS@有当前手番', scene: mk, action: { type: 'PASS', actor: 0 }, ok: true },
-  { label: 'PASS@对峙未决', scene: () => startDuel(mk(), 0, 1), action: { type: 'PASS', actor: 0 }, ok: false, reasonRe: /手番未推进/ },
-  { label: 'PASS@结算才立对峙（引擎已接受，推进挂起待对峙结算）', scene: settleIntoDuelScene, action: { type: 'PASS', actor: 0 }, ok: true, reasonRe: /挂起/ },
-  { label: 'PASS@无当前手番', scene: noActorScene, action: { type: 'PASS', actor: 0 }, ok: false, reasonRe: /手番未推进/ },
+  // ---- 通道 ③：PASS 以「引擎是否接受」裁决。B77 起第一道判据是 `skip_turn > 0`（行动三选一，
+  //      没有"自愿跳过"），其后才是「手番推进 or 结算时立起对峙」——两条老 oracle 原样保留。----
+  { label: 'PASS@未被封（行动三选一 ⇒ 不许自愿跳过）', scene: mk, action: { type: 'PASS', actor: 0 }, ok: false, reasonRe: /没人封你/ },
+  { label: 'PASS@被停手番', scene: () => skipOn(mk()), action: { type: 'PASS', actor: 0 }, ok: true },
+  { label: 'PASS@对峙未决', scene: () => skipOn(startDuel(mk(), 0, 1)), action: { type: 'PASS', actor: 0 }, ok: false, reasonRe: /手番未推进/ },
+  { label: 'PASS@结算才立对峙（引擎已接受，推进挂起待对峙结算）', scene: () => skipOn(settleIntoDuelScene()), action: { type: 'PASS', actor: 0 }, ok: true, reasonRe: /挂起/ },
+  { label: 'PASS@无当前手番', scene: () => skipOn(noActorScene()), action: { type: 'PASS', actor: 0 }, ok: false, reasonRe: /手番未推进/ },
   // ---- 未接线：只能显式判拒 ----
   { label: 'COMPARE@不在关隘格', scene: mk, action: { type: 'COMPARE', actor: 0, cardId: 'c_gate_trial', target: 1 }, ok: false, reasonRe: /关隘格/ },
   // ---- B18：关隘通道（GATE_RESOLVE）——不在关隘格上必拒 ----

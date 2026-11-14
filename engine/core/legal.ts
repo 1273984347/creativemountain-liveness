@@ -137,6 +137,12 @@ function actionPhaseCandidates(state: State, seat: number): Action[] {
     }
     return out;
   }
+  // B77 封锁第一层：被停手番 ⇒ **整个行动面只剩「结束手番」**。
+  //   ⚠️ 位置就是纪律：必须排在 pendingGate / pendingBarrier / duel 三个早退分支**之后**
+  //     （那三段本来就不受行动窗口判据约束，写在前头会把解阻塞通道一起关掉 ⇒ 被封者永远
+  //     卡在关隘上，规格 §2.6 黄6 + §3.6 豁免族），且排在 pendingCert **之前**
+  //     ⇒ skip 支配锁定：停手番期间连"打非位移牌"的资格也没有（D6 优先级 skip > silence）。
+  if (statusOf(state, seat, 'skip_turn') > 0) { return [{ type: 'PASS', actor: seat }]; }
   // ⚠️ **B71：待认证锁定者仍可打非位移牌**（规格 §5.1 / §13.4 ③；引擎 `act` 分支自 B66 起只拒位移牌）
   //   ⇒ 行动面**不再整面关闭**：只发**非位移** `PLAY_CARD`（位移判定用 `cardHasMovement`，
   //   与引擎 `performAction` 同源 ⇒ 枚举与引擎同判，不再窄于引擎）。
@@ -149,11 +155,16 @@ function actionPhaseCandidates(state: State, seat: number): Action[] {
     // ⚠️ B76：力竭恢复候选（恢复不是位移，不受锁定影响——设计规格 §2/§3）。
     //   自恢（本人力竭 ∧ 灵枢 ≥ 2）与救援（本人不力竭 ∧ 存体力竭他人 ∧ 灵枢 ≥ 1，任意距离）。
     pushRecuperateCandidates(state, seat, out);
+    // B77：封口对锁定者同样生效（silence 封的是"出牌/被动"，与位移无关 ⇒ 非位移牌也被封）。
+    const silencedLocked = isActionBlocked(state, seat, 'PLAY_CARD');
     for (const card of p.hand) {
       // ⚠️ B75：装备**不限位移**（引擎 equip 分支不查 pendingCert ⇒ 锁定期间照样能装备）；
       //   必须排在 `cardHasMovement` 的 continue **之前**，否则位移牌被跳过的同时也跳过了装备。
-      out.push({ type: 'EQUIP_CARD', actor: seat, cardId: card.id });
+      if (!isActionBlocked(state, seat, 'EQUIP_CARD')) {
+        out.push({ type: 'EQUIP_CARD', actor: seat, cardId: card.id });
+      }
       if (cardHasMovement(card)) { continue; }   // 引擎会拒（G-b 已修）⇒ 不发
+      if (silencedLocked) { continue; }          // 引擎会拒（封口）⇒ 同样不发
       if (cardNeedsTarget(card)) {
         for (const target of targetCandidates(state, seat)) {
           out.push({ type: 'PLAY_CARD', actor: seat, cardId: card.id, target });
@@ -165,11 +176,7 @@ function actionPhaseCandidates(state: State, seat: number): Action[] {
     return out;
   }
   if (!actionWindowOpen(state, seat)) { return []; }
-  // B77 封锁。⚠️ 位置就是纪律：必须在上面 pendingGate / pendingBarrier / duel 三个早退
-  //   分支**之后**——那三段本来就不受行动窗口判据约束，写在前头会把解阻塞通道一起关掉
-  //   ⇒ 被封者永远卡在关隘上（该处注释早已警告过，规格 §2.6 黄6）。
-  //   skip 生效时行动面只剩「结束手番」；此时**不得**再发通道候选（已由早退分支保证）。
-  if (statusOf(state, seat, 'skip_turn') > 0) { return [{ type: 'PASS', actor: seat }]; }
+  // B77 的 skip 短路在 pendingCert **之前**（skip 支配锁定），封口判据在下面两处循环里。
   const out: Action[] = [
     { type: 'MOVE', actor: seat, steps: 0 },   // 步数由骰子定，玩家不可选
     { type: 'ROLL_WHEEL', actor: seat },

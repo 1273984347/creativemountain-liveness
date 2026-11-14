@@ -25,7 +25,7 @@ import type { RuleMode } from '../scales.ts';
 import type { Effect } from '../types/theme.ts';
 import { clearTurnStates, type State } from './state.ts';
 // B77 家族 B：状态结算的唯一出处（力竭递减仍留在 endRound，两者不同锚，见规格 §4）。
-import { isActionBlocked, tickPlayerStatuses } from './statuses.ts';
+import { isActionBlocked, statusOf, tickPlayerStatuses } from './statuses.ts';
 import { recoverFromExhaustion, triggerExhaustion } from './exhaustion.ts';
 
 /** 流程运行结果。 */
@@ -208,13 +208,16 @@ function retarget(effect: Effect, target: number | undefined): Effect {
  *
  * ⚠️ `ask` ↔ `ROLL_WHEEL`（问天）：命名是原作「转盘」的遗留，映射见 `probe.ts:105`。
  */
-export type ActionFace = 'move' | 'ask' | 'act' | 'equip' | 'recuperate';
+export type ActionFace = 'move' | 'ask' | 'act' | 'equip' | 'recuperate' | 'pass';
 const FACE_OF_ACTION: Record<ActionFace, string> = {
   move: 'MOVE',
   ask: 'ROLL_WHEEL',
   act: 'PLAY_CARD',
   equip: 'EQUIP_CARD',
   recuperate: 'RECUPERATE',
+  // PASS 属豁免族（isActionBlocked 恒 false）⇒ 上面那道封锁检查对它不起作用，
+  // 「没人封你时拒 PASS」由下面的 `case 'pass'` 自己判。
+  pass: 'PASS',
 };
 
 export function performAction(
@@ -366,6 +369,21 @@ export function performAction(
       next = {
         ...next,
         log: [...next.log, { round: next.round, turnIndex: next.turnIndex, actor: seat, kind: 'equip', message: `装备「${card.name}」` }],
+      };
+      break;
+    }
+    case 'pass': {
+      // B77：被停手番者的唯一出口。**只写日志**——结算（地形 / 收入 / 护盾 / 裁牌）与推进
+      //   仍归 `advanceTurn` → `finishTurn`，否则 PASS 会变成第二条"绕过地形结算"的捷径
+      //   （B18-c 把回合末流程与手番推进解耦的本意就在这）。
+      // ⚠️ 判据是 skip_turn 本身，不是 isActionBlocked —— PASS 属豁免族，对它恒 false。
+      if (statusOf(state, seat, 'skip_turn') <= 0) { return state; }   // 没人封你 ⇒ 拒（引用相等）
+      next = {
+        ...state,
+        log: [...state.log, {
+          round: state.round, turnIndex: state.turnIndex, actor: seat, kind: 'status',
+          message: `停手番：座位 ${String(seat)}`,
+        }],
       };
       break;
     }

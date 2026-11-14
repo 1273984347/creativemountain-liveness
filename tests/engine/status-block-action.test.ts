@@ -11,7 +11,8 @@ import assert from 'node:assert/strict';
 import { isActionBlocked, blockedNotice } from '../../engine/core/statuses.ts';
 import { candidatesOf } from '../../engine/core/legal.ts';
 import { performAction } from '../../engine/core/turn-runner.ts';
-import { gateScene, mk } from './fixtures.ts';
+import { uiCandidates } from '../../web/legal-gate.ts';
+import { gateScene, mk, putPending } from './fixtures.ts';
 import type { Action } from '../../engine/core/action.ts';
 import type { State } from '../../engine/core/state.ts';
 
@@ -84,6 +85,21 @@ test('B77：skip 时引擎同样拒行棋、但拒不掉豁免族（停手番期
   const s = atSeat(withStatuses(mk(4, 7), 0, { skip_turn: 1 }), 0);
   assert.equal(performAction(s, 0, 'move'), s, 'skip 封行棋');
   assert.equal(performAction(s, 0, 'ask'), s, 'skip 封问天');
+});
+
+test('B77：待认证锁定 + 封口同时成立 ⇒ 锁定留下的非位移牌也被封口拿掉（两层同判）', () => {
+  // B71 让锁定者仍能拿到**非位移** PLAY_CARD；B77 的封口要在这条分支里也生效，
+  // 否则枚举会发一条引擎必拒的死选项（正是 B68/B71 一路在防的"枚举领先引擎"）。
+  let s = mk(4, 7);
+  s = putPending(s, [0]);
+  s = withStatuses(s, 0, { silence: 1 });
+  const engine = typesOf(candidatesOf(s, 0));
+  const ui = typesOf(uiCandidates(s, 0));
+  assert.ok(!engine.includes('PLAY_CARD'), `引擎侧仍发了出牌候选：${engine.join(',')}`);
+  assert.ok(!ui.includes('PLAY_CARD'), `UI 侧仍发了出牌候选：${ui.join(',')}`);
+  assert.deepEqual(ui, engine, '两层候选集必须逐字相等（漂移守卫的同一条纪律）');
+  // 装备不受封口影响 ⇒ 锁定者至少还剩一条行动（不是整面清零）。
+  assert.ok(engine.includes('EQUIP_CARD'), '装备不视为发言 ⇒ 锁定+封口下仍应可装备');
 });
 
 test('B77 死锁钉子：停在未通过关隘上的被封者，仍能选通道', () => {

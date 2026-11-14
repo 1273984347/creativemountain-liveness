@@ -272,6 +272,24 @@ function recuperate(target?: number): void {
   render();
 }
 
+/**
+ * B77：结束手番 —— 被 `skip_turn` 封住时的唯一出口。同款「先问闸再提交」（判据只在
+ * legal-gate 与引擎两处，UI 不管显隐之外的判断）；PASS 本身**不结算任何东西**，
+ * 地形 / 收入 / 护盾 / 裁牌仍由随后的 `advanceTurn → finishTurn` 负责（B18-c 解耦）。
+ */
+function passTurn(): void {
+  const seat = ui.seat;
+  const action: Action = { type: 'PASS', actor: seat };
+  if (!uiAllows(ui.state, seat, action)) {
+    ui.notice = uiBlockNotice(ui.state, seat, action) ?? '当前不能结束手番。';
+    render();
+    return;
+  }
+  ui.state = advanceTurn(performAction(ui.state, seat, 'pass'), ui.mode);
+  ui.notice = '已停手番：本回合你没有采取行动（回合末结算照常）。';
+  render();
+}
+
 function equipCard(cardId: string): void {
   const seat = ui.seat;
   ui.pendingTargetCardId = null;
@@ -600,6 +618,10 @@ function renderActions(): HTMLElement {
     } else {
       body.push(button('救援座位 ' + String(a.target) + '（1 灵枢，占本手番）', () => { recuperate(a.target); }));
     }
+  }
+  // ⚠️ B77：被停手番 ⇒ 行动面只剩这一条候选，按钮也只在枚举真的发出 PASS 时出现。
+  if (uiCandidates(ui.state, seat).some((a) => a.type === 'PASS')) {
+    body.push(button('结束手番（被封：本回合无法行动）', () => { passTurn(); }));
   }
   if (uiCandidates(ui.state, seat).some((a) => a.type === 'EQUIP_CARD')) {
     body.push(button('装备手牌（点一张牌）', () => {
