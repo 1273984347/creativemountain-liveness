@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { createInitialState, type State } from '../../engine/core/state.ts';
+import type { State } from '../../engine/core/state.ts';
 import { applyEffect } from '../../engine/ops/registry.ts';
 import { finishTurn } from '../../engine/core/turn-runner.ts';
 import { recoverFromExhaustion } from '../../engine/core/exhaustion.ts';
