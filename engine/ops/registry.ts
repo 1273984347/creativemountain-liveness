@@ -30,7 +30,7 @@ import {
 // ⚠️ 与 statuses.ts 构成 ESM 循环引用（那边为复用 discard_self 而 import 本文件的 applyEffect）：
 //   两边被跨模块使用的都是**函数声明**（提升、非 TDZ），且都只在运行时调用 ⇒ 安全。
 //   若将来谁改成 `const` 箭头函数导出，这里会以 undefined 崩在运行时而非编译期。
-import { applyStatus, grantImmunity } from '../core/statuses.ts';
+import { applyStatus, grantImmunity, statusOf } from '../core/statuses.ts';
 
 /**
  * 到达峰顶 → **进入活人认证流程**（规格 §5.1）。
@@ -352,9 +352,14 @@ export const OPS: OpHandlers = {
     const rolls: number[] = [rollD6(ctx.state.rng)];
     for (let i = 0; i < extra; i++) { rolls.push(rollD6(ctx.state.rng)); }
     const roll = Math.max(...rolls);
-    // ⚠️ B76：力竭 ⇒ 骰面 -1（下限 1）——**先减后加**：惩罚作用在骰面本身，
-    //   moveBonus（外挂加成，写入点恒非负）在此之后叠加。extra_roll 取最高后的最终骰面一并受罚。
-    const effective = (pl.exhaustedRounds ?? 0) > 0 ? Math.max(1, roll - 1) : roll;
+    // 位移罚**单一出处**（规格 B77 §3.2，取代 B76 的「力竭 −1」三元式）：
+    //   penalty = 力竭(0|1) + slow 层数，先减后加 —— moveBonus（外挂加成，写入点恒非负）
+    //   在罚之后叠加，extra_roll 取最高后的最终骰面一并受罚（B76 口径不变）。
+    // ⚠️ 别在别处再写 `max(1, …)`：两处下限必漂移（E94）。slow 为 0 层时本式与 B76 逐字等价，
+    //   这条等价性由 tests/engine/slow-movement.test.ts 最后一条用例钉住。
+    const exhaustedPart = (pl.exhaustedRounds ?? 0) > 0 ? 1 : 0;
+    const slowPart = statusOf(ctx.state, t.seat, 'slow');
+    const effective = Math.max(1, roll - (exhaustedPart + slowPart));
     const peak = ctx.state.board.peakIndex;
     const raw = pl.position + effective + pl.turn.moveBonus;
     const next = Math.min(peak, raw);
@@ -363,6 +368,12 @@ export const OPS: OpHandlers = {
       turn: { ...pl.turn, movedThisTurn: true, moveBonus: 0 },
     });
     state = { ...state, lastDice: roll };
+    // slow_applied 计数器只在**真的少走**时记（写入 ≠ 生效，规格 §9/§10 的同一条纪律）：
+    // 骰面已被下限兜住时（例：骰 1、slow 1）减速没有产生任何后果，不该计入读数。
+    const slowApplied = Math.min(slowPart, Math.max(0, roll - effective - exhaustedPart));
+    if (slowApplied > 0) {
+      state = withLog(state, ctx, 'status', `减速生效：座位 ${String(t.seat)}（-${String(slowApplied)} 格）`);
+    }
     if (extra > 0) {
       // 机会用完即清零（不累积到下一回合）
       state = { ...state, extraRolls: 0 };
