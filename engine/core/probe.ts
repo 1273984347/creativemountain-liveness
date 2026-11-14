@@ -158,5 +158,7 @@ export function probeAction(state: State, action: Action): ProbeResult {
     case 'EQUIP_CARD': return byRef(performAction(s, action.actor, 'equip', { cardId: action.cardId }), s);
     // ⚠️ B75：否决有显式 `{ok,note,state}` 契约 ⇒ 与 castVote 同款用 `byFlag`。
     case 'COUNCIL_VETO': { const r = useCouncilVeto(s, action.actor); return byFlag(r.ok, r.note, r.state, s); }
+    // ⚠️ B76：力竭恢复——byRef 同款（RECUPERATE 结算的拒绝以引用相等表达，Task 6 落引擎分支）。
+    case 'RECUPERATE': return byRef(performAction(s, action.actor, 'recuperate', action.target === undefined ? {} : { target: action.target }), s);
   }
 }

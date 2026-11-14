@@ -23,7 +23,8 @@ export type ActionType =
   | 'CERTIFY_MUTUAL_SIGN'
   | 'DUEL_SUBMIT_CARD'
   | 'EQUIP_CARD'
-  | 'COUNCIL_VETO';
+  | 'COUNCIL_VETO'
+  | 'RECUPERATE';
 
 /**
  * 声明式动作。`type` 为判别式字段。
@@ -94,4 +95,11 @@ export type Action =
    * ⚠️ 只能由持 `council_veto` 特权者在**所有存活玩家都已投票之后、结算之前**提交
    *   ——否决的对象是「本次投票结果」，投完票是硬前置。
    */
-  | { readonly type: 'COUNCIL_VETO'; readonly actor: number };
+  | { readonly type: 'COUNCIL_VETO'; readonly actor: number }
+  /**
+   * B76：力竭恢复（设计规格 §3）——**自恢**（无 target：本人力竭、花 2 灵枢、占 1 手番行动）
+   * 与**救援**（有 target：目标力竭、自己不力竭、花 1 灵枢、任意距离）。两者共用成员，
+   * 按 target 有无区分（镜像 PLAY_CARD 的 target? 形状）。
+   * ⚠️ `pendingCert` 下允许（救援 / 自恢不是位移，不触 §5.1 锁定）。
+   */
+  | { readonly type: 'RECUPERATE'; readonly actor: number; readonly target?: number };

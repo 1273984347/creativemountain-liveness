@@ -35,6 +35,8 @@ export function actionKey(a: Action): string {
     case 'EQUIP_CARD': return `equip:${a.cardId}`;
     // ⚠️ B75：否决 —— **单段无冒号**（无参数：投给谁由山议当前的票数榜首决定，不是选择项）。
     case 'COUNCIL_VETO': return 'council_veto';
+    // ⚠️ B76：力竭恢复 —— 无 target = 单段 `recuperate`（自恢）；有 target = 两段 `recuperate:<seat>`（救援，与 `vote:` 同款座位段）。
+    case 'RECUPERATE': return a.target === undefined ? 'recuperate' : `recuperate:${a.target}`;
   }
 }
 
@@ -162,6 +164,13 @@ function decodeKey(key: string): Action {
     case 'equip': return { type: 'EQUIP_CARD', actor: -1, cardId: need(parts[1]) };
     // ⚠️ B75：否决 —— 无冒号单段，head 即整串；带尾段（`council_veto:junk`）同样落在单射校验里。
     case 'council_veto': return { type: 'COUNCIL_VETO', actor: -1 };
+    // ⚠️ B76：decodeKey 按**头段**分派 ⇒ `recuperate` 与 `recuperate:3` 的 head 同为 'recuperate'，
+    //   在同一 case 内按段数分派：单段 = 自恢（无 target）；两段 = 救援（座位段走 num() ⇒ 非整数 / 空段抛错）。
+    case 'recuperate': {
+      if (parts.length === 1) { return { type: 'RECUPERATE', actor: -1 }; }
+      const target = num(parts[1]);
+      return { type: 'RECUPERATE', actor: -1, target };
+    }
     default: throw new Error(`未知动作 key：${key}`);
   }
 }

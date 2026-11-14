@@ -36,6 +36,9 @@ const SAMPLES: Action[] = [
   // ⚠️ B75：装备与否决（spec §4 / §6）—— `equip:<cardId>` 含牌 id 段，`council_veto` 是**单段无冒号**。
   { type: 'EQUIP_CARD', actor: 0, cardId: 'c_x' },
   { type: 'COUNCIL_VETO', actor: 0 },
+  // ⚠️ B76：力竭恢复（单段自恢 / 两段救援各一条——根因守卫要求每个成员都有往返样本）。
+  { type: 'RECUPERATE', actor: 0 },
+  { type: 'RECUPERATE', actor: 0, target: 3 },
 ];
 
 test('key 往返：withActor(decode(encode(a)), a.actor) 与 a 等价', () => {
@@ -48,9 +51,10 @@ test('key 唯一：SAMPLES 互不相同 ⇒ key 集合大小相等（actor 不�
   const keys = SAMPLES.map((a) => actionKey(a));
   // 样本数钉死：B15 契约修正后复议票（overturn 对）与应答（passed 对）各占两条 = 17 条；
   // B69 补齐 ActionType 全成员覆盖（关隘通道 / 裂隙通道 / 互签 / 对峙选牌各一条）⇒ 21 条；
-  // B75 装备与否决各一条 ⇒ 23 条。
+  // B75 装备与否决各一条 ⇒ 23 条；
+  // B76 力竭恢复（自恢 / 救援各一条）⇒ 25 条。
   // 少一条 ⇒ 断言会因 keys.length 同步变小而空转，故必须先固定样本总数。
-  assert.equal(keys.length, 23, '样本被误删，唯一性断言失去覆盖面');
+  assert.equal(keys.length, 25, '样本被误删，唯一性断言失去覆盖面');
   assert.equal(new Set(keys).size, keys.length, `key 撞车：${keys.join(' | ')}`);
 });
 

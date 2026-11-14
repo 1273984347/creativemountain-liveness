@@ -137,6 +137,20 @@ export function uiBlockNotice(state: State, seat: number, action: Action): strin
   const c = state.certification;
   const me = state.players[seat];
   switch (action.type) {
+    // ⚠️ B76：力竭恢复——占位拒因（恢复动作不受行动窗口限制：力竭/待认证下仍可用），Task 7 充实。
+    case 'RECUPERATE': {
+      const meNow = me;
+      if (action.target === undefined) {
+        if ((meNow?.exhaustedRounds ?? 0) === 0) { return '你并未力竭，无需自恢'; }
+        if ((meNow?.resource ?? 0) < 2) { return '灵枢不足（自恢需 2）'; }
+        return null;
+      }
+      const target = state.players[action.target];
+      if ((meNow?.exhaustedRounds ?? 0) > 0) { return '力竭期间不能救援他人'; }
+      if (target === undefined || !target.alive || (target.exhaustedRounds ?? 0) === 0) { return '目标并未力竭'; }
+      if ((meNow?.resource ?? 0) < 1) { return '灵枢不足（救援需 1）'; }
+      return null;
+    }
     case 'MOVE':
     case 'ROLL_WHEEL':
       return actionWindowRefusal(state, seat)?.message ?? null;

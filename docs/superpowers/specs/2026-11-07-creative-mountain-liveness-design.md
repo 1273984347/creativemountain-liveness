@@ -652,6 +652,8 @@ type Action =
   | { type: 'CERTIFY_MUTUAL_SIGN'; actor: number; target: number }
   | { type: 'DUEL_SUBMIT_CARD'; actor: number; cardId: string }
   | { type: 'EQUIP_CARD'; actor: number; cardId: string }
+  /** B76：力竭恢复——自恢（无 target，2 灵枢）/ 救援（有 target，1 灵枢）。pendingCert 下允许；力竭者可自恢不可救援。 */
+  | { type: 'RECUPERATE'; actor: number; target?: number }
   | { type: 'COUNCIL_VETO'; actor: number };
 ```
 

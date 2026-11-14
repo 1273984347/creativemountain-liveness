@@ -202,7 +202,7 @@ function retarget(effect: Effect, target: number | undefined): Effect {
 export function performAction(
   state: State,
   seat: number,
-  action: 'move' | 'ask' | 'act' | 'equip',
+  action: 'move' | 'ask' | 'act' | 'equip' | 'recuperate',
   payload: { readonly cardId?: string; readonly target?: number } = {},
 ): State {
   const player = state.players[seat];
@@ -292,6 +292,10 @@ export function performAction(
       }
       next = { ...next, log: [...next.log, { round: next.round, turnIndex: next.turnIndex, actor: seat, kind: 'card', message: `行事：打出「${card.name}」` }] };
       break;
+    }
+    // ⚠️ B76：力竭恢复——T5 编译桩（T6 以测试驱动落真语义：自恢 2 / 救援 1 / pendingCert 允许）。
+    case 'recuperate': {
+      return state;
     }
     case 'equip': {
       // ⚠️ B75（设计 §4.1）：装备 = 把手牌**转为常驻装备**（公开可见、无被动效果、免费、不占手牌上限）。
