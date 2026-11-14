@@ -24,7 +24,7 @@ import { settleRoundEndGoals } from '../goals/settle.ts';
 import type { RuleMode } from '../scales.ts';
 import type { Effect } from '../types/theme.ts';
 import { clearTurnStates, type State } from './state.ts';
-import { triggerExhaustion } from './exhaustion.ts';
+import { recoverFromExhaustion, triggerExhaustion } from './exhaustion.ts';
 
 /** 流程运行结果。 */
 export interface StepResult {
@@ -543,6 +543,17 @@ function endRound(next: State, mode: RuleMode): State {
   //   位置：认证结算**之后**、跨 round **之前** ⇒ 本回合内无人再读这些标志。
   //   ⚠️ `moveBonus` 不清（用后清零，见 state.ts 的 clearTurnStates 注释）。
   next = clearTurnStates(next);
+  // ---- 力竭递减（B76：round 级状态，触发当轮末照减——r1.2 落定的 ≈1.5 轮口径）----
+  //   归零瞬间调 recoverFromExhaustion（max 保底回血 + 日志 cause='自然'）。
+  for (const p of next.players) {
+    const n = p.exhaustedRounds ?? 0;
+    if (n <= 0) { continue; }
+    if (n - 1 === 0) {
+      next = recoverFromExhaustion(next, p.seat, '自然');
+    } else {
+      next = { ...next, players: next.players.map((x) => (x.seat === p.seat ? { ...x, exhaustedRounds: n - 1 } : x)) };
+    }
+  }
   // ---- 昼夜复位（每 round 一次；天机牌「本回合为夜」覆盖整个 round，见 finishTurn 注释）----
   next = { ...next, phaseValue: 'day' };
   // ---- 跨 round ----

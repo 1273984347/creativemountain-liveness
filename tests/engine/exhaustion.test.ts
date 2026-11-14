@@ -9,8 +9,9 @@ import { join } from 'node:path';
 
 import type { Player, State } from '../../engine/core/state.ts';
 import { applyEffect } from '../../engine/ops/registry.ts';
-import { finishTurn } from '../../engine/core/turn-runner.ts';
+import { finishTurn, performAction, advanceTurn } from '../../engine/core/turn-runner.ts';
 import { handLimitOf } from '../../engine/core/hand.ts';
+import { currentPlayer } from '../../engine/core/round.ts';
 import { performAbility } from '../../engine/core/abilities.ts';
 import { certifyChallenge } from '../../engine/core/certification.ts';
 import { recoverFromExhaustion } from '../../engine/core/exhaustion.ts';
@@ -181,3 +182,41 @@ function withPassive(s: State, seat: number, passive: unknown): State {
 }
 // ---------- 夹具 ----------
 
+
+// ---------- 自然恢复（Task 4）----------
+
+/** 跨一个 round（把 turnIndex 推到末位 + move + advanceTurn）。 */
+function crossRound(s: State): State {
+  const moved = { ...s, turnIndex: s.turnOrder.length - 1 };
+  const cur = currentPlayer(moved);
+  const acted = performAction(moved, cur, 'move');
+  return advanceTurn(acted, 'standard');
+}
+
+test('B76：触发当轮末递减 2→1（仍力竭——r1.1 笔误钉子：不是 max(0,-1)）', () => {
+  let s = exhaust(withHp(mk(4, 7), 0, 0), 0);
+  s = crossRound(s);
+  assert.equal(s.round, 2, '前提：已跨轮');
+  const p = s.players[0]!;
+  assert.equal(p.exhaustedRounds, 1, '触发当轮末剩 1——当轮末即解除 = 递减笔误');
+  assert.equal(p.hp, 0, '未解除 ⇒ 不回血');
+});
+
+test('B76：下一轮末 1→0 ⇒ 解除 + hp 保底 max(当前, ceil(hpMax/2))', () => {
+  let s = exhaust(withHp(mk(4, 7), 0, 0), 0);
+  s = crossRound(s);
+  s = crossRound(s);
+  const p = s.players[0]!;
+  assert.equal(p.exhaustedRounds, 0, '已解除');
+  assert.equal(p.hp, Math.ceil(p.hpMax / 2), '保底回血');
+});
+
+test('B76：力竭期间 heal 抬血 ⇒ 解除时保留（不倒扣）', () => {
+  let s = exhaust(withHp(mk(4, 7), 0, 0), 0);
+  s = crossRound(s); // 2→1
+  s = applyEffect({ state: s, actor: 1 }, { op: 'heal', amount: 5, target: 0 }).state;
+  const healed = s.players[0]!.hp;
+  s = crossRound(s); // 1→0 解除
+  assert.equal(s.players[0]!.exhaustedRounds, 0);
+  assert.equal(s.players[0]!.hp, healed, '解除不倒扣（heal 白给检查）');
+});
