@@ -48,6 +48,17 @@ export interface PlayerTurnState {
    *   读取一律用 `=== true` 判定。
    */
   readonly abilityUsedThisTurn?: boolean;
+  /**
+   * 本手番内是否被授予过负面状态 / 免疫（B77 家族 B 递减豁免）。
+   *
+   * ⚠️ **为什么需要它**：`skip_turn` / `silence` / `immunity` 的写入点全部在**该玩家自己的
+   *   手番内**（撞印判色、关隘失败、行动阶段自己出牌），而家族 B 的衰减也挂手番末
+   *   ⇒ 没有豁免位，「免疫 1 回合」会在授予它的同一手番末就被吃成 0，`t_oath` 一类
+   *   试炼奖励结构性恒为 0（B77 规格 §4 豁免条）。
+   * ⚠️ 可选字段（同 `abilityUsedThisTurn` 的理由：做成必填会让所有手写 `turn` 字面量
+   *   跟着改，徒增维护面）；读取一律 `=== true`。
+   */
+  readonly statusGrantedThisTurn?: boolean;
 }
 
 /** 清零用的空回合状态。 */
@@ -56,6 +67,7 @@ export const EMPTY_TURN: PlayerTurnState = {
   usedAsk: false,
   movedThisTurn: false,
   abilityUsedThisTurn: false,
+  statusGrantedThisTurn: false,
   finished: false,
 };
 
@@ -343,18 +355,17 @@ export function clearTurnStates(state: State): State {
   const players = state.players.map((p) => {
     const t = p.turn;
     if (t.usedAsk === false && t.movedThisTurn === false
-      && t.abilityUsedThisTurn !== true && t.finished !== true) {
+      && t.abilityUsedThisTurn !== true && t.statusGrantedThisTurn !== true && t.finished !== true) {
       return p;   // 已是干净状态（moveBonus 不参与判断）⇒ 原样返回，保持引用稳定
     }
     return {
       ...p,
-      turn: {
-        moveBonus: t.moveBonus,   // ⚠️ 例外：用后清零（见上），回合末不清
-        usedAsk: false,
-        movedThisTurn: false,
-        abilityUsedThisTurn: false,
-        finished: false,
-      },
+      // ⚠️ 必须从 EMPTY_TURN **展开**，不得逐字段手写清零对象：
+      //   本文件头就写着「整体替换（player.turn = EMPTY_TURN），避免逐字段清零时漏清」，
+      //   而 B75.2 为了保留 moveBonus 改成手写清单后，两者已经漂移过一次——
+      //   B77 新增的 statusGrantedThisTurn 在手写清单里静默不被清（跨 round 残留），
+      //   是 tests/engine/state-contract.test.ts 那条 B77 用例抓出来的。
+      turn: { ...EMPTY_TURN, moveBonus: t.moveBonus },   // 例外：moveBonus 用后清零（见上），回合末不清
     };
   });
   return { ...state, players };

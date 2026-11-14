@@ -622,6 +622,7 @@ type PlayerTurnState = {
 | `usedAsk` | `Player.turn.usedAsk` | **回合末清零** | 链式问天不得连锁（§3.2 第 14 条）；保证「每回合问天至多链式 1 次」 |
 | `movedThisTurn` | `Player.turn.movedThisTurn` | **回合末清零** | 「每回合首次移动 +1 格」（§4.1 开拓者）；「行棋必须走满」的判定基准 |
 | `abilityUsedThisTurn` | `Player.turn.abilityUsedThisTurn` | **回合末清零** | 「每回合 1 次」类被动的次数闸门（§4.1 观星者 / 窃火者 / 织梦者）；「每场 1 次」用 `counters`（本局累计，不清零） |
+| `statusGrantedThisTurn` | `Player.turn.statusGrantedThisTurn` | **手番末递减段自清**（round 末 `clearTurnStates` 为安全网） | B77：本手番内是否被授予过负面状态 / 免疫 ⇒ 家族 B 递减豁免依据（B77 规格 §4）；`=== true` 判定，缺省即「未授予」 |
 | `pendingCert` | `Player.pendingCert` | 直到认证终结 | **待认证锁定**（§5.1）：峰顶不能主动移动、不能用位移类牌；唯一离开方式是判罚后退 |
 | `exhaustedRounds` | `Player.exhaustedRounds` | **round 级递减**（回合末不清零，每 round 末 -1） | B76 力竭：HP 归零置 2；0 = 未力竭。手牌上限减半 / 骰移 -1 / 主动被动封锁 / 不可发起质疑（设计规格 §2） |
 

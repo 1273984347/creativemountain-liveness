@@ -7,6 +7,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import { createInitialState, clearTurnStates, EMPTY_TURN, type State } from '../../engine/core/state.ts';
 import { performAction, advanceTurn } from '../../engine/core/turn-runner.ts';
@@ -139,4 +140,33 @@ test('B76：Player 带 exhaustedRounds（0 = 未力竭），初始状态人人 0
     assert.equal('exhaustedRounds' in p, true, '字段必须存在（旧存档容错在消费点做，不在契约上做）');
     assert.equal(p.exhaustedRounds, 0);
   }
+});
+
+// ---------- B77：PlayerTurnState 新增键的**文档登记**必须被机械核对 ----------
+//
+// ⚠️ 为什么要自己写这条用例：门 ③ 的 C9 只解析 `export interface State` 的**顶层**字段
+//   （engine/core/state-fields.mjs 的 parseStateFields），**看不到 PlayerTurnState 的嵌套键**
+//   ⇒ B76 的 Player.exhaustedRounds 与本批的 turn.statusGrantedThisTurn 都不在 C9 覆盖内，
+//   「规格先行」的纪律在这类字段上没有任何门禁兜着。本用例从 EMPTY_TURN（事实源）派生
+//   逐键核对主规格 §6.2，补上这个盲区——清单不是手抄的，所以它不会自己变成第二事实源。
+test('B77：EMPTY_TURN 每个键都必须在主规格 §6.2 登记（C9 的嵌套字段盲区）', () => {
+  const spec = readFileSync('docs/superpowers/specs/2026-11-07-creative-mountain-liveness-design.md', 'utf8');
+  const idx = spec.indexOf('### 6.2 引擎状态');
+  assert.ok(idx >= 0, '前提：规格含 §6.2 引擎状态小节（C9 同款定位方式）');
+  const end = spec.indexOf('\n### ', idx + 10);
+  const sec = spec.slice(idx, end === -1 ? idx + 4000 : end);
+  for (const key of Object.keys(EMPTY_TURN)) {
+    assert.ok(sec.includes('`' + key + '`'), `PlayerTurnState.${key} 未登记进规格 §6.2（文档欠账）`);
+  }
+});
+
+test('B77：EMPTY_TURN 显式含 statusGrantedThisTurn=false，且 clearTurnStates 会清它', () => {
+  assert.equal(EMPTY_TURN.statusGrantedThisTurn, false,
+    '缺省必须显式为 false（exactOptionalPropertyTypes 下 undefined 与 false 不同形）');
+  const dirty: State = {
+    ...createInitialState({ players: 3, seed: 1, deckSize: 40 }),
+    players: createInitialState({ players: 3, seed: 1, deckSize: 40 }).players
+      .map((p) => ({ ...p, turn: { ...p.turn, statusGrantedThisTurn: true } })),
+  };
+  assert.equal(clearTurnStates(dirty).players[0]!.turn.statusGrantedThisTurn, false, 'round 末安全网必须清掉');
 });
