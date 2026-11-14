@@ -90,6 +90,8 @@ export interface Player {
    * 峰顶不能主动移动、不能用位移类牌；唯一离开方式是判罚后退。
    */
   readonly pendingCert: boolean;
+  /** B76 力竭：HP 归零置 2，每 round 末递减（round 级，不入 PlayerTurnState）。0 = 未力竭。 */
+  readonly exhaustedRounds: number;
   /** 回合内临时状态（回合末清零，见 PlayerTurnState） */
   readonly turn: PlayerTurnState;
   /** 负面状态层数/剩余回合数（规格 §6.4 状态类算子） */
@@ -264,6 +266,7 @@ export function createInitialState(opts: InitialStateOptions): State {
     factionId: `faction_${seat}`,
     hasMark: false,
     pendingCert: false,
+    exhaustedRounds: 0,
     turn: EMPTY_TURN,
     statuses: {},
     shield: 0,

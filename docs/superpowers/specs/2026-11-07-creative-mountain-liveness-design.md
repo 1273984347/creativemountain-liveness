@@ -567,7 +567,7 @@ type State = {
   round: number;             // 所有存活玩家各行动一次 = 1 个 round（§3.1）
   turnOrder: number[];       // 行动顺序：座位序列（开局随机决定，B10）——先手不绑定固定座位
   turnIndex: number;         // 当前手番在 round 内的位置
-  players: Player[];         // 体力/灵枢/手牌/装备/身份/阵营/位置/印记/待认证标记
+  players: Player[];         // 体力/灵枢/手牌/装备/身份/阵营/位置/印记/待认证/力竭标记
   board: Board;              // 地形与格位（格位 + 峰顶）
   decks: Decks;              // 各类牌堆（主牌库/弃牌堆/造物牌堆/天机/试炼/认证题）
   scales: ScalesRow;         // 当前局规模配置（§8）
@@ -620,6 +620,7 @@ type PlayerTurnState = {
 | `movedThisTurn` | `Player.turn.movedThisTurn` | **回合末清零** | 「每回合首次移动 +1 格」（§4.1 开拓者）；「行棋必须走满」的判定基准 |
 | `abilityUsedThisTurn` | `Player.turn.abilityUsedThisTurn` | **回合末清零** | 「每回合 1 次」类被动的次数闸门（§4.1 观星者 / 窃火者 / 织梦者）；「每场 1 次」用 `counters`（本局累计，不清零） |
 | `pendingCert` | `Player.pendingCert` | 直到认证终结 | **待认证锁定**（§5.1）：峰顶不能主动移动、不能用位移类牌；唯一离开方式是判罚后退 |
+| `exhaustedRounds` | `Player.exhaustedRounds` | **round 级递减**（回合末不清零，每 round 末 -1） | B76 力竭：HP 归零置 2；0 = 未力竭。手牌上限减半 / 骰移 -1 / 主动被动封锁 / 不可发起质疑（设计规格 §2） |
 
 **关键约束**：`usedAsk` / `movedThisTurn` / `abilityUsedThisTurn` **必须随 round 末一并清零**——它们是「本回合」语义，不是「本局」语义。实现时放在 `Player.turn` 子对象里，便于整体替换而非逐字段清零，避免漏清。
 

@@ -130,3 +130,13 @@ test('B75：旧存档缺 council.vetoBy ⇒ 按未使用处理，不抛错、也
   assert.equal(r.state.players[1]?.alive, false, '缺 vetoBy ⇒ 放逐照常');
   assert.equal(r.state.players[0]?.counters.vetoCount ?? 0, 0, '缺 vetoBy ⇒ 不得计数');
 });
+
+test('B76：Player 带 exhaustedRounds（0 = 未力竭），初始状态人人 0', () => {
+  const s = createInitialState({ players: 3, seed: 1, deckSize: 40 });
+  for (const p of s.players) {
+    // ⚠️ 不带 ?? 0 容错：字段本身必须存在且为 0（缺字段 = 契约未实现，必须红）。
+    //    读取侧容错（?? 0）属于消费点（handLimitOf 等），不属于契约断言。
+    assert.equal('exhaustedRounds' in p, true, '字段必须存在（旧存档容错在消费点做，不在契约上做）');
+    assert.equal(p.exhaustedRounds, 0);
+  }
+});
