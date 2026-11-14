@@ -128,7 +128,7 @@ test('B76：候选——力竭待认证目标仍收 CERTIFY_CHALLENGE（被质�
   // 座 0 力竭且座 2 待认证：座 0 有签印/弃权、无质疑
   const certifier = putPending(mk(4, 7), [2]);
   const ex = { ...certifier, players: certifier.players.map((p) => (p.seat === 0 ? { ...p, exhaustedRounds: 2 } : p)) };
-  const cands = candidatesOf(ex, 0).filter((a) => a.target === 2 || (a.type === 'CERTIFY_SIGN' && a.target === 2));
+  const cands = candidatesOf(ex, 0).filter((a) => (a.type === 'CERTIFY_SIGN' || a.type === 'CERTIFY_ABSTAIN' || a.type === 'CERTIFY_CHALLENGE') && a.target === 2);
   assert.equal(cands.some((a) => a.type === 'CERTIFY_SIGN' && a.target === 2), true, '签印照常');
   assert.equal(cands.some((a) => a.type === 'CERTIFY_ABSTAIN' && a.target === 2), true, '弃权照常');
   assert.equal(cands.some((a) => a.type === 'CERTIFY_CHALLENGE'), false, '无质疑');
