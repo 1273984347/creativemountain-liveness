@@ -9,6 +9,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { applyStatus, grantImmunity, statusOf, immunityOf } from '../../engine/core/statuses.ts';
+import { applyEffect } from '../../engine/ops/registry.ts';
 import { mk } from './fixtures.ts';
 import type { Player, State } from '../../engine/core/state.ts';
 import type { OpContext } from '../../engine/ops/registry.ts';
@@ -97,4 +98,32 @@ test('B77：旧存档缺 statuses / 缺 immunity 键 ⇒ 读出 0，不抛', () 
   const legacy = { ...base, players: base.players.map((p) => ({ ...p, statuses: undefined })) } as unknown as State;
   assert.equal(statusOf(legacy, 0, 'poison'), 0);
   assert.equal(immunityOf(legacy, 0, 'poison'), 0);
+});
+
+// ---------- 走**算子**入口的同判用例（主题包实际调的是这些 op，不是 applyStatus） ----------
+// 只有直接调 applyStatus 的用例是不够的：四套主题的 effects 全部写 op 名 ⇒
+// 改道没接上时，上面九条依然全绿，而真实对局里状态照旧只写不读（B75 的三环取证教训）。
+
+test('B77：poison 算子累加（蚀骨 + 毒瘴 = 3 层）', () => {
+  let s = mk(4, 7);
+  s = applyEffect({ state: s, actor: 0 }, { op: 'poison', amount: 2, target: 1 }).state;
+  s = applyEffect({ state: s, actor: 0 }, { op: 'poison', amount: 1, target: 1 }).state;
+  assert.equal(statusOf(s, 1, 'poison'), 3);
+});
+
+test('B77：silence 算子同样弃首位并进弃牌堆', () => {
+  const s = withHand(mk(4, 7), 1, ['a', 'b']);
+  const out = applyEffect({ state: s, actor: 0 }, { op: 'silence', amount: 1, target: 1 }).state;
+  assert.deepEqual(out.players[1]!.hand.map((c) => c.id), ['b']);
+  assert.equal(out.decks.discard.at(-1)!.id, 'a');
+});
+
+test('B77：immunity 算子开窗后，同类写入被挡且既有层数不动', () => {
+  let s = mk(4, 7);
+  s = applyEffect({ state: s, actor: 0 }, { op: 'poison', amount: 1, target: 1 }).state;
+  s = applyEffect({ state: s, actor: 1 }, { op: 'immunity', status: 'poison', amount: 1 }).state;
+  const r = applyEffect({ state: s, actor: 0 }, { op: 'poison', amount: 5, target: 1 });
+  assert.equal(r.ok, false, '算子层也要判未生效（上游据此不计奖励）');
+  assert.equal(statusOf(r.state, 1, 'poison'), 1);
+  assert.match(r.state.log.at(-1)!.message, /^被免疫：座位 1 的 poison$/);
 });

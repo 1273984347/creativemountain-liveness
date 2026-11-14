@@ -20,11 +20,17 @@ import {
   aliveTarget,
   fail,
   ok,
+  resolveTarget,
   withLog,
   withPlayer,
   type OpContext,
   type OpResult,
 } from './context.ts';
+// B77：死状态家族的写入侧唯一出处（免疫窗 / 累加 / 封口弃牌 / 授予豁免都在那里）。
+// ⚠️ 与 statuses.ts 构成 ESM 循环引用（那边为复用 discard_self 而 import 本文件的 applyEffect）：
+//   两边被跨模块使用的都是**函数声明**（提升、非 TDZ），且都只在运行时调用 ⇒ 安全。
+//   若将来谁改成 `const` 箭头函数导出，这里会以 undefined 崩在运行时而非编译期。
+import { applyStatus, grantImmunity } from '../core/statuses.ts';
 
 /**
  * 到达峰顶 → **进入活人认证流程**（规格 §5.1）。
@@ -412,61 +418,15 @@ export const OPS: OpHandlers = {
     const state = withPlayer(ctx.state, t.seat, { shield: pl.shield + p.amount });
     return ok(withLog(state, ctx, 'shield', `护盾 +${p.amount}`));
   },
-  poison: (ctx, p) => {
-    if (p.amount <= 0) { return fail(ctx.state, 'amount 必须为正'); }
-    const t = aliveTarget(ctx, p.target);
-    if (!t.ok) { return fail(ctx.state, t.note); }
-    const pl = ctx.state.players[t.seat];
-    if (pl === undefined) { return fail(ctx.state, '目标不存在'); }
-    const state = withPlayer(ctx.state, t.seat, {
-      statuses: { ...pl.statuses, poison: (pl.statuses.poison ?? 0) + p.amount },
-    });
-    return ok(withLog(state, ctx, 'poison', `中毒 +${p.amount}`));
-  },
-  slow: (ctx, p) => {
-    if (p.amount <= 0) { return fail(ctx.state, 'amount 必须为正'); }
-    const t = aliveTarget(ctx, p.target);
-    if (!t.ok) { return fail(ctx.state, t.note); }
-    const pl = ctx.state.players[t.seat];
-    if (pl === undefined) { return fail(ctx.state, '目标不存在'); }
-    const state = withPlayer(ctx.state, t.seat, {
-      statuses: { ...pl.statuses, slow: (pl.statuses.slow ?? 0) + p.amount },
-    });
-    return ok(withLog(state, ctx, 'slow', `减速 +${p.amount}`));
-  },
-  silence: (ctx, p) => {
-    if (p.amount <= 0) { return fail(ctx.state, 'amount 必须为正'); }
-    const t = aliveTarget(ctx, p.target);
-    if (!t.ok) { return fail(ctx.state, t.note); }
-    const pl = ctx.state.players[t.seat];
-    if (pl === undefined) { return fail(ctx.state, '目标不存在'); }
-    const state = withPlayer(ctx.state, t.seat, {
-      statuses: { ...pl.statuses, silence: (pl.statuses.silence ?? 0) + p.amount },
-    });
-    return ok(withLog(state, ctx, 'silence', `封口 ${p.amount} 回合`));
-  },
-  skip_turn: (ctx, p) => {
-    if (p.amount <= 0) { return fail(ctx.state, 'amount 必须为正'); }
-    const t = aliveTarget(ctx, p.target);
-    if (!t.ok) { return fail(ctx.state, t.note); }
-    const pl = ctx.state.players[t.seat];
-    if (pl === undefined) { return fail(ctx.state, '目标不存在'); }
-    const state = withPlayer(ctx.state, t.seat, {
-      statuses: { ...pl.statuses, skip_turn: (pl.statuses.skip_turn ?? 0) + p.amount },
-    });
-    return ok(withLog(state, ctx, 'skip_turn', `跳过 ${p.amount} 回合`));
-  },
-  immunity: (ctx, p) => {
-    if (p.amount <= 0) { return fail(ctx.state, 'amount 必须为正'); }
-    const t = aliveTarget(ctx, p.target);
-    if (!t.ok) { return fail(ctx.state, t.note); }
-    const pl = ctx.state.players[t.seat];
-    if (pl === undefined) { return fail(ctx.state, '目标不存在'); }
-    const state = withPlayer(ctx.state, t.seat, {
-      flags: { ...pl.flags, [`immunity_${p.status}`]: (pl.flags[`immunity_${p.status}`] as number | undefined ?? 0) + p.amount },
-    });
-    return ok(withLog(state, ctx, 'immunity', `免疫 ${p.status} ${p.amount} 回合`));
-  },
+  // ---------- 死状态家族（B77）----------
+  // 五段一律委托 `engine/core/statuses.ts` 的唯一出处：免疫窗拦截、累加语义、封口弃牌、
+  // 授予豁免标记全部在那里。就地重写会绕过这些纪律（常驻守卫见
+  // tests/engine/status-op-contract.test.ts ⇒ 绕过会当场红）。
+  poison: (ctx, p) => applyStatus(ctx, resolveTarget(ctx, p.target), 'poison', p.amount),
+  slow: (ctx, p) => applyStatus(ctx, resolveTarget(ctx, p.target), 'slow', p.amount),
+  silence: (ctx, p) => applyStatus(ctx, resolveTarget(ctx, p.target), 'silence', p.amount),
+  skip_turn: (ctx, p) => applyStatus(ctx, resolveTarget(ctx, p.target), 'skip_turn', p.amount),
+  immunity: (ctx, p) => grantImmunity(ctx, resolveTarget(ctx, p.target), p.status, p.amount),
   double_next_vote: (ctx, p) => {
     const t = aliveTarget(ctx, p.target);
     if (!t.ok) { return fail(ctx.state, t.note); }
