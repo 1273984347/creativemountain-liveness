@@ -21,11 +21,14 @@ const argOf = (name, dflt) => {
 /** 重扫产物路径（默认生成物，已被 `.gitignore`）。 */
 const SCAN_PATH = argOf('scan', 'docs/trial-reserve-scan.json');
 /** 基线快照路径（默认入库快照）。 */
-// ⚠️ B76：默认基线更新为 B76 快照（力竭机制 / RECUPERATE / 力竭 AI 三处行为变更 ⇒ 随机流分叉；
-//   B75.2 / B75.1 / B75 / B74 / B34 快照保留给门 ⑬ 与负样本测试用）。前史：B75.2（清零接线 + 追goal + 对峙判负）
-//   三处行为变更 ⇒ 随机流与决策分布均变，按 B35 流程显式重生成并留痕；
-//   B75.1 / B75 / B74 / B34 快照保留给门 ⑬ 与负样本测试用）。
-const BASELINE_PATH = argOf('baseline', 'docs/baselines/trial-reserve-scan-B76.json');
+// ⚠️ **B77：默认基线更新为 B77 快照**（五把状态算子从空转变为生效 + 被封者改走 PASS ⇒ 对局行为
+//   主动改变，按 B35 流程显式重生成并留痕；B77 批次记录 §7.1 说明「门 ⑨ 逐字等价本批故意不成立」）。
+//   换代实测漂移有方向：**无人封顶率各组普遍 +1~2pp、平均席位 1.63 → 1.55**（中毒/停手番/封口
+//   让登顶与签印变难），逐组比对 0/100 与 B76 一致 ⇒ 旧基线确实不再适用（不是噪声级差异）。
+//   B76 / B75.2 / B75.1 / B75 / B74 / B34 快照**全部保留**给门 ⑬ 与负样本测试用。
+//   前史：B76（力竭机制 / RECUPERATE / 力竭 AI 三处行为变更 ⇒ 随机流分叉）；
+//   B75.2（清零接线 + 追goal + 对峙判负）三处行为变更 ⇒ 随机流与决策分布均变。
+const BASELINE_PATH = argOf('baseline', 'docs/baselines/trial-reserve-scan-B77.json');
 /** 门禁脚本路径（默认 `tools/gate.mjs`）—— 注入点供**负样本测试**用。 */
 const GATE_PATH = argOf('gate', 'tools/gate.mjs');
 /** 模拟器路径（默认 `tests/sim/run.mjs`）—— 注入点供**负样本测试**用。 */

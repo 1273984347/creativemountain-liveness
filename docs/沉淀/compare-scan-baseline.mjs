@@ -1,7 +1,10 @@
 // 扫描**可复现性**比对：把「按需重扫」的产物与**入库基线快照**逐组对比。
 //
-// ⚠️ 用途：基线快照是「判定不变」的对照点 ⇒ 必须能证明「同样的 seed + 同样的局数 ⇒ 同样的结果」
-//   ⇒ 本脚本**逐组**比对每个指标；任一不一致即红（确定性模拟下不该出现漂移）。
+// ⚠️ 用途：基线快照是「判定不变」的对照点 ⇒ 必须能证明「**同一份代码** + 同样的 seed + 同样的局数
+//   ⇒ 同样的结果」⇒ 本脚本**逐组**比对每个指标；任一不一致即红。
+//   ⚠️ B77 措辞更正：这条比对**只保证可复现性**，不保证「跨批次不变」——主动修机制的行为批次
+//   （B75 / B75.1 / B75.2 / B76 / B77）本来就会让读数漂移，此时按 B35 流程**显式重扫并换代基线**，
+//   漂移的成因与方向写进批次记录（B77：兜底率 +1~2pp、平均席位 1.63→1.55），而不是放宽比对。
 //
 // 用法：`node docs/沉淀/compare-scan-baseline.mjs [--scan=<新产物>] [--baseline=<基线>]`
 
@@ -13,7 +16,8 @@ const argOf = (name, dflt) => {
   const hit = argv.find((x) => x.startsWith('--' + name + '='));
   return hit === undefined ? dflt : hit.slice(name.length + 3);
 };
-const baselinePath = resolve(process.cwd(), argOf('baseline', 'docs/baselines/trial-reserve-scan-B76.json'));
+// 默认基线 = B77 快照（与 `tools/release-check.mjs` 同步换代；旧快照全部保留，比对时用 --baseline= 指定）
+const baselinePath = resolve(process.cwd(), argOf('baseline', 'docs/baselines/trial-reserve-scan-B77.json'));
 const scanPath = resolve(process.cwd(), argOf('scan', 'docs/trial-reserve-scan.json'));
 
 /** 逐组比对的指标（全部原始统计量）。 */
