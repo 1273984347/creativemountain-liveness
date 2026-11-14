@@ -200,7 +200,7 @@ export function resolveCouncil(state: State): CouncilResult {
   //   效果上等价（印记只减半签印门槛，而放逐者已退出 `certification.pending` ⇒ 永不可能认证），
   //   但不收掉的话 UI 会给已出局者显示「印记」徽章，且「目标达成」统计会被虚高。
   const players = next.players.map((p) => (exiled.includes(p.seat)
-    ? { ...p, alive: false, hasMark: false }
+    ? { ...p, alive: false, hasMark: false, exhaustedRounds: 0 }   // ⚠️ B76 最终审查 I2：身上的力竭状态随放逐作废（与 hasMark 同款 §5.6 语义）
     : p));
   next = { ...next, players };
   // 被放逐者若处于待认证 → 认证终止（§5.6）

@@ -35,7 +35,7 @@ export function triggerExhaustion(state: State, seat: number): State {
  */
 export function recoverFromExhaustion(state: State, seat: number, cause: '自然' | '自恢' | '救援'): State {
   const p = state.players[seat];
-  if (p === undefined) { return state; }
+  if (p === undefined || !p.alive) { return state; }   // ⚠️ 最终审查 I2：死者不恢复、不回血、不生日志（清零是放逐侧职责）
   const hp = Math.max(p.hp, Math.ceil(p.hpMax / 2));
   return {
     ...state,

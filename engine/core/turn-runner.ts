@@ -299,6 +299,10 @@ export function performAction(
     //     （唯一实现，engine/core/exhaustion.ts）。**pendingCert 下允许**（不是位移，不触 §5.1；
     //     此前两条暂停早退已拦关隘 / 裂隙暂停期——与 B75 equip 同款）。
     case 'recuperate': {
+      // ⚠️ 最终审查 I1：对峙未决 ⇒ 拒绝（枚举层对峙面整面清零，执行层必须同判——
+      //   规格 §6 builder-check ①的「对峙期天然被拒」此前**不成立**：advanceTurn 阻塞推进
+      //   ≠ performAction 拒绝动作。引用相等 = probeAction 认得的拒绝信号）。
+      if (state.duel !== null) { return state; }
       const target = payload.target;
       if (target === undefined) {
         // 自恢
@@ -573,7 +577,7 @@ function endRound(next: State, mode: RuleMode): State {
   //   归零瞬间调 recoverFromExhaustion（max 保底回血 + 日志 cause='自然'）。
   for (const p of next.players) {
     const n = p.exhaustedRounds ?? 0;
-    if (n <= 0) { continue; }
+    if (n <= 0 || !p.alive) { continue; }   // ⚠️ 最终审查 I2：死者不递减（放逐侧已清，这里是防御）
     if (n - 1 === 0) {
       next = recoverFromExhaustion(next, p.seat, '自然');
     } else {

@@ -220,3 +220,37 @@ test('B76：力竭期间 heal 抬血 ⇒ 解除时保留（不倒扣）', () => 
   assert.equal(s.players[0]!.exhaustedRounds, 0);
   assert.equal(s.players[0]!.hp, healed, '解除不倒扣（heal 白给检查）');
 });
+
+// ---------- 最终审查 I2：被放逐者不得「自然恢复」（尸体回血 / 幽灵日志）----------
+//
+// ⚠️ 力竭约 1.5 round ⇒ 「hp 归零当轮被放逐」是真实牌型；放逐清 hasMark（§5.6）同款语义：
+//   被放逐者的力竭状态一并作废（exhaustedRounds 清 0）；endRound 递减循环跳过死者；
+//   recoverFromExhaustion 对死者不生日志不回血（唯一实现处的防御）。
+import { castVote, resolveCouncil } from '../../engine/core/council.ts';
+import { councilScene } from './fixtures.ts';
+
+test('B76 最终审查 I2：放逐清除力竭状态（与 hasMark 同款「身上的状态作废」）', () => {
+  let s = councilScene(4, 7);
+  s = { ...s, players: s.players.map((p) => (p.seat === 1 ? { ...p, exhaustedRounds: 2, hp: 0 } : p)) };
+  for (const p of s.players.filter((x) => x.alive)) {
+    const r = castVote(s, p.seat, p.seat === 1 ? 0 : 1);
+    assert.ok(r.ok, '前提：投票成功');
+    s = r.state;
+  }
+  const res = resolveCouncil(s);
+  assert.ok(res.ok);
+  assert.equal(res.state.players[1]!.alive, false, '座 1 被放逐');
+  assert.equal(res.state.players[1]!.exhaustedRounds, 0, '力竭状态随放逐作废');
+});
+
+test('B76 最终审查 I2：死者跨 round 末 ⇒ 无恢复日志、hp 不变（递减循环跳过死者）', () => {
+  // 直接构造死者带力竭残值的局面（放逐路径已清 ⇒ 这是防御性断言，防未来写入点漏清）
+  const s0 = exhaust(withHp(mk(4, 7), 1, 0), 1);
+  const dead = { ...s0, players: s0.players.map((p) => (p.seat === 1 ? { ...p, alive: false } : p)) };
+  const before = dead.players[1]!.hp;
+  const rec = recoverFromExhaustion(dead, 1, '自然');
+  assert.equal(rec.players[1]!.hp, before, '死者不回血');
+  assert.equal(rec.players[1]!.exhaustedRounds, 2, 'recoverFromExhaustion 不碰死者（清零是放逐侧的职责）');
+  const added = rec.log.slice(dead.log.length).filter((l) => l.kind === 'exhaustion');
+  assert.equal(added.length, 0, '无幽灵日志');
+});

@@ -133,3 +133,20 @@ test('B76：候选——力竭待认证目标仍收 CERTIFY_CHALLENGE（被质�
   assert.equal(cands.some((a) => a.type === 'CERTIFY_ABSTAIN' && a.target === 2), true, '弃权照常');
   assert.equal(cands.some((a) => a.type === 'CERTIFY_CHALLENGE'), false, '无质疑');
 });
+
+// ---------- 最终审查 I1：对峙期引擎层不得接受 RECUPERATE（枚举↔执行同判）----------
+//
+// ⚠️ 规格 §6 builder-check ①声称「关隘 / 裂隙暂停与**对峙期**天然被拒」——关隘 / 裂隙有早退、
+//   对峙没有（advanceTurn 阻塞 ≠ performAction 拒绝）⇒ 枚举不发候选（UI 摸不到）但引擎照单全收
+//   ——正是守卫看不见的枚举↔执行漂移（B68 同族）。修法：recuperate 分支加对峙检查（引用相等拒绝）。
+import { startDuel } from '../../engine/core/duel.ts';
+
+test('B76 最终审查 I1：对峙未决 ⇒ RECUPERATE 引用相等拒绝（与枚举同判——候选层对峙期整面清零）', () => {
+  const s0 = exhaustedAt(mk(4, 7), 1, 3);
+  // 座 0 与座 2 同格 ⇒ 挂决对峙（座 1 是力竭的待认证旁观者）
+  const same = { ...s0, players: s0.players.map((p) => (p.seat === 2 ? { ...p, position: s0.players[0]!.position } : p)) };
+  const duel = startDuel(same, 0, 2);
+  assert.ok(duel.duel !== null, '前提：对峙已挂起');
+  const r = performAction(duel, 1, 'recuperate', {});
+  assert.equal(r, duel, '对峙期一律拒绝（引用相等）');
+});
