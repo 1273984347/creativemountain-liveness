@@ -82,6 +82,22 @@ function loadTheme(id) {
 }
 
 /**
+ * B77 六计数器的报告行（顺序即报告顺序，与规格 §9 表逐行对齐）。
+ *
+ * ⚠️ 键名是跨任务契约：`poison_tick` 等五个必须与 `engine/core/statuses.ts` 的
+ *   `STATUS_LOG_PREFIX` 同键（`tests/gates/status-report.test.ts` 钉住），
+ *   只有 `silence_applied` 不取自日志（引擎的拦截信号是引用相等，写日志会废掉探针判据）。
+ */
+const STATUS_ROW_NAMES = [
+  ['poison_tick', '中毒扣血'],
+  ['slow_applied', '减速生效'],
+  ['silence_applied', '封口拦截（失能手番 · 反事实枚举）'],
+  ['silence_discard', '封口弃牌'],
+  ['skip_turn_applied', '停手番'],
+  ['immunity_blocked', '被免疫拦截'],
+];
+
+/**
  * 跑一档位（某主题 × 某人数 × N 局）。
  *
  * ⚠️ seed **必须含主题 id**：否则四套主题共用同一条随机轨迹 ⇒ 统计上是
@@ -112,6 +128,9 @@ function summarize(cells) {
   // B13：对峙次数统计
   let duelTotal = 0;
   let exhaustedTotal = 0; let recuperateSelf = 0; let recuperateRescue = 0; let naturalRecovery = 0;
+  // B77：死状态家族六计数器（poison_tick / slow_applied / silence_applied /
+  //   silence_discard / skip_turn_applied / immunity_blocked）。
+  const statusTotals = new Map();
   let duelGames = 0;
   const certRounds = new Map();
   // B23：关隘试炼统计（每张试炼牌 → 抽取次数 / 通过次数 / 触发过的局数）
@@ -219,6 +238,10 @@ function summarize(cells) {
     recuperateSelf += c.recuperateSelf ?? 0;
     recuperateRescue += c.recuperateRescue ?? 0;
     naturalRecovery += c.naturalRecovery ?? 0;
+    // B77：六计数器逐局累加（口径见 policy.mjs 的 statusCounters / silenceCost）。
+    for (const [k, v] of Object.entries(c.statusCounters ?? {})) {
+      statusTotals.set(k, (statusTotals.get(k) ?? 0) + (typeof v === 'number' ? v : 0));
+    }
     for (const w of c.winners) {
       const id = c.identities[w];
       const f = c.factions[w];
@@ -242,6 +265,7 @@ function summarize(cells) {
     avgSeats: total > 0 ? seatTotalSum / total : 0,
     gamesWithoutSeat, seatDist, champSeatDist, abilityOps, abilityGames, duelTotal, duelGames,
     exhaustedTotal, recuperateSelf, recuperateRescue, naturalRecovery,
+    statusTotals,
     markGames, markPlayers, goalAchieved, goalGames, goalPlayers, markAchieved,
     counterMax, counterSum, counterSamples,
     trialDraws, trialPasses, trialGames, trialFailed, failButPassed, failReleased,
@@ -671,6 +695,14 @@ if (args.out !== null) {
   lines.push('| 无席位局数 | ' + summary.gamesWithoutSeat + ' |');
   lines.push('| **力竭触发** | **' + summary.exhaustedTotal + '** 人次（每百局 ' + ((summary.exhaustedTotal / Math.max(1, summary.total)) * 100).toFixed(2) + '） |');
   lines.push('| 解除：自恢 / 救援 / 自然 | ' + summary.recuperateSelf + ' / ' + summary.recuperateRescue + ' / ' + summary.naturalRecovery + ' 人次 |');
+  // B77：死状态家族六行（一算子一个 + 弃牌单列 + 封口反事实；口径见规格 §9 表）。
+  //   ⚠️ 五个按**生效侧日志前缀**计数（前缀表 = engine/core/statuses.ts 的 STATUS_LOG_PREFIX），
+  //     `silence_applied` 例外：引擎的拦截信号是「引用相等」，写日志就会废掉探针判据
+  //     ⇒ 改按「摘掉封口后枚举会多发几个动作」取数（同一判据仍来自引擎 getLegalActions）。
+  for (const [k, name] of STATUS_ROW_NAMES) {
+    const n = summary.statusTotals.get(k) ?? 0;
+    lines.push('| **' + name + '** | **' + n + '** 人次（每百局 ' + ((n / Math.max(1, summary.total)) * 100).toFixed(2) + '） |');
+  }
   lines.push('| **异常条数** | **' + summary.anomalies + '**（门槛 0） |');
   lines.push('');
   lines.push('## 分主题 · 分人数档');

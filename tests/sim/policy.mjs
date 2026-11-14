@@ -21,6 +21,7 @@ import {
   certifyAbstain, resolveAppeals, isCertifier, hasUsedCertificationTurn,
 } from '../../engine/core/certification.ts';
 import { getLegalActions } from '../../engine/core/legal.ts';
+import { STATUS_LOG_PREFIX, statusOf } from '../../engine/core/statuses.ts';
 import { stateToJson } from '../../engine/core/serialize.ts';
 import { actionKey, actionFromKey, withActor } from '../../engine/core/action-key.ts';
 
@@ -457,6 +458,24 @@ export function rescueChoice(s, seat) {
 }
 
 /** 推进手番；若结算后进入对峙 ⇒ AI 选牌后继续推进（回合阻塞的闭环）。 */
+/**
+ * 封口实际吃掉的动作数（B77 规格 §9 里**唯一不由日志取数**的计数器）。
+ *
+ * ⚠️ 为什么不能扫日志：引擎拦下被封动作的方式是**引用相等**（turn-runner 的封锁检查），
+ *   那是探针认「这步非法」的信号；在拦截点写日志 ⇒ 状态变了 ⇒ 探针会把非法当合法。
+ * ⚠️ 于是取**反事实**：同一局面摘掉封口后，引擎自己会多发几个 `PLAY_CARD`/`ABILITY`。
+ *   判据仍然是引擎的 `getLegalActions`（模拟器不复制封锁集，E94），只是把它跑两遍。
+ */
+export function silenceCost(s, seat) {
+  if (statusOf(s, seat, 'silence') <= 0) { return 0; }
+  const n = (st) => getLegalActions(st, seat).filter((a) => a.type === 'PLAY_CARD' || a.type === 'ABILITY').length;
+  const bare = {
+    ...s,
+    players: s.players.map((p) => (p.seat === seat ? { ...p, statuses: { ...p.statuses, silence: 0 } } : p)),
+  };
+  return Math.max(0, n(bare) - n(s));
+}
+
 export async function advanceWithDuel(s, mode, opts) {
   // ⚠️ B18：委托引擎层统一出口（对峙 + 关隘闭环都在里面）——
   //   没有关隘闭环时，AI 会在关隘格上反复行棋直到离开 ⇒ **免费穿过关隘**。
@@ -588,6 +607,8 @@ export async function playOne(theme, players, seed, gateReserve, policy) {
   let s = installTheme(base, theme);
   const anomalies = [];
   const abilityOps = [];
+  // B77：封口实际吃掉的动作数（每个手番累加 `silenceCost`，口径见该函数注释）。
+  let silenceLost = 0;
   const maxSteps = s.scales.globalRoundLimit * players * 8 + 200;
   let steps = 0;
   // 首个进入待认证（登顶）的玩家 —— 用于追踪「先手优势」的传导路径：
@@ -607,6 +628,23 @@ export async function playOne(theme, players, seed, gateReserve, policy) {
     //   AI 的选牌由 `advanceWithDuel` 内的 `autoResolveDuel` 处理（含空手判负，B75.2 补结算时点语义）。
     if (s.duel !== null) {
       s = await advanceWithDuel(s, 'standard', { gateReserve });
+      continue;
+    }
+    // B77：封口生效读数（反事实枚举，见 `silenceCost`）。放在 PASS 分支之前 ⇒ 被停手番的
+    //   封口者不算「被吃掉的动作」（他那整回合本来就不属于自己，算进 silence 会重复计价）。
+    //   ⚠️ 单位是**手番人次**（不是候选动作数）：候选数正比于手牌张数（一手番 8 张牌就是 8），
+    //     与其余五个「人次」计数器不可比；实测口径差一个数量级（2.5/局 vs 授予 0.21/局）。
+    if (silenceCost(s, seat) > 0) { silenceLost += 1; }
+    // B77：被停手番 ⇒ 本手番唯一的出路是 PASS。判据用**引擎枚举**而不是自己抄一份封锁集：
+    //   `legal.ts` 把 skip 短路排在 pendingGate / pendingBarrier / duel 三个早退分支**之后**，
+    //   所以「枚举里有 PASS」恰好等价于「skip>0 且此刻没有解阻塞通道要办」⇒ 不会把正卡在
+    //   关隘上的被封者一起停掉（§3.6 豁免族防死锁）。
+    //   ⚠️ 位置两处都要紧：
+    //     · 必须在 `const roll = s.rng.next()` **之前** ⇒ 被 skip 的手番零随机消耗（门 ⑨ 轨迹口径）；
+    //     · 必须在 pendingCert 分支**之前** ⇒ skip 支配锁定（D6），否则被停手番的待认证者会
+    //       在「打非位移牌」上空耗一整回合，且「停手番：」日志不落 ⇒ skip_turn_applied 少计。
+    if (getLegalActions(s, seat).some((a) => a.type === 'PASS')) {
+      s = advanceTurn(performAction(s, seat, 'pass'), 'standard');
       continue;
     }
     const player = s.players[seat];
@@ -818,6 +856,26 @@ export async function playOne(theme, players, seed, gateReserve, policy) {
     recuperateSelf: s.log.filter((l) => l.kind === 'exhaustion' && l.message.includes('（自恢）')).length,
     recuperateRescue: s.log.filter((l) => l.kind === 'exhaustion' && l.message.includes('（救援）')).length,
     naturalRecovery: s.log.filter((l) => l.kind === 'exhaustion' && l.message.includes('（自然）')).length,
+    // B77：死状态家族六个计数器（规格 §9：一算子一个 + 弃牌单列 + 封口反事实）。
+    //   ⚠️ 五个从**生效侧日志**按前缀取数（前缀表在 engine/core/statuses.ts，唯一出处），
+    //      `silence_applied` 由 `silenceCost` 逐手番累加 ⇒ 不从「写入了几层封口」倒推。
+    statusCounters: (() => {
+      const out = {};
+      for (const [k, p] of Object.entries(STATUS_LOG_PREFIX)) {
+        out[k] = s.log.filter((l) => typeof l.message === 'string' && l.message.startsWith(p)).length;
+      }
+      out.silence_applied = silenceLost;
+      return out;
+    })(),
+    // 取证样本：每个计数器第一条匹配消息 ⇒ 「计数不是凭空造的」在报告侧也能一眼看见。
+    statusLogSamples: (() => {
+      const out = {};
+      for (const [k, p] of Object.entries(STATUS_LOG_PREFIX)) {
+        const hit = s.log.find((l) => typeof l.message === 'string' && l.message.startsWith(p));
+        out[k] = hit === undefined ? null : hit.message;
+      }
+      return out;
+    })(),
     // B23：试炼事件（**结构化字段** ⇒ 不解析文案；`trialId` / `trialPassed` 由引擎写入）
     trialEvents: s.log
       .filter((l) => l.kind === 'trial' && typeof l.trialId === 'string')

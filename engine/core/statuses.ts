@@ -20,6 +20,27 @@ export const IMMUNITY_FLAG_PREFIX = 'immunity_';
 /** 统一日志 kind。 */
 const LOG_KIND = 'status';
 
+/**
+ * 六个计数器里**由日志取数**的五个 message 前缀（规格 §9 表的机械侧）。
+ *
+ * ⚠️ 为什么是常量表而不是各处手抄：B76 的教训——模拟器按前缀扫、测试逐字匹配、
+ *   施工时各自发明就成了「日志还在、计数归零」。这张表是唯一出处：三个写入点引用它，
+ *   `tests/sim/policy.mjs` 扫它，`tests/gates/status-report.test.ts` 钉「别处不许再写字面量」。
+ *
+ * ⚠️ `silence_applied` **刻意不在表里**：封口拦截发生在 `performAction` 的
+ *   **引用相等拒绝**上（turn-runner.ts 的封锁检查，探针据此判非法 ⇒ 绕 UI 打引擎也拦得住）。
+ *   在拒绝点写日志就会改变引用 ⇒ 探针把非法动作当合法。所以封口的读数改从反事实取数：
+ *   「同一个手番，摘掉封口后引擎枚举会多发几个动作」，判据仍是引擎自己的 `getLegalActions`
+ *   （见 `tests/sim/policy.mjs` 的 `silenceCost`）。
+ */
+export const STATUS_LOG_PREFIX = {
+  poison_tick: '中毒扣血：',
+  slow_applied: '减速生效：',
+  silence_discard: '封口弃牌：',
+  skip_turn_applied: '停手番：',
+  immunity_blocked: '被免疫：',
+} as const;
+
 /** 读层数 / 回合数。旧存档缺字段一律 0（B75 R4 容错惯例）。 */
 export function statusOf(state: State, seat: number, kind: NegativeStatus): number {
   return state.players[seat]?.statuses?.[kind] ?? 0;
@@ -69,7 +90,7 @@ export function applyStatus(ctx: OpContext, seat: number, kind: NegativeStatus, 
     //   不变式的**意图**是「未生效不得被调用方当成功」（ok=false ⇒ 上游不计奖励），这点守住了；
     //   但拦截若完全不留痕，规格 §9 的 immunity_blocked 计数器就无从产生、§10 判据 3 的
     //   「免疫是否空转」这条硬验收也测不了 ⇒ 只多写一行日志，不动任何数值与状态。
-    return fail(withLog(state, targetCtx, LOG_KIND, `被免疫：座位 ${String(t.seat)} 的 ${kind}`), '目标处于免疫窗口内');
+    return fail(withLog(state, targetCtx, LOG_KIND, `${STATUS_LOG_PREFIX.immunity_blocked}座位 ${String(t.seat)} 的 ${kind}`), '目标处于免疫窗口内');
   }
   const p = state.players[t.seat]!;
   let next = withPlayer(state, t.seat, { statuses: { ...p.statuses, [kind]: (p.statuses?.[kind] ?? 0) + amount } });
@@ -81,7 +102,7 @@ export function applyStatus(ctx: OpContext, seat: number, kind: NegativeStatus, 
     const dropped = p.hand[0]!;
     const r = applyEffect({ state: next, actor: t.seat }, { op: 'discard_self', count: 1 });
     if (r.ok) {
-      next = withLog(r.state, targetCtx, LOG_KIND, `封口弃牌：座位 ${String(t.seat)}（弃 ${dropped.name}）`);
+      next = withLog(r.state, targetCtx, LOG_KIND, `${STATUS_LOG_PREFIX.silence_discard}座位 ${String(t.seat)}（弃 ${dropped.name}）`);
     }
   }
   return ok(next);
@@ -172,7 +193,7 @@ export function tickPlayerStatuses(state: State, seat: number): State {
     const hp = Math.max(0, p.hp - layers);
     next = withPlayer(next, seat, { hp });
     next = withLog(next, { state: next, actor: seat }, LOG_KIND,
-      `中毒扣血：座位 ${String(seat)}（-${String(layers)}）`);
+      `${STATUS_LOG_PREFIX.poison_tick}座位 ${String(seat)}（-${String(layers)}）`);
     // 力竭的置值与日志一律交给 exhaustion.ts —— 本模块不碰 exhaustedRounds（E94）。
     if (hp === 0) { next = triggerExhaustion(next, seat); }
     next = decStatus(next, seat, 'poison');

@@ -82,7 +82,7 @@ test('合法 key ⇒ 真的改道：fallbacks 恒 0，且记录与结局两处�
   setRecorder(rowsOff);
   let off: SimGameResult;
   try {
-    off = await playOne(theme(), 4, 9002, undefined, { face: 'play', seat: 0, decide: async () => null });
+    off = await playOne(theme(), 4, 9003, undefined, { face: 'play', seat: 0, decide: async () => null });
   } finally { setRecorder(null); }
   assert.ok(off.injection.calls > 0, '对照组必须真的被问到');
   assert.equal(off.injection.fallbacks, off.injection.calls, '对照组每次都回落');
@@ -97,12 +97,16 @@ test('合法 key ⇒ 真的改道：fallbacks 恒 0，且记录与结局两处�
   //   ⚠️ **B75.2 再换（9001 → 9002）**：回合末清零接线 + 追goal分支 + 对峙空手判负三处行为变更
   //   再次改变轨迹 ⇒ 9001 的两臂撞到同一个结局签名（E127「换样本不换判据」同款处置）。
   //   9002 实测：问出口 2 次、改道 2 次、回落 0、liveSeats off={"0":1} vs on={} ⇒ 分歧可观察。
+  //   ⚠️ **B77 再换（9002 → 9003）**：被 `skip_turn` 封住的手番改走 PASS（且排在 roll 之前）
+  //   又一次改变固定 seed 的轨迹 ⇒ 9002 两臂再度撞同一结局签名（证据 A 的打牌序列仍然分歧，
+  //   只有结局侧失去区分力）。9003 实测：问出口 5 次、回落 0、seat0 打牌 on 5 / off 2、
+  //   liveSeats on={1:1,2:1} vs off={2:1,3:1}、胜者 座2 vs 座1 ⇒ 两条证据都可观察。
   const rowsOn: DecisionRecord[] = [];
   const chosen: string[] = [];
   setRecorder(rowsOn);
   let on: SimGameResult;
   try {
-    on = await playOne(theme(), 4, 9002, undefined, {
+    on = await playOne(theme(), 4, 9003, undefined, {
       face: 'play', seat: 0,
       decide: async (_s, _seat, c) => {
         const last = c[c.length - 1];

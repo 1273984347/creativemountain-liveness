@@ -30,7 +30,7 @@ import {
 // ⚠️ 与 statuses.ts 构成 ESM 循环引用（那边为复用 discard_self 而 import 本文件的 applyEffect）：
 //   两边被跨模块使用的都是**函数声明**（提升、非 TDZ），且都只在运行时调用 ⇒ 安全。
 //   若将来谁改成 `const` 箭头函数导出，这里会以 undefined 崩在运行时而非编译期。
-import { applyStatus, grantImmunity, statusOf } from '../core/statuses.ts';
+import { applyStatus, grantImmunity, STATUS_LOG_PREFIX, statusOf } from '../core/statuses.ts';
 
 /**
  * 到达峰顶 → **进入活人认证流程**（规格 §5.1）。
@@ -372,7 +372,7 @@ export const OPS: OpHandlers = {
     // 骰面已被下限兜住时（例：骰 1、slow 1）减速没有产生任何后果，不该计入读数。
     const slowApplied = Math.min(slowPart, Math.max(0, roll - effective - exhaustedPart));
     if (slowApplied > 0) {
-      state = withLog(state, ctx, 'status', `减速生效：座位 ${String(t.seat)}（-${String(slowApplied)} 格）`);
+      state = withLog(state, ctx, 'status', `${STATUS_LOG_PREFIX.slow_applied}座位 ${String(t.seat)}（-${String(slowApplied)} 格）`);
     }
     if (extra > 0) {
       // 机会用完即清零（不累积到下一回合）

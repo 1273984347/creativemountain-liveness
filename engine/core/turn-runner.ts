@@ -25,7 +25,7 @@ import type { RuleMode } from '../scales.ts';
 import type { Effect } from '../types/theme.ts';
 import { clearTurnStates, type State } from './state.ts';
 // B77 家族 B：状态结算的唯一出处（力竭递减仍留在 endRound，两者不同锚，见规格 §4）。
-import { isActionBlocked, statusOf, tickPlayerStatuses } from './statuses.ts';
+import { isActionBlocked, STATUS_LOG_PREFIX, statusOf, tickPlayerStatuses } from './statuses.ts';
 import { recoverFromExhaustion, triggerExhaustion } from './exhaustion.ts';
 
 /** 流程运行结果。 */
@@ -382,7 +382,7 @@ export function performAction(
         ...state,
         log: [...state.log, {
           round: state.round, turnIndex: state.turnIndex, actor: seat, kind: 'status',
-          message: `停手番：座位 ${String(seat)}`,
+          message: `${STATUS_LOG_PREFIX.skip_turn_applied}座位 ${String(seat)}`,
         }],
       };
       break;

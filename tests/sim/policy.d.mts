@@ -141,6 +141,21 @@ export interface CounterValue {
  *   `tsc` 阶段报错，而不是静默得到 `unknown`。`.mjs` 消费方（评估器）本就不受 TS 保护，
  *   故本声明只影响测试与 IDE。字段集合以 `policy.mjs` 的 `return {...}` 为准，新增读数必须同步。
  */
+/**
+ * B77 六个状态计数器的键（规格 §9：一算子一个 + 弃牌单列 + 封口反事实）。
+ *
+ * 除 `silence_applied` 外，五个都由**生效侧日志前缀**取数，前缀表在
+ * `engine/core/statuses.ts` 的 `STATUS_LOG_PREFIX`（唯一出处）；
+ * `silence_applied` 由 `silenceCost` 的反事实枚举累加——引擎拦下被封动作的信号是
+ * 引用相等，在拦截点写日志会把探针的合法性判据废掉。
+ */
+export type StatusCounterKey =
+  | 'poison_tick' | 'slow_applied' | 'silence_applied' | 'silence_discard'
+  | 'skip_turn_applied' | 'immunity_blocked';
+
+/** 取自日志前缀的五个键（`silence_applied` 没有样本，故排除）。 */
+export type StatusLogKey = Exclude<StatusCounterKey, 'silence_applied'>;
+
 export interface SimGameResult {
   readonly reason: string;
   readonly rounds: number;
@@ -164,6 +179,10 @@ export interface SimGameResult {
   readonly markKinds: readonly string[];
   readonly counterValues: readonly CounterValue[];
   readonly anomalies: readonly string[];
+  /** B77：六计数器（该局读数）。 */
+  readonly statusCounters: Readonly<Record<StatusCounterKey, number>>;
+  /** B77：五个日志类计数器的取证样本（该局第一条匹配消息；没读数 ⇒ null）。 */
+  readonly statusLogSamples: Readonly<Partial<Record<StatusLogKey, string | null>>>;
   /** B70 Task 3 的注入计数（缺省 policy ⇒ 三个 0）。 */
   readonly injection: InjectionCounters;
 }
@@ -257,6 +276,17 @@ export declare function rescueChoice(s: State, seat: number): { fire: boolean; t
 export declare function advanceWithDuel(s: State, mode: RuleMode, opts?: AdvanceOpts): Promise<State>;
 
 /**
+ * B77：封口实际吃掉的动作数（`silence_applied` 计数器的唯一取数口径）。
+ *
+ * 反事实：同一局面摘掉 `silence` 后，引擎枚举会多发几个 `PLAY_CARD`/`ABILITY`。
+ * 纯读（不改 state、不消耗 rng）⇒ 报告轨迹零扰动；两臂同口径 ⇒ 模型臂与基线可比。
+ * 未被封口 ⇒ 0（连枚举都不重跑）。
+ * ⚠️ 返回值是「被吃掉的**候选动作数**」（正比于手牌张数）；报告用的计数器由调用方
+ *   折成「失能**手番**人次」，以便与其余五个计数器同单位。
+ */
+export declare function silenceCost(s: State, seat: number): number;
+
+/**
  * 跑一局，返回该局的统计与异常。
  *
  * ⚠️ `async` 是为 B70 Task 3 的**可注入策略**铺路（模型调用要 await）。
@@ -267,6 +297,8 @@ export declare function advanceWithDuel(s: State, mode: RuleMode, opts?: Advance
  *   ⇒ 三处改道分支一次都不进 ⇒ 与注入前**逐字同行为**（门 ⑨ 报告 diff 为空是硬约束）。
  * ⚠️ play 面注入只在**基线本来就要出牌**的那一段（`s.rng.next() >= 0.85`）接管「选哪张牌 + 打谁」
  *   （B70 终审 C1）：0.16/0.75/0.85 三段行动分段两臂完全相同（`roll` 两臂都恰好消耗一次）。
+ * ⚠️ B77 例外：被 `skip_turn` 停手番的手番在 `roll` **之前**就走 PASS 出口 ⇒ 两臂都**零**消耗
+ *   （判据取自引擎枚举 `getLegalActions` 是否发 PASS，探针用隔离副本试跑 ⇒ 不碰本局 rng）。
  * ⚠️ 模型臂的 rng 流在**第一次打出不同的牌之后**与基线分叉（牌不同 ⇒ 之后的状态与 rng 使用不同）；
  *   这不是「跳过了一次 rng」，而是同一起点上的状态分叉，是策略注入的固有效应。
  */
