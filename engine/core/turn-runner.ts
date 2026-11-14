@@ -25,7 +25,7 @@ import type { RuleMode } from '../scales.ts';
 import type { Effect } from '../types/theme.ts';
 import { clearTurnStates, type State } from './state.ts';
 // B77 家族 B：状态结算的唯一出处（力竭递减仍留在 endRound，两者不同锚，见规格 §4）。
-import { tickPlayerStatuses } from './statuses.ts';
+import { isActionBlocked, tickPlayerStatuses } from './statuses.ts';
 import { recoverFromExhaustion, triggerExhaustion } from './exhaustion.ts';
 
 /** 流程运行结果。 */
@@ -201,10 +201,26 @@ function retarget(effect: Effect, target: number | undefined): Effect {
  * - **问天**：掷 20 面指令骰并执行对应指令（§3.2）。
  * - **行事**：打出一张手牌或发动能力。
  */
+/**
+ * `performAction` 的第五个入参形状 ⇒ 与 `Action` 成员的映射**必须**是显式 `Record`：
+ * 三元链在新增动作时会静默落到最后一个分支（例：新增 `'pass'` 却映射成 `'RECUPERATE'`），
+ * 而 `Record<ActionFace, string>` 少一个键就直接 tsc 报错（同"穷尽 switch 不加 default"的纪律）。
+ *
+ * ⚠️ `ask` ↔ `ROLL_WHEEL`（问天）：命名是原作「转盘」的遗留，映射见 `probe.ts:105`。
+ */
+export type ActionFace = 'move' | 'ask' | 'act' | 'equip' | 'recuperate';
+const FACE_OF_ACTION: Record<ActionFace, string> = {
+  move: 'MOVE',
+  ask: 'ROLL_WHEEL',
+  act: 'PLAY_CARD',
+  equip: 'EQUIP_CARD',
+  recuperate: 'RECUPERATE',
+};
+
 export function performAction(
   state: State,
   seat: number,
-  action: 'move' | 'ask' | 'act' | 'equip' | 'recuperate',
+  action: ActionFace,
   payload: { readonly cardId?: string; readonly target?: number } = {},
 ): State {
   const player = state.players[seat];
@@ -215,6 +231,9 @@ export function performAction(
   if (pendingGate(state, seat) !== null) { return state; }
   // ⚠️ B18-b：停在**可放印的裂隙格** ⇒ 同样只能选通道（放印 / 不放）。
   if (pendingBarrier(state, seat) !== null) { return state; }
+  // B77：被封者的行动一律**引用相等**拒绝（与 pendingCert / B65 灵枢不足同款形状 ⇒ 探针认得）。
+  //   判据读 statuses 的唯一出处，枚举层只是**少发**候选，真正的门禁在这里（绕过 UI 调引擎也必须被拒）。
+  if (isActionBlocked(state, seat, FACE_OF_ACTION[action])) { return state; }
   let next = state;
   switch (action) {
     case 'move': {

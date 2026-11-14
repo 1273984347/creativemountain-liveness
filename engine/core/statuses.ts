@@ -101,6 +101,40 @@ export function grantImmunity(ctx: OpContext, seat: number, status: NegativeStat
     `免疫 ${status} ${String(amount)} 回合：座位 ${String(t.seat)}`));
 }
 
+/**
+ * skip_turn 的封锁集（规格 §3.6 ②）= **整个行动面**。
+ *
+ * ⚠️ `ROLL_WHEEL` 是**问天**（20 面指令骰），不是"阵营轮"——名字是原作转盘的遗留，
+ *   映射见 `probe.ts:105`（`ROLL_WHEEL → performAction(…, 'ask')`）与
+ *   `action-key.ts:14`（key 形 `ask`）。列进来才是封住问天，漏它等于留了一条行动口子。
+ */
+export const SKIP_BLOCKED: ReadonlySet<string> = new Set(['MOVE', 'PLAY_CARD', 'ABILITY', 'ROLL_WHEEL', 'EQUIP_CARD', 'RECUPERATE']);
+/** silence 的封锁集（§3.6 ③）——是 `SKIP_BLOCKED` 的真子集，故 skip 生效时禁言被吸收。 */
+export const SILENCE_BLOCKED: ReadonlySet<string> = new Set(['PLAY_CARD', 'ABILITY']);
+
+/**
+ * 某动作此刻是否被封。**豁免族一律 false**（结算期通道 / 对峙 / 认证 / 投票 / PASS）——
+ * 它们不是行动面的行动，而是未决流程的解阻塞；封掉就会死锁（封者永远卡在关隘上）。
+ *
+ * ⚠️ 判据只允许存在这一份：枚举层（`legal.ts`）、引擎（`performAction`）、UI 闸门
+ *   （`web/legal-gate.ts`）三层都读它 ⇒ 规格 §3.6 的「布尔一致 + 拒因一致」由这里保证。
+ */
+export function isActionBlocked(state: State, seat: number, type: string): boolean {
+  if (statusOf(state, seat, 'skip_turn') > 0) { return SKIP_BLOCKED.has(type); }
+  if (statusOf(state, seat, 'silence') > 0) { return SILENCE_BLOCKED.has(type); }
+  return false;
+}
+
+/**
+ * 三层共用的**同一句**拒因；优先级与封锁一致：停手番 > 封口。
+ * ⚠️ 顺序不是排版：UI 说「封口」而引擎说「力竭」会让玩家按错误的那句去试（规格 §3.6 末）。
+ */
+export function blockedNotice(state: State, seat: number): string | null {
+  if (statusOf(state, seat, 'skip_turn') > 0) { return '你被停了手番——这一回合只能结束行动。'; }
+  if (statusOf(state, seat, 'silence') > 0) { return '你被封口了——本回合不能出牌或发动被动。'; }
+  return null;
+}
+
 /** 家族 B 的衰减对象（③④⑤：poison 的衰减在 ② 内联处理，扣完血才减）。 */
 const DECAY_ORDER: readonly NegativeStatus[] = ['slow', 'silence', 'skip_turn'];
 /** 免疫窗的衰减对象（⑥：四类都可能被免疫，逐个查窗）。 */

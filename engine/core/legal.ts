@@ -42,6 +42,8 @@ import { topVoted } from './council.ts';
 import { isRoundEnd } from './round.ts';
 import { pendingGate } from './gate.ts';
 import { pendingBarrier } from './barrier.ts';
+// B77：行动封锁判据的**唯一**出处（引擎与 UI 闸门读同一个函数，规格 §3.6）。
+import { isActionBlocked, statusOf } from './statuses.ts';
 
 /** 行动阶段候选上限（官方 serve `MAX_CHOICE_OPTIONS=100`，留余量）。 */
 export const LEGAL_ACTION_CAP = 64;
@@ -163,17 +165,28 @@ function actionPhaseCandidates(state: State, seat: number): Action[] {
     return out;
   }
   if (!actionWindowOpen(state, seat)) { return []; }
+  // B77 封锁。⚠️ 位置就是纪律：必须在上面 pendingGate / pendingBarrier / duel 三个早退
+  //   分支**之后**——那三段本来就不受行动窗口判据约束，写在前头会把解阻塞通道一起关掉
+  //   ⇒ 被封者永远卡在关隘上（该处注释早已警告过，规格 §2.6 黄6）。
+  //   skip 生效时行动面只剩「结束手番」；此时**不得**再发通道候选（已由早退分支保证）。
+  if (statusOf(state, seat, 'skip_turn') > 0) { return [{ type: 'PASS', actor: seat }]; }
   const out: Action[] = [
     { type: 'MOVE', actor: seat, steps: 0 },   // 步数由骰子定，玩家不可选
     { type: 'ROLL_WHEEL', actor: seat },
   ];
   // ⚠️ B76：力竭恢复候选（自恢 / 救援）——与行棋 / 问天并列的行动面入口。
   pushRecuperateCandidates(state, seat, out);
+  // B77：silence 只封「出牌 / 发动被动」；装备不视为发言（装备不产生效果、不产生位移），
+  //   自救 RECUPERATE 同理放行（skip 时上面已整体短路，走不到这里）。
+  const silenced = isActionBlocked(state, seat, 'PLAY_CARD');
   for (const card of p.hand) {
     // ⚠️ B75：每张手牌都追加一条装备候选（与 PLAY_CARD 并列，装备免费 ⇒ 不看资源）。
     //   ⚠️ 候选数由此**按手牌数线性增长** ⇒ `LEGAL_ACTION_CAP=64` 更容易撞上，
     //   撞上限是**如实截断**（stats.truncated=true），不得放宽上限来「让用例好看」。
-    out.push({ type: 'EQUIP_CARD', actor: seat, cardId: card.id });
+    if (!isActionBlocked(state, seat, 'EQUIP_CARD')) {
+      out.push({ type: 'EQUIP_CARD', actor: seat, cardId: card.id });
+    }
+    if (silenced) { continue; }
     if (cardNeedsTarget(card)) {
       // 需目标的牌**只**按候选目标展开（不给无目标版本：引擎在 `act` 分支原样返回）。
       for (const target of targetCandidates(state, seat)) {
@@ -184,7 +197,7 @@ function actionPhaseCandidates(state: State, seat: number): Action[] {
     }
   }
   const avail = abilityAvailability(state, seat);
-  if (avail.usable) {
+  if (avail.usable && !isActionBlocked(state, seat, 'ABILITY')) {
     const abilityId = activeAbilityId(state, seat);
     if (avail.needsTarget) {
       for (const target of targetCandidates(state, seat)) { out.push({ type: 'ABILITY', actor: seat, abilityId, target }); }
