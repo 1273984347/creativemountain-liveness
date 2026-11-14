@@ -24,6 +24,7 @@ import { settleRoundEndGoals } from '../goals/settle.ts';
 import type { RuleMode } from '../scales.ts';
 import type { Effect } from '../types/theme.ts';
 import { clearTurnStates, type State } from './state.ts';
+import { triggerExhaustion } from './exhaustion.ts';
 
 /** 流程运行结果。 */
 export interface StepResult {
@@ -79,6 +80,10 @@ function resolveTile(state: State, seat: number): State {
         p.seat === seat ? { ...p, hp: Math.max(0, p.hp - 1) } : p,
       );
       next = { ...state, players, decks: { ...state.decks, deck: deckAfterFlip } };
+      // ⚠️ B76：归零 ⇒ 力竭（与 damage 同一实现——两路径统一，设计规格 §2）。
+      if (players[seat]!.hp === 0) {
+        next = triggerExhaustion(next, seat);
+      }
       break;
     }
     case 'rift': {

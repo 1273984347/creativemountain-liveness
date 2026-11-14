@@ -13,6 +13,7 @@ import { filterMatches } from '../types/card.ts';
 import { evaluatePredicate } from '../predicates.ts';
 import { enterPendingCertification } from '../core/certification.ts';
 import { bumpCounterOf } from '../core/counters.ts';
+import { triggerExhaustion } from '../core/exhaustion.ts';
 import type { State } from '../core/state.ts';
 export type { OpContext, OpResult } from './context.ts';
 import {
@@ -514,9 +515,10 @@ export const OPS: OpHandlers = {
     const hp = Math.max(0, pl.hp - rest);
     let state = withPlayer(ctx.state, t.seat, { shield: pl.shield - absorbed, hp });
     state = withLog(state, ctx, 'damage', `对座位 ${t.seat} 造成 ${p.amount} 伤害`);
+    // ⚠️ B76：HP 归零 ⇒ 力竭（不再出局——放逐是唯一出局通道，暗杀分支已收口）。
+    //   触发 / 解除的唯一实现在 engine/core/exhaustion.ts。
     if (hp === 0) {
-      state = withPlayer(state, t.seat, { alive: false });
-      state = withLog(state, ctx, 'damage', `座位 ${t.seat} 体力归零`);
+      state = triggerExhaustion(state, t.seat);
     }
     return ok(state);
   },

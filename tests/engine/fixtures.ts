@@ -24,7 +24,6 @@ import {
   enterPendingCertification,
 } from '../../engine/core/certification.ts';
 import { openCouncil } from '../../engine/core/council.ts';
-import { applyEffect } from '../../engine/ops/registry.ts';
 import { getScales } from '../../engine/scales.ts';
 import type { CertificationState } from '../../engine/core/flow.ts';
 
@@ -188,9 +187,13 @@ export function exiledScene(players = 4, seed = 7, victimSeat = 3): State {
   const victim = s.players[victimSeat];
   assert.ok(victim !== undefined, `前提：座 ${String(victimSeat)} 必须存在`);
   assert.ok(victim.hand.length > 0, `前提：座 ${String(victimSeat)} 必须有手牌（否则取证的变量不唯一）`);
-  const actor = victimSeat === 0 ? 1 : 0;
-  const res = applyEffect({ state: s, actor }, { op: 'damage', amount: victim.hpMax + 1, target: victimSeat });
-  const out = res.state;
+  // ⚠️ B76：damage 不再出局（打空 ⇒ 力竭）⇒ 夹具改**直接置放逐结果**。
+  //   本夹具的语义是「一个已出局的座位」，与出局方式无关（放逐是唯一出局通道，engine/core/council.ts）；
+  //   消费方测的是出局者的行为，不是出局的来路（直改字段 = withGoal / withPassive 同款先例）。
+  const out: State = {
+    ...s,
+    players: s.players.map((p) => (p.seat === victimSeat ? { ...p, alive: false } : p)),
+  };
   const now = out.players[victimSeat];
   assert.equal(now?.alive, false, `前提：座 ${String(victimSeat)} 必须真的被置为出局`);
   return out;
