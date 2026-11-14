@@ -293,9 +293,31 @@ export function performAction(
       next = { ...next, log: [...next.log, { round: next.round, turnIndex: next.turnIndex, actor: seat, kind: 'card', message: `行事：打出「${card.name}」` }] };
       break;
     }
-    // ⚠️ B76：力竭恢复——T5 编译桩（T6 以测试驱动落真语义：自恢 2 / 救援 1 / pendingCert 允许）。
+    // ⚠️ B76：力竭恢复（设计规格 §3）——**自恢**（无 target：本人力竭、扣 2 灵枢）
+    //   与**救援**（有 target：自己不力竭、目标力竭存活、扣 1 灵枢、任意距离）。
+    //   ⚠️ 拒绝以引用相等表达（probeAction 认得的拒绝信号）；生效路径走 recoverFromExhaustion
+    //     （唯一实现，engine/core/exhaustion.ts）。**pendingCert 下允许**（不是位移，不触 §5.1；
+    //     此前两条暂停早退已拦关隘 / 裂隙暂停期——与 B75 equip 同款）。
     case 'recuperate': {
-      return state;
+      const target = payload.target;
+      if (target === undefined) {
+        // 自恢
+        if ((player.exhaustedRounds ?? 0) === 0) { return state; }
+        if (player.resource < 2) { return state; }
+        const spent = spendResource(next, seat, 2);
+        if (!spent.ok) { return state; }
+        next = spent.state;
+        return recoverFromExhaustion(next, seat, '自恢');
+      }
+      // 救援
+      if ((player.exhaustedRounds ?? 0) > 0) { return state; }
+      const tp = state.players[target];
+      if (tp === undefined || !tp.alive || (tp.exhaustedRounds ?? 0) === 0) { return state; }
+      if (player.resource < 1) { return state; }
+      const spentRescue = spendResource(next, seat, 1);
+      if (!spentRescue.ok) { return state; }
+      next = spentRescue.state;
+      return recoverFromExhaustion(next, target, '救援');
     }
     case 'equip': {
       // ⚠️ B75（设计 §4.1）：装备 = 把手牌**转为常驻装备**（公开可见、无被动效果、免费、不占手牌上限）。
