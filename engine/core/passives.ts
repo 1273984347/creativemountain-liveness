@@ -104,6 +104,8 @@ export function abilityAvailability(state: State, seat: number): AbilityAvailabi
   const player = state.players[seat];
   if (player === undefined) { return { usable: false, reason: '座位不存在', needsTarget: false }; }
   if (!player.alive) { return { usable: false, reason: '已出局', needsTarget: false }; }
+  // ⚠️ B76：力竭封锁主动被动（规格设计 §2 效果 #3）——观星者 / 窃火者 / 织梦者 / 匠师全走本入口。
+  if ((player.exhaustedRounds ?? 0) > 0) { return { usable: false, reason: '力竭期间不能发动被动', needsTarget: false }; }
   const passive = passiveOf(state, seat);
   if (passive === undefined) { return { usable: false, reason: '本局没有身份被动（旧存档）', needsTarget: false }; }
   if (!ACTIVE_OPS.has(passive.op)) { return { usable: false, reason: '该被动为自动/常驻型，无需发动', needsTarget: false }; }

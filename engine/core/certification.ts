@@ -150,6 +150,9 @@ export function certifyChallenge(state: State, actor: number, target: number): C
   if (!c.pending.includes(target)) { return fail(state, `座位 ${target} 不在待认证状态`); }
   if (!isCertifier(state, actor)) { return fail(state, `座位 ${actor} 不是认证人`); }
   if (hasUsedCertificationTurn(state, actor)) { return fail(state, '本轮已用过认证机会'); }
+  // ⚠️ B76：力竭者作为认证人不可发起质疑（设计规格 §2 效果 #4）——**拒在扣费前**（一分不扣）。
+  //   不对称是刻意的：力竭削弱「主动施压」，不豁免「被检验」——力竭的待认证者仍可被他人质疑。
+  if (((state.players[actor]?.exhaustedRounds) ?? 0) > 0) { return fail(state, '力竭期间不能发起质疑'); }
   const challenger = state.players[actor];
   if (challenger === undefined || challenger.resource < 1) {
     return fail(state, '灵枢不足，无法发起质疑（需 1 灵枢）');

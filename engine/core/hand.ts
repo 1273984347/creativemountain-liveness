@@ -6,6 +6,8 @@ import { counterPatch } from './counters.ts';
 
 /** 手牌上限 = 体力上限（沿用原作「手牌数 = 体力值」）。 */
 export function handLimitOf(player: Player): number {
+  // ⚠️ B76：力竭 ⇒ 上限减半（向上取整）。读点容错 `?? 0`：旧存档缺字段按未力竭处理（B75 R4 同款）。
+  if ((player.exhaustedRounds ?? 0) > 0) { return Math.ceil(player.hpMax / 2); }
   return player.hpMax;
 }
 

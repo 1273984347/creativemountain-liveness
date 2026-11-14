@@ -346,8 +346,11 @@ export const OPS: OpHandlers = {
     const rolls: number[] = [rollD6(ctx.state.rng)];
     for (let i = 0; i < extra; i++) { rolls.push(rollD6(ctx.state.rng)); }
     const roll = Math.max(...rolls);
+    // ⚠️ B76：力竭 ⇒ 骰面 -1（下限 1）——**先减后加**：惩罚作用在骰面本身，
+    //   moveBonus（外挂加成，写入点恒非负）在此之后叠加。extra_roll 取最高后的最终骰面一并受罚。
+    const effective = (pl.exhaustedRounds ?? 0) > 0 ? Math.max(1, roll - 1) : roll;
     const peak = ctx.state.board.peakIndex;
-    const raw = pl.position + roll + pl.turn.moveBonus;
+    const raw = pl.position + effective + pl.turn.moveBonus;
     const next = Math.min(peak, raw);
     let state = withPlayer(ctx.state, t.seat, {
       position: next,

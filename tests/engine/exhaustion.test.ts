@@ -7,11 +7,14 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-import type { State } from '../../engine/core/state.ts';
+import type { Player, State } from '../../engine/core/state.ts';
 import { applyEffect } from '../../engine/ops/registry.ts';
 import { finishTurn } from '../../engine/core/turn-runner.ts';
+import { handLimitOf } from '../../engine/core/hand.ts';
+import { performAbility } from '../../engine/core/abilities.ts';
+import { certifyChallenge } from '../../engine/core/certification.ts';
 import { recoverFromExhaustion } from '../../engine/core/exhaustion.ts';
-import { mk } from './fixtures.ts';
+import { mk, putPending } from './fixtures.ts';
 
 /** 造一张黑牌（险径判定用）。 */
 function blackCard(id: string): { id: string; color: 'black' } {
@@ -121,3 +124,60 @@ test('B76 常驻：alive: false 的写入点只允许山议放逐（council.ts�
   walk('engine');
   assert.deepEqual(hits, ['engine/core/council.ts'], `damage 暗杀分支必须已删除；命中：${hits.join('、')}`);
 });
+
+// ---------- 四效果（Task 3）----------
+
+test('B76：力竭 ⇒ 手牌上限 = ceil(hpMax/2)（7 ⇒ 4）', () => {
+  const s = exhaust(mk(4, 7), 0);
+  assert.equal(handLimitOf(s.players[0]!), Math.ceil(s.players[0]!.hpMax / 2));
+  assert.ok(s.players[0]!.hpMax >= 6, '前提：hpMax ≥ 6（上限真的减半了）');
+});
+
+test('B76：旧存档缺 exhaustedRounds ⇒ handLimitOf 按 0 处理（不 NaN）', () => {
+  const s = mk(4, 7);
+  const legacy: Player = JSON.parse(JSON.stringify(s.players[0]));
+  delete (legacy as Record<string, unknown>).exhaustedRounds;
+  assert.equal(handLimitOf(legacy), legacy.hpMax, '缺字段按未力竭处理（Read Focus #1）');
+});
+
+test('B76：力竭骰移 = max(1, 骰面-1)（先减后加；seed 扫描保证区分力——骰面 ≥ 2 才可判）', () => {
+  let seen = false;
+  for (let seed = 7; seed < 60 && !seen; seed++) {
+    const start = mk(4, seed);
+    const pos0 = start.players[0]!.position;
+    const base = applyEffect({ state: start, actor: 0 }, { op: 'move_by_dice', faces: 6, target: 0 }).state;
+    const dieFace = base.players[0]!.position - pos0;
+    if (dieFace < 2) { continue; }   // 骰面 1 时 max(1,0)=1 与未力竭相同 ⇒ 该 seed 无区分力
+    seen = true;
+    const arm = applyEffect({ state: exhaust(mk(4, seed), 0), actor: 0 }, { op: 'move_by_dice', faces: 6, target: 0 }).state;
+    assert.equal(arm.players[0]!.position, Math.max(1, dieFace - 1), `seed=${seed} 骰面=${dieFace}`);
+  }
+  assert.ok(seen, 'seed 7–60 内必须出现骰面 ≥ 2（否则测试恒 vacuous）');
+});
+
+test('B76：力竭 ⇒ 主动被动被拒（performAbility ok:false，note 含力竭）', () => {
+  const s = withPassive(exhaust(mk(4, 7), 0), 0, { op: 'transfer_resource', amount: 1 });
+  const r = performAbility(s, 0, 1);
+  assert.equal(r.ok, false);
+  assert.ok((r.note ?? '').includes('力竭'), r.note);
+});
+
+test('B76：力竭 ⇒ 不能发起质疑（且不扣灵枢——拒在扣费前）', () => {
+  const s0 = putPending(mk(4, 7), [1]);
+  const s = exhaust(s0, 0);
+  assert.deepEqual(s.certification.pending, [1], '前提：座 1 真的在待认证（player 字段与认证状态两回事）');
+  const before = s.players[0]!.resource;
+  const r = certifyChallenge(s, 0, 1);
+  assert.equal(r.ok, false);
+  assert.ok((r.note ?? '').includes('力竭'), r.note);
+  assert.equal(r.state.players[0]!.resource, before, '拒在扣费前，一分不扣');
+});
+
+// ---------- 夹具 ----------
+
+/** 给座 `seat` 挂被动（passive-abilities.test.ts 的 withPassive 同款）。 */
+function withPassive(s: State, seat: number, passive: unknown): State {
+  return { ...s, players: s.players.map((p) => (p.seat === seat ? { ...p, flags: { ...p.flags, passive } } : p)) };
+}
+// ---------- 夹具 ----------
+
