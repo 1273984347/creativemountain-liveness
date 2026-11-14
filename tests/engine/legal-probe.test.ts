@@ -867,6 +867,24 @@ function overCapCornerScene(): State {
 //   比引擎严，只有把这个局面放进守卫才会变红。
 
 /**
+ * B77 封锁局面工厂：只动 `statuses`，其它字段一律由真实入口/既有夹具产生。
+ *
+ * ⚠️ 每个局面都必须让**两侧都有非空集合**（E87：空集 ≠ 有效）——
+ *   skip 面发 PASS、silence 面发 MOVE/EQUIP 但不发出牌，两侧任一侧漏判就会被集合相等抓到。
+ */
+type B77Status = 'poison' | 'slow' | 'silence' | 'skip_turn';
+function withStatusOn(s: State, seat: number, patch: Partial<Record<B77Status, number>>): State {
+  return { ...s, players: s.players.map((p) => (p.seat === seat ? { ...p, statuses: { ...p.statuses, ...patch } } : p)) };
+}
+const skipTurnScene = (seed: number): State => withStatusOn(mk(8, seed), 0, { skip_turn: 1 });
+const silencedScene = (seed: number): State => withStatusOn(mk(8, seed), 0, { silence: 1 });
+/** 锁定 × 封口（T7 发现的缺口：这条分支原先两层都没应用封口）。 */
+const silencedLockedScene = (seed: number): State => withStatusOn(putPending(mk(4, seed), [0]), 0, { silence: 1 });
+/** 停手番 × 停在未通过关隘 ⇒ 解阻塞通道必须照发、PASS 必须不出现（防死锁 + 防"跳过关隘"）。 */
+const gateWhileBlockedScene = (seed: number): State =>
+  withStatusOn(withStatusOn(gateScene(4, seed, 3, 0), 0, { silence: 2 }), 0, { skip_turn: 2 });
+
+/**
  * 漂移守卫遍历的局面集（按 seed 参数化；含两处 co-pending 真漂移取证局面）。
  *
  * ⚠️ 修复轮新增的后四个局面（裁定 R-3：原九局面**抓不到**以下几处判据被删，变异实测见报告）：
@@ -890,6 +908,9 @@ function driftScenes(seed: number): State[] {
     exhaustedSelfScene(seed), exhaustedRescueScene(seed),
     // ⚠️ B53：加入**关隘局面** ⇒ 「COMPARE 是否枚举」那一面不再恒为空集（E87）
     gateScene(4, seed),
+    // ⚠️ B77：封锁的三种形状各进一个局面（PASS 只由 skip 发 / 出牌被 silence 拿掉 /
+    //   锁定+封口同时成立时两层都得记得封口），外加「被封却停在关隘上」的防死锁形状。
+    skipTurnScene(seed), silencedScene(seed), silencedLockedScene(seed), gateWhileBlockedScene(seed),
   ];
 }
 
@@ -901,6 +922,31 @@ function sceneTag(s: State): string {
     + ` appealed=[${c.appealed.join(',')}] judgments=${JSON.stringify(c.judgments)}`
     + ` appealVotes=${JSON.stringify(c.appealVotes)}`;
 }
+
+test('B77：封锁局面必须有**非空的正面形状**（两侧一起漏判也会让集合相等变绿，E87 的另一半）', () => {
+  const shape = (s: State, seat: number): string[] =>
+    [...new Set(getLegalActions(s, seat).map((a) => a.type))].sort();
+  const uiShape = (s: State, seat: number): string[] =>
+    [...new Set(uiCandidates(s, seat).filter((a) => uiAllows(s, seat, a)).map((a) => a.type))].sort();
+  for (const seed of [7, 11, 23]) {
+    const skipped = skipTurnScene(seed);
+    assert.deepEqual(shape(skipped, 0), ['PASS'], `被封者的合法动作必须恰好是 PASS：${JSON.stringify(shape(skipped, 0))}`);
+    assert.deepEqual(uiShape(skipped, 0), ['PASS'], 'UI 侧必须同形状（漏发 PASS ⇒ 被封者点不动，等于卡死）');
+    assert.notDeepEqual(shape(skipped, 1), ['PASS'], '反证：只有座 0 被封，别人的行动面不该被牵连');
+
+    const silenced = silencedScene(seed);
+    const ss = shape(silenced, 0);
+    assert.ok(ss.includes('MOVE'), `封口不能拿走行棋：${JSON.stringify(ss)}`);
+    assert.ok(!ss.includes('PLAY_CARD'), '封口必须拿走出牌（UI 同理，见集合相等守卫）');
+
+    const gateBlocked = gateWhileBlockedScene(seed);
+    const gb = shape(gateBlocked, 0);
+    assert.ok(gb.includes('GATE_RESOLVE'), `被封者必须还能解关隘，否则死锁：${JSON.stringify(gb)}`);
+    assert.ok(!gb.includes('PASS'), '通道没选完之前不得发 PASS（否则等于允许跳过关隘）');
+    assert.deepEqual(uiShape(gateBlocked, 0), gb, '关隘×封锁面上 UI 与引擎必须同形状');
+  }
+});
+
 
 test('X4 回归锁：payOnly 关隘面 UI 与引擎**同判**「本关已改为付费」', () => {
   // ⚠️ 这条判据**不能靠集合相等守卫**：payOnly 时 `uiCandidates` 本就不发 COMPARE 候选
