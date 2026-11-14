@@ -254,6 +254,24 @@ function renderToolbar(): HTMLElement {
  *   被拒时把 `uiBlockNotice` 的拒因写进 notice（拒绝不沉默），并**退出装备模式**——
  *   留在模式里会让下一次点击继续撞同一堵墙。
  */
+/**
+ * B76：力竭恢复（自恢 / 救援）。与装备同款「先问闸再提交」：判据只有 legal-gate 与引擎两处，
+ * 被拒时把拒因写进 notice（拒绝不沉默）。恢复占掉本手番的唯一行动（自恢 2 灵枢 / 救援 1 灵枢）。
+ */
+function recuperate(target?: number): void {
+  const seat = ui.seat;
+  const action: Action = target === undefined ? { type: 'RECUPERATE', actor: seat } : { type: 'RECUPERATE', actor: seat, target };
+  if (!uiAllows(ui.state, seat, action)) {
+    ui.notice = uiBlockNotice(ui.state, seat, action) ?? '当前不可恢复。';
+    render();
+    return;
+  }
+  ui.state = performAction(ui.state, seat, 'recuperate', target === undefined ? {} : { target });
+  ui.state = advanceTurn(ui.state, ui.mode);   // 恢复占掉本手番的唯一行动（设计规格 §3）
+  ui.notice = target === undefined ? '自恢成功：力竭解除。' : '救援成功：座位 ' + String(target) + ' 的力竭解除。';
+  render();
+}
+
 function equipCard(cardId: string): void {
   const seat = ui.seat;
   ui.pendingTargetCardId = null;
@@ -572,7 +590,18 @@ function renderActions(): HTMLElement {
       ui.notice = '已退出装备模式。';
       render();
     }));
-  } else if (uiCandidates(ui.state, seat).some((a) => a.type === 'EQUIP_CARD')) {
+  }
+  // ⚠️ B76：力竭恢复入口——按钮只在枚举真的发出候选时出现（判据仍在 legal-gate）。
+  const recupCands = uiCandidates(ui.state, seat).filter((a) => a.type === 'RECUPERATE');
+  for (const a of recupCands) {
+    if (a.type !== 'RECUPERATE') { continue; }
+    if (a.target === undefined) {
+      body.push(button('自恢（2 灵枢，占本手番）', () => { recuperate(); }));
+    } else {
+      body.push(button('救援座位 ' + String(a.target) + '（1 灵枢，占本手番）', () => { recuperate(a.target); }));
+    }
+  }
+  if (uiCandidates(ui.state, seat).some((a) => a.type === 'EQUIP_CARD')) {
     body.push(button('装备手牌（点一张牌）', () => {
       ui.equipMode = true;
       ui.pendingTargetCardId = null;

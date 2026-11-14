@@ -872,6 +872,8 @@ function driftScenes(seed: number): State[] {
     exiledCouncilAppealScene(seed), councilVotedActionPanelScene(seed),
     // ⚠️ B75.1：否决的「自救不发 / 救他人要发」两条形状都进守卫（只进前者 ⇒ 两侧同空集，等于没测）
     councilVetoSelfRescueScene(seed), councilVetoSaveOtherScene(seed),
+    // ⚠️ B76：力竭恢复的双侧形状（自恢要发 / 救援要发——E87：空集 ≠ 有效）
+    exhaustedSelfScene(seed), exhaustedRescueScene(seed),
     // ⚠️ B53：加入**关隘局面** ⇒ 「COMPARE 是否枚举」那一面不再恒为空集（E87）
     gateScene(4, seed),
   ];
@@ -1122,6 +1124,19 @@ function councilVetoSceneWithTop(seed: number, holder: number, top: number): Sta
     assert.notEqual(s.council.votes[p.seat], undefined, 'councilVetoScene：全员（存活）必须都已投票 ⇒ 前置条件不能悄悄不成立');
   }
   return s;
+}
+
+
+/** B76：力竭自恢场景——座 0 力竭、灵枢充足 ⇒ 三层都必须发自恢候选。 */
+function exhaustedSelfScene(seed: number): State {
+  const s = mk(4, seed);
+  return { ...s, players: s.players.map((p) => (p.seat === 0 ? { ...p, exhaustedRounds: 2, resource: 3, hp: 0 } : p)) };
+}
+
+/** B76：力竭救援场景——座 1 力竭、座 0 不力竭且有灵枢 ⇒ 三层都必须发救援候选。 */
+function exhaustedRescueScene(seed: number): State {
+  const s = mk(4, seed);
+  return { ...s, players: s.players.map((p) => (p.seat === 1 ? { ...p, exhaustedRounds: 2, resource: 0, hp: 0 } : p)) };
 }
 
 function councilVetoSelfRescueScene(seed: number): State {

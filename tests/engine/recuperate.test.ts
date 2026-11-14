@@ -93,3 +93,43 @@ test('B76：三态叠加（力竭+待认证+印记）自恢 ⇒ hasMark/alive �
   assert.equal(r.players[1]!.alive, true, '不出局');
   assert.equal(r.players[1]!.exhaustedRounds, 0);
 });
+
+// ---------- 候选形状（Task 7，三层同判的引擎侧真值）----------
+import { candidatesOf } from '../../engine/core/legal.ts';
+
+test('B76：候选——力竭 + 灵枢≥2 ⇒ 发自恢候选（无 target）', () => {
+  const s = exhaustedAt(mk(4, 7), 0, 3);
+  const cands = candidatesOf(s, 0).filter((a) => a.type === 'RECUPERATE');
+  assert.deepEqual(cands, [{ type: 'RECUPERATE', actor: 0 }]);
+});
+
+test('B76：候选——力竭但灵枢不足 ⇒ 不发自恢', () => {
+  const s = exhaustedAt(mk(4, 7), 0, 1);
+  assert.equal(candidatesOf(s, 0).some((a) => a.type === 'RECUPERATE'), false);
+});
+
+test('B76：候选——有体力竭他人 + 灵枢≥1 ⇒ 每目标一条救援候选；自己不力竭', () => {
+  const s = exhaustedAt(mk(4, 7), 1, 0);
+  const cands = candidatesOf(s, 0).filter((a) => a.type === 'RECUPERATE');
+  assert.deepEqual(cands, [{ type: 'RECUPERATE', actor: 0, target: 1 }]);
+});
+
+test('B76：候选——力竭者不发救援候选（但保留自恢）', () => {
+  const s = { ...exhaustedAt(mk(4, 7), 1, 0), players: exhaustedAt(mk(4, 7), 1, 0).players.map((p) => (p.seat === 0 ? { ...p, exhaustedRounds: 2, resource: 3 } : p)) };
+  const cands = candidatesOf(s, 0).filter((a) => a.type === 'RECUPERATE');
+  assert.deepEqual(cands, [{ type: 'RECUPERATE', actor: 0 }], '力竭者只有自恢');
+});
+
+test('B76：候选——力竭待认证目标仍收 CERTIFY_CHALLENGE（被质疑权）+ 力竭认证人仍有签印/弃权无质疑', () => {
+  const pendingExhausted = putPending(mk(4, 7), [1]);
+  const scene = { ...pendingExhausted, players: pendingExhausted.players.map((p) => (p.seat === 1 ? { ...p, exhaustedRounds: 2 } : p)) };
+  const from0 = candidatesOf(scene, 0).filter((a) => a.type === 'CERTIFY_CHALLENGE' && a.target === 1);
+  assert.equal(from0.length, 1, '力竭的待认证者仍可被质疑');
+  // 座 0 力竭且座 2 待认证：座 0 有签印/弃权、无质疑
+  const certifier = putPending(mk(4, 7), [2]);
+  const ex = { ...certifier, players: certifier.players.map((p) => (p.seat === 0 ? { ...p, exhaustedRounds: 2 } : p)) };
+  const cands = candidatesOf(ex, 0).filter((a) => a.target === 2 || (a.type === 'CERTIFY_SIGN' && a.target === 2));
+  assert.equal(cands.some((a) => a.type === 'CERTIFY_SIGN' && a.target === 2), true, '签印照常');
+  assert.equal(cands.some((a) => a.type === 'CERTIFY_ABSTAIN' && a.target === 2), true, '弃权照常');
+  assert.equal(cands.some((a) => a.type === 'CERTIFY_CHALLENGE'), false, '无质疑');
+});

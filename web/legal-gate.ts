@@ -431,10 +431,13 @@ export function uiCandidates(state: State, seat: number): Action[] {
   } else if (me.pendingCert) {
     // ⚠️ **B71：锁定者只发非位移牌**（与引擎 `actionPhaseCandidates` 的锁定分支同款）。
     //   位移族（MOVE / ROLL_WHEEL / ABILITY）不发；阶段 / 本轮未完两条判据照旧。
+    //   ⚠️ B76：力竭恢复候选（自恢 / 救援——恢复不是位移；与引擎 pushRecuperateCandidates 同判，独立实现）。
     //   ⚠️ 与 `legal.ts` 各自独立写一份是**本文件的设计**（不 import 枚举）——
     //     两侧集合相等由 `legal-probe.test.ts` 的漂移守卫钉住。
     //   ⚠️ **不早退**：本函数后面还要追加山议 / 认证面候选（它们不受行动窗口约束）。
     if (state.phase === '行动' && !isRoundEnd(state)) {
+    pushRecuperateCandidatesUi(state, seat, out);
+
       for (const card of me.hand) {
         // ⚠️ B75：装备不限位移 ⇒ 必须排在 `cardHasMovement` 的 continue **之前**。
         out.push({ type: 'EQUIP_CARD', actor: seat, cardId: card.id });
@@ -451,6 +454,8 @@ export function uiCandidates(state: State, seat: number): Action[] {
   } else if (actionWindow(state, seat)) {
     out.push({ type: 'MOVE', actor: seat, steps: 0 });
     out.push({ type: 'ROLL_WHEEL', actor: seat });
+    // ⚠️ B76：力竭恢复候选（自恢 / 救援）——与引擎候选同判（独立实现，漂移守卫钉相等）。
+    pushRecuperateCandidatesUi(state, seat, out);
     for (const card of me.hand) {
       // ⚠️ B75：与引擎 `actionPhaseCandidates` 同款 —— 每张手牌并列一条装备候选。
       out.push({ type: 'EQUIP_CARD', actor: seat, cardId: card.id });
@@ -513,7 +518,10 @@ export function uiCandidates(state: State, seat: number): Action[] {
     for (const target of c.pending) {
       if (certifierTurn) {
         out.push({ type: 'CERTIFY_SIGN', actor: seat, target });
-        out.push({ type: 'CERTIFY_CHALLENGE', actor: seat, target });
+        // ⚠️ B76：力竭认证人不发质疑（与引擎同判，过滤只放在 CHALLENGE 产出处——r2 🔴2）。
+        if ((state.players[seat]?.exhaustedRounds ?? 0) === 0) {
+          out.push({ type: 'CERTIFY_CHALLENGE', actor: seat, target });
+        }
         out.push({ type: 'CERTIFY_ABSTAIN', actor: seat, target });
       }
       if (c.challenged.includes(seat) && !judged) {
@@ -538,4 +546,23 @@ export function uiAllowedSet(state: State, seat: number): string[] {
     if (uiAllows(state, seat, a)) { out.push(actionKey(a)); }
   }
   return out;
+}
+
+/**
+ * B76：力竭恢复候选（UI 侧独立实现——与引擎 `pushRecuperateCandidates` 同判，
+ * 集合相等由 `legal-probe.test.ts` 的候选层漂移守卫钉住）。
+ */
+function pushRecuperateCandidatesUi(state: State, seat: number, out: Action[]): void {
+  const me = state.players[seat];
+  if (me === undefined || !me.alive) { return; }
+  const exhausted = (me.exhaustedRounds ?? 0) > 0;
+  if (exhausted) {
+    if (me.resource >= 2) { out.push({ type: 'RECUPERATE', actor: seat }); }
+    return;
+  }
+  if (me.resource < 1) { return; }
+  for (const other of state.players) {
+    if (!other.alive || other.seat === seat) { continue; }
+    if ((other.exhaustedRounds ?? 0) > 0) { out.push({ type: 'RECUPERATE', actor: seat, target: other.seat }); }
+  }
 }

@@ -144,6 +144,9 @@ function actionPhaseCandidates(state: State, seat: number): Action[] {
   if (p.pendingCert) {
     if (!actionWindowOpenExceptLock(state, seat)) { return []; }
     const out: Action[] = [];
+    // ⚠️ B76：力竭恢复候选（恢复不是位移，不受锁定影响——设计规格 §2/§3）。
+    //   自恢（本人力竭 ∧ 灵枢 ≥ 2）与救援（本人不力竭 ∧ 存体力竭他人 ∧ 灵枢 ≥ 1，任意距离）。
+    pushRecuperateCandidates(state, seat, out);
     for (const card of p.hand) {
       // ⚠️ B75：装备**不限位移**（引擎 equip 分支不查 pendingCert ⇒ 锁定期间照样能装备）；
       //   必须排在 `cardHasMovement` 的 continue **之前**，否则位移牌被跳过的同时也跳过了装备。
@@ -164,6 +167,8 @@ function actionPhaseCandidates(state: State, seat: number): Action[] {
     { type: 'MOVE', actor: seat, steps: 0 },   // 步数由骰子定，玩家不可选
     { type: 'ROLL_WHEEL', actor: seat },
   ];
+  // ⚠️ B76：力竭恢复候选（自恢 / 救援）——与行棋 / 问天并列的行动面入口。
+  pushRecuperateCandidates(state, seat, out);
   for (const card of p.hand) {
     // ⚠️ B75：每张手牌都追加一条装备候选（与 PLAY_CARD 并列，装备免费 ⇒ 不看资源）。
     //   ⚠️ 候选数由此**按手牌数线性增长** ⇒ `LEGAL_ACTION_CAP=64` 更容易撞上，
@@ -267,7 +272,12 @@ function certificationCandidates(state: State, seat: number): Action[] {
   for (const target of c.pending) {
     if (certifierTurn) {
       out.push({ type: 'CERTIFY_SIGN', actor: seat, target });
-      out.push({ type: 'CERTIFY_CHALLENGE', actor: seat, target });
+      // ⚠️ B76：力竭认证人**不发质疑**（拒在引擎 certifyChallenge 的扣费前）——
+      //   过滤只放在 CHALLENGE 的产出处（r2 评审 🔴2：严禁放玩家循环层，否则连签印/弃权一起跳过）。
+      //   不对称刻意：力竭削弱「主动施压」，不豁免「被检验」——力竭的待认证者仍可被质疑。
+      if ((state.players[seat]?.exhaustedRounds ?? 0) === 0) {
+        out.push({ type: 'CERTIFY_CHALLENGE', actor: seat, target });
+      }
       out.push({ type: 'CERTIFY_ABSTAIN', actor: seat, target });
     }
     if (c.challenged.includes(seat) && !judged) {
@@ -309,6 +319,27 @@ function certificationCandidates(state: State, seat: number): Action[] {
  *   新加「窄于引擎」的判据时，**必须**同时留下形如上面五行的取证用例（引擎侧 `ok:true`
  *   或入口可用 + 枚举侧缺失），否则 Task 9 的登记与 Task 15 的判读无从引用。
  */
+
+/**
+ * B76：力竭恢复候选（自恢 / 救援）——`legal.ts` 与 `web/legal-gate.ts` 各自调用的共享形状。
+ * ⚠️ 放在这里而不是两处手写：候选判据（力竭 / 灵枢 / 目标存活）是**引擎裁定**的镜像，
+ *   两处各写一份迟早漂移（E94）——漂移守卫（候选层）钉住两侧集合相等。
+ */
+export function pushRecuperateCandidates(state: State, seat: number, out: Action[]): void {
+  const me = state.players[seat];
+  if (me === undefined || !me.alive) { return; }
+  const exhausted = (me.exhaustedRounds ?? 0) > 0;
+  if (exhausted) {
+    if (me.resource >= 2) { out.push({ type: 'RECUPERATE', actor: seat }); }
+    return;
+  }
+  if (me.resource < 1) { return; }
+  for (const other of state.players) {
+    if (!other.alive || other.seat === seat) { continue; }
+    if ((other.exhaustedRounds ?? 0) > 0) { out.push({ type: 'RECUPERATE', actor: seat, target: other.seat }); }
+  }
+}
+
 export function candidatesOf(state: State, playerId: number): Action[] {
   if (state.players[playerId]?.alive !== true) { return []; }
   return [

@@ -65,6 +65,7 @@ export function renderPlayers(
       row.append(el('span', { class: 'badge peek', text: '窥视 ' + label }));
     }
     if (p.pendingCert) { row.append(el('span', { class: 'badge cert', text: '待认证' })); }
+    if ((p.exhaustedRounds ?? 0) > 0) { row.append(el('span', { class: 'badge ex', text: '力竭 ' + String(p.exhaustedRounds) })); }
     if (p.equipment.length > 0) {
       row.append(el('span', { class: 'badge eq', text: '装备 ' + p.equipment.length }));
     }
