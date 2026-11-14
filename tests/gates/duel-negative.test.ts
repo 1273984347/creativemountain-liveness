@@ -70,16 +70,30 @@ function runE2E(cwd: string): { status: number | null; out: string } {
   return { status: r.status, out: (r.stdout ?? '') + (r.stderr ?? '') };
 }
 
-/** 破坏副本里的引擎对峙消费点。 */
+/**
+ * 在副本里**破坏引擎的对峙入口**。
+ *
+ * ⚠️ 必须切**两条**出口（B77 暴露的脆弱点）：`startDuel` 有两条都会写 `kind:'duel'` 日志的路径——
+ *   ① `:76` 立起 pending 对峙；② 空手相遇走 `autoLose()`，它经 `logDuel()` 同样落一条 duel 日志。
+ *   只切 ① 时，只要对局里出现过一次空手相遇，`duelTotal` 就 > 0 ⇒ 门 9 的可达性判据被骗过、
+ *   负样本**假绿**。B77 之前 720 局的冒烟窗口里恰好没有空手相遇所以看不出来；
+ *   B77 起 `silence`（封口）会在写入时弃一张牌 ⇒ 空手率上升，这条漏网路径立刻显形。
+ *   ⇒ 判据本身没错（空手自动落败确实是一次按规则结算的对峙），错的是破坏点覆盖不全。
+ */
 function breakEngine(cwd: string): void {
   const p = resolve(cwd, 'engine', 'core', 'duel.ts');
   const src = readFileSync(p, 'utf8');
-  const broken = src.replace(
+  const noPending = src.replace(
     '  return { ...state, duel: { seatA, seatB } };',
     '  return { ...state, duel: null }; // NEG-SAMPLE',
   );
-  assert.notEqual(broken, src, '负样本：应能在副本里破坏引擎的对峙消费点');
-  writeFileSync(p, broken, 'utf8');
+  assert.notEqual(noPending, src, '负样本：应能破坏「立起 pending 对峙」这条出口');
+  const noAutoLose = noPending.replace(
+    '    return autoLose(state, seatA, seatB, loser);',
+    '    return state; // NEG-SAMPLE（空手自动落败也不写日志）',
+  );
+  assert.notEqual(noAutoLose, noPending, '负样本：应能破坏「空手自动落败」这条出口（只切一条会让门 9 假绿）');
+  writeFileSync(p, noAutoLose, 'utf8');
 }
 
 /** 破坏副本里的 E2E 断言（回合解锁）。 */
