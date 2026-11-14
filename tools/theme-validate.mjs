@@ -8,7 +8,66 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { deriveThemeSchema } from './theme-schema.mjs';
+import { isDerivable, renderTrialText } from '../build/trial-text.mjs';
 import { SCALES } from '../engine/scales.ts';
+
+/**
+ * 不可派生题面（`fallback: true`）的**期望条数**（B77 规格 §6.3 第 3 条）。
+ *
+ * ⚠️ 刻意硬编码成常量、不做配置项：今天四套 48 条判定全在白名单内 ⇒ 0。
+ *   将来真要加一条非机械判定（例如按标记位判过关），必须改这个数字并在批次记录写理由
+ *   ——「放宽守卫」这件事得出现在 diff 里，而不是靠某个人记得配置文件里改过一行。
+ */
+export const EXPECTED_FALLBACK_COUNT = 0;
+
+/** `terms` 的十叶路径（校验**叶子**而非顶层 6 个键：只查顶层时，`types` 缺一个也照样绿）。 */
+const TERM_LEAVES = [
+  ['hp'], ['deck'], ['resource'], ['gate'],
+  ['types', 'motion'], ['types', 'attack'], ['types', 'defense'], ['types', 'utility'],
+  ['colors', 'red'], ['colors', 'black'],
+];
+
+/**
+ * 题面真值守卫（B77 §6.3）：凡判定可派生，`text` 必须逐字等于 `renderTrialText` 的结果。
+ *
+ * 为什么挂在门 ⑤ 而不是只写在测试里：题面漂移是**印刷事故**，而 IR 只搬运 text
+ * （build-ir.mjs:138）⇒ 只有主题包校验器站在源头，能拦住「牌面一套、引擎一套」。
+ */
+function checkTrialTruth(theme, err) {
+  for (const path of TERM_LEAVES) {
+    const got = path.reduce((o, k) => (o === undefined || o === null ? undefined : o[k]), theme.terms);
+    if (typeof got !== 'string' || got.length === 0) {
+      err(`terms.${path.join('.')} 必须是非空字符串（试炼题面的取词表，B77 §6.2）`);
+    }
+  }
+  let fallback = 0;
+  (theme.trials ?? []).forEach((t, i) => {
+    const conditional = (t.effects ?? []).find((e) => e.op === 'conditional');
+    if (!isDerivable(conditional?.pred)) {
+      // 不可派生 ⇒ 只查非空，但**必须**留下 fallback 标记，否则守卫对它视而不见
+      if (t.fallback !== true) {
+        err(`trials[${i}]（${t.id}）的判定 ${String(conditional?.pred?.kind)} 不在可派生白名单内，必须标 fallback: true`);
+      }
+      fallback += 1;
+      return;
+    }
+    if (t.fallback === true) {
+      err(`trials[${i}]（${t.id}）明明可派生却标了 fallback ⇒ 视为绕过守卫（B77 §6.3）`);
+      return;
+    }
+    let want;
+    try {
+      want = renderTrialText(conditional, theme.terms);
+    } catch (e) {
+      err(`trials[${i}]（${t.id}）题面派生失败：${e.message}`);
+      return;
+    }
+    if (t.text !== want) { err(`trials[${i}]（${t.id}）题面与判定不符：判[${want}] / 印[${t.text}]`); }
+  });
+  if (fallback !== EXPECTED_FALLBACK_COUNT) {
+    err(`不可派生题面数 = ${String(fallback)}，守卫期望 EXPECTED_FALLBACK_COUNT = ${String(EXPECTED_FALLBACK_COUNT)}：真要加非机械判定，改这个常量并在批次记录说明理由`);
+  }
+}
 
 /** 可用座位数上限（规模表 3–8 人）。 */
 const MAX_SEATS = Math.max(...SCALES.map((s) => s.players));
@@ -515,6 +574,8 @@ export function validateTheme(theme, schema) {
   for (const t of theme.trials ?? []) {
     if (typeof t.text !== 'string' || t.text.length === 0) { err(`试炼牌 ${t.id} 缺少 text`); }
   }
+  // 题面真值（B77 §6.3）：放在非空检查之后——空题面先按「缺少 text」报，别混成派生失败
+  checkTrialTruth(theme, err);
 
   return { errors, warnings };
 }
