@@ -12,7 +12,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-import { renderTrialText, isDerivable, DERIVABLE_PREDICATES } from '../../build/trial-text.mjs';
+import { renderTrialText, isDerivable, DERIVABLE_PREDICATES, GATE_FALLBACK_CLAUSE, GATE_PAY_FAIL_CLAUSE, renderTrialFailure, renderTrialFooter } from '../../build/trial-text.mjs';
 
 /** 仙侠基准词表（与 theme.json 的正式 `terms` 同形）。 */
 const TERMS = {
@@ -96,4 +96,23 @@ test('B77：四套 terms 的十叶齐备（缺一个叶子就会拼出 undefined
     assert.equal(Object.keys(t.terms!.types ?? {}).length, 4, `${id} terms.types 必须四个`);
     assert.equal(Object.keys(t.terms!.colors ?? {}).length, 2, `${id} terms.colors 必须两个`);
   }
+});
+
+// ---- B78 T7：失败后果句抽成导出常量（题面括注 / 卡面页脚 / 规则书三处同源）----
+test('B78：后果句是导出常量，括注仍是「未通过则 + 裸句」（题面逐字不变的机制证明）', () => {
+  assert.equal(GATE_FALLBACK_CLAUSE, '本关改为付费');
+  assert.equal(GATE_PAY_FAIL_CLAUSE, '仍未付足则判未通过，退 1 格并被封口');
+  assert.equal(renderTrialFailure({ op: 'gate_fallback_pay' }, TERMS), GATE_FALLBACK_CLAUSE);
+  assert.equal(renderTrialFailure(undefined, TERMS), undefined, '没有 else ⇒ 没有后果句');
+  assert.equal(renderTrialFooter(), '本关改为付费——' + GATE_PAY_FAIL_CLAUSE);
+  // 括注必须仍是「未通过则 + 裸后果」，否则 48 条题面会跟着变（下一跳由 themes 重生成 diff 兜底）
+  assert.equal(renderTrialText(
+    cond({ kind: 'has_card_count', filter: { color: 'black' }, count: 2 }, { op: 'draw_cards', count: 1 }), TERMS),
+    '展示手里 2 张黑色牌——通过后抽 1 张符箓（未通过则本关改为付费）。');
+});
+
+test('B78：页脚句不含「退 1 格并被封口」的旧假话（真归属是比牌未胜 / 付费不足放行）', () => {
+  assert.equal(renderTrialFooter().includes('失败则退 1 格并被封口'), false);
+  // 但「退 1 格并被封口」本身是真规则，必须保留在「仍未付足」这一侧
+  assert.ok(renderTrialFooter().includes('退 1 格并被封口'));
 });

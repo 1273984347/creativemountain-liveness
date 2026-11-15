@@ -12,3 +12,12 @@ export declare function isDerivable(pred: unknown): boolean;
 
 /** 试炼题面 = 条件句 + 奖励句 + 失败后果；白名单外的判定抛错（调用方负责标 `fallback`）。 */
 export declare function renderTrialText(effect: unknown, terms: unknown): string;
+
+/** 试炼失败的唯一中文后果口径（真值：gate.ts:204-221 只写 gate_pay_<格>，不退格也不封口）。 */
+export declare const GATE_FALLBACK_CLAUSE: string;
+/** 改为付费后仍付不起的后果（真值：gate.ts:250-252 + failGate gate.ts:337-352 —— 退格与封口在这一侧）。 */
+export declare const GATE_PAY_FAIL_CLAUSE: string;
+/** 裸后果句（else 缺失 ⇒ undefined）；题面括注与卡面页脚共用。 */
+export declare function renderTrialFailure(elseEffect: unknown, terms: unknown): string | undefined;
+/** 页脚整句（题面括注 / 卡面页脚 / 规则书三处同源的那一句）。 */
+export declare function renderTrialFooter(): string;

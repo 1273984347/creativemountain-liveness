@@ -55,11 +55,32 @@ function renderCondition(pred, terms) {
   return `展示手里 ${String(pred.count)} 张${bits.join('')}牌`;
 }
 
-/** 失败后果：12 张试炼今天全是「本关改为付费」，出现别的值就是数据变了 ⇒ 照常渲染，不写死。 */
-function renderElse(elseEffect, terms) {
+/** 试炼失败的唯一后果口径（真值：gate.ts:204-221 只写 gate_pay_<格>，不退格也不封口）。 */
+export const GATE_FALLBACK_CLAUSE = '本关改为付费';
+/** 改为付费后仍付不起 ⇒ 判未通过并放行；退格与封口发生在**这一侧**（gate.ts:250-252 / :337-352）。 */
+export const GATE_PAY_FAIL_CLAUSE = '仍未付足则判未通过，退 1 格并被封口';
+
+/**
+ * 裸后果句（题面括注与卡面页脚共用）。
+ *
+ * ⚠️ 不写死：出现别的 else op 就照常渲染 —— 12 张今天全是 gate_fallback_pay，
+ *   但那是**数据现状**，不是渲染器该替数据做的承诺。
+ */
+export function renderTrialFailure(elseEffect, terms) {
   if (elseEffect === undefined) { return undefined; }
-  if (elseEffect.op === 'gate_fallback_pay') { return '未通过则本关改为付费'; }
-  return `未通过则${renderEffect(elseEffect, terms)}`;
+  if (elseEffect.op === 'gate_fallback_pay') { return GATE_FALLBACK_CLAUSE; }
+  return renderEffect(elseEffect, terms);
+}
+
+/**
+ * 卡面页脚整句（B78 §4 R2）。
+ *
+ * 病根：B78 前页脚写死「失败则退 1 格并被封口」，而试炼失败分支只写 gate_pay_<格>
+ * —— 同一张牌上题面括注（真）与页脚（假）互相矛盾，且页脚不进 text / 不进 IR，
+ * 门 ⑤/⑥/⑦ 结构上看不见。现在页脚由本函数派生，规则书小节必须逐字包含同一句。
+ */
+export function renderTrialFooter() {
+  return `${GATE_FALLBACK_CLAUSE}——${GATE_PAY_FAIL_CLAUSE}`;
 }
 
 /**
@@ -72,6 +93,7 @@ export function renderTrialText(effect, terms) {
   const pred = effect?.pred;
   if (!isDerivable(pred)) { throw new Error('renderTrialText：判定不在可派生白名单内'); }
   const body = `${renderCondition(pred, terms)}——通过后${renderEffect(effect.then, terms)}`;
-  const els = renderElse(effect.else, terms);
+  const bare = renderTrialFailure(effect.else, terms);
+  const els = bare === undefined ? undefined : '未通过则' + bare;
   return `${body}${els === undefined ? '' : `（${els}）`}。`;
 }
