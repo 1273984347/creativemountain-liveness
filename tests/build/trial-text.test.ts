@@ -19,6 +19,8 @@ const TERMS = {
   hp: '灵力', deck: '符箓', resource: '灵枢', gate: '关隘',
   types: { motion: '位移', attack: '攻击', defense: '防御', utility: '功能' },
   colors: { red: '红', black: '黑' },
+  // B78 T10：immune 奖励的名词位改走 terms.statuses（三叶）。fixture 补叶，断言不变。
+  statuses: { poison: '中毒', slow: '减速', silence: '封口' },
 };
 const cond = (pred: unknown, then: unknown) =>
   ({ op: 'conditional', pred, then, else: { op: 'gate_fallback_pay' } });

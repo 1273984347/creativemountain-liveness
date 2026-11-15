@@ -34,6 +34,7 @@ export default {
     hp: '精神值', deck: '异能牌', resource: '异能点', gate: '封锁线',
     types: { motion: '位移', attack: '攻击', defense: '防御', utility: '功能' },
     colors: { red: '红', black: '黑' },
+    statuses: { poison: '中毒', slow: '减速', silence: '封口' },
   },
 
   suits: [

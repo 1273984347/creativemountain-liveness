@@ -219,6 +219,7 @@ export function buildTheme(base, data) {
       ...data.terms,
       types: { ...data.terms.types },
       colors: { ...data.terms.colors },
+      statuses: { ...data.terms.statuses },
     },
     counts: { ...base.counts },
     factions,

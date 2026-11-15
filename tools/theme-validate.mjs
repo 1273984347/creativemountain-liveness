@@ -25,6 +25,8 @@ const TERM_LEAVES = [
   ['hp'], ['deck'], ['resource'], ['gate'],
   ['types', 'motion'], ['types', 'attack'], ['types', 'defense'], ['types', 'utility'],
   ['colors', 'red'], ['colors', 'black'],
+  // B78 §4 R4：三叶（不是四叶——skip_turn 只有动词位、无名词位读取点，见规格 R4 取证）
+  ['statuses', 'poison'], ['statuses', 'slow'], ['statuses', 'silence'],
 ];
 
 /**

@@ -43,6 +43,7 @@ export default {
     hp: '机体完整度', deck: '指令', resource: '算力', gate: '安全闸',
     types: { motion: '位移', attack: '攻击', defense: '防御', utility: '功能' },
     colors: { red: '红', black: '黑' },
+    statuses: { poison: '中毒', slow: '减速', silence: '封口' },
   },
 
   /** 12 个花色（内部标识，不参与点数比较；§6.5 suit 不参与任何比较）。 */

@@ -67,7 +67,9 @@ const statusPart = (): string => sectionBody(narr(), '# 负面状态');
 
 test('R2-1：关隘小节逐字含派生后果句，且不含旧假话', () => {
   const body = gateBody();
-  assert.ok(body.includes(renderTrialFailure({ op: 'gate_fallback_pay' }, GLOSSARY)), '缺「本关改为付费」口径');
+  const clause = renderTrialFailure({ op: 'gate_fallback_pay' }, GLOSSARY);
+  assert.equal(typeof clause, 'string', '前提：gate_fallback_pay 有裸后果句');
+  assert.ok(body.includes(clause as string), '缺「本关改为付费」口径');
   assert.ok(body.includes(GATE_PAY_FAIL_CLAUSE), '缺「仍未付足则判未通过…」');
   assert.equal(body.includes(FAKE), false, '规则书不许把退格封口归给试炼失败');
 });

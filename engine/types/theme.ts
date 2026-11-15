@@ -437,6 +437,20 @@ export interface ThemeTerms {
     readonly red: string;
     readonly black: string;
   };
+  /**
+   * 负面状态的**名词**位（B78 §4 R4）。
+   *
+   * ⚠️ 只有三个：`skip_turn` 在四套卡面里只以**动词骨架**出现（「使一名对手跳过 N 个回合」，
+   *   全仓「跳过回合」出现 0 次），而名词位唯一消费点是 immunity 分支
+   *   （数据分布 silence 16 / poison 12 / slow 8 / skip_turn 0）⇒ 第四叶是有写入点、
+   *   无读取点的字段（B77 立项要治的那类空转）。将来真发「免疫跳过回合」，
+   *   `termWord` 会抛错而不是静默回落，届时补叶并走批次记录。
+   */
+  readonly statuses: {
+    readonly poison: string;
+    readonly slow: string;
+    readonly silence: string;
+  };
 }
 
 /** 主题包完整结构。 */

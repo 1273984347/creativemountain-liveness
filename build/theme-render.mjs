@@ -8,23 +8,27 @@
 // 与 IR 的关系：这里产出的是 **theme.json 的 card.text 字段**（落盘即为数据），
 //   ir.json 只负责**搬运**它 —— 不在渲染期现编，parity-check 的文本可追溯性不被破坏。
 
-/** 负面状态中文名。 */
-const STATUS_CN = {
-  poison: '中毒',
-  slow: '减速',
-  silence: '封口',
-  skip_turn: '跳过回合',
-};
+/**
+ * 从词表取词：缺失即抛错——静默拼出 `undefined` 会一路印到实体牌上。
+ *
+ * ⚠️ B78 §4 R4：本函数是 `trial-text.mjs` 私有 `word()` 的**上提**，两处共用一份实现。
+ * ⚠️ 切法（写死）：**只许名词进 terms**（`{statuses.poison}` 这类），骨架
+ *   （「使一名对手……N 层」）留在渲染器。整句模板化 = 把语法交给主题，是第二事实源的另一副面孔。
+ */
+export function termWord(table, key, path) {
+  const v = table?.[key];
+  if (typeof v !== 'string' || v.length === 0) {
+    throw new Error(`词表缺 ${path}.${String(key)}（主题包 terms 不完整）`);
+  }
+  return v;
+}
 
-/** 卡类型中文名。 */
-const TYPE_CN = {
-  motion: '位移',
-  attack: '攻击',
-  defense: '防御',
-  utility: '功能',
-};
-
-/** 比较运算符中文符号。 */
+/**
+ * 比较运算符中文符号。
+ *
+ * ⚠️ 这张表**不**进 terms：`≤ ≥ = ≠` 不是主题词（任何主题的数学符号都一样），
+ *   把它主题化只会给词表加一个永远同值的叶子（B78 §4 R4 的「无读取点字段」判据）。
+ */
 const CMP_CN = {
   lte: '≤',
   gte: '≥',
@@ -55,8 +59,8 @@ export function renderPredicate(pred, terms) {
     case 'has_card': {
       const f = pred.filter ?? {};
       const parts = [];
-      if (f.color !== undefined) parts.push(f.color === 'red' ? '红色' : '黑色');
-      if (f.type !== undefined) parts.push(TYPE_CN[f.type]);
+      if (f.color !== undefined) parts.push(termWord(terms.colors, f.color, 'colors') + '色');
+      if (f.type !== undefined) parts.push(termWord(terms.types, f.type, 'types'));
       const desc = parts.length > 0 ? parts.join('') : '任意';
       return `手中有${desc}${terms.deck}`;
     }
@@ -71,7 +75,7 @@ export function renderPredicate(pred, terms) {
     case 'players_alive':
       return `存活人数 ${CMP_CN[pred.op]} ${pred.count}`;
     case 'card_type_is':
-      return `在手${terms.deck}中有${TYPE_CN[pred.type]}牌`;
+      return `在手${terms.deck}中有${termWord(terms.types, pred.type, 'types')}牌`;
     case 'identity_is':
       return `身份为 ${pred.identityId}`;
     case 'faction_is':
@@ -120,15 +124,18 @@ export function renderEffect(effect, terms) {
     case 'shield':
       return `获得 ${n} 点护盾`;
     case 'poison':
-      return `使一名对手中毒 ${n} 层`;
+      return `使一名对手${termWord(terms.statuses, 'poison', 'statuses')} ${n} 层`;
     case 'slow':
-      return `使一名对手减速 ${n} 层`;
+      return `使一名对手${termWord(terms.statuses, 'slow', 'statuses')} ${n} 层`;
     case 'silence':
-      return `使一名对手封口 ${n} 回合`;
+      return `使一名对手${termWord(terms.statuses, 'silence', 'statuses')} ${n} 回合`;
     case 'skip_turn':
+      // ⚠️ 唯一留在骨架里的状态词：这是**动词位**（「跳过 N 个回合」），不是名词位。
+      //   四套卡面里「跳过回合」出现 0 次、「跳过」4 次 ⇒ terms.statuses 不收 skip_turn
+      //   （收了就是无读取点的第四叶，B78 §4 R4 取证）。改措辞走 L-B78-5 同族的案子。
       return `使一名对手跳过 ${n} 个回合`;
     case 'immunity':
-      return `免疫${STATUS_CN[effect.status]} ${effect.amount} 回合`;
+      return `免疫${termWord(terms.statuses, effect.status, 'statuses')} ${effect.amount} 回合`;
     case 'compare_cards':
       return `与一名对手比牌`;
     case 'disarm':

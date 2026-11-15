@@ -17,7 +17,7 @@
 // 同一类目不留两个词。骰子句**故意不**掺 `terms.deck`：urban 的 deck 是「异能牌」，
 // 拼出来是「异能牌骰」。主题感由 `terms.resource/hp/deck` 在奖励句里承担。
 
-import { renderEffect } from './theme-render.mjs';
+import { renderEffect, termWord } from './theme-render.mjs';
 
 /**
  * 可派生的判定白名单（规格 §6.3）。
@@ -32,15 +32,6 @@ export function isDerivable(pred) {
   return typeof pred?.kind === 'string' && DERIVABLE_PREDICATES.has(pred.kind);
 }
 
-/** 从词表取一个词：缺失即抛错——静默拼出 `undefined` 会一路印到实体牌上。 */
-function word(table, key, path) {
-  const v = table?.[key];
-  if (typeof v !== 'string' || v.length === 0) {
-    throw new Error(`renderTrialText：词表缺 ${path}.${String(key)}（主题包 terms 不完整）`);
-  }
-  return v;
-}
-
 /** 条件句：把判定谓词翻译成对玩家提的要求。 */
 function renderCondition(pred, terms) {
   if (pred.kind === 'dice_is_at_least') {
@@ -49,8 +40,8 @@ function renderCondition(pred, terms) {
   // has_card_count：filter 的 color/type 各自进题面，顺序「色在前、类在后」（中文定语的既有读法）
   const filter = pred.filter ?? {};
   const bits = [];
-  if (filter.color !== undefined) { bits.push(word(terms.colors, filter.color, 'colors') + '色'); }
-  if (filter.type !== undefined) { bits.push(word(terms.types, filter.type, 'types')); }
+  if (filter.color !== undefined) { bits.push(termWord(terms.colors, filter.color, 'colors') + '色'); }
+  if (filter.type !== undefined) { bits.push(termWord(terms.types, filter.type, 'types')); }
   // 「手里」二字不能省：场上还有 round 级公开亮牌与对峙亮牌，只说「展示 2 张牌」会读成亮牌区
   return `展示手里 ${String(pred.count)} 张${bits.join('')}牌`;
 }

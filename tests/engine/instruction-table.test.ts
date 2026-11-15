@@ -16,6 +16,8 @@ const terms = (resource: string): ThemeTerms => ({
   hp: '灵力', deck: '符箓', resource, gate: '关隘',
   types: { motion: '位移', attack: '攻击', defense: '防御', utility: '功能' },
   colors: { red: '红', black: '黑' },
+  // T3 时 statuses 还不存在，故意没写；T10 把它变成必填 ⇒ 现在补上（不是为过编译而放宽断言）。
+  statuses: { poison: '中毒', slow: '减速', silence: '封口' },
 });
 
 test('表本体：20 条、face 严格 1..20 升序、无重复', () => {
