@@ -29,6 +29,20 @@ const TERM_LEAVES = [
   ['statuses', 'poison'], ['statuses', 'slow'], ['statuses', 'silence'],
 ];
 
+/** 试炼牌名的上限（B78 §2.2）。 */
+const NAME_MAX = 6;
+/**
+ * 合并禁字表（B78 §2.2）。
+ *
+ * 量化词（张/枚/点/至少/不低于/≥/回合 + 两个颜色词组）来自第 2 节原裁定：
+ *   名字的活是「这场考验在叙事上是什么」，量化口径只属于题面。
+ * 类目词（试炼 + 四套 gate 词全集）来自 r1 合并：头部已印「{gate}试炼」，名字再含它就是复读。
+ * ⚠️ **单字颜色 / 单字关允许**：禁的是词组（「赤步」「红移」「朱守」「赤关」合法，
+ *   「红色校验」「关隘守」非法）。
+ */
+const NAME_BANNED = ['张', '枚', '点', '至少', '不低于', '≥', '红色', '黑色', '回合',
+  '试炼', '关隘', '封锁线', '安全闸', '阵门'];
+
 /**
  * 题面真值守卫（B77 §6.3）：凡判定可派生，`text` 必须逐字等于 `renderTrialText` 的结果。
  *
@@ -43,7 +57,19 @@ function checkTrialTruth(theme, err) {
     }
   }
   let fallback = 0;
+  const seenNames = new Map();
   (theme.trials ?? []).forEach((t, i) => {
+    // ---- B78 §2.2：name 判据（必填 / ≤6 字 / 禁数字 / 合并禁字表 / 套内不撞名）----
+    if (typeof t.name !== 'string' || t.name.length === 0) {
+      err(`trials[${i}]（${t.id}）缺 name ⇒ 实体件版面靠它起标题行（B78 §3.1 站 9）`);
+    } else {
+      if (t.name.length > NAME_MAX) { err(`trials[${i}]（${t.id}）的 name「${t.name}」超过 ${String(NAME_MAX)} 字`); }
+      if (/[0-9０-９]/.test(t.name)) { err(`trials[${i}]（${t.id}）的 name「${t.name}」含数字 ⇒ parity 锚定串 #N+name 的唯一性靠「无数字」`); }
+      for (const w of NAME_BANNED) {
+        if (t.name.includes(w)) { err(`trials[${i}]（${t.id}）的 name「${t.name}」含禁字「${w}」（量化词或类目词，B78 §2.2）`); }
+      }
+      seenNames.set(t.name, (seenNames.get(t.name) ?? 0) + 1);
+    }
     const conditional = (t.effects ?? []).find((e) => e.op === 'conditional');
     if (!isDerivable(conditional?.pred)) {
       // 不可派生 ⇒ 只查非空，但**必须**留下 fallback 标记，否则守卫对它视而不见
@@ -66,6 +92,11 @@ function checkTrialTruth(theme, err) {
     }
     if (t.text !== want) { err(`trials[${i}]（${t.id}）题面与判定不符：判[${want}] / 印[${t.text}]`); }
   });
+  for (const [n, c] of seenNames) {
+    if (c > 1) {
+      err(`trials[].name「${n}」在本套内出现 ${String(c)} 次 ⇒ 同套 12 张必须互异（门 ⑧ 管的是跨套，两者不同判据）`);
+    }
+  }
   if (fallback !== EXPECTED_FALLBACK_COUNT) {
     err(`不可派生题面数 = ${String(fallback)}，守卫期望 EXPECTED_FALLBACK_COUNT = ${String(EXPECTED_FALLBACK_COUNT)}：真要加非机械判定，改这个常量并在批次记录说明理由`);
   }
