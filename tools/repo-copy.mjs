@@ -94,6 +94,13 @@ export const DOC_SYNC_INCLUDE = [
   'engine/',
   'docs/superpowers/specs/',
   'print/规则书叙述.md',
+  // ⚠️ B78：doc-sync 的判定链现在依赖 build/ 下的**派生口径**——
+  //   `rules-book-contract.mjs` import `build/trial-text.mjs`（后果句唯一出处），
+  //   而后者 import `build/theme-render.mjs`（termWord）。副本缺这两个文件时，
+  //   负样本会以 ERR_MODULE_NOT_FOUND 崩掉而不是给出 C8/C10 的 FAIL 文本
+  //   （tests/build/rules-book.test.ts 实测踩到）。
+  'build/trial-text.mjs',
+  'build/theme-render.mjs',
   'package.json',
   'tsconfig.json',
   'esbuild.config.mjs',
