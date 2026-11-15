@@ -87,7 +87,8 @@ export function checkIrVsTheme(ir, theme) {
     }
   };
   cmpList('认证题卡', ir.certCards, theme.certificationCards, 'id', ['prompt']);
-  cmpList('试炼牌', ir.trials, theme.trials, 'id', ['text']);
+  // B78：name 与天机牌同形（:91 早就比 ['name','text']）⇒ 试炼牌补到同一等公民地位。
+  cmpList('试炼牌', ir.trials, theme.trials, 'id', ['name', 'text']);
   cmpList('天机牌', ir.heavenCards, theme.heavenCards, 'id', ['name', 'text']);
   cmpList('造物牌', ir.creationCards, theme.creationDeck, 'cardId', ['name', 'text']);
   return errors;
@@ -134,6 +135,10 @@ export function checkSvgVsIr(svgTexts, ir) {
   for (const h of ir.heavenCards ?? []) { must.push(['天机牌名', h.name]); }
   for (const c of ir.certCards ?? []) { must.push(['认证题卡', c.prompt]); }
   for (const t of ir.trials ?? []) { must.push(['试炼牌', t.text]); }
+  // B78：name 的**可见性**锚定串 = '#' + 序号 + name（T15 实图顺序：关隘试炼 / #1 / 燃朱）。
+  // ⚠️ 不用裸 name：门 ⑤ 禁数字入名正是让 #N 之后的非数字序列唯一，避免撞上正文/页脚子串；
+  //   裸 name 抓不到「进了 JSON 却没印上牌」。
+  (ir.trials ?? []).forEach((t, i) => { must.push(['试炼牌名', '#' + String(i + 1) + t.name]); });
   // 调试护栏：任何 undefined 都说明取错了字段名
   for (const [label, value] of must) {
     if (typeof value !== 'string' || value.length === 0) {

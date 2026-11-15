@@ -116,6 +116,13 @@ export function normalizeRefs(value) {
 }
 
 /** 检查一套新主题相对基准的 §10.1 两张清单。 */
+/**
+ * 允许跨套同名的 trial id 白名单（B78 §2.2 同侧规则）。
+ * 今天为空 ⇒ 任何同名即红；登记 id 必须在批次记录写理由。
+ * ⚠️ 它是**同名**判据的出口，与「同侧」无关 —— 同侧是人工维度（规格 §2.5）。
+ */
+export const SAME_NAME_ALLOWED = [];
+
 export function checkThemeDiff(base, theme) {
   const errors = [];
   const notes = [];
@@ -262,6 +269,15 @@ export function checkThemeDiff(base, theme) {
     }
   }
   notes.push(`b) 天机 ${(theme.heavenCards ?? []).length} 张 / 试炼 ${(theme.trials ?? []).length} 张效果沿用基准`);
+
+  // ---------- B78：试炼牌名跨套必须互异（同侧 = 指向同一件事，不是共用同一个名字）----------
+  const baseTrialNames = new Map((base.trials ?? []).map((t) => [t.id, t.name]));
+  (theme.trials ?? []).forEach((t) => {
+    if (SAME_NAME_ALLOWED.includes(t.id)) { return; }
+    if (baseTrialNames.get(t.id) === t.name) {
+      errors.push(`${tag} b) 试炼牌 ${t.id} 的名字「${String(t.name)}」与基准同名 ⇒ 同侧不等于同名（B78 §2.2）`);
+    }
+  });
 
   // ---------- 允许复用 c) 8 身份槽位 ----------
   for (let i = 0; i < (theme.identities ?? []).length; i++) {
