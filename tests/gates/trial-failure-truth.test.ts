@@ -13,7 +13,8 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { trialSvg } from '../../build/print-parts.ts';
-import { renderTrialFooter } from '../../build/trial-text.mjs';
+import { GATE_PAY_FAIL_CLAUSE, renderTrialFailure, renderTrialFooter } from '../../build/trial-text.mjs';
+import { sectionBody } from '../../tools/rules-book-contract.mjs';
 
 /** trialSvg 的第三参是 `Readonly<Record<string,string>>`（IR glossary 形状），字面量即可。 */
 const GLOSSARY = { gate: '关隘' };
@@ -55,4 +56,58 @@ test('R2：48 张当前试炼牌的页脚全部是派生句、且都不含旧假
       assert.equal(svg.includes(FAKE), false, `${id}/${t.id} 的页脚仍是旧假话`);
     });
   }
+});
+
+// ---- T9 / R2+R7：规则书小节 ↔ 真值（七条各自独立，漏改哪条就红哪条）----
+const narr = (): string => readFileSync(resolve('print', '规则书叙述.md'), 'utf8');
+const gateBody = (): string => sectionBody(narr(), '### {{gate}}');
+const certPart = (): string => sectionBody(narr(), '### 判罚权与申诉') + sectionBody(narr(), '### 质疑的成本');
+const duelPart = (): string => sectionBody(narr(), '## 对峙');
+const statusPart = (): string => sectionBody(narr(), '# 负面状态');
+
+test('R2-1：关隘小节逐字含派生后果句，且不含旧假话', () => {
+  const body = gateBody();
+  assert.ok(body.includes(renderTrialFailure({ op: 'gate_fallback_pay' }, GLOSSARY)), '缺「本关改为付费」口径');
+  assert.ok(body.includes(GATE_PAY_FAIL_CLAUSE), '缺「仍未付足则判未通过…」');
+  assert.equal(body.includes(FAKE), false, '规则书不许把退格封口归给试炼失败');
+});
+
+test('R2-2：关隘小节举的例子必须是**真实存在的判定**（门槛 ∈ {6,12}、不出现已删的资源型）', () => {
+  const body = gateBody();
+  const theme = JSON.parse(readFileSync(resolve('themes', 'xianxia2026', 'theme.json'), 'utf8')) as any;
+  const amounts = new Set<number>(theme.trials.flatMap((t: any) =>
+    (t.effects ?? []).filter((e: any) => e.pred?.kind === 'dice_is_at_least').map((e: any) => e.pred.amount)));
+  const quoted = [...body.matchAll(/≥\s*(\d+)/g)].map((m) => Number(m[1]));
+  assert.ok(quoted.length > 0, '前提：小节确有举例门槛');
+  for (const n of quoted) { assert.ok(amounts.has(n), `举例 ≥${String(n)} 不存在于任何判定（真值 ${[...amounts].join('/')}）`); }
+  assert.equal(/出示 4 枚/.test(body), false, '「出示 4 枚资源」是 B22 已替换的旧判定，举例不许留');
+});
+
+test('R7-1：认证小节写明「答对 ≤1 ⇒ 待认证者后退 1 格」', () => {
+  assert.ok(certPart().includes('后退 1 格'), '认证代价不全：certification.ts:186');
+});
+
+test('R7-2：认证小节写明「复议失败 ⇒ 额外扣一枚并后退」', () => {
+  const t = certPart();
+  assert.ok(t.includes('复议失败'), '缺复议失败的代价（certification.ts:304,355）');
+  assert.ok(/复议失败[^。]*扣/.test(t), '复议失败的扣费未写');
+});
+
+test('R7-3：对峙「亮牌留场」必须有平局例外', () => {
+  const t = duelPart();
+  assert.ok(t.includes('留在场上公开'), '前提：留场句仍在');
+  assert.ok(t.includes('平局除外'), '漏抄主规格 :183 的 B13 裁定（平局亮牌当场弃掉、不留场）');
+});
+
+test('R7-4：负面状态小节的单位词唯一（不许「N 回合」与「N 个手番」并存）', () => {
+  const t = statusPart();
+  assert.equal(/N 回合/.test(t), false, '仍有「N 回合」标题 ⇒ 与正文/引擎口径（statuses.ts:75）冲突');
+  assert.ok(t.includes('N 个手番'), '前提：小节的正确单位词仍在');
+});
+
+test('R7-5 反向钉住：两处**引擎实现缺口**的文档承诺不许被删（L-B78-2 / L-B78-3）', () => {
+  assert.ok(gateBody().includes('不再被抽取'),
+    '删这句 = 把 L-B78-2 伪装成「文档本来就没错」；主规格 :240 要求排除');
+  assert.ok(certPart().includes('再扣一枚'),
+    '删这句 = 把 L-B78-3 伪装成文档瑕疵；主规格 §5.3.4 :432 要求共扣 2');
 });

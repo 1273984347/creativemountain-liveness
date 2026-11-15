@@ -25,6 +25,9 @@
  * ⚠️ `required` 里的字符串是**规则书模板里必须逐字出现**的要点，
  *   改规则书措辞时必须同步改这里（这正是 C10 存在的意义：改漏了立刻判红）。
  */
+// ⚠️ B78：后果句的**口径**来自 build/trial-text.mjs，本文件不手抄文案（抄了就成第二事实源）。
+import { GATE_FALLBACK_CLAUSE, GATE_PAY_FAIL_CLAUSE } from '../build/trial-text.mjs';
+
 export const TERRAIN_CONTRACT = [
   {
     term: 'boon',
@@ -53,7 +56,9 @@ export const TERRAIN_CONTRACT = [
     specName: '关隘',
     section: '### {{gate}}',
     // ⚠️ 「改为付费」是 B19-b 的试炼失败后果（规则书必须写明，否则玩家不知道有这条后果）。
-    required: ['付费', '试炼', '试炼牌', '改为付费'],
+    // ⚠️ B78：required 从「关键词出现过」升级为「派生后果句逐字出现」。
+    //   逐条追加（而不是整段），漏写哪条时报错能指向具体那一条。
+    required: ['付费', '试炼', '试炼牌', GATE_FALLBACK_CLAUSE, GATE_PAY_FAIL_CLAUSE],
   },
   {
     term: 'peak',
