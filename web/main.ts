@@ -795,7 +795,7 @@ function render(): void {
     }));
   }
   panels.push(renderActions());
-  panels.push(section('日志', renderLog(s)));
+  panels.push(section('日志', renderLog(s, 40, themeById(ui.themeId).theme.terms)));
 
   root.innerHTML = '';
   root.append(el('h1', { class: 'title', text: '创界山·活人认证 —— ' + theme.meta.name }));
