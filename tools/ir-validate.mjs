@@ -22,6 +22,28 @@ export const IR_TOP_KEYS = [
   'heavenCards', 'board',
 ];
 
+/**
+ * 被**逐字比对**覆盖的 IR 顶层键（对手是 theme.json，或该键自己的快照）。
+ *
+ * ⚠️ B78 T17：这张清单是**元守卫**的输入——每个顶层键要么在这里，
+ *   要么进 `STRUCTURAL_KEYS_MAP`（带原因）；不许有「没人认领」的键。
+ */
+export const TRACEABLE_KEYS = ['scales', 'instructionTable', 'factions', 'identities',
+  'cards', 'creationCards', 'certCards', 'trials', 'heavenCards', 'board'];
+
+/**
+ * 只受**结构校验**、不做逐字对齐的键 —— 每项必须写原因（漏检不许匿名存在）。
+ *
+ * ⚠️ 判据在 tests/gates/ir-coverage-gap.test.ts：差集为空 + 原因长度 ≥ 8 + 两份清单同源。
+ */
+export const STRUCTURAL_KEYS_MAP = {
+  version: '版本号是契约本身，由 :42 的 === 1 断言；无对应 theme.json 字段',
+  meta: '主题元数据：id/name/tagline/resourceName/deckName 由门 ⑧ 判跨套差异，不与基准逐字对齐',
+  glossary: '术语表：与 terms 的三键一致由门 ⑤ 判（B78 R6），这里只核形状',
+  counts: '规模计数：由 doc-sync C1/C2 的数值链与门 ⑧ 的数量判据覆盖',
+};
+export const STRUCTURAL_KEYS = Object.keys(STRUCTURAL_KEYS_MAP);
+
 /** 校验 ir.json。 */
 export function validateIr(ir, theme, scales) {
   const errors = [];
@@ -115,6 +137,24 @@ export function validateIr(ir, theme, scales) {
     const src2 = (theme.certificationCards ?? []).find((x) => x.id === cc.id);
     if (src2 === undefined) { err('认证题卡 id 不存在于 theme.json：' + cc.id); continue; }
     if (cc.prompt !== src2.prompt) { err('认证题卡 ' + cc.id + ' 的 prompt 与 theme.json 不一致'); }
+  }
+
+  // ---------- 3.x B78：board 的逐字可追溯 ----------
+  // 过去只判结构（格数 / peakIndex / gateTrialIds 引用）⇒ tiles[].name / gateFee / branchTo
+  // 与 theme.json 的逐字一致性**无人核对**（现查：parity 完全不碰 board）。
+  const srcTiles = new Map((theme.board?.tiles ?? []).map((x) => [x.index, x]));
+  for (const t of ir.board.tiles) {
+    const src = srcTiles.get(t.index);
+    if (src === undefined) { err('棋盘格 ' + String(t.index) + ' 在 theme.json 中不存在'); continue; }
+    if (t.kind !== src.kind) { err('棋盘格 ' + String(t.index) + ' 的 kind 与 theme.json 不一致'); }
+    if (t.name !== src.name) { err('棋盘格 ' + String(t.index) + ' 的 name 与 theme.json 不一致'); }
+    if ((t.gateFee ?? null) !== (src.gate?.fee ?? null)) { err('棋盘格 ' + String(t.index) + ' 的 gateFee 与 theme.json 不一致'); }
+    if ((t.gateTrialIds ?? []).join(',') !== (src.gate?.trialIds ?? []).join(',')) {
+      err('棋盘格 ' + String(t.index) + ' 的 gateTrialIds 与 theme.json 不一致');
+    }
+    if ((t.branchTo ?? []).join(',') !== (src.branches ?? []).map((b) => b.to).join(',')) {
+      err('棋盘格 ' + String(t.index) + ' 的 branchTo 与 theme.json 不一致');
+    }
   }
 
   // ---------- 4. 引用完整性 ----------
