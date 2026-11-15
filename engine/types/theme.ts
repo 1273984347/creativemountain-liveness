@@ -361,6 +361,11 @@ export interface CertificationCard {
 /** 关隘试炼牌。 */
 export interface TrialCard {
   readonly id: string;
+  /**
+   * 试炼牌名（B78 §2.1；正式字段，进 IR、进版面、进 parity）。
+   * 必填、≤ 6 字、禁数字与量化/类目词（门 ⑤ 判）；语义同侧由人工对照规格 §2.4 管。
+   */
+  readonly name: string;
   readonly text: string;
   readonly effects?: readonly Effect[];
   /**

@@ -169,11 +169,16 @@ export function buildTheme(base, data) {
   // 这一段原来是 `data.trials[i]` 手抄文本：判定在基准、文本在 theme-data ⇒ 两份真相各自
   // 演化，B26 加难后四套印出过 9–10/12 条「牌面写的条件 ≠ 引擎判的条件」，而 IR 只带 text，
   // 印刷链路查不出来。现在题面与卡牌一样只有一个来源。
-  const trials = base.trials.map((b) => {
+  const trials = base.trials.map((b, i) => {
     const conditional = (b.effects ?? []).find((e) => e.op === 'conditional');
     const derivable = isDerivable(conditional?.pred);
+    const name = data.trialNames?.[i];
+    if (typeof name !== 'string' || name.length === 0) {
+      throw new Error(`主题 ${data.id} 的 trialNames[${String(i)}]（${b.id}）缺失 ⇒ 名字必须有源，不许回落基准名`);
+    }
     return {
       id: b.id,
+      name,
       text: derivable ? renderTrialText(conditional, data.terms) : b.text,
       // 白名单外的判定才留手写题面，并显式标出来给守卫放行（§6.3：fallback 总数钉死为 0）
       ...(derivable ? {} : { fallback: true }),

@@ -26,6 +26,8 @@ export interface ThemeData {
   readonly cardNames: Readonly<Record<string, readonly string[]>>;
   readonly flagCards?: Readonly<Record<string, Readonly<Record<number, { readonly name: string; readonly effects: unknown }>>>>;
   readonly heavenCards: readonly { readonly name: string; readonly text: string }[];
+  /** 12 条试炼牌名（B78 §2.1）。按位对位基准的 trials 顺序；缺失生成器抛错，不许回落基准名。 */
+  readonly trialNames: readonly string[];
   // ⚠️ B77 §6.1：这里**没有** `trials` —— 试炼题面由 `build/trial-text.mjs` 从基准判定 +
   //   本表 `terms` 派生。手写文本列表就是那份「第二事实源」，删掉它才是修复。
   readonly creationCards: readonly { readonly name: string; readonly text: string }[];

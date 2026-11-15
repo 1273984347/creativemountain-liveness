@@ -37,6 +37,10 @@ export default {
     statuses: { poison: '中毒', slow: '减速', silence: '封口' },
   },
 
+  // 只承载 12 条**名字**。⚠️ 本字段故意不叫 trials：B77 曾有一个 trials 字段（手抄题面）
+  // 已被删除，复用旧名会让「这个字段是不是又回来了」的歧义重现。题面唯一来源仍是基准 + renderTrialText。
+  trialNames: ['心火', '暗涌', '疾移', '手气', '硬顶', '静养', '外壳', '冲刺', '清血', '夜袭', '豪赌', '热盾'],
+
   suits: [
     'street', 'rooftop', 'neon', 'subway', 'traffic', 'crowd',
     'dream', 'mirror', 'signal', 'rain', 'underground', 'radio',

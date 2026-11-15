@@ -47,6 +47,10 @@ export default {
   },
 
   /** 12 个花色（内部标识，不参与点数比较；§6.5 suit 不参与任何比较）。 */
+  // 只承载 12 条**名字**。⚠️ 本字段故意不叫 trials：B77 曾有一个 trials 字段（手抄题面）
+  // 已被删除，复用旧名会让「这个字段是不是又回来了」的歧义重现。题面唯一来源仍是基准 + renderTrialText。
+  trialNames: ['过载', '暗码', '跃迁', '轻掷', '铁壁', '温机', '力场', '红移', '滤净', '暗火', '临界', '赤垒'],
+
   suits: [
     'rail', 'quantum', 'phase', 'electrogravity', 'photon', 'plasma',
     'darkmatter', 'gravitywave', 'nano', 'deepspace', 'entropy', 'orbit',

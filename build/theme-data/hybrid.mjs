@@ -37,6 +37,10 @@ export default {
     statuses: { poison: '中毒', slow: '减速', silence: '封口' },
   },
 
+  // 只承载 12 条**名字**。⚠️ 本字段故意不叫 trials：B77 曾有一个 trials 字段（手抄题面）
+  // 已被删除，复用旧名会让「这个字段是不是又回来了」的歧义重现。题面唯一来源仍是基准 + renderTrialText。
+  trialNames: ['赤焰', '玄铁', '缩地', '占风', '铸盾', '温补', '罡罩', '焰踏', '化毒', '隐刃', '搏天', '赤盾'],
+
   suits: [
     'sword', 'talisman', 'array', 'void', 'lightning', 'frost',
     'flame', 'sea', 'stone', 'cloud', 'blood', 'steel',
