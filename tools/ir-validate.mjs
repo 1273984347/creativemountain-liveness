@@ -130,8 +130,21 @@ export function validateIr(ir, theme, scales) {
   if (ir.board.peakIndex !== ir.board.length) {
     err('board.peakIndex 必须等于 board.length');
   }
-  if (ir.instructionTable.length !== 20) {
-    err('指令表必须恰好 20 条，实际 ' + ir.instructionTable.length);
+  // ⚠️ B78：过去只判「恰好 20 条」⇒ 两份指令表各自漂移而门禁看不见内容。
+  //   现在连 face 顺序与**内容**一起钉：内容钉子 = tests/gates/snapshots/instruction-d20.json
+  //   （四套各一份，见 B78 规格 §4 R3）。改规则必须先改快照并在批次记录写理由。
+  const faceSeq = ir.instructionTable.map((x) => x.face);
+  const wantFaces = Array.from({ length: 20 }, (_, i) => i + 1);
+  if (ir.instructionTable.length !== 20 || faceSeq.join(',') !== wantFaces.join(',')) {
+    err('指令表必须 face 1..20 各一条且严格升序，实际 ' + JSON.stringify(faceSeq));
+  }
+  const snapRel = 'tests/gates/snapshots/instruction-d20.json';
+  if (existsSync(snapRel)) {
+    const want = JSON.parse(readFileSync(snapRel, 'utf8'))[theme.meta.id] ?? [];
+    const got = ir.instructionTable.map((x) => ({ face: x.face, text: x.text }));
+    if (JSON.stringify(got) !== JSON.stringify(want)) {
+      err('指令表内容与快照不符（B78 §4 R3）：改规则要先改快照并在批次记录说明理由');
+    }
   }
   if (ir.certCards.length < 8) {
     err('认证题卡至少 8 张，实际 ' + ir.certCards.length);
