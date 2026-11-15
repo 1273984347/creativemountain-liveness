@@ -217,7 +217,11 @@ export function heavenSvg(item: { readonly id: string; readonly name: string; re
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}mm" height="${h}mm" viewBox="0 0 ${w} ${h}">${parts.join('')}</svg>`;
 }
 /** 试炼牌 SVG（关隘试炼用，标准牌尺寸）。 */
-export function trialSvg(item: { readonly id: string; readonly text: string }, index: number, terms: Terms): string {
+export function trialSvg(
+  item: { readonly id: string; readonly name?: string; readonly text: string },
+  index: number,
+  terms: Terms,
+): string {
   const w = CARD_W;
   const h = CARD_H;
   const pad = CARD_PAD;
@@ -225,9 +229,17 @@ export function trialSvg(item: { readonly id: string; readonly text: string }, i
   parts.push(`<rect x="0" y="0" width="${w}" height="${h}" rx="${CARD_RADIUS}" fill="#f4efe4" stroke="#8a6420" stroke-width="0.5"/>`);
   parts.push(`<text x="${pad + 2}" y="${pad + 8}" font-size="3.4" fill="#8a6420">${term(terms, 'gate', '关隘')}试炼</text>`);
   parts.push(`<text x="${w - pad - 2}" y="${pad + 8}" font-size="4.6" fill="#3a322a" text-anchor="end" font-weight="700">#${index + 1}</text>`);
+  // B78 §3.2 甲案：类目行不动（它是玩家识别牌型的第一层信息），name 起独立第二行；
+  //   正文起点**固定** pad+27（规格 r1.5：空 name 也占位 —— 偏移不许是数据的函数）。
+  //   弃乙案（类目挪页脚）：页脚现在承载派生规则句（renderTrialFooter），再堆就撞。
+  const name = item.name ?? '';
+  const bodyTop = pad + 27;
+  if (name.length > 0) {
+    parts.push(`<text x="${pad + 2}" y="${pad + 15}" font-size="4.4" fill="#1a1613" font-weight="700">${esc(name)}</text>`);
+  }
   const lines = wrap(item.text, 15);
   lines.forEach((l, i) => {
-    parts.push(`<text x="${pad + 2}" y="${pad + 20 + i * 4.8}" font-size="3.4" fill="#1a1613">${esc(l)}</text>`);
+    parts.push(`<text x="${pad + 2}" y="${bodyTop + i * 4.8}" font-size="3.4" fill="#1a1613">${esc(l)}</text>`);
   });
   parts.push(`<text x="${pad + 2}" y="${h - pad - 5}" font-size="2.6" fill="#8a7c6a">${esc(renderTrialFooter())}</text>`);
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}mm" height="${h}mm" viewBox="0 0 ${w} ${h}">${parts.join('')}</svg>`;
