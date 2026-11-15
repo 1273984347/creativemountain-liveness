@@ -36,6 +36,11 @@
     "colors": {
       "red": "红",
       "black": "黑"
+    },
+    "statuses": {
+      "poison": "中毒",
+      "slow": "减速",
+      "silence": "封口"
     }
   },
   "counts": {
