@@ -272,7 +272,7 @@ export function performAction(
       const face = rollD20(next.rng);
       next = { ...next, lastDice: face };
       next = applyInstruction(next, seat, face);
-      next = { ...next, log: [...next.log, { round: next.round, turnIndex: next.turnIndex, actor: seat, kind: 'ask', message: `问天：掷出 ${face} —— ${instructionText(face)}`, diceRoll: face }] };
+      next = { ...next, log: [...next.log, { round: next.round, turnIndex: next.turnIndex, actor: seat, kind: 'ask', message: `问天：掷出 ${face}，执行第 ${face} 条指令`, diceRoll: face }] };
       break;
     }
     case 'act': {
@@ -415,7 +415,7 @@ function applyInstruction(state: State, seat: number, face: number): State {
     case 14: {
       const face2 = rollD20(state.rng);
       const chained = applyInstruction({ ...state, lastDice: face2 }, seat, face2);
-      return { ...chained, log: [...chained.log, { round: chained.round, turnIndex: chained.turnIndex, actor: seat, kind: 'ask', message: `链式问天：掷出 ${face2} —— ${instructionText(face2)}`, diceRoll: face2 }] };
+      return { ...chained, log: [...chained.log, { round: chained.round, turnIndex: chained.turnIndex, actor: seat, kind: 'ask', message: `链式问天：掷出 ${face2}，执行第 ${face2} 条指令`, diceRoll: face2 }] };
     }
     case 15: return applyEffect(ctx, { op: 'immunity', status: 'silence', amount: 1 }).state;
     case 16: return applyEffect(ctx, { op: 'swap_position', target: 1 }).state;
