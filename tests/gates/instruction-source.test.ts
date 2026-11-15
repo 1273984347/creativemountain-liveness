@@ -54,3 +54,29 @@ test('B78：ask 日志保留可查指针与结构化骰面（UI 靠 diceRoll 展
     assert.match(last.message, /第 \d+ 条指令/, `兜底句要能让玩家查表：[${last.message}]`);
   }
 });
+
+// ---- T4：表已迁出 turn-runner，字面量只许住在一个文件 ----
+const TABLE = readFileSync('engine/core/instruction-table.ts', 'utf8');
+/** 摘掉表本体后，任何文件再出现被引号包裹的指令文案都算第二事实源（B77 前缀表同法）。 */
+const PROBE_ROWS = ['抽 2 张牌', '掷 6 面移动骰并按点数前进', '全员弃 1 张牌', '自由执行一次「阵营轮」效果'];
+const SCOPE = ['engine/core/turn-runner.ts', 'engine/core/instruction-table.ts', 'build/build-ir.mjs', 'web/ui/log.ts'];
+
+test('B78：表已迁出 turn-runner，引擎不再引用表或替换函数', () => {
+  assert.ok(TABLE.includes('export const INSTRUCTION_TABLE'), '前提：表在 instruction-table.ts');
+  assert.equal(/instructionText/.test(RUNNER), false, 'turn-runner.ts 不许出现 instructionText');
+  assert.equal(/INSTRUCTION_TABLE/.test(RUNNER), false, 'turn-runner.ts 不许出现 INSTRUCTION_TABLE');
+});
+
+test('B78：指令文案字面量只出现在表文件（摘掉表本体后逐文件扫）', () => {
+  const start = TABLE.indexOf('export const INSTRUCTION_TABLE');
+  const end = TABLE.indexOf('];', start);
+  assert.ok(start > 0 && end > start, '前提：能定位表本体');
+  const stripped = TABLE.slice(0, start) + TABLE.slice(end + 2);
+  for (const f of SCOPE) {
+    const src = f === 'engine/core/instruction-table.ts' ? stripped : readFileSync(f, 'utf8');
+    for (const p of PROBE_ROWS) {
+      assert.equal(src.includes(`'${p}'`) || src.includes(`\`${p}\``), false,
+        `${f} 手抄了指令文案「${p}」⇒ 请改用 INSTRUCTION_TABLE / instructionText`);
+    }
+  }
+});

@@ -132,38 +132,9 @@ export function startGame(state: State): State {
   return state;
 }
 
-/**
- * 掷 20 面指令骰执行一条指令（§3.2 「问天」）。
- *
- * 指令表是**主题无关的通用表**（规格 §3.2）；主题包可覆盖个别条目。
- */
-export const INSTRUCTION_TABLE: readonly { readonly face: number; readonly text: string }[] = [
-  { face: 1, text: '抽 1 张牌' },
-  { face: 2, text: '灵枢 +1' },
-  { face: 3, text: '抽 2 张牌' },
-  { face: 4, text: '灵枢 -1（给自己）' },
-  { face: 5, text: '掷 6 面移动骰并按点数前进' },
-  { face: 6, text: '前进 2 格' },
-  { face: 7, text: '抽 1 张牌 + 灵枢 +1' },
-  { face: 8, text: '弃 1 张牌抽 2 张' },
-  { face: 9, text: '前进 1 格并抽 1 张牌' },
-  { face: 10, text: '全员弃 1 张牌' },
-  { face: 11, text: '指定一名玩家弃 1 张牌' },
-  { face: 12, text: '指定一名玩家后退 1 格' },
-  { face: 13, text: '获得 1 张指定类型手牌' },
-  { face: 14, text: '立即再掷一次 20 面指令骰并执行（不可再连锁）' },
-  { face: 15, text: '免疫本回合的「封口」' },
-  { face: 16, text: '与一名玩家交换手牌各 1 张' },
-  { face: 17, text: '本回合移动 +2 格' },
-  { face: 18, text: '获得 1 枚灵枢（不超上限）' },
-  { face: 19, text: '指定一名玩家抽 1 张牌' },
-  { face: 20, text: '自由执行一次「阵营轮」效果' },
-];
+// 20 面指令表**不在本文件**（B78 §4 R3）：唯一出处是 `engine/core/instruction-table.ts`，
+// 消费方是 `web/ui/log.ts` 与 `build/build-ir.mjs`；引擎只报骰面与指令序号（见 :275/:418 的 ask 日志）。
 
-/** 取指令表某面的文本。 */
-export function instructionText(face: number): string {
-  return INSTRUCTION_TABLE.find((x) => x.face === face)?.text ?? '（无对应指令）';
-}
 /**
  * 改写效果里的**目标座位**（递归）。
  *

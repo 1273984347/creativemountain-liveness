@@ -11,6 +11,9 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { loadScalesFromSource } from '../tools/scales-parse.mjs';
+// 指令表的唯一事实源（B78 §4 R3）：本文件**不再自己抄 20 条**——B78 前引擎与这里各一份，
+// 引擎那份写死「灵枢」、这里按 terms 替换 ⇒ 三套主题的对局日志与规则书各说各话。
+import { INSTRUCTION_TABLE } from '../engine/core/instruction-table.ts';
 
 const ROOT = process.cwd();
 
@@ -63,20 +66,6 @@ function goalText(kind, count, terms) {
     default: return '未知目标';
   }
 }
-/** 指令表（结构主题无关，规格 §3.2；其中的资源名随主题）。 */
-function instructionTable(terms) {
-  const r = terms.resource;
-  return [
-  [1, '抽 1 张牌'], [2, r + ' +1'], [3, '抽 2 张牌'], [4, r + ' -1（给自己）'],
-  [5, '掷 6 面移动骰并按点数前进'], [6, '前进 2 格'], [7, '抽 1 张牌 + ' + r + ' +1'],
-  [8, '弃 1 张牌抽 2 张'], [9, '前进 1 格并抽 1 张牌'], [10, '全员弃 1 张牌'],
-  [11, '指定一名玩家弃 1 张牌'], [12, '指定一名玩家后退 1 格'], [13, '获得 1 张指定类型手牌'],
-  [14, '立即再掷一次 20 面指令骰并执行（不可再连锁）'], [15, '免疫本回合的「封口」'],
-  [16, '与一名玩家交换手牌各 1 张'], [17, '本回合移动 +2 格'], [18, '获得 1 枚' + r + '（不超上限）'],
-  [19, '指定一名玩家抽 1 张牌'], [20, '自由执行一次「阵营轮」效果'],
-  ].map(([face, t]) => ({ face, text: t }));
-}
-
 /** 从 theme.json 生成 IR 文档。 */
 export function buildIr(theme, scales) {
   const terms = termsOf(theme);
@@ -108,7 +97,8 @@ export function buildIr(theme, scales) {
       globalRoundLimit: src(r.players, 'globalRoundLimit', r.globalRoundLimit),
       seatWeight: src(r.players, 'seatWeight', r.seatWeight),
     })),
-    instructionTable: instructionTable(terms),
+    // 表体来自唯一事实源，{resource} 按本主题词表替换。⚠️ 不在这里重抄文案。
+    instructionTable: INSTRUCTION_TABLE.map((r) => ({ face: r.face, text: r.text.split('{resource}').join(terms.resource) })),
     factions: theme.factions.map((f) => ({
       id: f.id, name: f.name, hpBase: f.hpBase, resourceBase: f.resourceBase,
       abilityText: f.abilityText, wheelText: f.wheelText, deckTags: [...f.deckTags],
