@@ -10,7 +10,7 @@
 // 运行：`npm run build:print`（esbuild 打包本文件 → node 执行）。
 
 import { chromium } from 'playwright';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -81,6 +81,11 @@ export function renderNarration(template: string, ir: IrDocument): string {
 }
 /** 导出全部 SVG 实体件。 */
 export function exportSvgs(ir: IrDocument): string[] {
+  // ⚠️ B78 §4 R2：**先清空再写** —— 生成物目录必须是**确定**的。
+  //   旧实现只写不删：改过试炼牌顺序/改名后，旧编号文件会留在目录里，而
+  //   `build-package.mjs:43` 对本目录**整目录 cpSync** ⇒ 旧代试炼牌（页脚还是旧假话）
+  //   会随发布包一起发出去。现查证据：每套 svg 目录曾积到 24 个试炼牌文件 = 12 当前 + 12 旧代。
+  rmSync(SVG_DIR, { recursive: true, force: true });
   mkdirSync(SVG_DIR, { recursive: true });
   const written: string[] = [];
   const put = (name: string, svg: string): void => {

@@ -4,6 +4,8 @@
 // 保证打印尺寸与画布坐标 1:1 对应。
 
 import { CARD_H, CARD_PAD, CARD_RADIUS, CARD_W, CHIP_D, A2_H, A2_W, esc, wrap } from './print-templates.ts';
+// 页脚句的唯一口径在 build/trial-text.mjs（B78 §4 R2：题面括注 / 页脚 / 规则书三处同源）。
+import { renderTrialFooter } from './trial-text.mjs';
 
 import type { IrBoard, IrCard, IrDocument, IrFaction, IrIdentity } from '../engine/types/ir.ts';
 
@@ -12,7 +14,10 @@ const COLOR_BG: Record<string, string> = { red: '#f6efe6', black: '#e8ecf0' };
 const COLOR_EDGE: Record<string, string> = { red: '#c05a4a', black: '#4a5a6a' };
 
 /** 一张卡牌的 SVG。 */
-export function cardSvg(card: IrCard, opts: { readonly index?: number; readonly total?: number } = {}): string {
+// ⚠️ B78：原来的第二参 `opts?: {index,total}` 从未被任何调用点使用（build-print /
+//   cardRowSvg 全部只传 card）⇒ 删掉。它是本文件第一次被 .ts 测试引用时（T8）
+//   由门 ① 的 noUnusedParameters 暴露出来的既有死参数，不是本批引入。
+export function cardSvg(card: IrCard): string {
   const w = CARD_W;
   const h = CARD_H;
   const pad = CARD_PAD;
@@ -224,7 +229,7 @@ export function trialSvg(item: { readonly id: string; readonly text: string }, i
   lines.forEach((l, i) => {
     parts.push(`<text x="${pad + 2}" y="${pad + 20 + i * 4.8}" font-size="3.4" fill="#1a1613">${esc(l)}</text>`);
   });
-  parts.push(`<text x="${pad + 2}" y="${h - pad - 5}" font-size="2.6" fill="#8a7c6a">失败则退 1 格并被封口</text>`);
+  parts.push(`<text x="${pad + 2}" y="${h - pad - 5}" font-size="2.6" fill="#8a7c6a">${esc(renderTrialFooter())}</text>`);
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}mm" height="${h}mm" viewBox="0 0 ${w} ${h}">${parts.join('')}</svg>`;
 }
 /** 筹码 SVG（直径 25mm）。 */
