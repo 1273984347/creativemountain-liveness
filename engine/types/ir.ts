@@ -139,7 +139,8 @@ export interface IrDocument {
   readonly cards: readonly IrCard[];
   readonly creationCards: readonly { readonly cardId: string; readonly name: string; readonly text: string }[];
   readonly certCards: readonly { readonly id: string; readonly prompt: string }[];
-  readonly trials: readonly { readonly id: string; readonly text: string }[];
+  /** 试炼牌：`name` 是 B78 新增的正式字段（进版面），`text` 是派生题面。 */
+  readonly trials: readonly { readonly id: string; readonly name: string; readonly text: string }[];
   readonly heavenCards: readonly { readonly id: string; readonly name: string; readonly text: string }[];
   readonly board: IrBoard;
 }

@@ -70,6 +70,9 @@ function goalText(kind, count, terms) {
 export function buildIr(theme, scales) {
   const terms = termsOf(theme);
   const ir = {
+    // ⚠️ B78：trials[].name 是 IR 版本 1 的**字段扩展**，不升版本号。IR 无跨版本读取方
+    //   （存档用 v:2 信封装 State，不是 IR），升版本只会逼 ir-validate 与所有 print/*/ir.json
+    //   一起改，换不到任何保障；字段形状变更由 engine/types/ir.ts 的 TypeScript 类型约束。
     version: 1,
     meta: {
       id: theme.meta.id,
@@ -125,7 +128,7 @@ export function buildIr(theme, scales) {
       cardId: c.cardId, name: c.name, text: c.text,
     })),
     certCards: theme.certificationCards.map((c) => ({ id: c.id, prompt: c.prompt })),
-    trials: (theme.trials ?? []).map((t) => ({ id: t.id, text: t.text })),
+    trials: (theme.trials ?? []).map((t) => ({ id: t.id, name: t.name, text: t.text })),
     heavenCards: theme.heavenCards.map((h) => ({ id: h.id, name: h.name, text: h.text })),
     board: {
       length: theme.board.length,

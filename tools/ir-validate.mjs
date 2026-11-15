@@ -39,6 +39,7 @@ export function validateIr(ir, theme, scales) {
   for (const k of Object.keys(ir)) {
     if (!IR_TOP_KEYS.includes(k)) { err('多余顶层键：' + k); }
   }
+  // 版本 1 的字段形状在 B78 有扩展（trials[].name），version 保持 1——理由见 build-ir.mjs:84 注释。
   if (ir.version !== 1) { err('ir.version 必须是 1，实际 ' + String(ir.version)); }
   if (errors.length > 0) { return { errors, warnings }; }
 
@@ -107,6 +108,8 @@ export function validateIr(ir, theme, scales) {
     const src2 = (theme.trials ?? []).find((x) => x.id === t.id);
     if (src2 === undefined) { err('试炼牌 id 不存在于 theme.json：' + t.id); continue; }
     if (t.text !== src2.text) { err('试炼牌 ' + t.id + ' 的 text 与 theme.json 不一致'); }
+    // B78：name 与 text 同权——IR 是印刷链路唯一输入，名字漂了玩家手里的牌就与数据源不符。
+    if (t.name !== src2.name) { err('试炼牌 ' + t.id + ' 的 name 与 theme.json 不一致'); }
   }
   for (const cc of ir.certCards) {
     const src2 = (theme.certificationCards ?? []).find((x) => x.id === cc.id);
