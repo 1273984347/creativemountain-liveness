@@ -28,10 +28,12 @@ export default {
     player: '异能者',
   },
 
-  /** 术语层（B77 规格 §6.2）：**十叶齐备**——`types`/`colors` 是试炼题面的取词表，
+  /** 术语层（B77 规格 §6.2）：**十五叶齐备**——`types`/`colors` 是试炼题面的取词表，
    *  用词与 `theme-render.mjs` 的 `TYPE_CN` 同源，卡面与题面共用一套类目名。 */
   terms: {
     hp: '精神值', deck: '异能牌', resource: '异能点', gate: '封锁线',
+    // B79 §3.1：句子层 {path} / {peak}
+    path: '街区', peak: '天台',
     types: { motion: '位移', attack: '攻击', defense: '防御', utility: '功能' },
     colors: { red: '红', black: '黑' },
     statuses: { poison: '中毒', slow: '减速', silence: '封口' },

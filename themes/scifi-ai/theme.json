@@ -27,6 +27,8 @@
     "deck": "指令",
     "resource": "算力",
     "gate": "安全闸",
+    "path": "轨道",
+    "peak": "奇点台",
     "types": {
       "motion": "位移",
       "attack": "攻击",

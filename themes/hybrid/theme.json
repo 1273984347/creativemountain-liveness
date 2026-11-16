@@ -27,6 +27,8 @@
     "deck": "道箓",
     "resource": "灵能",
     "gate": "阵门",
+    "path": "栈道",
+    "peak": "道顶",
     "types": {
       "motion": "位移",
       "attack": "攻击",

@@ -20,9 +20,12 @@ import { SCALES } from '../engine/scales.ts';
  */
 export const EXPECTED_FALLBACK_COUNT = 0;
 
-/** `terms` 的十叶路径（校验**叶子**而非顶层 6 个键：只查顶层时，`types` 缺一个也照样绿）。 */
+/** `terms` 的十五叶路径（校验**叶子**而非顶层 6 个键：只查顶层时，`types` 缺一个也照样绿）。 */
 const TERM_LEAVES = [
   ['hp'], ['deck'], ['resource'], ['gate'],
+  // B79 §3.1：句子层要用 {path} / {peak} ⇒ 必须是必填叶
+  //   （此前它们只活在开放索引的 glossary 里，缺键不红，展开器只能静默兜底）
+  ['path'], ['peak'],
   ['types', 'motion'], ['types', 'attack'], ['types', 'defense'], ['types', 'utility'],
   ['colors', 'red'], ['colors', 'black'],
   // B78 §4 R4：三叶（不是四叶——skip_turn 只有动词位、无名词位读取点，见规格 R4 取证）

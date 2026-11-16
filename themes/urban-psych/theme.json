@@ -27,6 +27,8 @@
     "deck": "异能牌",
     "resource": "异能点",
     "gate": "封锁线",
+    "path": "街区",
+    "peak": "天台",
     "types": {
       "motion": "位移",
       "attack": "攻击",

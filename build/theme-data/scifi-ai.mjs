@@ -37,10 +37,12 @@ export default {
   },
 
   /** 术语层：卡面文案渲染时替换通用词。 */
-  /** 术语层（B77 规格 §6.2）：**十叶齐备**——`types`/`colors` 是试炼题面的取词表，
+  /** 术语层（B77 规格 §6.2）：**十五叶齐备**——`types`/`colors` 是试炼题面的取词表，
    *  用词与 `theme-render.mjs` 的 `TYPE_CN` 同源，卡面与题面共用一套类目名。 */
   terms: {
     hp: '机体完整度', deck: '指令', resource: '算力', gate: '安全闸',
+    // B79 §3.1：句子层 {path} / {peak}
+    path: '轨道', peak: '奇点台',
     types: { motion: '位移', attack: '攻击', defense: '防御', utility: '功能' },
     colors: { red: '红', black: '黑' },
     statuses: { poison: '中毒', slow: '减速', silence: '封口' },

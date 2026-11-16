@@ -27,6 +27,8 @@
     "deck": "符箓",
     "resource": "灵枢",
     "gate": "关隘",
+    "path": "山道",
+    "peak": "封顶台",
     "types": {
       "motion": "位移",
       "attack": "攻击",

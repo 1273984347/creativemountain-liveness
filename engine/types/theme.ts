@@ -422,16 +422,23 @@ export interface Counts {
 }
 
 /**
- * 派生文本的词表（B77 规格 §6.2）：四个通用词 + 四个牌类 + 两个牌色 = **十叶**。
+ * 派生文本的词表（B77 规格 §6.2）：六个通用词 + 四个牌类 + 两个牌色 + 三个状态名词 = **十五叶**。
  *
  * `types` / `colors` 的键必须是 `CardType` / `CardColor` 的枚举值 ——
  * 题面派生拿判定谓词的 filter 直接查这张表，键写错就拼出 `undefined`。
+ *
+ * B79 §3.1 新增 `path` / `peak`：句子层（引擎 note、UI 拒因、面板标题）从今只从这里取词，
+ * 所以它们必须是**必填叶**而不是 `glossary` 里的开放键——缺键不红的地基上盖不出「按主题说话」的界面。
  */
 export interface ThemeTerms {
   readonly hp: string;
   readonly deck: string;
   readonly resource: string;
   readonly gate: string;
+  /** 路径类地貌的词（B79 §3.1）：山道 / 轨道 / 街区 / 栈道。句子层 `{path}` 的取值。 */
+  readonly path: string;
+  /** 终点的词（B79 §3.1）：封顶台 / 奇点台 / 天台 / 道顶。句子层 `{peak}` 的取值。 */
+  readonly peak: string;
   readonly types: {
     readonly motion: string;
     readonly attack: string;
@@ -463,7 +470,7 @@ export interface ThemePack {
   readonly meta: ThemeMeta;
   readonly glossary: Glossary;
   /**
-   * 派生文本的词表正身（B77 规格 §6.2；十叶齐备由门 ⑤ 校验）。
+   * 派生文本的词表正身（B77 规格 §6.2；十五叶齐备由门 ⑤ 校验）。
    *
    * ⚠️ 与 `glossary` 的分工：glossary 是**界面与规则书的名词对照**（含 hand/peak/seal 等），
    *   `terms` 是**渲染器的取词表**——卡面（`renderEffect`）与试炼题面（`renderTrialText`）

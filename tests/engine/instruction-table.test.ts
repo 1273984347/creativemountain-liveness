@@ -14,6 +14,8 @@ import type { ThemeTerms } from '../../engine/types/theme.ts';
 /** 造一份完整词表，只换资源词——其余字段与四套现值同形。 */
 const terms = (resource: string): ThemeTerms => ({
   hp: '灵力', deck: '符箓', resource, gate: '关隘',
+  // B79 §3.1：path/peak 升格必填 ⇒ 补上（同 statuses 的先例：为契约补齐，不是为过编译放宽断言）。
+  path: '山道', peak: '封顶台',
   types: { motion: '位移', attack: '攻击', defense: '防御', utility: '功能' },
   colors: { red: '红', black: '黑' },
   // T3 时 statuses 还不存在，故意没写；T10 把它变成必填 ⇒ 现在补上（不是为过编译而放宽断言）。
