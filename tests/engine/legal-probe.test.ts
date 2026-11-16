@@ -77,8 +77,8 @@ test('试跑：COMPARE 在**关隘格外**必拒（拒因是真实规则，不�
   //   而该占位分支与 B19 的真实试跑分支**同在一个 switch** ⇒ 先命中的占位分支永远生效
   //   ⇒ 出牌比对通道**永远被拒** ⇒ 枚举里永远没有 COMPARE，
   //   而 UI 侧早已接线 ⇒ 「UI 与 AI 同一枚举」在关隘面破口。占位分支已删（B53）。
-  //   现在拒因来自**真实规则**（`resolveCompareGate`：「当前不在未通过的关隘格上」）。
-  assert.match(r.reason, /关隘格/, '拒因必须来自真实规则（不再是「未实现」占位）');
+  //   现在拒因来自**真实规则**（`resolveCompareGate`：「当前不在未通过的{gate}格上」，B79 起是占位符形态）。
+  assert.match(r.reason, /{gate}格/, '拒因必须来自真实规则（不再是「未实现」占位）');
 });
 
 test('试跑：COMPARE 在**关隘格上**被引擎接受（B53：出牌比对通道已真正可用）', () => {
@@ -310,9 +310,9 @@ const PROBE_CASES: readonly ProbeCase[] = [
   { label: 'PASS@结算才立对峙（引擎已接受，推进挂起待对峙结算）', scene: () => skipOn(settleIntoDuelScene()), action: { type: 'PASS', actor: 0 }, ok: true, reasonRe: /挂起/ },
   { label: 'PASS@无当前手番', scene: () => skipOn(noActorScene()), action: { type: 'PASS', actor: 0 }, ok: false, reasonRe: /手番未推进/ },
   // ---- 未接线：只能显式判拒 ----
-  { label: 'COMPARE@不在关隘格', scene: mk, action: { type: 'COMPARE', actor: 0, cardId: 'c_gate_trial', target: 1 }, ok: false, reasonRe: /关隘格/ },
+  { label: 'COMPARE@不在关隘格', scene: mk, action: { type: 'COMPARE', actor: 0, cardId: 'c_gate_trial', target: 1 }, ok: false, reasonRe: /{gate}格/ },
   // ---- B18：关隘通道（GATE_RESOLVE）——不在关隘格上必拒 ----
-  { label: 'GATE_RESOLVE@不在关隘格', scene: mk, action: { type: 'GATE_RESOLVE', actor: 0, channel: 'pay' }, ok: false, reasonRe: /关隘/ },
+  { label: 'GATE_RESOLVE@不在关隘格', scene: mk, action: { type: 'GATE_RESOLVE', actor: 0, channel: 'pay' }, ok: false, reasonRe: /{gate}/ },
   // ---- B18-b：裂隙通道（BARRIER_RESOLVE）——不在可放印的裂隙格上必拒 ----
   { label: 'BARRIER_RESOLVE@不在裂隙格', scene: mk, action: { type: 'BARRIER_RESOLVE', actor: 0, channel: 'place' }, ok: false, reasonRe: /裂隙/ },
 ];

@@ -80,7 +80,9 @@ test('B18：付费通道 —— 灵枢不足 ⇒ 拒绝且状态不变', () => {
   const r = resolveGate(s, 0, 'pay');
   assert.equal(r.ok, false, '灵枢不足必须被拒');
   assert.equal(r.state, s, '被拒时状态必须原样返回（无副作用）');
-  assert.match(String(r.note), /灵枢不足/);
+  // B79 §5.1：引擎交出的是**占位符形态**，所以判据也跟着转形式（不是放宽——玩家看到的
+  //   句子由出口展开，那条正面断言在 tests/engine/card-cost.test.ts 的 B65/A-5b 与 T14 的 R3）。
+  assert.match(String(r.note), /\{resource\}不足/, '资源不足必须点名（R-2 拒绝要说人话）');
 });
 
 test('B18：试炼通道 —— 公开抽牌 + 执行效果树 + 记通过标记', () => {

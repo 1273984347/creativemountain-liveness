@@ -20,10 +20,11 @@ import type { State } from '../../engine/core/state.ts';
 const IDS = ['hybrid', 'scifi-ai', 'urban-psych', 'xianxia2026'];
 const themeOf = (id: string): any => JSON.parse(readFileSync(resolve('themes', id, 'theme.json'), 'utf8'));
 /**
- * 任何一套主题的五个叶词：引擎文本里出现其中之一，就是引擎替某个主题作了主张。
+ * 四套主题五个叶词的**并集**（R1 源码禁字表用的就是它）。
  *
  * `noUncheckedIndexedAccess` 下 `t[k]` 是 `string | undefined` ⇒ 显式收窄（叶子的齐备性
  * 由门 ⑤ 与 `tests/gates/theme-leaf-upgrade.test.ts` 保证，不在这里再兜一次值）。
+ * ⚠️ 运行时守卫**不拿并集当判据**，用下面的 `foreignWords`。
  */
 const LEAF_WORDS = [...new Set(IDS.flatMap((id) => {
   const t = themeOf(id).terms as Record<string, string | undefined>;
@@ -31,6 +32,28 @@ const LEAF_WORDS = [...new Set(IDS.flatMap((id) => {
     .map((k) => t[k])
     .filter((v): v is string => typeof v === 'string' && v.length > 0);
 }))];
+
+/** 本主题自己的五个叶词。 */
+function ownWords(id: string): Set<string> {
+  const t = themeOf(id).terms as Record<string, string | undefined>;
+  return new Set(['resource', 'gate', 'path', 'peak', 'hp']
+    .map((k) => t[k])
+    .filter((v): v is string => typeof v === 'string' && v.length > 0));
+}
+
+/**
+ * 某套主题局里的「别套词」= 并集 − 本套五叶（B79 §5 R3 的取词口径）。
+ *
+ * 运行时**必须按当前主题取词**：引擎会把主题数据回显进日志——实测仙侠局里出现
+ * `封口弃牌：座位 0（弃 灵枢符）`，「灵枢」是**它自己那张牌的名字**，完全合法。
+ * 拿全局并集判就会把这种本套合规文本判成泄漏（评审那一轮纠正过的正是这个形状）。
+ * 「引擎不许持有本主题的词」由 R1（源码零字面量）+ 每段的占位符存在断言负责，
+ * 「别套的词不许串进来」由这里负责——两条判据合起来才闭合。
+ */
+function foreignWords(id: string): string[] {
+  const own = ownWords(id);
+  return LEAF_WORDS.filter((w) => !own.has(w));
+}
 
 /** 引擎文本 = 返回值 note + 新写进 log 的行（note 也会被 gate.ts 一类插进 message，见 B79 §4.3）。 */
 function textsOf(r: { ok?: boolean; state: State; note?: unknown }, beforeLogLen: number): string[] {
@@ -59,9 +82,9 @@ test('B79：资源算子的日志与拒因不含任何主题叶词（接线后�
       state = r.state;
       for (const text of texts) {
         checked += 1;
-        for (const w of LEAF_WORDS) {
+        for (const w of foreignWords(id)) {
           assert.equal(text.includes(w), false,
-            `${id}：算子文本「${text}」含主题词「${w}」⇒ 引擎不该持有主题文案（改用 {resource} 等占位符）`);
+            `${id}：算子文本「${text}」含**别套**主题词「${w}」（本套词由 R1 与占位符断言负责）`);
         }
       }
     }
@@ -103,4 +126,80 @@ test('B79 负样本的负样本：gate_fallback_pay 的开发者可见串也走�
   assert.ok(line.includes('本关改为付费'), '⇒ 共享子串被改动（§5.3 红线）');
   assert.equal(/号(关隘|阵门|安全闸|封锁线)/.test(line), false, `「N 号关隘」仍写死主题词：${line}`);
   assert.ok(/\{gate\}/.test(line), `名词位没接占位符：${line}`);
+});
+
+// ---------- T10：关隘（gate.ts 12 行）----------
+//
+// 三条通道 + 两条「不是关隘格」的拒绝 + 「已转付费却资源不足」那条 ⇒ 12 行全覆盖。
+// 资源与 flags 直接摆在测试构造的状态上（本守卫判的是**文案**，不是机制；机制归
+// tests/engine/gate.test.ts 与门⑨）。
+import { payGate, drawTrial, resolveGate, resolveCompareGate } from '../../engine/core/gate.ts';
+
+/** 把座 0 放到第一座关隘上（可选：预置「已转付费」标记与资源额）。 */
+function atGate(state: State, resource: number, payOnly = false): State {
+  const tile = state.board.tiles.find((t) => t.kind === 'gate');
+  assert.ok(tile !== undefined, '前提：棋盘上要有关隘格');
+  return {
+    ...state,
+    players: state.players.map((p) => p.seat === 0
+      ? { ...p, position: tile.index, resource, flags: payOnly ? { ...p.flags, [`gate_pay_${tile.index}`]: true } : p.flags }
+      : p),
+  };
+}
+
+function gateTexts(id: string, seed: number): string[] {
+  const out: string[] = [];
+  const base = installTheme(mk(4, seed), themeOf(id));
+  const nonGate = base.board.tiles.find((t) => t.kind !== 'gate');
+  assert.ok(nonGate !== undefined, '前提：棋盘上也要有非关隘格');
+  const runs: Array<() => { state: State; note?: unknown }> = [
+    () => payGate(atGate(base, 0), 0, base.board.tiles.find((t) => t.kind === 'gate')!),   // 资源不足
+    () => payGate(atGate(base, 99), 0, base.board.tiles.find((t) => t.kind === 'gate')!),   // 付得起
+    () => payGate(base, 0, nonGate),                                                        // 此格不是关隘
+    () => drawTrial(base, 0, nonGate),                                                      // 同上，试炼侧
+    () => resolveGate(atGate(base, 0), 0, 'trial'),                                         // 试炼：过与不过都在这条里
+    () => resolveGate(atGate(base, 0, true), 0, 'pay'),                                     // 已转付费却不足
+    () => resolveGate(atGate(base, 99, true), 0, 'pay'),                                    // 已转付费且付得起
+    () => resolveCompareGate(atGate(base, 99), 0, 'no-such-card', 1),                        // 出牌比对侧的守门文案
+  ];
+  for (const run of runs) {
+    const before = base.log.length;
+    const r = run();
+    out.push(...textsOf({ state: r.state, note: r.note }, before));
+  }
+  return out;
+}
+
+test('B79：关隘三通道与拒绝分支的 note/日志不含任何主题叶词', () => {
+  const counts = new Map<string, number>();
+  let checked = 0;
+  for (const seed of [20260, 20261, 20262]) {
+    for (const id of IDS) {
+      const texts = gateTexts(id, seed);
+      counts.set(`${id}/${String(seed)}`, texts.length);
+      for (const text of texts) {
+        checked += 1;
+        for (const w of foreignWords(id)) {
+          assert.equal(text.includes(w), false, `${id}/seed=${String(seed)}：「${text}」含别套词「${w}」`);
+        }
+      }
+    }
+  }
+  // 不变量一：**同 seed 下四套的文本条数必须相同**（RNG 与主题无关 ⇒ 条数漂了就说明
+  //   某套走了一条别套没走的路径，那才是真正的行为差异信号）。实测每套每 seed = 15 条。
+  for (const seed of [20260, 20261, 20262]) {
+    const per = IDS.map((id) => counts.get(`${id}/${String(seed)}`));
+    assert.equal(new Set(per).size, 1, `seed=${String(seed)} 四套文本条数不同：${per.join(',')} ⇒ 分支覆盖不再同构`);
+  }
+  // 不变量二：总条数钉死（8 次调用中 resolveGate('trial') 会连带写出试炼/抽牌/封口等行 ⇒ 15/套/seed）。
+  assert.equal(checked, IDS.length * 3 * 15,
+    `取到 ${String(checked)} 条，预期 ${String(IDS.length * 3 * 15)} 条 ⇒ 判据形状变了，先查清楚再放行`);
+});
+
+test('B79 前提：关隘文案里确实有「退 1 格并被封口」那条日志（failGate 的 note 会进 message，§4.3）', () => {
+  const got = gateTexts('xianxia2026', 20260);
+  const withToken = got.filter((x) => /\{gate\}/.test(x));
+  assert.ok(withToken.length >= 4, `带 {gate} 的只有 ${String(withToken.length)} 条 ⇒ 接线未生效：${JSON.stringify(got)}`);
+  assert.ok(got.some((x) => x.includes('退 1 格并被封口')), '⇒ 没跑到 failGate，判据覆盖面不足');
+  assert.ok(got.some((x) => x.includes('本关改为付费')), '⇒ 没跑试炼失败分支，210 行那条没被覆盖');
 });

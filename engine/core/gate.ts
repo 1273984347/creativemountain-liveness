@@ -113,17 +113,17 @@ export function markGatePassed(state: State, actor: number, tile: Tile): State {
  */
 export function payGate(state: State, actor: number, tile: Tile): GateResult {
   const fee = tile.gate?.fee;
-  if (fee === undefined) { return fail(state, false, '此格不是关隘'); }
+  if (fee === undefined) { return fail(state, false, `此格不是{gate}`); }
   const p = state.players[actor];
   if (p === undefined) { return fail(state, false, '玩家不存在'); }
   if (p.resource < fee) {
-    return fail(state, false, `灵枢不足：关隘标价 ${fee}，现有 ${p.resource}`);
+    return fail(state, false, `{resource}不足：{gate}标价 ${fee}，现有 ${p.resource}`);
   }
   const players = state.players.map((x) =>
     x.seat === actor ? { ...x, resource: x.resource - fee } : x,
   );
   const next: State = markGatePassed({ ...state, players }, actor, tile);
-  return { ok: true, state: next, passed: true, note: `支付 ${fee} 灵枢通过关隘` };
+  return { ok: true, state: next, passed: true, note: `支付 ${fee} {resource}通过{gate}` };
 }
 
 /**
@@ -133,7 +133,7 @@ export function payGate(state: State, actor: number, tile: Tile): GateResult {
  */
 export function drawTrial(state: State, actor: number, tile: Tile): GateResult {
   const trialIds = tile.gate?.trialIds;
-  if (trialIds === undefined) { return fail(state, false, '此格不是关隘'); }
+  if (trialIds === undefined) { return fail(state, false, `此格不是{gate}`); }
   const pool = state.decks.trial.filter((t) => trialIds.includes(t.id));
   if (pool.length === 0) { return fail(state, false, '无可用试炼牌'); }
   const idx = Math.floor(state.rng.next() * pool.length);
@@ -207,8 +207,8 @@ function trialChannel(state: State, actor: number, tile: Tile): GateResult {
     log: [...next.log, {
       round: next.round, turnIndex: next.turnIndex, actor, kind: 'trial',
       message: fallback
-        ? `关隘试炼：${trial.text}——未通过，本关改为付费`
-        : `关隘试炼：${trial.text}`,
+        ? `{gate}试炼：${trial.text}——未通过，本关改为付费`
+        : `{gate}试炼：${trial.text}`,
       diceRoll: face,
       // ⚠️ B23：**结构化字段** ⇒ 平衡模拟可直接统计每张试炼牌的通过率（不必解析文案）。
       trialId: trial.id,
@@ -233,7 +233,7 @@ export function resolveGate(state: State, actor: number, channel: 'pay' | 'trial
   const p = state.players[actor];
   if (p === undefined) { return fail(state, false, '玩家不存在'); }
   const tile = pendingGate(state, actor);
-  if (tile === null) { return fail(state, false, '当前不在未通过的关隘格上'); }
+  if (tile === null) { return fail(state, false, `当前不在未通过的{gate}格上`); }
   // ⚠️ B24：**本关已改为付费**（试炼失败后）⇒ 引擎层**拒绝**再走试炼通道。
   //   粗筛（legal.ts）早已只发 `pay`，但引擎层不拒 ⇒ 脚本/测试可绕过粗筛重复试炼。
   if (channel === 'trial' && p.flags[`gate_pay_${tile.index}`] === true) {
@@ -245,11 +245,11 @@ export function resolveGate(state: State, actor: number, channel: 'pay' | 'trial
     const fallback = p.flags[`gate_pay_${tile.index}`] === true;
     if (mine < fee) {
       if (!fallback) {
-        return fail(state, false, `灵枢不足：关隘标价 ${fee}，现有 ${mine}`);
+        return fail(state, false, `{resource}不足：{gate}标价 ${fee}，现有 ${mine}`);
       }
       // ⚠️ B19-b：本关**已改为付费**却仍付不起 ⇒ 判「未通过并放行」
       //   （否则玩家会永远卡在这座关隘上 —— 无出路即死循环）。
-      return failGate(state, actor, tile, '本关已改为付费，但灵枢不足 ⇒ 判未通过');
+      return failGate(state, actor, tile, `本关已改为付费，但{resource}不足 ⇒ 判未通过`);
     }
     return payGate(state, actor, tile);
   }
@@ -278,7 +278,7 @@ export function resolveCompareGate(
   const p = state.players[actor];
   if (p === undefined) { return fail(state, false, '玩家不存在'); }
   const tile = pendingGate(state, actor);
-  if (tile === null) { return fail(state, false, '当前不在未通过的关隘格上'); }
+  if (tile === null) { return fail(state, false, `当前不在未通过的{gate}格上`); }
   if (target === actor) { return fail(state, false, '不能与自己比对'); }
   // ⚠️ B24：**本关已改为付费**（试炼失败后）⇒ 只剩付费通道 ⇒ 引擎层**拒绝**出牌比对。
   if (p.flags[`gate_pay_${tile.index}`] === true) {
@@ -347,9 +347,11 @@ function failGate(state: State, actor: number, tile: Tile, note: string): GateRe
     ...next,
     log: [...next.log, {
       round: next.round, turnIndex: next.turnIndex, actor, kind: 'gate',
-      message: `关隘：${note}——退 1 格并被封口`,
+      message: `{gate}：${note}——退 1 格并被封口`,
     }],
   };
+  // ⚠️ 上面那行 log 把**同一个 note 插进了 `message`**（`passGate` 同形）⇒ note 类文案照样
+  //   走日志出口，所以 `logLineText` 必须对**全部 kind** 展开，而不是只认 `ask`（B79 §4.3）。
   return { ok: true, state: next, passed: false, note };
 }
 
@@ -363,7 +365,7 @@ function passGate(state: State, actor: number, tile: Tile, note: string): GateRe
     ...marked,
     log: [...state.log, {
       round: state.round, turnIndex: state.turnIndex, actor, kind: 'gate',
-      message: `关隘：${note}`,
+      message: `{gate}：${note}`,
     }],
   };
   return { ok: true, state: next, passed: true, note };
