@@ -63,7 +63,7 @@ export const OPS: OpHandlers = {
     const cur = ctx.state.players[t.seat]?.resource ?? 0;
     const next = Math.min(RESOURCE_CAP, cur + p.amount);
     const state = withPlayer(ctx.state, t.seat, { resource: next });
-    return ok(withLog(state, ctx, 'gain_resource', `灵枢 +${next - cur}`));
+    return ok(withLog(state, ctx, 'gain_resource', `{resource} +${next - cur}`));
   },
   spend_resource: (ctx, p) => {
     if (p.amount <= 0) { return fail(ctx.state, 'amount 必须为正'); }
@@ -71,10 +71,10 @@ export const OPS: OpHandlers = {
     if (!t.ok) { return fail(ctx.state, t.note); }
     const cur = ctx.state.players[t.seat]?.resource ?? 0;
     if (cur < p.amount) {
-      return fail(ctx.state, `灵枢不足：需 ${p.amount}，现有 ${cur}`);
+      return fail(ctx.state, `{resource}不足：需 ${p.amount}，现有 ${cur}`);
     }
     const state = withPlayer(ctx.state, t.seat, { resource: cur - p.amount });
-    return ok(withLog(state, ctx, 'spend_resource', `灵枢 -${p.amount}`));
+    return ok(withLog(state, ctx, 'spend_resource', `{resource} -${p.amount}`));
   },
   transfer_resource: (ctx, p) => {
     if (p.amount <= 0) { return fail(ctx.state, 'amount 必须为正'); }
@@ -85,19 +85,19 @@ export const OPS: OpHandlers = {
     if (!dst.ok) { return fail(ctx.state, dst.note); }
     const from = ctx.state.players[src.seat]?.resource ?? 0;
     if (from < p.amount) {
-      return fail(ctx.state, `灵枢不足：需 ${p.amount}，现有 ${from}`);
+      return fail(ctx.state, `{resource}不足：需 ${p.amount}，现有 ${from}`);
     }
     const to = ctx.state.players[dst.seat]?.resource ?? 0;
     let state = withPlayer(ctx.state, src.seat, { resource: from - p.amount });
     state = withPlayer(state, dst.seat, { resource: Math.min(RESOURCE_CAP, to + p.amount) });
-    return ok(withLog(state, ctx, 'transfer_resource', `转移灵枢 ${p.amount}`));
+    return ok(withLog(state, ctx, 'transfer_resource', `转移{resource} ${p.amount}`));
   },
   set_resource: (ctx, p) => {
     const t = aliveTarget(ctx, p.target);
     if (!t.ok) { return fail(ctx.state, t.note); }
     const next = Math.max(0, Math.min(RESOURCE_CAP, p.amount));
     const state = withPlayer(ctx.state, t.seat, { resource: next });
-    return ok(withLog(state, ctx, 'set_resource', `灵枢设为 ${next}`));
+    return ok(withLog(state, ctx, 'set_resource', `{resource}设为 ${next}`));
   },
 
   // ================= 牌（9）=================
@@ -702,9 +702,9 @@ export const OPS: OpHandlers = {
     const idx = p.tileIndex ?? pl.position;
     const tile = ctx.state.board.tiles.find((x) => x.index === idx);
     if (tile === undefined) { return fail(ctx.state, `无此格：${idx}`); }
-    if (tile.kind !== 'gate') { return fail(ctx.state, '当前不是关隘格'); }
+    if (tile.kind !== 'gate') { return fail(ctx.state, `当前不是{gate}格`); }
     const state = withPlayer(ctx.state, ctx.actor, { flags: { ...pl.flags, [`gate_pay_${idx}`]: true } });
-    return ok(withLog(state, ctx, 'gate_fallback_pay', `本关改为付费（${String(idx)} 号关隘）`));
+    return ok(withLog(state, ctx, 'gate_fallback_pay', `本关改为付费（${String(idx)} 号{gate}）`));
   },
 
   // ================= 判定与装备（3）=================
