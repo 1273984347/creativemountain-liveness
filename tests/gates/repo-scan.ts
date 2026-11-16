@@ -22,9 +22,16 @@ import { join, relative, resolve } from 'node:path';
 /** 自检入口的标识（**大小写不敏感**匹配；精确令牌，非子串）。 */
 export const TOKENS: readonly string[] = ['CM_SELFTEST', '--selftest'];
 
-/** 跳过目录（依赖 / 产物 / 版本库 / 编辑器配置）。 */
+/**
+ * 跳过目录（依赖 / 产物 / 版本库 / 编辑器配置）。
+ *
+ * `.qoder/`（B79 裁定）= Qoder IDE 的本地产物目录（知识中心缓存 185 个 md，未跟踪、不进发布包），
+ * 与 `.vscode`/`.idea` 同类。⚠️ **这不是新增盲区**：下面那条「扫描盲区守卫」要求
+ * 跳过目录内的**已入库**文件必须登记 `SCAN_EXCEPTIONS` ⇒ 一旦有人把 `.qoder/` 里的文件
+ * `git add`，那条测试立刻红并逼出登记。跳过只对**未入库**的本机缓存生效，而它本来就到不了玩家手里。
+ */
 export const SKIP_DIRS: ReadonlySet<string> = new Set([
-  'node_modules', '.git', 'dist', 'print', 'coverage', '.tmp', '.vscode', '.idea',
+  'node_modules', '.git', 'dist', 'print', 'coverage', '.tmp', '.vscode', '.idea', '.qoder',
 ]);
 
 /** 跳过的大文件阈值（>2MB 多半是二进制 / 字体）。 */
