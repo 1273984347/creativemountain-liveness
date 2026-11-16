@@ -3,6 +3,7 @@
 import type { State } from '../../engine/core/state.ts';
 import type { ThemePack } from '../../engine/types/theme.ts';
 import { el } from './dom.ts';
+import { termExpander } from './terms.ts';
 
 /** 渲染当前玩家的手牌（可点击出牌）。 */
 export function renderHand(
@@ -32,7 +33,8 @@ export function renderHand(
 }
 
 /**
- * 渲染玩家列表（体力/资源/身份/阵营/装备/状态；术语取自主题 glossary）。
+ * 渲染玩家列表（体力/资源/身份/阵营/装备/状态）。术语取词 = `theme.terms`（B79 §3.4：
+ * glossary 已退回印刷层对照表，界面不再从它取词）。
  *
  * `onPick` 存在时玩家行可点击（用于**出牌选目标**）；`picking` 为真时才高亮可点行。
  */
@@ -43,6 +45,8 @@ export function renderPlayers(
   picking = false,
 ): HTMLElement {
   const list = el('div', { class: 'players' });
+  // 面板是四个显示出口之一（B79 §4.3）：引擎给占位符，这里按本主题词表展开。
+  const t = termExpander(theme.terms);
   for (const p of state.players) {
     const identity = theme.identities.find((i) => i.id === p.identityId);
     const faction = theme.factions.find((f) => f.id === p.factionId);
@@ -52,7 +56,7 @@ export function renderPlayers(
     row.append(el('span', { class: 'p-name', text: identity?.name ?? p.identityId }));
     // B11：活人席计分制 —— 玩家行显示已获席位数
     const seats = state.liveSeats[p.seat] ?? 0;
-    row.append(el('span', { class: 'p-meta', text: (faction?.name ?? p.factionId) + ' · ' + theme.glossary.HP + ' ' + p.hp + '/' + p.hpMax + ' · ' + theme.meta.resourceName + ' ' + p.resource + ' · 位 ' + p.position + (seats > 0 ? ' · 活人席 ' + String(seats) : '') }));
+    row.append(el('span', { class: 'p-meta', text: (faction?.name ?? p.factionId) + ' · ' + t('{hp}') + ' ' + p.hp + '/' + p.hpMax + ' · ' + t('{resource}') + ' ' + p.resource + ' · 位 ' + p.position + (seats > 0 ? ' · 活人席 ' + String(seats) : '') }));
     if (p.hasMark) { row.append(el('span', { class: 'badge mark', text: '印记' })); }
     // B13：处于对峙的双方加标记
     if (state.duel !== null && (state.duel.seatA === p.seat || state.duel.seatB === p.seat)) {

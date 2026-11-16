@@ -14,6 +14,7 @@ import { uiAllows, uiBlockNotice, uiHasLegalTarget, uiCandidates, pendingGateHer
 import { resolveGate, resolveCompareGate } from '../engine/core/gate.ts';
 import { resolveBarrier } from '../engine/core/barrier.ts';
 import { THEMES, themeById } from './theme.ts';
+import { termExpander } from './ui/terms.ts';
 import { el, button, section } from './ui/dom.ts';
 import { renderBoard } from './ui/board.ts';
 import { renderHand, renderPlayers } from './ui/hand.ts';
@@ -374,7 +375,7 @@ function resolveGateChannel(channel: 'pay' | 'trial'): void {
   }
   const r = resolveGate(ui.state, seat, channel);
   if (!r.ok) {
-    ui.notice = '关隘结算失败：' + r.note;
+    ui.notice = '{gate}结算失败：' + r.note;
     render();
     return;
   }
@@ -471,6 +472,8 @@ function useAbility(target?: number): void {
 /** 行动区（行棋 / 问天 / 行事）。 */
 function renderActions(): HTMLElement {
   const theme = themeById(ui.themeId).theme;
+  // 玩家可见文本的主题词展开器（B79 §4.3）——本函数是 notice / 面板 / 按钮的主要产地。
+  const t = termExpander(theme.terms);
   const seat = ui.seat;
   const player = ui.state.players[seat];
   const body: (Node | string)[] = [];
@@ -487,9 +490,9 @@ function renderActions(): HTMLElement {
   if (gate !== null) {
     const mine = player.resource;
     const canPay = mine >= gate.fee;
-    body.push(el('div', { class: 'warn', text: '关隘：付费通过（' + String(gate.fee) + ' ' + theme.glossary.resource + '）或抽一张试炼牌通过。' }));
+    body.push(el('div', { class: 'warn', text: t('{gate}：付费通过（' + String(gate.fee) + ' {resource}）或抽一张试炼牌通过。') }));
     if (!canPay) {
-      body.push(el('div', { class: 'muted', text: '灵枢不足（需 ' + String(gate.fee) + '，现有 ' + String(mine) + '）——只能走试炼通道。' }));
+      body.push(el('div', { class: 'muted', text: t('{resource}不足（需 ' + String(gate.fee) + '，现有 ' + String(mine) + '）——只能走试炼通道。') }));
     }
     body.push(button('付费通过（' + String(gate.fee) + '）', () => { resolveGateChannel('pay'); }, !canPay));
     body.push(button('试炼闯关', () => { resolveGateChannel('trial'); }));
@@ -519,12 +522,12 @@ function renderActions(): HTMLElement {
         }));
       }
     }
-    return section('关隘', ...body);
+    return section(t('{gate}'), ...body);
   }
   // ⚠️ B18-b：停在**可放印的裂隙格** ⇒ 只显示裂隙面板（放印 / 不放）。
   const barrier = pendingBarrierHere(ui.state, seat);
   if (barrier !== null) {
-    body.push(el('div', { class: 'warn', text: '裂隙：可花 ' + String(barrier.cost) + ' ' + theme.glossary.resource + ' 在这一格放置「封路印」，让后来者必须判定。' }));
+    body.push(el('div', { class: 'warn', text: t('裂隙：可花 ' + String(barrier.cost) + ' {resource} 在这一格放置「封路印」，让后来者必须判定。') }));
     body.push(button('放置封路印（-' + String(barrier.cost) + '）', () => { resolveBarrierChannel('place'); }));
     body.push(button('不放置，直接通过', () => { resolveBarrierChannel('skip'); }));
     return section('裂隙', ...body);
@@ -597,7 +600,7 @@ function renderActions(): HTMLElement {
     body.push(el('div', { class: 'muted', text: '被动不可用：' + ability.reason }));
   }
   if (ui.notice !== null) {
-    body.push(el('div', { class: 'warn', text: ui.notice }));
+    body.push(el('div', { class: 'warn', text: t(ui.notice ?? '') }));
   }
   // ⚠️ B75：装备入口 —— 按钮**只在枚举真的发出装备候选时**出现（不自己判窗口，判据仍在 legal-gate），
   //   点击后进入「装备模式」，由手牌点击承担选牌；被闸挡下时给出拒因（门禁:拒绝不沉默）。
@@ -614,9 +617,9 @@ function renderActions(): HTMLElement {
   for (const a of recupCands) {
     if (a.type !== 'RECUPERATE') { continue; }
     if (a.target === undefined) {
-      body.push(button('自恢（2 灵枢，占本手番）', () => { recuperate(); }));
+      body.push(button(t('自恢（2 {resource}，占本手番）'), () => { recuperate(); }));
     } else {
-      body.push(button('救援座位 ' + String(a.target) + '（1 灵枢，占本手番）', () => { recuperate(a.target); }));
+      body.push(button(t('救援座位 ' + String(a.target) + '（1 {resource}，占本手番）'), () => { recuperate(a.target); }));
     }
   }
   // ⚠️ B77：被停手番 ⇒ 行动面只剩这一条候选，按钮也只在枚举真的发出 PASS 时出现。
@@ -687,6 +690,7 @@ function render(): void {
   const root = document.getElementById('app');
   if (root === null) { return; }
   const theme = themeById(ui.themeId).theme;
+  const t = termExpander(theme.terms);
   const s = ui.state;
 
   const status = el('div', { class: 'status' });
@@ -718,7 +722,7 @@ function render(): void {
 
   const panels: (Node | string)[] = [
     renderToolbar(),
-    section('山道', renderBoard(s)),
+    section(t('{path}'), renderBoard(s)),
     renderPlayers(s, theme, (picked) => { onPickTarget(picked); }, ui.pendingTargetCardId !== null || ui.pendingAbility),
   ];
   // 山议面板
@@ -755,7 +759,7 @@ function render(): void {
       onSign: (target) => { const r = certifySign(s, ui.seat, target); ui.state = r.ok ? r.state : s; render(); },
       onChallenge: (target, questions) => {
         const ch = certifyChallenge(s, ui.seat, target);
-        if (!ch.ok) { alert(ch.note ?? '无法发起质疑'); return; }
+        if (!ch.ok) { alert(t(ch.note ?? '无法发起质疑')); return; }
         const withLog = { ...ch.state, log: [...ch.state.log, { round: ch.state.round, turnIndex: ch.state.turnIndex, actor: ui.seat, kind: 'certify', message: '对座' + target + ' 发起质疑：' + questions.join(' / ') }] };
         ui.state = withLog;
         render();

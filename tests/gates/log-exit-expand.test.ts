@@ -55,3 +55,50 @@ test('B79：ask 仍按结构化 diceRoll 追加指令内容（B78 的行为不�
 test('B79：terms 缺省时保留占位符原文——这条只证降级形状，常驻守卫是 R3（T14）', () => {
   assert.match(logLineText(entry('gate', '{gate}标价 3')), /\{gate\}/);
 });
+
+// ---------- B79 §4.3 其余出口 + §3.4 取词换源（T8）----------
+//
+// alert 的「参数里直含占位符」由 T13 的 `scanUnexpandedAlerts` 常驻抓（同一个正则住在
+// tools/theme-word-scan.mjs，正样本负样本共用——B51 教训）。本文件不另写一份近似实现，
+// 否则测的是这份近似实现自己。
+import { termExpander } from '../../web/ui/terms.ts';
+
+test('B79：termExpander 绑定主题后，notice 与按钮文案都展开', () => {
+  const t = termExpander(termsOf('urban-psych'));
+  assert.equal(t('{resource}不足（自恢需 2）'), '异能点不足（自恢需 2）');
+  assert.equal(t('自恢（2 {resource}，占本手番）'), '自恢（2 异能点，占本手番）');
+  assert.equal(t('无占位符文本'), '无占位符文本');
+});
+
+test('B79：notice 的唯一渲染点必须过展开器（它是引擎 note 的主要露出口）', () => {
+  const lines = readFileSync('web/main.ts', 'utf8').split('\n')
+    .filter((l) => /class:\s*'warn'/.test(l) && /ui\.notice/.test(l));
+  assert.equal(lines.length, 1, `notice 渲染点应当恰好一处，实际 ${String(lines.length)} 处：\n${lines.join('\n')}`);
+  assert.ok(/\bt\(/.test(lines[0] ?? ''), `notice 未经展开直投：${lines[0] ?? ''}`);
+});
+
+test('B79：引擎 note 的四条「前缀 + note」拼接也要过展开器（前缀本身含主题词）', () => {
+  const src = readFileSync('web/main.ts', 'utf8');
+  const hits = src.split('\n').filter((l) => /ui\.notice = .*r\.note/.test(l));
+  assert.ok(hits.length >= 4, `前提：「结算失败：+ note」这类拼接至少 4 处，实际 ${String(hits.length)}`);
+  for (const l of hits) {
+    assert.ok(/\.notice = t\(/.test(l) || /\{gate\}/.test(l) || !/'[^']*(灵枢|关隘|山道|峰顶|灵力)/.test(l),
+      `note 拼接处既有裸主题词又没过展开器：${l.trim()}`);
+  }
+});
+
+// §3.4 的硬依赖边**已经走完**（门⑤ 五键判等在 T2 落地）⇒ 这条判据现在可以常驻：
+// 界面若再回读 `glossary`，就是「同一个 `{resource}` 两个来源」复活，而两表一旦漂，
+// 界面上的词与规则书上的词会安静地分成两套。
+test('B79 §3.4：web 侧不再从 glossary 取词（glossary 退回印刷层对照表）', () => {
+  const files = ['web/main.ts', 'web/ui/hand.ts', 'web/ui/cert.ts', 'web/ui/council.ts', 'web/tutorial.ts'];
+  const offenders: string[] = [];
+  for (const f of files) {
+    readFileSync(f, 'utf8').split('\n').forEach((l, i) => {
+      const t = l.trim();
+      if (t.startsWith('//') || t.startsWith('*') || t.startsWith('/*')) { return; }
+      if (/glossary\s*[.[]/.test(t)) { offenders.push(`${f}:${String(i + 1)} ${t.slice(0, 70)}`); }
+    });
+  }
+  assert.deepEqual(offenders, [], '⇒ 改用 theme.terms（句子层唯一取词，门⑤ 逐叶校验）');
+});

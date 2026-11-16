@@ -11,6 +11,7 @@ import type { State } from '../../engine/core/state.ts';
 import type { ThemePack } from '../../engine/types/theme.ts';
 import { el, button, section } from './dom.ts';
 import { uiAllows, uiBlockNotice } from '../legal-gate.ts';
+import { expandThemeWords } from '../../engine/core/theme-text.ts';
 
 /**
  * 山议面板的**可投目标集合**（座位号升序）。
@@ -78,7 +79,10 @@ export function renderCouncil(
   }
   body.push(tally);
   if (alive.length === 3) {
-    body.push(el('div', { class: 'warn', text: '3 人局：山议不淘汰人，得票最高者扣 2 ' + theme.glossary.resource + '（并列各扣 1）。' }));
+    // 出口展开（B79 §4.3）。⚠️ 这里不调 `t()` 而是显式调 expandThemeWords：本函数里
+    //   `t` 已经被投票遍历占用（`for (const t of Object.values(c.votes))`），
+    //   为省一次调用去改无关的循环变量名不值得。
+    body.push(el('div', { class: 'warn', text: expandThemeWords('3 人局：山议不淘汰人，得票最高者扣 2 {resource}（并列各扣 1）。', theme.terms) }));
   }
   // ⚠️ B75：仲裁者否决 —— 可点性只问 `uiAllows`（本文件不自算判据，口径在 legal-gate/引擎两处）。
   //   非持权者**整行不出现**（否决不是他的事，不必告诉他「你没有特权」）；

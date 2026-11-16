@@ -472,11 +472,15 @@ export interface ThemePack {
   /**
    * 派生文本的词表正身（B77 规格 §6.2；十五叶齐备由门 ⑤ 校验）。
    *
-   * ⚠️ 与 `glossary` 的分工：glossary 是**界面与规则书的名词对照**（含 hand/peak/seal 等），
-   *   `terms` 是**渲染器的取词表**——卡面（`renderEffect`）与试炼题面（`renderTrialText`）
-   *   从这里取词，所以它必须逐主题齐备；不进 IR（IR 只搬运落盘文本）。
+   * ⚠️ 与 `glossary` 的分工（B79 §3.5 起收紧）：`terms` 是**句子层与卡面的唯一取词**——
+   *   卡面（`renderEffect`）、试炼题面（`renderTrialText`）、对局界面的中文句子都从这里取；
+   *   `glossary` 退回**印刷层对照表**（IR / 规则书 / 牌面排版），重叠的五键由门 ⑤
+   *   `checkTermsGlossaryAgreement` 判等。`terms` 不进 IR（IR 只搬运落盘文本）。
+   * ⚠️ B79 把它从 `?:` 改成**必填**：渲染层现在无条件读它（`termExpander(theme.terms)`），
+   *   留一个「可以没有」的类型标记等于让每个调用点自己决定缺了怎么办——那就会长出第四套兜底词
+   *   （§3.2 刚拆掉的 `termsOf` 六个 `??` 就是这个形状）。齐备性本来已由门 ⑤ 保证，类型应当说实话。
    */
-  readonly terms?: ThemeTerms;
+  readonly terms: ThemeTerms;
   readonly counts: Counts;
   readonly factions: readonly Faction[];
   readonly identities: readonly Identity[];

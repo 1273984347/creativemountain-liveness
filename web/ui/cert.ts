@@ -18,6 +18,7 @@ import { el, button, section } from './dom.ts';
 import { appealThirdParties, certificationThreshold, hasUsedCertificationTurn, signatureCount } from '../../engine/core/certification.ts';
 import { actionKey } from '../../engine/core/action-key.ts';
 import { uiAllows, uiBlockNotice } from '../legal-gate.ts';
+import { termExpander } from './terms.ts';
 
 /** 认证面板所需的回调。 */
 export interface CertCallbacks {
@@ -114,6 +115,8 @@ export function renderCertification(
 ): HTMLElement {
   const c = state.certification;
   const body: (Node | string)[] = [];
+  // 面板按钮是显示出口（B79 §4.3），代价文案的词由本主题词表给出。
+  const t = termExpander(theme.terms);
   const pending = c.pending;
   if (pending.length === 0) {
     return section('活人认证', el('span', { class: 'muted', text: '（当前无待认证者）' }));
@@ -168,7 +171,7 @@ export function renderCertification(
   // ---- 待认证者的复议（同样过闸：灵枢不足时不再挂出必然失败的那颗按钮 ⇒ 行为变化 3）----
   {
     const row = rowOf([gated({ type: 'CERTIFY_APPEAL', actor: seat, target: seat },
-      '申请复议（-2 ' + theme.glossary.resource + '）', () => { cb.onAppeal(seat); })]);
+      t('申请复议（-2 {resource}）'), () => { cb.onAppeal(seat); })]);
     if (row !== null) { body.push(row); rows += 1; }
   }
   // ---- 认证人的判定（已质疑且尚未判定；逐按钮过闸）----
