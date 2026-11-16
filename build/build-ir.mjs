@@ -37,20 +37,25 @@ function src(players, field, value) {
 }
 
 /**
- * 主题术语（从主题 glossary 取，缺键回退通用词）。
+ * 印刷层与实体件的取词（B79 §3.2：唯一来源 = `theme.terms`；缺叶由门 ⑤ 拦，**不再 `??` 兜底**）。
  *
  * ⚠️ 实体件的文本必须随主题走 —— 否则四套主题的规则书里会出现别的主题的词
- *   （本轮实测：基准仙侠的「灵枢」「符箓」被硬编码进了所有实体件模板）。
+ *   （B78 实测：基准仙侠的「灵枢」「符箓」曾被硬编码进所有实体件模板）。
+ * ⚠️ 此前六个键各带一条兜底，而兜底词与**四套现值都不等**（`peak ?? '峰顶'` vs 基准「封顶台」、
+ *   `hp ?? '体力'` 四套没一个叫这个）⇒ 那不是安全默认值，是**第三套词**：门⑤ 一旦漏跑，
+ *   规则书就印出谁的主题都不是的句子，而且没有任何地方会红。
+ * ⚠️ `deck` 取 `meta.deckName`（牌堆名）而不是 `terms.deck`（单张牌名）——
+ *   四套实测两表全不等，同一条理由见 B79 §3.3 判等为什么豁免 deck。
  */
 export function termsOf(theme) {
-  const g = theme.glossary ?? {};
+  const t = theme.terms;
   return {
-    hp: g.HP ?? '体力',
-    deck: theme.meta.deckName ?? '牌',
-    resource: g.resource ?? '资源',
-    gate: g.gate ?? '关隘',
-    peak: g.peak ?? '峰顶',
-    path: g.path ?? '山道',
+    hp: t.hp,
+    deck: theme.meta.deckName,
+    resource: t.resource,
+    gate: t.gate,
+    peak: t.peak,
+    path: t.path,
   };
 }
 
@@ -104,8 +109,7 @@ export function buildIr(theme, scales) {
     })),
     // 表体来自唯一事实源，占位符按**本主题词表**展开。⚠️ 不在这里重抄文案，也不在这里自己
     //   split/join——替换语义住在 expandThemeWords（B79 §4.2；此前这里是第二份实现）。
-    //   取词用 `theme.terms`（闭合枚举、门⑤ 逐叶校验）而不是 `termsOf()` 的 glossary+`??` 兜底：
-    //   后者是第三套词，T6 处理。
+    //   取词用 `theme.terms`（闭合枚举、门⑤ 逐叶校验），与 termsOf() 同源（B79 §3.2）。
     instructionTable: INSTRUCTION_TABLE.map((r) => ({ face: r.face, text: expandThemeWords(r.text, theme.terms) })),
     factions: theme.factions.map((f) => ({
       id: f.id, name: f.name, hpBase: f.hpBase, resourceBase: f.resourceBase,
