@@ -435,7 +435,7 @@ export interface ThemeTerms {
   readonly deck: string;
   readonly resource: string;
   readonly gate: string;
-  /** 路径类地貌的词（B79 §3.1）：山道 / 轨道 / 街区 / 栈道。句子层 `{path}` 的取值。 */
+  /** 路径类地貌的词（B79 §3.1）：山道 / 轨道 / 街区 / 索桥。句子层 `{path}` 的取值。 */
   readonly path: string;
   /** 终点的词（B79 §3.1）：封顶台 / 奇点台 / 天台 / 道顶。句子层 `{peak}` 的取值。 */
   readonly peak: string;

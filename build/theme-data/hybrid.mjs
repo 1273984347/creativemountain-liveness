@@ -18,7 +18,10 @@ export default {
     resource: '灵能',
     peak: '道顶',
     seal: '认证印',
-    path: '山道',
+    // B79 §3.6（r1.3 定稿）：融合套 path = 「索桥」。
+    //   「栈道」被门⑧ 串戏判据证伪——它是四套复用的岔路标签（基准 theme.json:1358），
+    //   「云阶 / 石阶」也分别撞格名「碎云阶 / 石阶前」⇒ 术语词不得与复用型正文撞子串。
+    path: '索桥',
     plain: '荒野',
     boon: '灵地',
     hazard: '险径',
@@ -32,8 +35,8 @@ export default {
    *  用词与 `theme-render.mjs` 的 `TYPE_CN` 同源，卡面与题面共用一套类目名。 */
   terms: {
     hp: '气血', deck: '道箓', resource: '灵能', gate: '阵门',
-    // B79 §3.1：句子层 {path} / {peak}。path 与基准「山道」重词 ⇒ 门⑧ 判差异化（T3）
-    path: '栈道', peak: '道顶',
+    // B79 §3.1：句子层 {path} / {peak}。path 与基准「山道」重词 ⇒ 门⑧ ②′ + 两两互异一起判（r1.3 定稿「索桥」）
+    path: '索桥', peak: '道顶',
     types: { motion: '位移', attack: '攻击', defense: '防御', utility: '功能' },
     colors: { red: '红', black: '黑' },
     statuses: { poison: '中毒', slow: '减速', silence: '封口' },

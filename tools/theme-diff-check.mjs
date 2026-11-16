@@ -9,6 +9,8 @@
 // 必须差异化 4 项（缺一不可）：
 //   ① 主题标识：meta.name / meta.tagline / 四阵营 name 与基准**全部**不同
 //   ② glossary 四核心术语（HP / deck / hand / resource）与基准全部不同
+//   ②′ terms 句子层五叶（resource / gate / path / peak / hp）与基准全部不同（B79 §3.6），
+//      并且**跨套两两互异**——只比基准看不见「两套非基准主题撞词」
 //   ③ 认证题卡：≥8 张；与基准 prompt **逐字**不同；且 ≥8 张命中本主题 domainWords
 //   ④ 标志性卡牌：1–2 张，且其 effects 与基准卡池**任何一张**都不同
 //
@@ -42,6 +44,16 @@ export const MIN_DOMAIN_WORDS = 6;
 
 /** 专属名词表的最短词长（单字词如「的」不具备区分度）。 */
 export const MIN_DOMAIN_WORD_LEN = 2;
+
+/**
+ * 句子层五叶（B79 §3.6）：引擎与界面的中文句子里会印出来的那五个词。
+ *
+ * 与 `engine/core/theme-text.ts` 的 `TERM_TOKENS` 是同一集合（占位符名 = 叶名）。
+ * 两处各自声明而不共用：门 ⑧ 只管「跨套撞不撞词」，渲染层只管「怎么替换」，
+ * 让差异化去 import 渲染实现是把两件事焊死。**漂移由 T4 的测试钉住**
+ * （`SENTENCE_LEAVES ≡ TERM_TOKENS`），不是靠人记得两边一起改。
+ */
+export const SENTENCE_LEAVES = ['resource', 'gate', 'path', 'peak', 'hp'];
 
 /** 深度比较前的规范化：对象键排序 ⇒ 与 JSON 键书写顺序无关。 */
 export function canonical(value) {
@@ -162,6 +174,19 @@ export function checkThemeDiff(base, theme) {
       if (a !== undefined && b !== undefined && a[1] === b[1]) {
         errors.push(`${tag} ② glossary.${a[0]} 与 glossary.${b[0]} 同词（${a[1]}）——四个核心术语必须互异`);
       }
+    }
+  }
+
+  // ---------- 必须差异化 ②′ 句子层五叶（B79 §3.6）----------
+  // 这五叶自 B79 起是**引擎与界面句子里印出来的词**（`{resource}` `{gate}` `{path}` `{peak}` `{hp}`），
+  // 不再只是印刷层对照表 ⇒ 撞词不再只是「两张牌重名」，而是「非本主题的对局界面通篇说别人的话」。
+  // 缺叶同样判红：占位符无词可展开时，展开器按设计**抛错**（B79 §4.1），不能让局跑到那句话才炸。
+  for (const leaf of SENTENCE_LEAVES) {
+    const v = theme.terms?.[leaf];
+    if (typeof v !== 'string' || v.length === 0) {
+      errors.push(`${tag} ②′ terms.${leaf} 缺失 ⇒ 句子层占位符 {${leaf}} 无词可展开`);
+    } else if (v === base.terms?.[leaf]) {
+      errors.push(`${tag} ②′ terms.${leaf} 与基准相同：${v}`);
     }
   }
 
@@ -389,6 +414,13 @@ export function checkThemesMutuallyDistinct(themes, base = null) {
       for (const key of ['HP', 'deck', 'hand', 'resource']) {
         if (a.glossary?.[key] === b.glossary?.[key]) {
           errors.push(`${pair} glossary.${key} 相同：${a.glossary?.[key]}`);
+        }
+      }
+      // 句子层五叶两两互异（B79 §3.6）：②′ 只比基准 ⇒ 「两套非基准主题撞词」是它的盲区，
+      //   这条补的正是那个盲区（本轮 path 撞词就是基准 vs 融合套，改词后同类事故会换位置复发）。
+      for (const leaf of SENTENCE_LEAVES) {
+        if (a.terms?.[leaf] !== undefined && a.terms?.[leaf] === b.terms?.[leaf]) {
+          errors.push(`${pair} terms.${leaf} 相同：${a.terms?.[leaf]}`);
         }
       }
       const namesA = new Set((a.factions ?? []).map((f) => f.name));

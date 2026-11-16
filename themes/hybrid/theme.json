@@ -13,7 +13,7 @@
     "resource": "灵能",
     "peak": "道顶",
     "seal": "认证印",
-    "path": "山道",
+    "path": "索桥",
     "plain": "荒野",
     "boon": "灵地",
     "hazard": "险径",
@@ -27,7 +27,7 @@
     "deck": "道箓",
     "resource": "灵能",
     "gate": "阵门",
-    "path": "栈道",
+    "path": "索桥",
     "peak": "道顶",
     "types": {
       "motion": "位移",

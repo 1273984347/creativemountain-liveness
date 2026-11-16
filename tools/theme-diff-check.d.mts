@@ -10,6 +10,8 @@ export interface DiffCheckResult {
 export interface ThemeLike {
   readonly meta: { readonly id: string; readonly name: string; readonly tagline: string };
   readonly glossary: Readonly<Record<string, string>>;
+  /** 句子层取词表（B79 §3.6：②′ 与两两互异读这五叶）。 */
+  readonly terms?: Readonly<Record<string, string | undefined>>;
   readonly factions: readonly { readonly id: string; readonly name: string }[];
   readonly identities: readonly { readonly id: string; readonly name: string }[];
   readonly cards: readonly { readonly id: string; readonly name: string; readonly effects: readonly unknown[] }[];
@@ -52,3 +54,5 @@ export declare const MAX_FLAG_CARDS: number;
 export declare const MIN_CERT_CARDS: number;
 export declare const MIN_DOMAIN_WORDS: number;
 export declare const MIN_DOMAIN_WORD_LEN: number;
+/** 句子层五叶（B79 §3.6）：②′ 与两两互异的判定对象；与 `TERM_TOKENS` 同集合，漂移由 T4 测试钉。 */
+export declare const SENTENCE_LEAVES: readonly string[];
