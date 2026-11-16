@@ -108,6 +108,33 @@ function checkTrialTruth(theme, err) {
 /** 可用座位数上限（规模表 3–8 人）。 */
 const MAX_SEATS = Math.max(...SCALES.map((s) => s.players));
 
+/**
+ * `terms`（句子层唯一取词）与 `glossary`（印刷层对照表）的重叠键必须逐字等值（B79 §3.3）。
+ *
+ * ⚠️ 这是 **B78 §4 R6 承诺却从未实现的守卫（E136）**：`ir-validate:42` 的注释、B78 规格 §4、
+ *   B78 验收 12 三处互相引用「门⑤ 判等」，代码零行——B79 开工探针实测「只改 `glossary.gate`」
+ *   得 0 条错误（五个键全如此），见 `docs/批次/B79-…-执行记录.md` §6。
+ * ⚠️ `deck` **故意不比**：`terms.deck` 是单张牌名（符箓/道箓/指令/异能牌），`glossary.deck`
+ *   是牌库名（符箓库/…），四套实测两表**全部不等** ⇒ 比了就是把正确数据判红。
+ *   （同一条理由见 B79 §4.4：`deck` 也不进句子层占位符集合。）
+ */
+const TERMS_GLOSSARY_PAIRS = [
+  ['hp', 'HP'], ['resource', 'resource'], ['gate', 'gate'], ['path', 'path'], ['peak', 'peak'],
+];
+
+function checkTermsGlossaryAgreement(theme, err) {
+  for (const [leaf, key] of TERMS_GLOSSARY_PAIRS) {
+    const a = theme.terms?.[leaf];
+    const b = theme.glossary?.[key];
+    // 缺值由 TERM_LEAVES（terms 侧）与「glossary 缺少核心术语」（glossary 侧）各自报，
+    // 这里只判**两边都有值却不相等**的情形——否则缺键会一次报三条，掩盖真正的不一致。
+    if (typeof a !== 'string' || typeof b !== 'string') { continue; }
+    if (a !== b) {
+      err(`terms.${leaf}「${a}」与 glossary.${key}「${b}」不一致 ⇒ 句子层与印刷层在说两个词（B79 §3.3）`);
+    }
+  }
+}
+
 /** 校验结果。 */
 export function validateTheme(theme, schema) {
   const errors = [];
@@ -137,6 +164,8 @@ export function validateTheme(theme, schema) {
       err(`glossary 缺少核心术语：${k}`);
     }
   }
+  // 两张词表的重叠键必须逐字等值（B79 §3.3，销 B78 R6 空守卫 E136）
+  checkTermsGlossaryAgreement(theme, err);
 
   // ---------- counts ----------
   for (const k of ['handStart', 'deckTotal', 'trialTotal', 'certTotal']) {

@@ -39,7 +39,8 @@ export const TRACEABLE_KEYS = ['scales', 'instructionTable', 'factions', 'identi
 export const STRUCTURAL_KEYS_MAP = {
   version: '版本号是契约本身，由 :42 的 === 1 断言；无对应 theme.json 字段',
   meta: '主题元数据：id/name/tagline/resourceName/deckName 由门 ⑧ 判跨套差异，不与基准逐字对齐',
-  glossary: '术语表：与 terms 的三键一致由门 ⑤ 判（B78 R6），这里只核形状',
+  glossary: '术语表：印刷层对照表。与 terms 的**五键判等**住在门⑤ `checkTermsGlossaryAgreement`（B79 §3.3）——'
+    + '⚠️ B78 此处的注释曾声称该判定存在而实现零行（E136），B79 已补上并跑过篡改探针；这里只核形状',
   counts: '规模计数：由 doc-sync C1/C2 的数值链与门 ⑧ 的数量判据覆盖',
 };
 export const STRUCTURAL_KEYS = Object.keys(STRUCTURAL_KEYS_MAP);
