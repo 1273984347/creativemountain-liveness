@@ -14,6 +14,8 @@ import { loadScalesFromSource } from '../tools/scales-parse.mjs';
 // 指令表的唯一事实源（B78 §4 R3）：本文件**不再自己抄 20 条**——B78 前引擎与这里各一份，
 // 引擎那份写死「灵枢」、这里按 terms 替换 ⇒ 三套主题的对局日志与规则书各说各话。
 import { INSTRUCTION_TABLE } from '../engine/core/instruction-table.ts';
+// 句子层占位符的唯一替换实现（B79 §4.1/§4.2）——本文件此前自己 split/join，是第二份。
+import { expandThemeWords } from '../engine/core/theme-text.ts';
 
 const ROOT = process.cwd();
 
@@ -100,8 +102,11 @@ export function buildIr(theme, scales) {
       globalRoundLimit: src(r.players, 'globalRoundLimit', r.globalRoundLimit),
       seatWeight: src(r.players, 'seatWeight', r.seatWeight),
     })),
-    // 表体来自唯一事实源，{resource} 按本主题词表替换。⚠️ 不在这里重抄文案。
-    instructionTable: INSTRUCTION_TABLE.map((r) => ({ face: r.face, text: r.text.split('{resource}').join(terms.resource) })),
+    // 表体来自唯一事实源，占位符按**本主题词表**展开。⚠️ 不在这里重抄文案，也不在这里自己
+    //   split/join——替换语义住在 expandThemeWords（B79 §4.2；此前这里是第二份实现）。
+    //   取词用 `theme.terms`（闭合枚举、门⑤ 逐叶校验）而不是 `termsOf()` 的 glossary+`??` 兜底：
+    //   后者是第三套词，T6 处理。
+    instructionTable: INSTRUCTION_TABLE.map((r) => ({ face: r.face, text: expandThemeWords(r.text, theme.terms) })),
     factions: theme.factions.map((f) => ({
       id: f.id, name: f.name, hpBase: f.hpBase, resourceBase: f.resourceBase,
       abilityText: f.abilityText, wheelText: f.wheelText, deckTags: [...f.deckTags],

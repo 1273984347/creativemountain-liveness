@@ -14,6 +14,7 @@
 // 目录归属若将来觉得别扭，另批迁移；`tests/gates/instruction-source.test.ts` 的两条判据
 // 与目录无关，迁过去原样搬。
 
+import { expandThemeWords } from './theme-text.ts';
 import type { ThemeTerms } from '../types/theme.ts';
 
 /** 一面指令。 */
@@ -55,20 +56,19 @@ export const INSTRUCTION_TABLE: readonly InstructionRow[] = [
 ];
 
 /**
- * 某一面的文案（按主题词表替换 `{resource}`）。
+ * 某一面的文案（占位符按主题词表展开）。
  *
- * ⚠️ 越界 / 缺 `terms.resource` ⇒ **抛错**，不返回兜底串（理由见测试文件头）。
+ * ⚠️ 越界 ⇒ 本函数抛错；缺叶 ⇒ `expandThemeWords` 抛错。都不返回兜底串（理由见测试文件头）。
+ * ⚠️ 本表**目前**只有 `{resource}` 一个占位符，仍然改调 `expandThemeWords` 而不是自己
+ *   split/join：统一实现比留一个特化替换更好——将来表里加 `{gate}` 之类不用动本函数。
+ *   **不许**以「只用得到一个叶」为由退回 split/join（B79 §4.2；B78 时这里有第二份替换）。
  * ⚠️ **L-B78-5**：face 15 的「本回合」低估了豁免窗 —— 真值见 `statuses.ts:126-137` 与 B77 r5：
- *   在自己手番内授予 = 当前剩余 + 接下来 1 个**完整手番**。用户裁定丙 ⇒ 本批照搬主规格现值，
- *   另批与主规格 §3.2 一并改措辞。这里**既不许**顺手改成「1 个手番」，**也不许**删掉本行注释；
+ *   在自己手番内授予 = 当前剩余 + 接下来 1 个**完整手番**。B78 用户裁定丙 ⇒ 照搬主规格现值、
+ *   措辞另批；那个「另批」就是 B79 T17（Q4 裁定甲：并入结账）。本行注释在结账前**不许删**，
  *   写编号是为了 `grep -rn "L-B78-5" engine/` 能直接查到「这句话有债」。
  */
 export function instructionText(face: number, terms: ThemeTerms): string {
   const row = INSTRUCTION_TABLE.find((x) => x.face === face);
   if (row === undefined) { throw new Error(`instructionText：没有第 ${String(face)} 面指令`); }
-  const word = terms?.resource;
-  if (typeof word !== 'string' || word.length === 0) {
-    throw new Error('instructionText：terms.resource 缺失（主题包词表不完整）');
-  }
-  return row.text.split(RESOURCE).join(word);
+  return expandThemeWords(row.text, terms);
 }

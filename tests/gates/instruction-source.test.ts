@@ -14,6 +14,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import { performAction } from '../../engine/core/turn-runner.ts';
+import { INSTRUCTION_TABLE, instructionText } from '../../engine/core/instruction-table.ts';
 import { mk } from '../engine/fixtures.ts';
 
 const RUNNER = readFileSync('engine/core/turn-runner.ts', 'utf8');
@@ -78,5 +79,36 @@ test('B78：指令文案字面量只出现在表文件（摘掉表本体后逐�
       assert.equal(src.includes(`'${p}'`) || src.includes(`\`${p}\``), false,
         `${f} 手抄了指令文案「${p}」⇒ 请改用 INSTRUCTION_TABLE / instructionText`);
     }
+  }
+});
+
+// ---- B79 §4.2（T5）：替换语义只许一份实现 ----
+//
+// B78 留下两份 `split('{resource}').join(...)`：`instruction-table.ts:73` 与
+// `build-ir.mjs:104`。同一件事两份实现，第三份（`expandThemeWords`，T4）落地后
+// 前两份都必须改调它——否则将来表里加 `{gate}`，只有展开器认识它，两处旧替换各印一半。
+const EXPANDER = readFileSync('engine/core/theme-text.ts', 'utf8');
+const IR_SRC = readFileSync('build/build-ir.mjs', 'utf8');
+
+test('B79：instructionText 与 build-ir 都不再自带 split/join 替换', () => {
+  assert.ok(EXPANDER.includes('export function expandThemeWords'), '前提：展开器存在（T4）');
+  assert.equal(/\.split\((RESOURCE|'\{resource\}')\)/.test(TABLE), false,
+    'instruction-table.ts 仍在自己替换 ⇒ 第二份实现');
+  assert.equal(/\.split\('\{resource\}'\)/.test(IR_SRC), false,
+    'build-ir.mjs 仍在自己替换 ⇒ 第二份实现');
+  assert.ok(TABLE.includes('expandThemeWords'), 'instruction-table.ts 必须改调展开器');
+  assert.ok(IR_SRC.includes('expandThemeWords'), 'build-ir.mjs 必须改调展开器');
+});
+
+test('B79：改调后 20 面输出逐字不变（换实现不换文案，face 15 由 T17 单独改）', () => {
+  // 四套各比一次快照：快照是手工维护的独立钉子（见 instruction-d20.test.ts 文件头），
+  // 用它当尺子才叫「输出没变」，用改前源码自比是自证。
+  const snap = JSON.parse(readFileSync('tests/gates/snapshots/instruction-d20.json', 'utf8')) as
+    Record<string, { face: number; text: string }[]>;
+  assert.ok(Object.keys(snap).length >= 4, `前提：快照要有四套，实际 ${Object.keys(snap).join('/')}`);
+  for (const [id, rows] of Object.entries(snap)) {
+    const theme = JSON.parse(readFileSync(`themes/${id}/theme.json`, 'utf8')) as { terms: Parameters<typeof instructionText>[1] };
+    assert.deepEqual(INSTRUCTION_TABLE.map((r) => instructionText(r.face, theme.terms)),
+      rows.map((x) => x.text), `${id}：20 面输出与快照不符 ⇒ 换实现换掉了文案`);
   }
 });
