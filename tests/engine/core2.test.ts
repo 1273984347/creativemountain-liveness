@@ -25,7 +25,7 @@ test('开局每人发 handStart 张手牌', () => {
 
 // ---------- 手牌与牌库循环（§3.1 步骤 6、§3.4 险径） ----------
 
-test('手牌上限 = 体力上限（沿用原作「手牌数 = 体力值」）', () => {
+test('手牌上限 = HP 上限（沿用原作「手牌数 = 体力值」）', () => {
   const s = createInitialState({ players: 3, seed: 1, deckSize: 40 });
   const p = at(s.players, 0);
   assert.equal(handLimitOf(p), p.hpMax);
@@ -69,9 +69,9 @@ test('牌库抽空后弃牌堆洗回牌库（牌库循环）', () => {
 });
 
 
-// ---------- 灵枢经济（§4.3） ----------
+// ---------- 资源经济（§4.3） ----------
 
-test('灵枢收入后增加，上限为 10', () => {
+test('资源收入后增加，上限为 10', () => {
   const s = createInitialState({ players: 3, seed: 1, deckSize: 40 });
   const g = gainResource(s, 0, 3);
   assert.equal(at(g.players, 0).resource, at(s.players, 0).resource + 3);
@@ -79,7 +79,7 @@ test('灵枢收入后增加，上限为 10', () => {
   assert.equal(at(capped.players, 0).resource, RESOURCE_CAP);
 });
 
-test('灵枢不足时无法支出，状态不变', () => {
+test('资源不足时无法支出，状态不变', () => {
   const s = createInitialState({ players: 3, seed: 1, deckSize: 40 });
   const r = spendResource(s, 0, 99);
   assert.equal(r.ok, false);

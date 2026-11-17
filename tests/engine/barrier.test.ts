@@ -1,6 +1,6 @@
 // 裂隙与封路印（规格 §3.4，B18-b）的回归测试。
 //
-// 覆盖：① 待放印判定（含灵枢不足不打扰玩家）；② 放印（扣费 + 置印 + **不判定自己**）；
+// 覆盖：① 待放印判定（含资源不足不打扰玩家）；② 放印（扣费 + 置印 + **不判定自己**）；
 //   ③ 不放印；④ **已有印时到达 ⇒ 判色**（红通过 / 黑停 1 回合）；⑤ 引擎层门禁。
 
 import { test } from 'node:test';
@@ -40,19 +40,19 @@ function topColor(state: State, color: 'red' | 'black'): State {
   return { ...state, decks: { ...state.decks, deck } };
 }
 
-test('B18-b：落在无印裂隙格且灵枢够 ⇒ 待放印；灵枢不足则不打扰玩家', () => {
+test('B18-b：落在无印裂隙格且资源够 ⇒ 待放印；资源不足则不打扰玩家', () => {
   const s = riftScene();
   assert.ok(pendingBarrier(s, 0) !== null, '应待放印');
   assert.equal(pendingBarrier(s, 1), null, '别的座位不在裂隙格上');
-  assert.equal(pendingBarrier(riftScene({ resource: BARRIER_COST - 1 }), 0), null, '灵枢不足 ⇒ 不必打扰');
+  assert.equal(pendingBarrier(riftScene({ resource: BARRIER_COST - 1 }), 0), null, '资源不足 ⇒ 不必打扰');
   assert.equal(pendingBarrier(riftScene({ barrier: true }), 0), null, '已有印 ⇒ 直接判定，不给选择');
 });
 
-test('B18-b：放印 —— 扣 2 灵枢、在该格置印，且**放置当次不判定自己**', () => {
+test('B18-b：放印 —— 扣 2 资源、在该格置印，且**放置当次不判定自己**', () => {
   const s = riftScene();
   const r = resolveBarrier(s, 0, 'place');
   assert.equal(r.ok, true, '放印应成功：' + String(r.note));
-  assert.equal(r.state.players[0]?.resource, 10 - BARRIER_COST, '应扣掉 2 灵枢');
+  assert.equal(r.state.players[0]?.resource, 10 - BARRIER_COST, '应扣掉 2 点资源');
   const tile = r.state.board.tiles.find((t) => t.index === RIFT_INDEX);
   assert.equal(tile?.barrier, true, '该格应有封路印');
   assert.equal(r.state.players[0]?.statuses.skip_turn ?? 0, 0, '放置当次不判定自己 ⇒ 不会被自己封住');
@@ -62,7 +62,7 @@ test('B18-b：不放印 —— 直接通过（不扣资源、不置印）', () =
   const s = riftScene();
   const r = resolveBarrier(s, 0, 'skip');
   assert.equal(r.ok, true);
-  assert.equal(r.state.players[0]?.resource, 10, '不放印不扣灵枢');
+  assert.equal(r.state.players[0]?.resource, 10, '不放印不扣资源');
   const tile = r.state.board.tiles.find((t) => t.index === RIFT_INDEX);
   assert.notEqual(tile?.barrier, true, '不放印 ⇒ 无封路印');
   assert.ok(r.state.log.some((l) => l.kind === 'barrier'), '应留下裂隙日志（让探针能区分已处理）');

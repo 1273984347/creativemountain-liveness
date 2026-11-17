@@ -1,14 +1,14 @@
-// B65 · G-a：出牌费用语义（付费 + 灵枢不足即拒绝）
+// B65 · G-a：出牌费用语义（付费 + 资源不足即拒绝）
 //
 // ⚠️ 规格裁定（B65）：出牌**付费** —— 打出卡牌须支付该牌的 `cost`（规格 §3.1「行事」/§4.3）
-//   ⇒ **灵枢不足 ⇒ 引擎拒绝该动作**（不扣、不出牌、状态不变）。
+//   ⇒ **资源不足 ⇒ 引擎拒绝该动作**（不扣、不出牌、状态不变）。
 //   ⚠️ 此前（本次裁定前）：引擎 `act` 分支**既不校验也不扣**、UI 只显示不拦、
 //   只有模拟器把 `cost <= resource` 当资格线 ⇒ 数字轨可**免费出牌**。
 //
 // ⚠️ 本文件钉住四层，缺一层就有一层可能悄悄漂回：
-//   ① **引擎扣费环**：打出后灵枢恰好减 `cost`，手牌少一张；
-//   ② **引擎拒绝环**：灵枢不足 ⇒ 状态**逐字不变**（不扣、不弃牌、不结算效果）；
-//   ③ **UI 拒因**：`uiBlockNotice` 必须点名「灵枢不足」且给出差额（R-2 拒绝要说人话）；
+//   ① **引擎扣费环**：打出后资源恰好减 `cost`，手牌少一张；
+//   ② **引擎拒绝环**：资源不足 ⇒ 状态**逐字不变**（不扣、不弃牌、不结算效果）；
+//   ③ **UI 拒因**：`uiBlockNotice` 必须点名「资源不足」且给出差额（R-2 拒绝要说人话）；
 //   ④ **枚举口径**：资源不足的牌**不得**出现在 `getLegalActions` 里（引擎自己拒 ⇒ 试跑如实反映）。
 
 import { test } from 'node:test';
@@ -37,7 +37,7 @@ function cardOfCost(cost: number): Card {
   return card;
 }
 
-/** 座 0 手里有指定卡、灵枢给定的局面。 */
+/** 座 0 手里有指定卡、资源给定的局面。 */
 function scene(card: Card, resource: number): State {
   const s0 = createInitialState({ players: 3, seed: 5, deckSize: 40 });
   return {
@@ -46,55 +46,55 @@ function scene(card: Card, resource: number): State {
   };
 }
 
-test('B65/A-1 引擎扣费环：打出卡牌 ⇒ 灵枢恰好减 cost，手牌少一张', () => {
+test('B65/A-1 引擎扣费环：打出卡牌 ⇒ 资源恰好减 cost，手牌少一张', () => {
   const card = cardOfCost(2);
   const s = scene(card, 5);
   const r = performAction(s, 0, 'act', { cardId: card.id });
   assert.equal(r.players[0]?.resource, 3,
-    '[B65/A-1 引擎扣费环] 打出 cost=' + String(card.cost) + ' 的牌 ⇒ 灵枢应从 5 减到 3');
+    '[B65/A-1 引擎扣费环] 打出 cost=' + String(card.cost) + ' 的牌 ⇒ 资源应从 5 减到 3');
   assert.equal(r.players[0]?.hand.length, 0,
     '[B65/A-1 引擎扣费环] 牌应已打出（手牌少一张）');
   assert.notEqual(r, s, '[B65/A-1 引擎扣费环] 状态应已改变（引用不等）');
 });
 
-test('B65/A-2 引擎拒绝环：灵枢不足 ⇒ 状态逐字不变（不扣、不弃牌、不结算效果）', () => {
+test('B65/A-2 引擎拒绝环：资源不足（基准印「灵枢」）⇒ 状态逐字不变（不扣、不弃牌、不结算效果）', () => {
   const card = cardOfCost(3);
-  const s = scene(card, 1);   // 只有 1 灵枢，打 cost=3 的牌
+  const s = scene(card, 1);   // 只有 1 点资源，打 cost=3 的牌
   const r = performAction(s, 0, 'act', { cardId: card.id });
   // ⚠️ **引用相等**是 `performAction` 唯一的被拒信号（probe.ts 认的就是它）
   assert.equal(r, s,
-    '[B65/A-2 引擎拒绝环] 灵枢不足 ⇒ 必须原样返回（引用相等）⇒ 探针才认得出「被拒」');
+    '[B65/A-2 引擎拒绝环] 资源不足 ⇒ 必须原样返回（引用相等）⇒ 探针才认得出「被拒」');
   assert.equal(r.players[0]?.resource, 1,
-    '[B65/A-2 引擎拒绝环] 灵枢不足时**不得**扣费');
+    '[B65/A-2 引擎拒绝环] 资源不足时**不得**扣费');
   assert.equal(r.players[0]?.hand.length, 1,
-    '[B65/A-2 引擎拒绝环] 灵枢不足时**不得**弃牌（牌还在手里）');
+    '[B65/A-2 引擎拒绝环] 资源不足时**不得**弃牌（牌还在手里）');
 });
 
-test('B65/A-3 边界：灵枢**恰好等于** cost ⇒ 允许打出（余额归零，不得误拒）', () => {
+test('B65/A-3 边界：资源**恰好等于** cost ⇒ 允许打出（余额归零，不得误拒）', () => {
   const card = cardOfCost(2);
   const s = scene(card, 2);
   const r = performAction(s, 0, 'act', { cardId: card.id });
-  assert.notEqual(r, s, '[B65/A-3 边界] 灵枢恰好等于 cost ⇒ 必须允许打出');
+  assert.notEqual(r, s, '[B65/A-3 边界] 资源恰好等于 cost ⇒ 必须允许打出');
   assert.equal(r.players[0]?.resource, 0,
-    '[B65/A-3 边界] 打出后灵枢应为 0');
+    '[B65/A-3 边界] 打出后资源应为 0');
   assert.equal(r.players[0]?.hand.length, 0, '[B65/A-3 边界] 牌应已打出');
 });
 
-test('B65/A-4 零费牌：cost=0 的牌打出不扣灵枢（不得因「扣费」误扣）', () => {
+test('B65/A-4 零费牌：cost=0 的牌打出不扣资源（不得因「扣费」误扣）', () => {
   const card = cardOfCost(0);
   const s = scene(card, 3);
   const r = performAction(s, 0, 'act', { cardId: card.id });
   assert.notEqual(r, s, '[B65/A-4 零费牌] cost=0 的牌必须能打出');
   assert.equal(r.players[0]?.resource, 3,
-    '[B65/A-4 零费牌] cost=0 ⇒ 灵枢不得减少');
+    '[B65/A-4 零费牌] cost=0 ⇒ 资源不得减少');
 });
 
-test('B65/A-5 UI 拒因：灵枢不足 ⇒ uiBlockNotice 必须点名「灵枢不足」并给出差额', () => {
+test('B65/A-5 UI 拒因：资源不足 ⇒ uiBlockNotice 必须点名「资源不足」并给出差额', () => {
   const card = cardOfCost(3);
   const s = scene(card, 1);
   const action = { type: 'PLAY_CARD' as const, actor: 0, cardId: card.id };
   const notice = uiBlockNotice(s, 0, action);
-  assert.ok(notice !== null, '[B65/A-5 UI 拒因] 灵枢不足 ⇒ UI 必须拦下');
+  assert.ok(notice !== null, '[B65/A-5 UI 拒因] 资源不足 ⇒ UI 必须拦下');
   // B79 §5.1：UI 拒因现在交出去的是**占位符形态**（由 notice 出口展开）⇒ 判据跟着转形式，
   //   「点名资源不足 + 给出差额」这两条要求一字没放宽；玩家真正看到的句子由 A-5b 正面钉。
   assert.match(notice ?? '', /\{resource\}不足/,
@@ -122,12 +122,12 @@ test('B65/A-5b UI 拒因展开后仍点名「灵枢不足」并给出差额（�
   assert.equal(/\{/.test(shown), false, `[B65/A-5b] 展开后不得残留占位符：${shown}`);
 });
 
-test('B65/A-6 UI 放行：灵枢足够 ⇒ 不得拦（否则玩家永远打不出牌）', () => {
+test('B65/A-6 UI 放行：资源足够 ⇒ 不得拦（否则玩家永远打不出牌）', () => {
   const card = cardOfCost(2);
   const s = scene(card, 5);
   const action = { type: 'PLAY_CARD' as const, actor: 0, cardId: card.id };
   assert.equal(uiAllows(s, 0, action), true,
-    '[B65/A-6 UI 放行] 灵枢足够 ⇒ UI 必须放行');
+    '[B65/A-6 UI 放行] 资源足够 ⇒ UI 必须放行');
   assert.equal(uiBlockNotice(s, 0, action), null,
     '[B65/A-6 UI 放行] uiBlockNotice 必须返回 null');
 });
@@ -138,13 +138,13 @@ test('B65/A-7 枚举口径：资源不足的牌不得出现在 getLegalActions �
   const actions = getLegalActions(s, 0);
   const cardActions = actions.filter((a) => a.type === 'PLAY_CARD' && a.cardId === card.id);
   assert.deepEqual(cardActions, [],
-    '[B65/A-7 枚举口径] 灵枢不足的牌不得被枚举（引擎拒绝 ⇒ 试跑如实反映）');
+    '[B65/A-7 枚举口径] 资源不足的牌不得被枚举（引擎拒绝 ⇒ 试跑如实反映）');
 
   const ok = scene(card, 3);   // 打得起
   const okCardActions = getLegalActions(ok, 0)
     .filter((a) => a.type === 'PLAY_CARD' && a.cardId === card.id);
   assert.equal(okCardActions.length, 1,
-    '[B65/A-7 枚举口径] 灵枢足够时该牌**必须**被枚举（否则模型与玩家都打不出）');
+    '[B65/A-7 枚举口径] 资源足够时该牌**必须**被枚举（否则模型与玩家都打不出）');
 });
 
 // ================= 变异自证：证明上面 7 条断言**真的有判别力** =================

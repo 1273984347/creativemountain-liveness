@@ -70,7 +70,7 @@ export function record(state, seat, heuristic, face = null) {
 export function checkState(s, label) {
   const problems = [];
   for (const p of s.players) {
-    if (!Number.isFinite(p.hp) || p.hp < 0) problems.push(label + ' 座' + p.seat + ' 体力非法 ' + p.hp);
+    if (!Number.isFinite(p.hp) || p.hp < 0) problems.push(label + ' 座' + p.seat + ' HP 非法 ' + p.hp);
     if (!Number.isFinite(p.resource) || p.resource < 0) problems.push(label + ' 座' + p.seat + ' 资源非法 ' + p.resource);
     if (!Number.isFinite(p.position) || p.position < 0 || p.position > s.board.length) {
       problems.push(label + ' 座' + p.seat + ' 位置越界 ' + p.position);
@@ -247,7 +247,7 @@ export async function certificationTurn(s, policy, counters, hit) {
  * AI 的**出牌选牌**（B65）——按效果强度选，不是「第一张付得起的牌」。
  *
  * ⚠️ **为什么改（G-a 付费的连带后果）**：出牌改为**付费**后（规格 §3.1「行事」/§4.3），
- *   灵枢迅速见底 ⇒ 旧策略「找第一张 `cost <= resource` 的牌」会让大量回合**无牌可打**
+ *   资源迅速见底 ⇒ 旧策略「找第一张 `cost <= resource` 的牌」会让大量回合**无牌可打**
  *   ⇒ 退化为行棋 ⇒ 对局拖长、并列封顶变多 ⇒ **独赢局口径下位次胜率极差被噪声主导**
  *   （实测：8 人局独赢局 391/400 → 350/400 ⇒ 极差 5.9pp → 13.4pp，门 ⑫ 判红）。
  *
@@ -262,7 +262,7 @@ export async function certificationTurn(s, policy, counters, hit) {
  * ⚠️ **不越权**：本函数只**选牌**，不代替引擎判合法（费用不足的牌由引擎拒 ⇒ 见 B65/A-7）。
  *
  * @param {object} hand 座的手牌
- * @param {number} resource 当前灵枢
+ * @param {number} resource 当前资源
  * @returns {object|undefined} 选中的牌（无可打牌 ⇒ undefined）
  */
 /**
@@ -371,7 +371,7 @@ export function maybeUseAbility(s, seat) {
   if (s.rng.next() >= 0.25) { return null; }
   let target;
   if (op === 'transfer_resource') {
-    // 窃火者：选一个灵枢最多的对手偷
+    // 窃火者：选一个资源最多的对手偷
     const others = s.players.filter((p) => p.alive && p.seat !== seat && p.resource > 0);
     if (others.length === 0) { return null; }
     let best = others[0];
@@ -395,7 +395,7 @@ export function maybeUseAbility(s, seat) {
  * 语义（与 B75 装备分支同一范式）：
  *   · **达阈即停**：`counters ≥ goal.count` ⇒ null（不无限占行动、不拖慢全局节奏）；
  *   · **不抽随机数**：决策由状态决定（`Rng.next()` 可变 ⇒ 零扰动，见 equip 分支同款注释）；
- *   · **失败回落**：`performAbility` 失败（每回合闸门 / 目标灵枢不足）⇒ null，调用方回落行动带；
+ *   · **失败回落**：`performAbility` 失败（每回合闸门 / 目标资源不足）⇒ null，调用方回落行动带；
  *   · **只服务两类目标**：`equip_count` 归 B75 装备分支，本函数不叠用。
  *
  * ⚠️ 这是**占位启发式**（非最优、人类玩家行为未建模 —— 同 B75.1 §6 的声明）：
@@ -412,7 +412,7 @@ export function goalPursuit(s, seat) {
   if (goal.kind === 'steal_count' && passive.op === 'transfer_resource') {
     if ((counters.stolenTotal ?? 0) >= goal.count) { return null; }
     const amount = passive.amount ?? 1;
-    // 窃火者：选灵枢最多的对手偷（与 maybeUseAbility 的选择器同口径：平手取序靠前）
+    // 窃火者：选资源最多的对手偷（与 maybeUseAbility 的选择器同口径：平手取序靠前）
     const others = s.players.filter((x) => x.alive && x.seat !== seat && (x.resource ?? 0) >= amount);
     let best = others[0];
     for (const x of others) { if (best !== undefined && (x.resource ?? 0) > (best.resource ?? 0)) { best = x; } }
@@ -432,7 +432,7 @@ export function goalPursuit(s, seat) {
 
 /**
  * B76：力竭自恢的占位决策（p=0.5）——**前置过滤在抽签之前**（r2 评审 🔴3）：
- * 非力竭 / 灵枢不足的座位**零 rng 消耗**。占位声明同 B75.1 §6：非最优、人类行为未建模、消耗一次 rng。
+ * 非力竭 / 资源不足的座位**零 rng 消耗**。占位声明同 B75.1 §6：非最优、人类行为未建模、消耗一次 rng。
  */
 export function selfRecuperateChoice(s, seat) {
   const p = s.players[seat];

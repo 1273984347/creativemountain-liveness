@@ -500,7 +500,7 @@ test('[LAYER-E10-APPEAL-WINDOW 窗口关闭] 复议裁定后 appealed 被清（�
   const resolved = resolveAppeals(st, 0);
   assert.equal(resolved.ok, true, '[LAYER-E10-APPEAL-WINDOW 窗口关闭] 复议裁定应成功：' + String(resolved.note));
   assert.equal(resolved.state.certification.appealed.includes(0), false,
-    '[LAYER-E10-APPEAL-WINDOW 窗口关闭] **裁定后复议窗口必须关闭**（否则轮末会再裁定一次 ⇒ 重复扣灵枢/后退）');
+    '[LAYER-E10-APPEAL-WINDOW 窗口关闭] **裁定后复议窗口必须关闭**（否则轮末会再裁定一次 ⇒ 重复扣资源/后退）');
   assert.equal(resolved.state.players[1]?.counters.successfulChallenges, 0,
     '[LAYER-E10-APPEAL-WINDOW 窗口关闭] 复议推翻 ⇒ 该次质疑不再成立 ⇒ 计数回退');
 });

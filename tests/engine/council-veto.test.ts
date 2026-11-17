@@ -75,7 +75,7 @@ test('B75：否决已用但本次本就不会放逐 ⇒ 不计数', () => {
   assert.equal(res.state.players[0]?.counters.vetoCount ?? 0, 0, '未阻止放逐 ⇒ 不计数');
 });
 
-test('B75：3 人局不受否决影响（扣灵枢分支）', () => {
+test('B75：3 人局不受否决影响（扣资源分支）', () => {
   // ⚠️ B75.1：持权者不能是被最高票的那个（否则测的是「自救被拒」）⇒ 座 2 持权、座 0 被最高票。
   let s = grantVeto(councilScene(3, 7), 2);
   for (const p of s.players) {
@@ -92,7 +92,7 @@ test('B75：3 人局不受否决影响（扣灵枢分支）', () => {
   assert.ok(res.ok);
   // ⚠️ counters 初始是 `{}`（动态添加）⇒ 未触发时是 undefined；用 `?? 0` 兼容两种初始形状。
   assert.equal(res.state.players[2]?.counters.vetoCount ?? 0, 0, '3 人局不涉及放逐 ⇒ 不计数');
-  assert.equal(res.state.players[0]?.resource, Math.max(0, (before ?? 0) - 2), '3 人局仍走扣灵枢裁定');
+  assert.equal(res.state.players[0]?.resource, Math.max(0, (before ?? 0) - 2), '3 人局仍走扣资源裁定');
 });
 
 test('B75.1：不能为自己使用否决（只可救他人）—— 引擎与 UI 三层同判', () => {

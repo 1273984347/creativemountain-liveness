@@ -32,7 +32,7 @@ test('B76：严格反解——recuperate:junk / recuperate: / recuperate:1x 一�
 import { mk, putPending } from './fixtures.ts';
 import { performAction } from '../../engine/core/turn-runner.ts';
 
-/** 夹具：座 `seat` 力竭 + 灵枢置值。 */
+/** 夹具：座 `seat` 力竭 + 资源置值。 */
 function exhaustedAt(s: import('../../engine/core/state.ts').State, seat: number, resource: number): import('../../engine/core/state.ts').State {
   return { ...s, players: s.players.map((p) => (p.seat === seat ? { ...p, exhaustedRounds: 2, resource, hp: 0 } : p)) };
 }
@@ -41,7 +41,7 @@ test('B76：自恢正例——扣 2、解除、回血保底、日志（自恢）
   const s = exhaustedAt(mk(4, 7), 0, 3);
   const r = performAction(s, 0, 'recuperate', {});
   const p = r.players[0]!;
-  assert.equal(p.resource, 1, '扣 2 灵枢');
+  assert.equal(p.resource, 1, '扣 2 点资源');
   assert.equal(p.exhaustedRounds, 0, '解除');
   assert.equal(p.hp, Math.ceil(p.hpMax / 2), '保底回血');
   assert.ok(r.log.some((l) => l.kind === 'exhaustion' && l.message.includes('（自恢）')));
@@ -50,18 +50,18 @@ test('B76：自恢正例——扣 2、解除、回血保底、日志（自恢）
 test('B76：救援正例——扣 1、目标解除、日志（被座 N 救援）', () => {
   const s = exhaustedAt(mk(4, 7), 1, 0);
   const r = performAction(s, 0, 'recuperate', { target: 1 });
-  assert.equal(r.players[0]!.resource, s.players[0]!.resource - 1, '扣 1 灵枢');
+  assert.equal(r.players[0]!.resource, s.players[0]!.resource - 1, '扣 1 点资源');
   assert.equal(r.players[1]!.exhaustedRounds, 0, '目标解除');
   assert.equal(r.players[1]!.hp, Math.ceil(r.players[1]!.hpMax / 2), '目标保底回血');
   assert.ok(r.log.some((l) => l.kind === 'exhaustion' && l.message.includes('座位 1（救援）')), 'message 契约：解除力竭：座位 N（救援）');
 });
 
-test('B76：灵枢不足自恢 ⇒ 引用相等拒绝', () => {
+test('B76：资源不足自恢 ⇒ 引用相等拒绝（基准印「灵枢」）', () => {
   const s = exhaustedAt(mk(4, 7), 0, 1);
   assert.equal(performAction(s, 0, 'recuperate', {}), s);
 });
 
-test('B76：灵枢不足救援 ⇒ 引用相等拒绝', () => {
+test('B76：资源不足救援 ⇒ 引用相等拒绝', () => {
   const s = exhaustedAt(mk(4, 7), 1, 0);
   const poor = { ...s, players: s.players.map((p) => (p.seat === 0 ? { ...p, resource: 0 } : p)) };
   assert.equal(performAction(poor, 0, 'recuperate', { target: 1 }), poor);
@@ -97,18 +97,18 @@ test('B76：三态叠加（力竭+待认证+印记）自恢 ⇒ hasMark/alive �
 // ---------- 候选形状（Task 7，三层同判的引擎侧真值）----------
 import { candidatesOf } from '../../engine/core/legal.ts';
 
-test('B76：候选——力竭 + 灵枢≥2 ⇒ 发自恢候选（无 target）', () => {
+test('B76：候选——力竭 + 资源≥2 ⇒ 发自恢候选（无 target）', () => {
   const s = exhaustedAt(mk(4, 7), 0, 3);
   const cands = candidatesOf(s, 0).filter((a) => a.type === 'RECUPERATE');
   assert.deepEqual(cands, [{ type: 'RECUPERATE', actor: 0 }]);
 });
 
-test('B76：候选——力竭但灵枢不足 ⇒ 不发自恢', () => {
+test('B76：候选——力竭但资源不足 ⇒ 不发自恢', () => {
   const s = exhaustedAt(mk(4, 7), 0, 1);
   assert.equal(candidatesOf(s, 0).some((a) => a.type === 'RECUPERATE'), false);
 });
 
-test('B76：候选——有体力竭他人 + 灵枢≥1 ⇒ 每目标一条救援候选；自己不力竭', () => {
+test('B76：候选——有体力竭他人 + 资源≥1 ⇒ 每目标一条救援候选；自己不力竭', () => {
   const s = exhaustedAt(mk(4, 7), 1, 0);
   const cands = candidatesOf(s, 0).filter((a) => a.type === 'RECUPERATE');
   assert.deepEqual(cands, [{ type: 'RECUPERATE', actor: 0, target: 1 }]);

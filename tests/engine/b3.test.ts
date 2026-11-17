@@ -85,7 +85,7 @@ test('§5.3 弃权合法且不产生签印', () => {
   assert.equal(signatureCount(r.state, 0), 0);
 });
 
-test('§5.3.4 发起质疑立即扣 1 灵枢（无论成败）', () => {
+test('§5.3.4 发起质疑立即扣 1 点资源（无论成败；基准印「灵枢」）', () => {
   const s = pendingScene(5);
   const before = at(s.players, 1).resource;
   const r = certifyChallenge(s, 1, 0);
@@ -93,7 +93,7 @@ test('§5.3.4 发起质疑立即扣 1 灵枢（无论成败）', () => {
   assert.equal(at(r.state.players, 1).resource, before - 1, '发起质疑即付费');
 });
 
-test('§5.3.4 灵枢不足时不可发起质疑', () => {
+test('§5.3.4 资源不足时不可发起质疑', () => {
   const s = pendingScene(5);
   const broke = { ...s, players: s.players.map((p) => (p.seat === 1 ? { ...p, resource: 0 } : p)) };
   const r = certifyChallenge(broke, 1, 0);
@@ -121,14 +121,14 @@ test('§5.3 判定不通过 → 先记录判定并给复议窗口（不立即后
   assert.equal(ans.state.certification.judgments[1], false, '判定被记录');
 });
 
-test('§5.3.2 复议申请消耗 2 灵枢，且每轮限 1 次', () => {
+test('§5.3.2 复议申请消耗 2 资源，且每轮限 1 次', () => {
   const s = pendingScene(5);
   const ch = certifyChallenge(s, 1, 0);
   const ans = certifyAnswer(ch.state, 1, 0, false);
   const before = at(ans.state.players, 0).resource;
   const ap = certifyAppeal(ans.state, 0, 0);
   assert.equal(ap.ok, true, '判不通过后仍可申请复议');
-  assert.equal(at(ap.state.players, 0).resource, before - 2, '复议 -2 灵枢');
+  assert.equal(at(ap.state.players, 0).resource, before - 2, '复议 -2 点资源');
   const again = certifyAppeal(ap.state, 0, 0);
   assert.equal(again.ok, false, '每轮限 1 次');
 });
@@ -199,7 +199,7 @@ test('§5.1 进入待认证状态', () => {
 
 // ---------- §5.6 山议 ----------
 
-test('§5.6 3 人局山议 → 山议裁定（扣灵枢，不淘汰）', () => {
+test('§5.6 3 人局山议 → 山议裁定（扣资源，不淘汰）', () => {
   const s = createInitialState({ players: 3, seed: 7, deckSize: 40 });
   const opened = openCouncil(s);
   assert.equal(opened.ok, true);
@@ -211,7 +211,7 @@ test('§5.6 3 人局山议 → 山议裁定（扣灵枢，不淘汰）', () => {
   const before = at(st.players, 1).resource;
   const res = resolveCouncil(st);
   assert.equal(res.ok, true);
-  assert.equal(at(res.state.players, 1).resource, before - 2, '3 人局最高票扣 2 灵枢');
+  assert.equal(at(res.state.players, 1).resource, before - 2, '3 人局最高票扣 2 点资源');
   assert.equal(at(res.state.players, 1).alive, true, '3 人局不淘汰');
 });
 
@@ -269,7 +269,7 @@ test('§5.8 兜底排名：距峰顶近者胜', () => {
   assert.equal(ranked[0], 2, '座位 2 离峰顶更近，应排第一');
 });
 
-test('§5.8 兜底排名：距峰顶相同时比**累计**签印数，再相同时比灵枢', () => {
+test('§5.8 兜底排名：距峰顶相同时比**累计**签印数，再相同时比资源', () => {
   const s = createInitialState({ players: 4, seed: 7, deckSize: 40 });
   const base = { ...s, players: s.players.map((p) => ({ ...p, position: 10 })) };
   // ⚠️ B11：兜底排名用的是**整局累计**签印数（`counters.signaturesTotal`），

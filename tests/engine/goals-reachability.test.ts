@@ -129,7 +129,7 @@ test('B75.2：reroll_count —— 没够数不发印记（防把「有目标」�
 test('B75.2：steal_count —— 偷取入**偷取者**的计数，回合末结算发印记', () => {
   let s = withGoal(withPassive(mk(4, 7), 0, { op: 'transfer_resource', amount: 1 }), 0, 'steal_count', 1);
   const victim = s.players[1];
-  assert.ok(victim !== undefined && victim.resource >= 1, '前提：目标须有灵枢');
+  assert.ok(victim !== undefined && victim.resource >= 1, '前提：目标须有资源');
   assert.deepEqual(goalOf(s, 0), { kind: 'steal_count', count: 1 }, '前提：目标已派生');
   const r = performAbility(s, 0, 1);
   assert.ok(r.ok, '前提：窃火者发动偷取必须成功：' + String(r.note));

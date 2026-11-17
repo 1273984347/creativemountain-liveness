@@ -31,7 +31,7 @@ function noted(note: string | undefined): string {
  * 「座 0 被判不通过并申请复议」的局面（5 人局）。
  *
  * ⚠️ 认证字段一律走**引擎入口**（certifyX），不手拼（遵 fixtures 的禁令）。
- * ⚠️ 座 0 补到 5 灵枢是复议的成本（`certifyAppeal` 需 2）。
+ * ⚠️ 座 0 补到 5 资源是复议的成本（`certifyAppeal` 需 2）。
  */
 function appealScene(): ReturnType<typeof putPending> {
   const challenged = certifyChallenge(putPending(mk(5, 7), [0]), 1, 0);

@@ -69,14 +69,14 @@ test('gain_resource 生效且受上限 10 约束', () => {
   assert.equal(at(capped.state.players, 0).resource, 10);
 });
 
-test('spend_resource 灵枢不足 → 失败且状态不变', () => {
+test('spend_resource 资源不足 → 失败且状态不变', () => {
   const c = ctx();
   const r = applyEffect(c, { op: 'spend_resource', amount: 99 });
   assert.equal(r.ok, false);
   assert.equal(r.state, c.state);
 });
 
-test('transfer_resource 在双方间转移灵枢', () => {
+test('transfer_resource 在双方间转移资源', () => {
   const c = ctx();
   const before1 = at(c.state.players, 0).resource;
   const before2 = at(c.state.players, 1).resource;
@@ -208,7 +208,7 @@ test('goal 判定按计数器阈值（达成即发印记的判定依据）', () 
   assert.equal(isGoalAchieved(withCounter, 0, 'pass_gates', 4), false);
 });
 
-test('survive_with_hp 检查存活且体力达上限（count 忽略）', () => {
+test('survive_with_hp 检查存活且 HP 达上限（count 忽略）', () => {
   const s = createInitialState({ players: 3, seed: 1, deckSize: 40 });
   assert.equal(isGoalAchieved(s, 0, 'survive_with_hp', 1), true);
   const hurt = { ...s, players: s.players.map((p, i) => (i === 0 ? { ...p, hp: p.hpMax - 1 } : p)) };

@@ -112,7 +112,7 @@ test('引擎集成：performAction 带 target ⇒ 伤害落到该座位，而不
   const s = withCardInHand(card);
   const before = s.players.map((p) => p.hp);
   const r = performAction(s, 0, 'act', { cardId: card.id, target: 2 });
-  assert.equal(r.players[2]?.hp, (before[2] ?? 0) - 1, '座 2 应掉 1 点体力');
+  assert.equal(r.players[2]?.hp, (before[2] ?? 0) - 1, '座 2 应掉 1 点 HP');
   assert.equal(r.players[0]?.hp, before[0], '座 0 不应掉血（target 不得落回占位座位）');
   assert.equal(r.players[0]?.hand.length, 0, '牌应已打出');
 });

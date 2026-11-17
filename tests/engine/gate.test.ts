@@ -1,6 +1,6 @@
 // 关隘通道（规格 §3.5，B18）的回归测试。
 //
-// 覆盖六件事：① 待过闸判定；② 付费通道成功；③ 付费通道灵枢不足被拒；
+// 覆盖六件事：① 待过闸判定；② 付费通道成功；③ 付费通道资源不足被拒；
 //   ④ 试炼通道成功（抽牌 + 执行效果树）；⑤ **引擎层门禁**（停在关隘上时其它行动一律被拒）；
 //   ⑥ 自动解算出口（AI / 脚本用）。
 
@@ -20,7 +20,7 @@ import type { Card, ThemePack } from '../../engine/types/theme.ts';
 const GATE_INDEX = 6;
 const GATE_FEE = 3;
 
-/** 装主题并把座 0 放到关隘格上（`resource` 可调，用于灵枢不足的分支）。 */
+/** 装主题并把座 0 放到关隘格上（`resource` 可调，用于资源不足的分支）。 */
 function gateScene(resource = 10): State {
   const theme = JSON.parse(readFileSync(resolve('themes/xianxia2026/theme.json'), 'utf8')) as ThemePack;
   const s0 = installTheme(createInitialState({ players: 4, seed: 7, deckSize: 40 }), theme);
@@ -75,10 +75,10 @@ test('B18：付费通道 —— 扣标价、记通过标记', () => {
   assert.equal(p0?.flags[`gate_${String(GATE_INDEX)}`], true, '应记录通过标记');
 });
 
-test('B18：付费通道 —— 灵枢不足 ⇒ 拒绝且状态不变', () => {
+test('B18：付费通道 —— 资源不足（基准印「灵枢」）⇒ 拒绝且状态不变', () => {
   const s = gateScene(1);
   const r = resolveGate(s, 0, 'pay');
-  assert.equal(r.ok, false, '灵枢不足必须被拒');
+  assert.equal(r.ok, false, '资源不足必须被拒');
   assert.equal(r.state, s, '被拒时状态必须原样返回（无副作用）');
   // B79 §5.1：引擎交出的是**占位符形态**，所以判据也跟着转形式（不是放宽——玩家看到的
   //   句子由出口展开，那条正面断言在 tests/engine/card-cost.test.ts 的 B65/A-5b 与 T14 的 R3）。
@@ -107,7 +107,7 @@ test('B18-c：关隘试炼发的牌当场裁到手牌上限（结算期通道选
   // ⚠️ 根因（实测定位）：超限者**全部停在关隘格**、且只超 **1 张牌**
   //   ⇒ 关隘 6 的试炼牌 `t_sword` 无论成败都 `draw_cards(1)`；
   //   而试炼通道发生在**手番结算之后** ⇒ 手番末的裁牌已跑完、回合末裁牌又被阻塞延后 ⇒ 超限。
-  const s = gateScene(1); // 灵枢 1 ⇒ 付费不够，只能走试炼
+  const s = gateScene(1); // 资源 1 ⇒ 付费不够，只能走试炼
   const p0 = s.players[0];
   assert.ok(p0 !== undefined);
   // 把座 0 的手牌填满上限（不填满则「超限」测不出来）
@@ -163,7 +163,7 @@ test('B19：出牌比对通道 —— 胜则通过、败则退 1 格并被封口
 test('B19-b：试炼失败 ⇒ 本关改为付费（此后只剩付费通道，付不起则判未通过放行）', () => {
   // 场景：座 0 站在 30 号关隘（B22 后 t_toll 在其试炼池）。
   // ⚠️ 只有 **7–8 人局**才是 36 格 / 4 座关隘（规模表 §8 gateCount=4）⇒ 本场景用 8 人局；
-  //   4 人局只有 28 格 / 3 座关隘，30 号格会被 fitBoard **降级为普通格** ⇒ 根本不是关隘。，灵枢 0 ⇒ 付费不可用 ⇒ 走试炼。
+  //   4 人局只有 28 格 / 3 座关隘，30 号格会被 fitBoard **降级为普通格** ⇒ 根本不是关隘。资源 0 ⇒ 付费不可用 ⇒ 走试炼。
   const theme = JSON.parse(readFileSync(resolve('themes/xianxia2026/theme.json'), 'utf8')) as ThemePack;
   const s0 = installTheme(createInitialState({ players: 8, seed: 7, deckSize: 40 }), theme);
   const toll = s0.decks.trial.find((c) => c.id === 't_toll');
@@ -177,7 +177,7 @@ test('B19-b：试炼失败 ⇒ 本关改为付费（此后只剩付费通道，�
   };
   const r = resolveGate(scene, 0, 'trial');
   assert.equal(r.ok, true, '试炼通道应被受理：' + String(r.note));
-  assert.equal(r.passed, false, '灵枢不足 ⇒ 试炼未通过');
+  assert.equal(r.passed, false, '资源不足 ⇒ 试炼未通过');
   assert.equal(r.state.players[0]?.flags['gate_pay_30'], true, '应标记「本关改为付费」');
   assert.notEqual(r.state.players[0]?.flags['gate_30'], true, '未通过 ⇒ 不写通过标记');
   // 仍停在关隘上，但**只剩付费通道**（粗筛只发 pay）。
@@ -193,12 +193,12 @@ test('B19-b：试炼失败 ⇒ 本关改为付费（此后只剩付费通道，�
   assert.equal(pendingGate(poor.state, 0), null, '放行后不再停在关隘');
 });
 
-test('B18：自动解算出口 —— 灵枢够就付费，不够走试炼', () => {
+test('B18：自动解算出口 —— 资源够就付费，不够走试炼', () => {
   const rich = autoResolveGate(gateScene(10), 0);
   assert.equal(rich.players[0]?.flags[`gate_${String(GATE_INDEX)}`], true);
-  assert.equal(rich.players[0]?.resource, 10 - GATE_FEE, '灵枢够 ⇒ 自动付费');
-  // ⚠️ B22：灵枢不足 ⇒ 自动走试炼；B26：试炼判定升级为「至少 2 张身法牌」⇒ 固定「只留 t_oath」并**显式构造手牌**。
+  assert.equal(rich.players[0]?.resource, 10 - GATE_FEE, '资源够 ⇒ 自动付费');
+  // ⚠️ B22：资源不足 ⇒ 自动走试炼；B26：试炼判定升级为「至少 2 张身法牌」⇒ 固定「只留 t_oath」并**显式构造手牌**。
   const poor = autoResolveGate(withMotionHand(onlyTrials(gateScene(2), ['t_oath'])), 0);
-  assert.equal(poor.players[0]?.flags[`gate_${String(GATE_INDEX)}`], true, '灵枢不足 ⇒ 自动走试炼');
-  assert.equal(poor.players[0]?.resource, 2, '试炼通道不扣灵枢（灵枢 2 原样保留）');
+  assert.equal(poor.players[0]?.flags[`gate_${String(GATE_INDEX)}`], true, '资源不足 ⇒ 自动走试炼');
+  assert.equal(poor.players[0]?.resource, 2, '试炼通道不扣资源（资源 2 原样保留）');
 });

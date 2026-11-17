@@ -63,8 +63,8 @@ test('State 契约：清零不影响玩家其他状态（不可误伤）', () =>
   };
   const cleared = clearTurnStates(dirty);
   const p = at(cleared.players, 0);
-  assert.equal(p.resource, 7, '灵枢不得被清零影响');
-  assert.equal(p.hp, 3, '体力不得被清零影响');
+  assert.equal(p.resource, 7, '资源不得被清零影响');
+  assert.equal(p.hp, 3, 'HP 不得被清零影响');
   assert.equal(p.position, 12, '位置不得被清零影响');
   assert.equal(p.hasMark, true, '印记不得被清零影响');
   assert.equal(p.pendingCert, true, '待认证标记不得被清零影响');

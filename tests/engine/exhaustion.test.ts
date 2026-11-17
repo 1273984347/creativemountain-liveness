@@ -163,7 +163,7 @@ test('B76：力竭 ⇒ 主动被动被拒（performAbility ok:false，note 含�
   assert.ok((r.note ?? '').includes('力竭'), r.note);
 });
 
-test('B76：力竭 ⇒ 不能发起质疑（且不扣灵枢——拒在扣费前）', () => {
+test('B76：力竭 ⇒ 不能发起质疑（且不扣资源——拒在扣费前）', () => {
   const s0 = putPending(mk(4, 7), [1]);
   const s = exhaust(s0, 0);
   assert.deepEqual(s.certification.pending, [1], '前提：座 1 真的在待认证（player 字段与认证状态两回事）');

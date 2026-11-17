@@ -60,7 +60,7 @@ function playRounds(start: State, rounds: number): State {
 /** 状态合法性体检（跑完一局后逐玩家核对）。 */
 function assertLegal(s: State, label: string): void {
   for (const p of s.players) {
-    assert.ok(Number.isFinite(p.hp) && p.hp >= 0, `${label} 座${p.seat} 体力非法：${p.hp}`);
+    assert.ok(Number.isFinite(p.hp) && p.hp >= 0, `${label} 座${p.seat} HP 非法：${p.hp}`);
     assert.ok(Number.isFinite(p.resource) && p.resource >= 0, `${label} 座${p.seat} 资源非法：${p.resource}`);
     assert.ok(Number.isFinite(p.shield) && p.shield >= 0, `${label} 座${p.seat} 护盾非法：${p.shield}`);
     assert.ok(
@@ -112,7 +112,7 @@ for (const id of THEME_IDS) {
     assert.ok(faction !== undefined, '阵营应能在主题里找到');
     assert.ok(
       s.players[0]?.hpMax === faction.hpBase || s.players[0]?.hpMax === s.scales.handStart,
-      '体力上限应来自阵营体力或规模表起始手牌下限',
+      'HP 上限应来自阵营 HP 或规模表起始手牌下限',
     );
     // 每人都发到起始手牌（开局天机可能额外发 1 张，故用区间）
     for (const p of s.players) {

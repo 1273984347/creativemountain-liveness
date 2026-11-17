@@ -176,10 +176,10 @@ test('试跑：山议投票与认证签印在对应局面合法', () => {
 test('试跑：复议必须由待认证者本人发起（旧手写镜像方向有误）', () => {
   const s = pendingScene();
   assert.equal(probeAction(s, { type: 'CERTIFY_APPEAL', actor: 1, target: 0 }).ok, false, '认证人不能替别人申请');
-  // 反方向也要钉住：`certifyAppeal` 的真实前置是 `target === actor` 且灵枢 >= 2，
+  // 反方向也要钉住：`certifyAppeal` 的真实前置是 `target === actor` 且资源 >= 2，
   // 只在「非本人」一条上断言的话，把两个参数写反同样能骗过这条用例。
   assert.equal(probeAction(pendingScene(), { type: 'CERTIFY_APPEAL', actor: 0, target: 0 }).ok, true,
-    '待认证者本人（座 0 灵枢 5 >= 2）申请复议必须合法');
+    '待认证者本人（座 0 资源 5 >= 2）申请复议必须合法');
 });
 
 test('试跑：15 个动作类型逐一有明确判定，且每次试跑都不消耗原 state 的随机源', () => {
@@ -551,7 +551,7 @@ function challengedThenPendingScene(): State {
  * ⇒ `pending=[0,3]`、`appealed=[0]`、`judgments={1:false}`。
  * 引擎判据：`certifyAppealVote` 只排除**申请人**与**判定人**，而 `resolveAppeals` 把
  * 「存活 − 判定人 − 待认证对象」全算作独立第三方 ⇒ 座 3（同为待认证者）的复议票是被接受的。
- * ⚠️ 座 0 补到 5 灵枢是复议的成本（`certifyAppeal` 需 2），与 fixtures 的 `appealedScene` 同一手法。
+ * ⚠️ 座 0 补到 5 资源是复议的成本（`certifyAppeal` 需 2），与 fixtures 的 `appealedScene` 同一手法。
  */
 function coPendingAppealScene(): State {
   const challenged = certifyChallenge(putPending(mk(5, 7), [0]), 1, 0);
@@ -834,10 +834,10 @@ function wideHandScene(handSize: number, players = 4, seed = 7): State {
  * 「候选超上限、接受数却不足上限」的角落局面（发现 3 取证）。
  *
  * 构造：8 人局 + 座 1–7 全部待认证（`putPending` 的真实引擎入口）+ 座 0 拿到 44 张可打的牌
- *   + 座 0 灵枢清零。
+ *   + 座 0 资源清零。
  * 数字（全部由 `LEGAL_ACTION_CAP` 表达，不写死）：
  *   粗筛 = 2（行棋/问天）+ 44（出牌）+ 7×3（签印/质疑/弃权）= `CAP + 3` = 67；
- *   `certifyChallenge` 要 1 灵枢（粗筛**不看**费用，G-a 同族）⇒ 那 7 条被引擎拒
+ *   `certifyChallenge` 要 1 资源（粗筛**不看**费用，G-a 同族）⇒ 那 7 条被引擎拒
  *   ⇒ 接受 = 60 < `CAP` ⇒ `getLegalActions` 里那条 `break` 从不执行 ⇒ **没丢任何候选**，
  *     而 `truncated` 按 brief 口径报真。
  * ⚠️ 只改 `hand` 与座 0 的 `resource`（复议/质疑的成本），认证字段一律走引擎入口。
@@ -888,7 +888,7 @@ const gateWhileBlockedScene = (seed: number): State =>
  * 漂移守卫遍历的局面集（按 seed 参数化；含两处 co-pending 真漂移取证局面）。
  *
  * ⚠️ 修复轮新增的后四个局面（裁定 R-3：原九局面**抓不到**以下几处判据被删，变异实测见报告）：
- *   · `starvedCertScene` —— 全座位灵枢归零 ⇒ 钉 `uiAllows` 的 `resource >= 1 / >= 2` 两条（R-4 保留并钉死）；
+ *   · `starvedCertScene` —— 全座位资源归零 ⇒ 钉 `uiAllows` 的 `resource >= 1 / >= 2` 两条（R-4 保留并钉死）；
  *   · `appealVoteCastScene` —— 复议票真的落账过 ⇒ 钉「已投过复议票」在门禁层与粗筛层的那一对判据；
  *   · `exiledCouncilAppealScene` —— 有座位被山议放逐**且**复议窗口还开着 ⇒ 钉存活早退与三处存活/非本人判据；
  *   · `councilVotedActionPanelScene` —— 山议进行中且座 0 已投过一票 ⇒ 钉 VOTE 的「已投过票」并供 R-2 的行动面板场景。
@@ -1034,10 +1034,10 @@ test('漂移守卫（常驻·候选层）：uiCandidates == candidatesOf（粗�
 // ---- 修复轮新增的四个局面（全部引擎入口构造，只动 resource / hand / flags.passive）----
 
 /**
- * 「灵枢见底」的认证局面（裁定 R-3 其二；同时把 R-4 保留的两条 `resource >=` 钉成可失败判据）。
+ * 「资源见底」的认证局面（裁定 R-3 其二；同时把 R-4 保留的两条 `resource >=` 钉成可失败判据）。
  *
  * `pending` 走 `putPending`（真实 `enterPendingCertification` + `advanceCertificationRound`），
- * 之后只把 `resource` 归零、`hand` 削到 2 张——质疑要 1 灵枢、复议要 2 灵枢 ⇒ 这两类动作引擎必拒，
+ * 之后只把 `resource` 归零、`hand` 削到 2 张——质疑要 1 资源、复议要 2 资源 ⇒ 这两类动作引擎必拒，
  * 而 `candidatesOf` 的粗筛**不看费用**（G-a 同族）⇒ 「UI 侧少了那条费用判据」只能从**枚举层守卫**露出来。
  * ⚠️ 手牌削小、待认证者只留 2 名：候选 10 条，远低于 `LEGAL_ACTION_CAP`
  *   ——撞上限时两侧一起被截断，比的就是截断而不是判据（`overCapCornerScene` 是同一手法的价格参照）。
@@ -1049,7 +1049,7 @@ function starvedCertScene(seed: number): State {
     players: base.players.map((p) => ({ ...p, resource: 0, hand: p.hand.slice(0, 2) })),
   };
   assert.deepEqual(s.players.map((p) => p.resource), [0, 0, 0, 0],
-    'starvedCertScene：局面名承诺「灵枢见底」⇒ 全座位 resource 必须为 0');
+    'starvedCertScene：局面名承诺「资源见底」⇒ 全座位 resource 必须为 0');
   for (const seat of [0, 1]) {
     assert.ok(candidatesOf(s, seat).length < LEGAL_ACTION_CAP,
       `starvedCertScene：座${String(seat)} 候选必须留在上限之下（否则两侧一起被截断，测不到判据）`);
@@ -1058,13 +1058,13 @@ function starvedCertScene(seed: number): State {
   }
   // 牙齿前提：候选**在册**而枚举**被拒**——这条差值正是 uiAllows 那两条费用判据的容身之处。
   assert.ok(candidatesOf(s, 0).some((a) => a.type === 'CERTIFY_CHALLENGE'),
-    'starvedCertScene：0 灵枢的质疑候选必须在粗筛里（粗筛不发就谈不上门禁可删）');
+    'starvedCertScene：0 资源的质疑候选必须在粗筛里（粗筛不发就谈不上门禁可删）');
   assert.equal(getLegalActions(s, 0).some((a) => a.type === 'CERTIFY_CHALLENGE'), false,
-    '引擎侧：certifyChallenge 需 1 灵枢 ⇒ 0 灵枢必被拒');
+    '引擎侧：certifyChallenge 需 1 点资源 ⇒ 0 资源必被拒');
   assert.ok(candidatesOf(s, 1).some((a) => a.type === 'CERTIFY_APPEAL'),
     'starvedCertScene：座 1（待认证者）的复议候选必须在粗筛里');
   assert.equal(getLegalActions(s, 1).some((a) => a.type === 'CERTIFY_APPEAL'), false,
-    '引擎侧：certifyAppeal 需 2 灵枢 ⇒ 0 灵枢必被拒（死的「申请复议」按钮由此判死）');
+    '引擎侧：certifyAppeal 需 2 点资源 ⇒ 0 资源必被拒（死的「申请复议」按钮由此判死）');
   return s;
 }
 
@@ -1187,13 +1187,13 @@ function councilVetoSceneWithTop(seed: number, holder: number, top: number): Sta
 }
 
 
-/** B76：力竭自恢场景——座 0 力竭、灵枢充足 ⇒ 三层都必须发自恢候选。 */
+/** B76：力竭自恢场景——座 0 力竭、资源充足 ⇒ 三层都必须发自恢候选。 */
 function exhaustedSelfScene(seed: number): State {
   const s = mk(4, seed);
   return { ...s, players: s.players.map((p) => (p.seat === 0 ? { ...p, exhaustedRounds: 2, resource: 3, hp: 0 } : p)) };
 }
 
-/** B76：力竭救援场景——座 1 力竭、座 0 不力竭且有灵枢 ⇒ 三层都必须发救援候选。 */
+/** B76：力竭救援场景——座 1 力竭、座 0 不力竭且有资源 ⇒ 三层都必须发救援候选。 */
 function exhaustedRescueScene(seed: number): State {
   const s = mk(4, seed);
   return { ...s, players: s.players.map((p) => (p.seat === 1 ? { ...p, exhaustedRounds: 2, resource: 0, hp: 0 } : p)) };
@@ -1308,19 +1308,19 @@ test('面板可点性 == 引擎认证面（R-1 常驻）：cert 面板每个按�
   }
 });
 
-test('行为变化 3（R-1 的后果）：待认证者灵枢不足时不再给出死的「申请复议（-2 灵枢）」按钮', () => {
+test('行为变化 3（R-1 的后果）：待认证者资源不足时不再给出死的「申请复议（-2 资源）」按钮', () => {
   const s = starvedCertScene(7);
   // 旧的手写显隐判据在这里**为真**（本人待认证且未申请过）⇒ 本条测的正是它与 uiAllows 的分歧。
   assert.equal(s.certification.pending.includes(1) && !s.certification.appealed.includes(1), true,
     '前提自查：旧手写判据（pending ∧ 未申请）此时必须为真，否则这条没在测分歧');
   const appeal: Action = { type: 'CERTIFY_APPEAL', actor: 1, target: 1 };
-  assert.equal(uiAllows(s, 1, appeal), false, '引擎 0 灵枢必拒 ⇒ UI 也不给点（新代码必须站 uiAllows 这边）');
+  assert.equal(uiAllows(s, 1, appeal), false, '引擎 0 资源必拒 ⇒ UI 也不给点（新代码必须站 uiAllows 这边）');
   // B79 §5.1：`uiBlockNotice` 现在交出占位符形态 ⇒ 判据跟着转形式（「点名成本来源」这条
   //   要求本身一字没放宽；玩家看到的句子由 card-cost.test.ts 的 B65/A-5b 正面钉）。
   assert.match(uiBlockNotice(s, 1, appeal) ?? '', /2 \{resource\}/, '拒绝理由要点名成本来源，不能只说「不可申请」');
   // ⚠️ **B67 更新**：本条原断言「座 1 在面板上不得拿到**任何**按钮」——
   //   但 G-d 接线后**互签**成了待认证者的另一个合法入口，且**互签不花钱**（是待认证者之间的签印）
-  //   ⇒ 灵枢不足**不该**连带禁掉互签 ⇒ 断言须改为「不得出现**要花钱**的复议按钮」。
+  //   ⇒ 资源不足**不该**连带禁掉互签 ⇒ 断言须改为「不得出现**要花钱**的复议按钮」。
   //   ⚠️ 面板上若还有别的免费入口（如互签），本条**不该**断言「一颗按钮都没有」——
   //   那会把「免费入口」也误判成缺陷。
   const panel = certClickableActions(s, 1).map(actionKey);
@@ -1328,7 +1328,7 @@ test('行为变化 3（R-1 的后果）：待认证者灵枢不足时不再给�
     '座 1 在面板上不得拿到「申请复议」按钮（旧代码会挂出一个点了就静默失败的复议按钮）');
   // ⚠️ 互签对象是**另一位待认证者**（本局面 `pending=[1,2]` ⇒ 座 1 与座 2 互签）
   assert.equal(panel.filter((k) => k === 'cert:mutual:2').length, 1,
-    '座 1 与座 2 互签的按钮**应当**出现（互签不花钱 ⇒ 不受灵枢不足影响）');
+    '座 1 与座 2 互签的按钮**应当**出现（互签不花钱 ⇒ 不受资源不足影响）');
 });
 
 // ---- ③ 拒绝不得沉默（R-2）----

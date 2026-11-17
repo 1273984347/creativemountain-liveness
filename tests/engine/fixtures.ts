@@ -11,7 +11,7 @@
 //   · `certifyChallenge` 遇目标持山主 `certify_free_pass`：本次质疑**视为签印**，
 //     `challenged` 里根本没有质疑人（certification.ts:133-145）；
 //   · `certifyAppeal` **不要求**已存在失败判定（certification.ts:206-220 只查 pending、
-//     target === actor、本轮未申请过、灵枢 >= 2）⇒ 判定若是「通过」它照样返回 ok:true。
+//     target === actor、本轮未申请过、资源 >= 2）⇒ 判定若是「通过」它照样返回 ok:true。
 //   若 builder 只看 `.ok`，就会把这些「假局面」交给 Tasks 6–8，表现为下游一条莫名其妙的红。
 //   故每个 builder 收尾都断言「局面名承诺的字段」，失败消息里带上 builder 名与引擎 `note`。
 import assert from 'node:assert/strict';
@@ -143,14 +143,14 @@ export function appealedScene(players = 5, seed = 7): State {
   const answered = certifyAnswer(challengedScene(players, seed), 1, 0, false);
   assert.ok(answered.ok, 'appealedScene：判定必须落账，否则后续断言无意义：' + noteOf(answered.note));
   // 后置：局面名承诺「判不通过」。certifyAppeal **并不**要求失败判定存在
-  // （只查 pending / target === actor / 本轮未申请过 / 灵枢 >= 2），
+  // （只查 pending / target === actor / 本轮未申请过 / 资源 >= 2），
   // 所以「判通过」也能一路走到 appealed=[0] ⇒ 必须在源头就把 judgments[1] === false 钉死。
   assert.equal(answered.state.certification.judgments[1], false,
     `appealedScene：局面名承诺「座 1 判座 0 不通过」⇒ certification.judgments[1] 必须是 false，`
     + `实际 judgments[1]=${String(answered.state.certification.judgments[1])}；`
     + `引擎 note=` + noteOf(answered.note));
   const judged = answered.state;
-  // certifyAppeal 的前置是 resource >= 2 且 target === actor——先补足灵枢再申请。
+  // certifyAppeal 的前置是 resource >= 2 且 target === actor——先补足资源再申请。
   const rich: State = { ...judged, players: judged.players.map((p) => (p.seat === 0 ? { ...p, resource: 5 } : p)) };
   const r = certifyAppeal(rich, 0, 0);
   assert.ok(r.ok, 'appealedScene：复议申请必须成功，否则后续断言无意义：' + noteOf(r.note));

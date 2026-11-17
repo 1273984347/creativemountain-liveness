@@ -1,6 +1,6 @@
 // 关隘通道**余量规则**（B24）的引擎层回归。
 //
-// 覆盖：① 付费后仍余 ≥ 2 灵枢 ⇒ AI 直接付费；② 付得起但会掏空 ⇒ AI 改走**试炼**（博一把）；
+// 覆盖：① 付费后仍余 ≥ 2 资源 ⇒ AI 直接付费；② 付得起但会掏空 ⇒ AI 改走**试炼**（博一把）；
 //   ③ 余量不足 + 试炼失败 ⇒ 本关改为付费 ⇒ 再付费即通过；④ 已改为付费的关隘 ⇒ 引擎层**拒绝**
 //   再试炼 / 再比牌；⑤ 完全付不起 ⇒ 仍走试炼（B22 既有行为不变）。
 
@@ -40,7 +40,7 @@ function gateScene(gateIndex: number, resource: number, trials: readonly string[
   };
 }
 
-test('B24：余量判据 —— 付费后仍余 ≥ 2 灵枢才算体面付费', () => {
+test('B24：余量判据 —— 付费后仍余 ≥ 2 资源才算体面付费', () => {
   assert.equal(canPayGateWithReserve(6, 4), true, '付 4 剩 2 ⇒ 体面');
   assert.equal(canPayGateWithReserve(5, 4), false, '付 4 剩 1 ⇒ 余量不足');
   assert.equal(canPayGateWithReserve(4, 4), false, '付 4 剩 0 ⇒ 余量不足');
@@ -56,7 +56,7 @@ test('B24：余量充足 ⇒ AI 直接付费（不走试炼）', () => {
 });
 
 test('B24：余量不足（付得起但会掏空）⇒ AI 改走试炼', () => {
-  // 14 号关标价 4；灵枢 5 ⇒ 付完只剩 1 < 余量 2 ⇒ 走试炼。
+  // 14 号关标价 4；资源 5 ⇒ 付完只剩 1 < 余量 2 ⇒ 走试炼。
   const s = gateScene(14, 5, ['t_sutra']);
   const r = autoResolveGate(s, 0);
   assert.equal(r.log.some((l) => l.kind === 'trial'), true, '应走试炼通道（博一把）');
@@ -64,7 +64,7 @@ test('B24：余量不足（付得起但会掏空）⇒ AI 改走试炼', () => {
 });
 
 test('B24：余量不足 + 试炼失败 ⇒ 本关改为付费 ⇒ 再付费即通过', () => {
-  // 22 号关标价 4；灵枢 4 ⇒ 付完剩 0 < 余量 2 ⇒ 走试炼；t_silent 判定「手上有守御类牌」
+  // 22 号关标价 4；资源 4 ⇒ 付完剩 0 < 余量 2 ⇒ 走试炼；t_silent 判定「手上有守御类牌」
   // 而手牌被清空 ⇒ 必失败 ⇒ 本关改为付费 ⇒ 之后付费即通过（余量规则的语义：先博一把）。
   const s = gateScene(22, 4, ['t_silent'], []);
   const r1 = autoResolveGate(s, 0);
@@ -94,7 +94,7 @@ test('B24：完全付不起 ⇒ 仍走试炼（B22 既有行为不变）', () =>
 });
 
 test('B24：付费通道本身不受余量规则影响（玩家显式付费照常通过）', () => {
-  // 规则只约束 **AI 自动解算**；玩家显式选付费时按标价扣灵枢（余量不足也允许）。
+  // 规则只约束 **AI 自动解算**；玩家显式选付费时按标价扣资源（余量不足也允许）。
   const s = gateScene(14, 4);
   const r = resolveGate(s, 0, 'pay');
   assert.equal(r.ok, true, '玩家付费应受理');

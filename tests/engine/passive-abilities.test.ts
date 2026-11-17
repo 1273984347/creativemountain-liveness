@@ -55,7 +55,7 @@ test('B12：开拓者 —— 行棋时本回合首次移动 +1 格', () => {
 
 // ---------- 匠师：每场限 1 次免费造物 ----------
 
-test('B12：匠师 —— 免费造物（从造物牌堆取牌加入手牌，不花灵枢）', () => {
+test('B12：匠师 —— 免费造物（从造物牌堆取牌加入手牌，不花资源）', () => {
   const s = withPassive(game(5), 0, { op: 'create_card', cardId: 'c_talisman' });
   const before = s.players[0]?.hand.length ?? 0;
   const creationBefore = s.decks.creation.length;
@@ -91,23 +91,23 @@ test('B12：守夜人 —— 回合结束时获得 1 点护盾', () => {
   assert.ok(next.log.some((l) => l.message.startsWith('[被动:shield]')), '应有被动日志');
 });
 
-// ---------- 窃火者：每回合可偷 1 枚灵枢 ----------
+// ---------- 窃火者：每回合可偷 1 枚资源 ----------
 
-test('B12：窃火者 —— 偷取目标 1 枚灵枢（目标 −1、自己 +1）', () => {
+test('B12：窃火者 —— 偷取目标 1 枚资源（目标 −1、自己 +1）', () => {
   const s = withPassive(game(9), 0, { op: 'transfer_resource', amount: 1, target: 0 });
   const rich = s.players[1];
-  assert.ok(rich !== undefined && rich.resource >= 1, '目标须有灵枢');
+  assert.ok(rich !== undefined && rich.resource >= 1, '目标须有资源');
   const r = performAbility(s, 0, 1);
   assert.equal(r.ok, true, '应发动成功：' + r.note);
   assert.equal(r.state.players[1]?.resource, (rich.resource ?? 0) - 1, '目标 −1');
   assert.equal(r.state.players[0]?.resource, (s.players[0]?.resource ?? 0) + 1, '自己 +1');
 });
 
-test('B12：窃火者 —— 不选目标 / 目标无灵枢 ⇒ 发动失败（不消耗行动）', () => {
+test('B12：窃火者 —— 不选目标 / 目标无资源 ⇒ 发动失败（不消耗行动）', () => {
   const s = withPassive(game(9), 0, { op: 'transfer_resource', amount: 1, target: 0 });
   assert.equal(performAbility(s, 0).ok, false, '未选目标应失败');
   const poor = { ...s, players: s.players.map((p) => (p.seat === 1 ? { ...p, resource: 0 } : p)) };
-  assert.equal(performAbility(poor, 0, 1).ok, false, '目标无灵枢应失败');
+  assert.equal(performAbility(poor, 0, 1).ok, false, '目标无资源应失败');
 });
 
 // ---------- 织梦者：每回合 1 次改自己的险径判定 ----------
@@ -117,7 +117,7 @@ test('B12：织梦者 —— 改写自己的险径判定为安全（消费点在
   const r = performAbility(s, 0);
   assert.equal(r.ok, true, '应发动成功：' + r.note);
   assert.equal(r.state.players[0]?.flags.judgementModified, true, '应挂上改判定标记');
-  // 落到险径格 ⇒ 安全通过（不扣体力）且标记被消费
+  // 落到险径格 ⇒ 安全通过（不扣HP）且标记被消费
   const hazard = r.state.board.tiles.find((t) => t.kind === 'hazard');
   assert.ok(hazard !== undefined, '主题棋盘应有险径格');
   const onHazard: State = {
@@ -126,7 +126,7 @@ test('B12：织梦者 —— 改写自己的险径判定为安全（消费点在
   };
   const hpBefore = onHazard.players[0]?.hp ?? 0;
   const after = finishTurn(onHazard, 0);
-  assert.equal(after.players[0]?.hp, hpBefore, '体力不应减少（判定被改写为安全）');
+  assert.equal(after.players[0]?.hp, hpBefore, 'HP 不应减少（判定被改写为安全）');
   assert.equal(after.players[0]?.flags.judgementModified, false, '标记应被消费');
 });
 

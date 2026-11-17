@@ -151,10 +151,10 @@ test('B75.2：达阈即停 —— stolenTotal ≥ count ⇒ 不再追（不无�
   assert.equal(goalPursuit(s, 0), null, '已偷满 5 枚 ⇒ 追goal结束，回到正常行动带');
 });
 
-test('B75.2：无目标可偷 ⇒ 回落 null（对手灵枢全部 < amount）', () => {
+test('B75.2：无目标可偷 ⇒ 回落 null（对手资源全部 < amount）', () => {
   let s = withPassiveAndGoal(mk(4, 7), 0, { op: 'transfer_resource', amount: 1 }, 'steal_count', 5);
   s = { ...s, players: s.players.map((p) => (p.alive && p.seat !== 0 ? { ...p, resource: 0 } : p)) };
-  assert.equal(goalPursuit(s, 0), null, '没人有灵枢 ⇒ 追不动，回落正常行动带');
+  assert.equal(goalPursuit(s, 0), null, '没人有资源 ⇒ 追不动，回落正常行动带');
 });
 
 test('B75.2：织梦者追goal —— 改判挂标记并计数；达阈即停', () => {
@@ -194,7 +194,7 @@ test('B75.2：非追goal目标 / 无被动 / 待认证锁定 ⇒ 一律 null', (
 import { selfRecuperateChoice, rescueChoice } from '../../tests/sim/policy.mjs';
 import { triggerExhaustion, recoverFromExhaustion } from '../../engine/core/exhaustion.ts';
 
-/** 夹具：座 seat 力竭 + 灵枢置值；座 victim 力竭归零。 */
+/** 夹具：座 seat 力竭 + 资源置值；座 victim 力竭归零。 */
 function exhaustedShape(s: State, self: number, resource: number, victim?: number): State {
   return { ...s, players: s.players.map((p) => {
     if (p.seat === self) { return { ...p, exhaustedRounds: 2, resource, hp: 0 }; }
@@ -203,7 +203,7 @@ function exhaustedShape(s: State, self: number, resource: number, victim?: numbe
   }) };
 }
 
-test('B76：自恢占位概率——力竭 + 灵枢≥2 跨 seed 扫描 seen 两值（0.5 真判据）', () => {
+test('B76：自恢占位概率——力竭 + 资源≥2 跨 seed 扫描 seen 两值（0.5 真判据）', () => {
   const seen = new Set<boolean>();
   for (let seed = 7; seed < 80 && seen.size < 2; seed++) {
     seen.add(selfRecuperateChoice(exhaustedShape(mk(4, seed), 0, 3), 0));
@@ -219,7 +219,7 @@ test('B76：非力竭座位 ⇒ selfRecuperateChoice 恒 false 且零 rng 消耗
   assert.deepEqual(s.rng.snapshot(), before, '前置过滤不过 ⇒ 不抽签');
 });
 
-test('B76：力竭但灵枢不足 ⇒ false 且零 rng 消耗', () => {
+test('B76：力竭但资源不足 ⇒ false 且零 rng 消耗', () => {
   const s = exhaustedShape(mk(4, 7), 0, 1);
   const before = s.rng.snapshot();
   assert.equal(selfRecuperateChoice(s, 0), false);
@@ -227,7 +227,7 @@ test('B76：力竭但灵枢不足 ⇒ false 且零 rng 消耗', () => {
 });
 
 test('B76：救援占位——存在力竭他人跨 seed 两值；无力竭他人恒 false 零消耗', () => {
-  // ⚠️ 救援形状：**自己不力竭**（座 0 有灵枢）、他人（座 1）力竭——
+  // ⚠️ 救援形状：**自己不力竭**（座 0 有资源）、他人（座 1）力竭——
   //   首版夹具把自己也置力竭 ⇒ 「力竭者不能救援」正确早退 ⇒ 测试 vacuous（自纠）。
   const rescueShape = (seed: number): State => {
     const s0 = mk(4, seed);
