@@ -104,6 +104,38 @@ export function scanThemeWords(root, domains, words, whitelist) {
 export const SENTENCE_WHITELIST = new Map();
 
 /**
+ * 兜底词黑名单（B79 §2.4）：**不属于任何一套主题、却曾被当默认值写进文案**的词。
+ *
+ * 为什么单列一张表：R1 的禁字表 = 四套 `terms` 五叶取值的并集，这个定义天生看不见这类词——
+ * 「体力」不是任何一套的 hp 词（灵力/气血/机体完整度/精神值），却是 `termsOf` 里
+ * `hp ?? '体力'` 的默认值，同样的词还漏在引擎文案里两处（`exhaustion.ts:28`、`registry.ts:507`）。
+ * 只靠禁字表，「R1 已 0 命中」会是一句**边界没说清的实话**。
+ *
+ * ⚠️ 入表规则：**只收本批已清零的词**。把还没接线的词（`峰顶` 2 处、`裂隙` 13 处、`险径` 2 处，
+ *   见规格 §2.4 待裁定项）提前放进来 = 让守卫自红，然后被人顺手注释掉——那比没有守卫更糟。
+ *   它们接线后按同一规则加入。`牌库` 不入表：它是中立机制词（同 `资源`，§5.1.1 甲′ 口径）。
+ */
+export const FALLBACK_BAN = ['体力'];
+
+/** 扫兜底词（与 `scanThemeWords` 同一套行过滤，共用实现）。 */
+export function scanFallbackWords(root, domains, words = FALLBACK_BAN) {
+  const hits = [];
+  const base = resolve(root);
+  for (const domain of domains) {
+    for (const f of listSources(resolve(base, domain))) {
+      const rel = f.slice(base.length + 1).split('\\').join('/');
+      readFileSync(f, 'utf8').split('\n').forEach((line, i) => {
+        if (isComment(line)) { return; }
+        for (const w of words) {
+          if (line.includes(w)) { hits.push(`${rel}:${String(i + 1)} 兜底词「${w}」 ${line.trim().slice(0, 60)}`); }
+        }
+      });
+    }
+  }
+  return hits;
+}
+
+/**
  * R2：`alert(...)` 的参数里**直接**出现占位符字面量 = 忘了展开（定位辅助判据，规格 §5）。
  *
  * ⚠️ 只判「直含字面量」，不判「必须经展开函数」——后者会把合规的 `alert(t(x))` 一起误报，

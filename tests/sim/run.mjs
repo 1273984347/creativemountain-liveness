@@ -1025,7 +1025,7 @@ if (args.out !== null) {
   lines.push('> **抽取次数** = 试炼通道抽到该牌的次数；**通过率** = 通过次数 / 抽取次数。');
   lines.push('> **理论期望** = `(faces - amount + 1) / faces`（骰子型试炼；由主题包数据派生）。');
   lines.push('');
-  lines.push('> ⚠️ **样本量说明**：真实对局里试炼是**偶发事件**（AI 策略「灵枢够就付费」）⇒ 抽取次数很少 ⇒');
+  lines.push('> ⚠️ **样本量说明**：真实对局里试炼是**偶发事件**（AI 策略「资源够就付费」）⇒ 抽取次数很少 ⇒');
   lines.push('> 本表只作**可达性证据**（哪张牌被真正抽到过、哪些牌一次都没出现），**不作硬阈值**；');
   lines.push('> 精确判据见**定向长跑**（`node tests/sim/run.mjs --trial-rate` ⇒ 报告 `docs/trial-pass-rate.md`）。');
   lines.push('');

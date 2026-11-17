@@ -44,7 +44,9 @@ test('B77 ②：poison 扣血到 0 ⇒ 走 triggerExhaustion，且与 damage 触
   for (const [name, s] of [['poison', byPoison], ['damage', byDamage]] as const) {
     assert.equal(hpOf(s, 1), 0, `${name}：clamp 到 0，不得为负`);
     assert.equal(s.players[1]!.exhaustedRounds, 2, `${name}：必须走 exhaustion.ts 置 2，不是自置字段`);
-    assert.ok(s.log.some((l) => /^力竭：座位 1（体力归零）$/.test(l.message)), `${name}：力竭日志由 exhaustion.ts 负责`);
+    // B79 §5.1：引擎交出的是占位符形态 ⇒ 判据跟着转形式（展开后的玩家文案由
+    //   tests/gates/theme-word-runtime.test.ts 的 {hp} 条目正面钉住）。
+    assert.ok(s.log.some((l) => /^力竭：座位 1（\{hp\}归零）$/.test(l.message)), `${name}：力竭日志由 exhaustion.ts 负责`);
   }
   assert.equal(byPoison.players[1]!.exhaustedRounds, byDamage.players[1]!.exhaustedRounds,
     '两条触发路径等长（r3.2）：poison 触发的力竭同样会被本 round 末的家族 A 接手');

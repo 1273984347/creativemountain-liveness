@@ -32,3 +32,13 @@ export declare function scanThemeWords(
 
 /** R2：alert 参数里直含占位符字面量的位置。 */
 export declare function scanUnexpandedAlerts(root: string): string[];
+
+/** 兜底词黑名单（B79 §2.4）——只收本批已清零的词。 */
+export declare const FALLBACK_BAN: readonly string[];
+
+/** 扫兜底词（与 scanThemeWords 共用行过滤与注释豁免规则）。 */
+export declare function scanFallbackWords(
+  root: string,
+  domains: readonly string[],
+  words?: readonly string[],
+): string[];

@@ -504,7 +504,8 @@ export const OPS: OpHandlers = {
     if (pl === undefined) { return fail(ctx.state, '目标不存在'); }
     const hp = Math.min(pl.hpMax, pl.hp + p.amount);
     const state = withPlayer(ctx.state, t.seat, { hp });
-    return ok(withLog(state, ctx, 'heal', `恢复 ${hp - pl.hp} 点体力`));
+    // B79 §2.4：兜底词（四套都不用的 HP 叫法）走占位符，由出口按本主题展开。
+    return ok(withLog(state, ctx, 'heal', `恢复 ${hp - pl.hp} 点{hp}`));
   },
   /** 对峙（规格 §3.3）：红 > 黑 → 同色比 rank（A=14 最大）→ 全同平局。 */
   compare_cards: (ctx, p) => {

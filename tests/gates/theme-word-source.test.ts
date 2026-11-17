@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 import {
-  leafWordsFromThemes, scanThemeWords, scanUnexpandedAlerts, listSources,
+  leafWordsFromThemes, scanThemeWords, scanUnexpandedAlerts, scanFallbackWords, FALLBACK_BAN, listSources,
   SENTENCE_DOMAINS, SENTENCE_WHITELIST,
 } from '../../tools/theme-word-scan.mjs';
 import { SENTENCE_LEAVES } from '../../tools/theme-diff-check.mjs';
@@ -125,4 +125,38 @@ test('R2 负样本：alert 直投占位符必报；合规的 alert(t(…)) 与�
   const hits = scanUnexpandedAlerts(dir);
   assert.deepEqual(hits.map((h) => /:(\d+)\s/.exec(h)?.[1]), ['1'],
     `只该报第 1 行（直投），实际：${JSON.stringify(hits)}`);
+});
+
+// ---------- B79 §2.4：兜底词黑名单（禁字表定义范围之外的另一张网）----------
+
+test('§2.4 兜底词：engine/web 非注释行不得出现「体力」一类的第三套词', () => {
+  assert.deepEqual(scanFallbackWords(resolve('.'), SENTENCE_DOMAINS), [],
+    '⇒ 「体力」不是任何一套的 hp 词（灵力/气血/机体完整度/精神值），它是 termsOf 兜底词的孪生兄弟');
+});
+
+test('§2.4 表的自洽：FALLBACK_BAN 里每个词都必须在真实树上已经清零（否则守卫上线即红会被顺手注释）', () => {
+  assert.deepEqual(FALLBACK_BAN, ['体力'], '入表规则见 tools/theme-word-scan.mjs 的注释：只收已清零的词');
+  for (const w of FALLBACK_BAN) {
+    assert.deepEqual(scanFallbackWords(resolve('.'), SENTENCE_DOMAINS, [w]), [],
+      `「${w}」还在表内却有命中 ⇒ 要么接线、要么把它移出黑名单，不许留着让守卫自红`);
+  }
+  // 反面账：未接线的表外词必须**在规格 §2.4 里有名有数**，不能既不在禁字表也不在册上
+  const spec = readFileSync('docs/superpowers/specs/2026-11-16-b79-句子层主题词接线-design.md', 'utf8');
+  for (const w of ['峰顶', '裂隙', '险径', '牌库']) {
+    assert.ok(spec.includes(w), `§2.4 表外清单缺「${w}」⇒ 盲区必须写清，否则「R1 已 0 命中」会被读成全部清完`);
+  }
+});
+
+test('§2.4 负样本：把「体力」塞回引擎副本 ⇒ 必须被报出（证明这张网有牙齿）', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'b79-fb-'));
+  mkdirSync(join(dir, 'engine'), { recursive: true });
+  // 码点在**测试里**求值后拼进字符串（T13 的教训：把 `String.fromCharCode(...)` 当源码文本写进
+  // 文件，注入根本没落地，而「没注入」与「守卫没牙齿」在结果上完全同形）
+  const FALLBACK = String.fromCharCode(20307) + String.fromCharCode(21147);
+  const probe = `export const heal = '恢复 3 点${FALLBACK}';\n`;
+  writeFileSync(join(dir, 'engine', 'probe.ts'), probe, 'utf8');
+  assert.ok(readFileSync(join(dir, 'engine', 'probe.ts'), 'utf8').includes(FALLBACK), '前提失败：注入没落地');
+  const hits = scanFallbackWords(dir, ['engine'], [FALLBACK]);
+  assert.equal(hits.length, 1, `实际：${JSON.stringify(hits)}`);
+  assert.match(hits[0] ?? '', /probe\.ts:1/);
 });

@@ -134,6 +134,7 @@ test('B79 负样本的负样本：gate_fallback_pay 的开发者可见串也走�
 // 资源与 flags 直接摆在测试构造的状态上（本守卫判的是**文案**，不是机制；机制归
 // tests/engine/gate.test.ts 与门⑨）。
 import { payGate, drawTrial, resolveGate, resolveCompareGate } from '../../engine/core/gate.ts';
+import { triggerExhaustion } from '../../engine/core/exhaustion.ts';
 
 /** 把座 0 放到第一座关隘上（可选：预置「已转付费」标记与资源额）。 */
 function atGate(state: State, resource: number, payOnly = false): State {
@@ -495,4 +496,33 @@ test('B79 R3 反证：故意不传 terms ⇒ 占位符会露出来（证明上�
   const shown = logLineText(entry, theme.terms);
   assert.equal(/\{/.test(shown), false, `展开后仍有花括号：${shown}`);
   assert.equal(shown.includes('算力'), true, `展开没用本主题词：${shown}`);
+});
+
+// ---------- T15.1：{hp} 两行（规格 §2.4 表外兜底词）----------
+
+test('B79 §2.4：heal 与力竭日志交出 {hp}，基准展开后是本套的 HP 词', () => {
+  const cases: Array<[string, string]> = [['xianxia2026', '灵力'], ['scifi-ai', '机体完整度']];
+  for (const [id, hpWord] of cases) {
+    const theme = themeOf(id);
+    const base = installTheme(mk(4, 20260), theme);
+    const withHp: State = { ...base, players: base.players.map((p) => (p.seat === 1 ? { ...p, hp: p.hpMax - 3 } : p)) };
+
+    const before = withHp.log.length;
+    const healed = applyEffect({ state: withHp, actor: 0 }, { op: 'heal', amount: 2, target: 1 } as never);
+    const healTexts = textsOf({ state: healed.state, note: healed.note }, before);
+    const rawHeal = healTexts.find((x) => x.includes('恢复'));
+    assert.ok(rawHeal !== undefined, `没取到恢复文案：${JSON.stringify(healTexts)}`);
+    assert.ok(rawHeal.includes('{hp}'), `heal 仍是硬编码 HP 叫法：${rawHeal}`);
+
+    const exhausted = triggerExhaustion(withHp, 1);
+    const exLine = exhausted.log[exhausted.log.length - 1];
+    assert.ok(exLine !== undefined && exLine.message.includes('（{hp}归零）'), `力竭日志未走占位符：${exLine?.message ?? '(无)'}`);
+    assert.ok(exLine !== undefined && exLine.message.startsWith('力竭：'), '⇒ 前缀「力竭：」是仿真的计数键（§1），不许动');
+
+    // 出口展开后必须说本主题的词
+    const t = termExpander(theme.terms);
+    assert.ok(t(exLine?.message ?? '').includes(`（${hpWord}归零）`), `${id}：展开后应含「${hpWord}归零」`);
+    assert.ok(t(rawHeal).includes(hpWord), `${id}：heal 展开后应含「${hpWord}」`);
+    assert.equal(/\{/.test(t(rawHeal)), false, '展开后不得残留占位符');
+  }
 });

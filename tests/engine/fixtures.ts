@@ -177,7 +177,7 @@ export function councilScene(players = 4, seed = 7): State {
 /**
  * 某个座位**已出局**的局面（发现 2 的 e 项取证：粗筛窄于引擎的第五条）。
  *
- * ⚠️ 用**真实引擎入口**构造：`damage` 算子在体力归零时把目标置 `alive: false`
+ * ⚠️ 用**真实引擎入口**构造：`damage` 算子在 HP 归零时把目标置 `alive: false`
  *   （`engine/ops/registry.ts` 的 damage 分支）⇒ 不用手拼 `alive` 字段。
  *   打死之前先确认目标有手牌 —— 否则粗筛会因「无牌可打」而清空，
  *   取证就分不清是「死亡座位」这一条判据在起作用（⇒ 取证必须**只有这一个变量**）。

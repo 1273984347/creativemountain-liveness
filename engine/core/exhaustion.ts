@@ -25,7 +25,10 @@ export function triggerExhaustion(state: State, seat: number): State {
   return {
     ...state,
     players: state.players.map((x) => (x.seat === seat ? { ...x, exhaustedRounds: 2 } : x)),
-    log: [...state.log, logEntry(state, seat, '力竭：座位 ' + String(seat) + '（体力归零）')],
+    // B79 §2.4：「体力」是四套都不用的兜底词（hp 词是 灵力/气血/机体完整度/精神值），
+    //   与 §3.2 拆掉的 `hp ?? '体力'` 同源 ⇒ 走占位符，由出口按本主题展开。
+    //   ⚠️ 前缀「力竭：」是仿真的计数键（规格 §1），只有括注内部随主题走。
+    log: [...state.log, logEntry(state, seat, '力竭：座位 ' + String(seat) + '（{hp}归零）')],
   };
 }
 
