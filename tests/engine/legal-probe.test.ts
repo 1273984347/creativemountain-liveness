@@ -1315,7 +1315,9 @@ test('行为变化 3（R-1 的后果）：待认证者灵枢不足时不再给�
     '前提自查：旧手写判据（pending ∧ 未申请）此时必须为真，否则这条没在测分歧');
   const appeal: Action = { type: 'CERTIFY_APPEAL', actor: 1, target: 1 };
   assert.equal(uiAllows(s, 1, appeal), false, '引擎 0 灵枢必拒 ⇒ UI 也不给点（新代码必须站 uiAllows 这边）');
-  assert.match(uiBlockNotice(s, 1, appeal) ?? '', /2 灵枢/, '拒绝理由要点名成本来源，不能只说「不可申请」');
+  // B79 §5.1：`uiBlockNotice` 现在交出占位符形态 ⇒ 判据跟着转形式（「点名成本来源」这条
+  //   要求本身一字没放宽；玩家看到的句子由 card-cost.test.ts 的 B65/A-5b 正面钉）。
+  assert.match(uiBlockNotice(s, 1, appeal) ?? '', /2 \{resource\}/, '拒绝理由要点名成本来源，不能只说「不可申请」');
   // ⚠️ **B67 更新**：本条原断言「座 1 在面板上不得拿到**任何**按钮」——
   //   但 G-d 接线后**互签**成了待认证者的另一个合法入口，且**互签不花钱**（是待认证者之间的签印）
   //   ⇒ 灵枢不足**不该**连带禁掉互签 ⇒ 断言须改为「不得出现**要花钱**的复议按钮」。

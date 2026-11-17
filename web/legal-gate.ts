@@ -150,13 +150,13 @@ export function uiBlockNotice(state: State, seat: number, action: Action): strin
       const meNow = me;
       if (action.target === undefined) {
         if ((meNow?.exhaustedRounds ?? 0) === 0) { return '你并未力竭，无需自恢'; }
-        if ((meNow?.resource ?? 0) < 2) { return '灵枢不足（自恢需 2）'; }
+        if ((meNow?.resource ?? 0) < 2) { return `{resource}不足（自恢需 2）`; }
         return null;
       }
       const target = state.players[action.target];
       if ((meNow?.exhaustedRounds ?? 0) > 0) { return '力竭期间不能救援他人'; }
       if (target === undefined || !target.alive || (target.exhaustedRounds ?? 0) === 0) { return '目标并未力竭'; }
-      if ((meNow?.resource ?? 0) < 1) { return '灵枢不足（救援需 1）'; }
+      if ((meNow?.resource ?? 0) < 1) { return `{resource}不足（救援需 1）`; }
       return null;
     }
     case 'MOVE':
@@ -175,7 +175,7 @@ export function uiBlockNotice(state: State, seat: number, action: Action): strin
       //   ⇒ 这里**必须同步**给出同款拒因（规格 §3.1「行事」/§4.3）⇒ 否则玩家点了才发现被拒。
       //   ⚠️ 拒绝**要说人话**（R-2）⇒ 必须点名「灵枢不足」与**差多少**，不能只说「资源不够」。
       if (me !== undefined && me.resource < card.cost) {
-        return `灵枢不足：打出「${card.name}」需 ${String(card.cost)} 灵枢，你只有 ${String(me.resource)}。`;
+        return `{resource}不足：打出「${card.name}」需 ${String(card.cost)} {resource}，你只有 ${String(me.resource)}。`;
       }
       // 需目标的牌必须带候选目标；不需目标的牌必须不带目标（引擎 `act` 分支同源）。
       return cardNeedsTarget(card)
@@ -237,14 +237,14 @@ export function uiBlockNotice(state: State, seat: number, action: Action): strin
       if (certifier !== null) { return certifier; }
       if (usedCertTurn(c, seat)) { return '你本轮的认证机会已用（签印 / 质疑 / 弃权 三选一）。'; }
       // 质疑扣 1 灵枢（§5.3.4；引擎不足则拒 ⇒ 这里也得拒，`starvedCertScene` 钉着这条）
-      return (me?.resource ?? 0) >= 1 ? null : '灵枢不足：发起质疑需 1 灵枢。';
+      return (me?.resource ?? 0) >= 1 ? null :  `{resource}不足：发起质疑需 1 {resource}。`;
     }
     case 'CERTIFY_APPEAL': {
       if (action.target !== seat) { return '复议必须由待认证者本人申请（target 必须是本人）。'; }
       if (!isPendingSeat(c, seat)) { return '你不是待认证者，无从申请复议。'; }
       if (c.appealed.includes(seat)) { return '本轮已申请过复议。'; }
       // 复议需 2 灵枢（certifyAppeal 的真实前置；`starvedCertScene` 钉着这条）
-      return (me?.resource ?? 0) >= 2 ? null : '灵枢不足：申请复议需 2 灵枢。';
+      return (me?.resource ?? 0) >= 2 ? null :  `{resource}不足：申请复议需 2 {resource}。`;
     }
     case 'CERTIFY_ANSWER': {
       if (!c.challenged.includes(seat)) { return '你本轮未发起质疑，没有判定权。'; }
@@ -274,7 +274,7 @@ export function uiBlockNotice(state: State, seat: number, action: Action): strin
     }
     case 'COMPARE': {
       // ⚠️ B19：关隘出牌比对通道（规格 §3.5 B19 定案）——判据与 probeAction 对齐。
-      if (pendingGateHere(state, seat) === null) { return '你当前不在未通过的关隘格上，无需比对。'; }
+      if (pendingGateHere(state, seat) === null) { return `你当前不在未通过的{gate}格上，无需比对。`; }
       const card = me?.hand.find((x) => x.id === action.cardId);
       if (card === undefined) { return '手牌里没有这张牌（可能已被弃掉或不属于你）。'; }
       // ⚠️ B53 修正：引擎 `resolveCompareGate` 在**本关已改为付费**时拒绝出牌比对
@@ -294,10 +294,10 @@ export function uiBlockNotice(state: State, seat: number, action: Action): strin
     }
     case 'GATE_RESOLVE': {
       const gate = pendingGateHere(state, seat);
-      if (gate === null) { return '你当前不在未通过的关隘格上，无需选择通道。'; }
+      if (gate === null) { return `你当前不在未通过的{gate}格上，无需选择通道。`; }
       if (action.channel === 'pay') {
         const mine = me?.resource ?? 0;
-        if (mine < gate.fee) { return `灵枢不足：关隘标价 ${gate.fee}，现有 ${mine}。`; }
+        if (mine < gate.fee) { return `{resource}不足：{gate}标价 ${gate.fee}，现有 ${mine}。`; }
       }
       return null;
     }

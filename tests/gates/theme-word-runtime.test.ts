@@ -324,3 +324,77 @@ test('B79：action-key 的开发者串改机制标识——不用占位符、也
   for (const w of LEAF_WORDS) { assert.equal(msg.includes(w), false, `开发者串含主题词「${w}」：${msg}`); }
   assert.equal(msg.includes('{'), false, `开发者串不该用占位符（没有出口会展开它）：${msg}`);
 });
+
+// ---------- T12：UI 拒因（web/legal-gate.ts 8 行）+ B65-M3 变异夹具逐字串 ----------
+//
+// `uiBlockNotice` 拿不到 terms（§4.3 已定：不改签名、不注入词表）⇒ 它交出去的就是
+// **占位符形态**，由 notice 出口展开。所以这里的判据是「不含别套词 + 含占位符」两半，
+// 而「玩家看到的仍点名资源不足」由 card-cost.test.ts 的 B65/A-5b 正面钉。
+import { uiBlockNotice } from '../../web/legal-gate.ts';
+import { getLegalActions } from '../../engine/core/legal.ts';
+import { activeAbilityId } from '../../engine/core/passives.ts';
+
+test('B79：UI 拒因全是占位符形态，不含任何主题叶词（含 `{hp}` 以外的五叶按套判）', () => {
+  let checked = 0;
+  for (const id of IDS) {
+    const theme = themeOf(id);
+    const state = installTheme(mk(4, 20260), theme);
+    // 资源清零 ⇒ 所有带成本前置的分支都会给出拒因（自恢/救援/出牌/质疑/复议/关隘两条）
+    const poor: State = { ...state, players: state.players.map((p) => ({ ...p, resource: 0 })) };
+    const texts: string[] = [];
+    for (const a of getLegalActions(poor, 0).concat(mirrorActions(poor))) {
+      const n = uiBlockNotice(poor, 0, a);
+      if (typeof n === 'string') { texts.push(n); }
+    }
+    // 直接按动作类型构造一批候选（粗筛放行与否不影响这里：uiBlockNotice 是逐条判据）
+    for (const t of texts) {
+      checked += 1;
+      for (const w of foreignWords(id)) {
+        assert.equal(t.includes(w), false, `${id}：UI 拒因「${t}」含别套词「${w}」`);
+      }
+    }
+    if (checked > 0) {
+      assert.ok(texts.some((t) => /\{resource\}/.test(t)) || texts.length === 0,
+        `${id}：一批拒因里没有任何 {resource} ⇒ 出牌/质疑/复议三条没被覆盖：${JSON.stringify(texts)}`);
+    }
+  }
+  assert.ok(checked >= IDS.length * 2, `只取到 ${String(checked)} 条拒因 ⇒ 判据会空转`);
+});
+
+/** 手工摆一批动作给 uiBlockNotice（它的判据按 action.type 分支，与粗筛是否放行无关）。 */
+function mirrorActions(state: State): Array<Parameters<typeof uiBlockNotice>[2]> {
+  const hand = state.players[0]?.hand ?? [];
+  const cardId = hand[0]?.id ?? 'c_none';
+  const acts: Array<Parameters<typeof uiBlockNotice>[2]> = [
+    { type: 'PLAY_CARD', actor: 0, cardId },
+    { type: 'CERTIFY_CHALLENGE', actor: 1, target: 0 },
+    { type: 'CERTIFY_APPEAL', actor: 0, target: 0 },
+    { type: 'GATE_RESOLVE', actor: 0, channel: 'pay' },
+    { type: 'COMPARE', actor: 0, cardId, target: 1 },
+    { type: 'RECUPERATE', actor: 0 },
+    { type: 'ABILITY', actor: 0, abilityId: activeAbilityId(state, 0) },
+  ];
+  return acts;
+}
+
+test('B79：M3 变异夹具的 before 串必须逐字等于 legal-gate.ts 的当前行', () => {
+  // 为什么要这条：patchCopy 靠**逐字串匹配**改源码。接线后形状变了，而夹具不跟着改就
+  // 「找不到模式 ⇒ 什么都没改 ⇒ mutant 代码 ≡ 原代码 ⇒ r.code === 0 ⇒ M3 假绿」——
+  // 那是变异自证自己骗自己。这里把失败提前到施工当天，且**不在本文件写模板串**
+  // （`${}` 在源码里会被当真，写了就变成测我自己的字符串而不是测夹具）。
+  const fixture = readFileSync('tests/engine/card-cost.test.ts', 'utf8');
+  const anchor = "patchCopy(dir, 'web/legal-gate.ts',";
+  const at = fixture.indexOf(anchor);
+  assert.ok(at > 0, '前提：M3 夹具要住在 card-cost.test.ts 里');
+  const line = fixture.slice(at + anchor.length).split('\n').map((x) => x.trim()).filter((x) => x !== '')[0] ?? '';
+  assert.ok(line.startsWith('"') && (line.endsWith('";') || line.endsWith('",') || line.endsWith('"')),
+    `前提：before 串是双引号字面量，实际取到的是：${line.slice(0, 40)}`);
+  const raw = line.replace(/[;,]\s*$/, '');
+  const before = JSON.parse(raw) as string;
+  const src = readFileSync('web/legal-gate.ts', 'utf8');
+  assert.ok(src.includes(before),
+    `M3 的 before 串已对不上源码 ⇒ 变异会静默空跑。夹具里是：${before.slice(0, 60)}`);
+  // 反向也要成立：源码里那句出牌拒因确实已经是占位符形态
+  assert.ok(src.includes('{resource}不足：打出「'), '⇒ 出牌拒因还没接线（T12 Step 3 未完成）');
+  assert.ok(src.includes('{resource}，你只有 '), '⇒ 拒因后半句没接线 ⇒ M3 的 before 串无对应物');
+});

@@ -24,6 +24,7 @@ import { createInitialState, type State } from '../../engine/core/state.ts';
 import { performAction } from '../../engine/core/turn-runner.ts';
 import { getLegalActions } from '../../engine/core/legal.ts';
 import { uiAllows, uiBlockNotice } from '../../web/legal-gate.ts';
+import { termExpander } from '../../web/ui/terms.ts';
 
 const theme = JSON.parse(
   readFileSync(resolve(process.cwd(), 'themes', 'xianxia2026', 'theme.json'), 'utf8'),
@@ -94,14 +95,31 @@ test('B65/A-5 UI 拒因：灵枢不足 ⇒ uiBlockNotice 必须点名「灵枢�
   const action = { type: 'PLAY_CARD' as const, actor: 0, cardId: card.id };
   const notice = uiBlockNotice(s, 0, action);
   assert.ok(notice !== null, '[B65/A-5 UI 拒因] 灵枢不足 ⇒ UI 必须拦下');
-  assert.match(notice ?? '', /灵枢不足/,
-    '[B65/A-5 UI 拒因] 拒绝要说人话（R-2）⇒ 必须点名「灵枢不足」');
+  // B79 §5.1：UI 拒因现在交出去的是**占位符形态**（由 notice 出口展开）⇒ 判据跟着转形式，
+  //   「点名资源不足 + 给出差额」这两条要求一字没放宽；玩家真正看到的句子由 A-5b 正面钉。
+  assert.match(notice ?? '', /\{resource\}不足/,
+    '[B65/A-5 UI 拒因] 拒绝要说人话（R-2）⇒ 必须点名资源不足');
   assert.match(notice ?? '', /3/,
     '[B65/A-5 UI 拒因] 必须给出所需费用（3），不能只说「不够」');
   assert.match(notice ?? '', /1/,
-    '[B65/A-5 UI 拒因] 必须给出玩家现有灵枢（1），玩家才知道差多少');
+    '[B65/A-5 UI 拒因] 必须给出玩家现有资源（1），玩家才知道差多少');
   assert.equal(uiAllows(s, 0, action), false,
     '[B65/A-5 UI 拒因] uiAllows 必须与 uiBlockNotice 同判');
+});
+
+// B79 §5.1：拒因换成占位符形态后，这条钉住「换了取词层，基准主题玩家看到的句子一字不变」。
+// 这里的「灵枢」是**展开结果**（不是 UI 持有的文案），按红线**不许中性化**。
+test('B65/A-5b UI 拒因展开后仍点名「灵枢不足」并给出差额（换架构不换文案）', () => {
+  const card = cardOfCost(3);
+  const s = scene(card, 1);
+  const action = { type: 'PLAY_CARD' as const, actor: 0, cardId: card.id };
+  const raw = uiBlockNotice(s, 0, action);
+  assert.ok(raw !== null, '[B65/A-5b] 资源不足 ⇒ UI 必须拦下');
+  const shown = termExpander(theme.terms)(raw ?? '');
+  assert.match(shown, /灵枢不足/, '[B65/A-5b] 玩家看到的仍然点名「灵枢不足」（R-2 拒绝要说人话）');
+  assert.match(shown, /需 3 灵枢/, '[B65/A-5b] 费用数字与资源名仍然同句出现');
+  assert.match(shown, /你只有 1/, '[B65/A-5b] 仍然给出现有资源，玩家才知道差多少');
+  assert.equal(/\{/.test(shown), false, `[B65/A-5b] 展开后不得残留占位符：${shown}`);
 });
 
 test('B65/A-6 UI 放行：灵枢足够 ⇒ 不得拦（否则玩家永远打不出牌）', () => {
@@ -215,10 +233,13 @@ test('[B65-M2 变异自证] 撤掉引擎的资源不足拒绝 ⇒ 拒绝环必�
     '[B65-M2 变异自证] mutant 必须红在「拒绝环」层的专属措辞上；out 前 900 字=' + r.out.slice(0, 900));
 });
 
-test('[B65-M3 变异自证] UI 拒因不再点名「灵枢不足」⇒ UI 层必须判红', { skip: SKIP_MUTATION }, () => {
+test('[B65-M3 变异自证] UI 拒因不再点名资源不足 ⇒ UI 层必须判红', { skip: SKIP_MUTATION }, () => {
   const r = runMutant((dir) => {
+    // B79 T12：拒因改占位符形态 ⇒ before 串必须逐字跟着换（否则 patch 找不到模式、
+    // mutant ≡ 原代码、r.code===0 ⇒ M3 假绿）。逐字一致性由
+    // tests/gates/theme-word-runtime.test.ts 的「M3 before 串等于当前行」常驻钉住。
     patchCopy(dir, 'web/legal-gate.ts',
-      "        return `灵枢不足：打出「${card.name}」需 ${String(card.cost)} 灵枢，你只有 ${String(me.resource)}。`;",
+      "        return `{resource}不足：打出「${card.name}」需 ${String(card.cost)} {resource}，你只有 ${String(me.resource)}。`;",
       "        return '这张牌现在打不出来。';");
   });
   assert.notEqual(r.code, 0,
