@@ -127,6 +127,22 @@ test('R2 负样本：alert 直投占位符必报；合规的 alert(t(…)) 与�
     `只该报第 1 行（直投），实际：${JSON.stringify(hits)}`);
 });
 
+// ---------- B79 §2.3：四套共用报告的标签（T18）----------
+
+test('B79 §2.3：平衡报告的被动标签不含任何主题叶词（一份表统四套，不许替所有主题作主张）', () => {
+  // ⚠️ 计划写的是两条硬编码字符串对账（含旧串「偷灵枢」）。改成从禁字表派生有两处好处：
+  //   ①旧词不再需要留在仓库里当负样本（它本身就是禁字）；②一次覆盖**七条**标签而不是改过的那一条。
+  const src = readFileSync('tests/sim/run.mjs', 'utf8');
+  const words = leafWordsFromThemes().map((w) => w.word);
+  const labels = [...src.matchAll(/^\s{4}\w+:\s*'([^']+)',$/gm)].map((m) => m[1] ?? '');
+  assert.ok(labels.length >= 7, `前提失败：PASSIVE_LABELS 只取到 ${String(labels.length)} 条 ⇒ 判据会空转`);
+  const bad = labels.filter((l) => words.some((w) => l.includes(w)));
+  assert.deepEqual(bad, [], `⇒ 报告是四套共用的一份表，标签写某套的词等于替所有主题作主张：${JSON.stringify(bad)}`);
+  assert.ok(labels.some((l) => l.includes('偷资源')), '⇒ transfer_resource 应写成机制词「窃火者 · 偷资源」');
+  // 反面账：`织梦者 · 改险径判定` 里的「险径」**不在**上面这 20 词里（它是 glossary 的未纳入键，
+  // L-B79-4）。本判据只管叶词，留着「险径」不是漏网而是**已登记的边界**——扩到它需要 {hazard}。
+});
+
 // ---------- B79 §2.4：兜底词黑名单（禁字表定义范围之外的另一张网）----------
 
 test('§2.4 兜底词：engine/web 非注释行不得出现「体力」一类的第三套词', () => {

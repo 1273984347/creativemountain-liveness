@@ -992,12 +992,14 @@ if (args.out !== null) {
   lines.push('');
   lines.push('| 被动 | op | 触发次数 | 触发过的局数 | 每百局触发次数 |');
   lines.push('|---|---|---|---|---|');
+  // B79 §2.3：这一张表**四套主题共用**（报告不按主题分栏），标签写基准词等于替所有主题作主张
+  //   ⇒ 一律用机制词。判据在 `tests/gates/theme-word-source.test.ts`，禁字表从主题数据派生。
   const PASSIVE_LABELS = {
     move_forward: '开拓者 · 首次移动 +1 格',
     create_card: '匠师 · 免费造物',
     peek_deck: '观星者 · 看牌堆顶',
     shield: '守夜人 · 回合末护盾',
-    transfer_resource: '窃火者 · 偷灵枢',
+    transfer_resource: '窃火者 · 偷资源',
     modify_judgement: '织梦者 · 改险径判定',
     certify_free_pass: '山主 · 免质疑',
   };
