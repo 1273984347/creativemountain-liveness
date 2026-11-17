@@ -65,7 +65,7 @@ test('R1 负样本：往临时副本塞一行主题词 ⇒ 扫描必须报出它
   assert.match(hits[0] ?? '', /probe\.ts:1 「灵枢」 叶=resource 主题=xianxia2026/);
 });
 
-test('R1 负样本：整行注释不报（历史施工注记是证据，规格 §2 的 214 行）', () => {
+test('R1 负样本：整行注释不报（历史施工注记是证据，计数见规格 §2）', () => {
   const dir = mkdtempSync(join(tmpdir(), 'b79-r1c-'));
   mkdirSync(join(dir, 'engine'), { recursive: true });
   writeFileSync(join(dir, 'engine', 'probe.ts'), '// 扣 2 灵枢\n/* 关隘 */\n * 山道\nexport const x = 1;\n', 'utf8');
