@@ -398,3 +398,101 @@ test('B79：M3 变异夹具的 before 串必须逐字等于 legal-gate.ts 的当
   assert.ok(src.includes('{resource}不足：打出「'), '⇒ 出牌拒因还没接线（T12 Step 3 未完成）');
   assert.ok(src.includes('{resource}，你只有 '), '⇒ 拒因后半句没接线 ⇒ M3 的 before 串无对应物');
 });
+
+// ---------- T14：R3 收尾——**真局**日志与 UI 拒因，按本主题展开后判 ----------
+//
+// 为什么不自己写一套「回合驱动」：那样就成了流程层的**第二份实现**（本批要治的正是这类病）。
+// 仿真层每个决策点都会 `record(动作前的局面)`，而 `State.log` 只增不减 ⇒
+// **取最长的那条 log 就是接近完整的真局日志**，一行驱动代码都不用重写。
+import { playOne, setRecorder } from '../sim/policy.mjs';
+import type { DecisionRecord } from '../sim/policy.mjs';
+import { stateFromJson } from '../../engine/core/serialize.ts';
+import { logLineText } from '../../web/ui/log.ts';
+import { termExpander } from '../../web/ui/terms.ts';
+
+const OWN = (id: string) => (['resource', 'gate', 'path', 'peak', 'hp'] as const)
+  .map((k) => (themeOf(id).terms as Record<string, string>)[k] as string);
+
+test('B79 R3：四套真局（3/4/5 人各两局）的日志与 UI 拒因，按本主题展开后干净', async () => {
+  let logLines = 0, blockTexts = 0, ownSentences = 0;
+  const games: string[] = [];
+
+  for (const id of IDS) {
+    const theme = themeOf(id);
+    const foreign = foreignWords(id);
+    const own = OWN(id);
+    const t = termExpander(theme.terms);
+    for (const players of [3, 4, 5]) {
+      for (let g = 0; g < 2; g++) {
+        const bag: DecisionRecord[] = [];
+        setRecorder(bag);
+        try {
+          await playOne(theme, players, 20260 + g * 31 + players * 7);
+        } finally { setRecorder(null); }
+        assert.ok(bag.length > 0, `${id}/${String(players)} 人：仿真一个决策点都没记录 ⇒ 真局没跑起来`);
+        games.push(`${id}/${String(players)}:${String(bag.length)} 个决策点`);
+
+        // ① 日志：log 只增 ⇒ 最长的一条即最完整的真局日志
+        let best: State['log'] = [];
+        let bestState: State | null = null;
+        for (const r of bag) {
+          const s = stateFromJson(r.state);
+          if (s.log.length > best.length) { best = s.log; bestState = s; }
+        }
+        assert.ok(best.length >= 10, `${id}/${String(players)} 人：真局只有 ${String(best.length)} 行日志 ⇒ 覆盖面不足`);
+        for (const e of best) {
+          const shown = logLineText(e, theme.terms);
+          logLines += 1;
+          assert.equal(/\{(?:resource|gate|path|peak|hp)\}/.test(shown), false,
+            `${id}：漏展开 ⇒「${shown}」⇒ 有一类文案没接进出口（R1/R2 抓不到这一类）`);
+          for (const w of foreign) {
+            assert.equal(shown.includes(w), false, `${id}：日志「${shown}」含别套词「${w}」`);
+          }
+          if (own.some((w) => shown.includes(w))) { ownSentences += 1; }
+        }
+
+        // ② UI 拒因：拿真局面去试**会被挡**的动作形状。
+        //    ⚠️ 不能扫 `getLegalActions` 的结果——合法的动作 `uiBlockNotice` 按设计返回 null
+        //    （UI 与引擎同判是 R-1 的硬约束），扫它恒得 0 条，那就是一条空转判据。
+        if (bestState !== null) {
+          const s0 = bestState;
+          const hand = s0.players[0]?.hand ?? [];
+          const attempts: Array<Parameters<typeof uiBlockNotice>[2]> = [
+            ...hand.map((c) => ({ type: 'PLAY_CARD' as const, actor: 0, cardId: c.id })),
+            { type: 'GATE_RESOLVE' as const, actor: 0, channel: 'pay' },
+            { type: 'GATE_RESOLVE' as const, actor: 0, channel: 'trial' },
+            { type: 'CERTIFY_APPEAL' as const, actor: 0, target: 0 },
+            { type: 'CERTIFY_CHALLENGE' as const, actor: 0, target: 1 },
+            { type: 'RECUPERATE' as const, actor: 0 },
+            { type: 'ABILITY' as const, actor: 0, abilityId: activeAbilityId(s0, 0) },
+          ];
+          for (const a of attempts) {
+            const n = uiBlockNotice(s0, 0, a);
+            if (typeof n !== 'string') { continue; }
+            blockTexts += 1;
+            const shown = t(n);
+            assert.equal(/\{(?:resource|gate|path|peak|hp)\}/.test(shown), false,
+              `${id}：拒因漏展开 ⇒「${shown}」`);
+            for (const w of foreign) {
+              assert.equal(shown.includes(w), false, `${id}：拒因「${shown}」含别套词「${w}」`);
+            }
+          }
+        }
+      }
+    }
+  }
+  // 防空转：三个读数都得够量，否则上面的循环可能一次都没进
+  assert.ok(logLines >= 200, `只收集到 ${String(logLines)} 条真局日志 ⇒ 判据会空转`);
+  assert.ok(blockTexts >= 4, `只有 ${String(blockTexts)} 条真局拒因被检查（四套 × 若干局）⇒ 覆盖面不足：${games.join(' | ')}`);
+  assert.ok(ownSentences >= 20, `只有 ${String(ownSentences)} 句带本主题叶词 ⇒ 展开可能整体没生效`);
+});
+
+test('B79 R3 反证：故意不传 terms ⇒ 占位符会露出来（证明上一条的「干净」来自展开，不是来自恒等）', () => {
+  const theme = themeOf('scifi-ai');
+  const raw = '支付 3 {resource}通过{gate}';
+  const entry = { kind: 'gate', round: 1, turnIndex: 0, actor: 0, message: raw };
+  assert.match(logLineText(entry), /\{resource\}/, '不展开时**应当**看到占位符 ⇒ 若这里不露，说明前提（会露）不成立，上一条就是空判据');
+  const shown = logLineText(entry, theme.terms);
+  assert.equal(/\{/.test(shown), false, `展开后仍有花括号：${shown}`);
+  assert.equal(shown.includes('算力'), true, `展开没用本主题词：${shown}`);
+});
