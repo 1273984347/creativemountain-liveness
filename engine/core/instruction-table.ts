@@ -47,7 +47,7 @@ export const INSTRUCTION_TABLE: readonly InstructionRow[] = [
   { face: 12, text: '指定一名玩家后退 1 格' },
   { face: 13, text: '获得 1 张指定类型手牌' },
   { face: 14, text: '立即再掷一次 20 面指令骰并执行（不可再连锁）' },
-  { face: 15, text: '免疫本回合的「封口」' },
+  { face: 15, text: '免疫「封口」至下一个完整手番结束' },
   { face: 16, text: '与一名玩家交换手牌各 1 张' },
   { face: 17, text: '本回合移动 +2 格' },
   { face: 18, text: `获得 1 枚${RESOURCE}（不超上限）` },
@@ -62,10 +62,11 @@ export const INSTRUCTION_TABLE: readonly InstructionRow[] = [
  * ⚠️ 本表**目前**只有 `{resource}` 一个占位符，仍然改调 `expandThemeWords` 而不是自己
  *   split/join：统一实现比留一个特化替换更好——将来表里加 `{gate}` 之类不用动本函数。
  *   **不许**以「只用得到一个叶」为由退回 split/join（B79 §4.2；B78 时这里有第二份替换）。
- * ⚠️ **L-B78-5**：face 15 的「本回合」低估了豁免窗 —— 真值见 `statuses.ts:126-137` 与 B77 r5：
- *   在自己手番内授予 = 当前剩余 + 接下来 1 个**完整手番**。B78 用户裁定丙 ⇒ 照搬主规格现值、
- *   措辞另批；那个「另批」就是 B79 T17（Q4 裁定甲：并入结账）。本行注释在结账前**不许删**，
- *   写编号是为了 `grep -rn "L-B78-5" engine/` 能直接查到「这句话有债」。
+ * ⚠️ **face 15 的措辞 ≡ 豁免窗真值**（B79 R6 / §A.4，L-B78-5 已在 T17 结账）：真值是
+ *   `statuses.ts` 的 `grantImmunity`（加层、不清旧层）+ `tickPlayerStatuses`（在**该玩家自己手番末**
+ *   衰减，授予当回合有 `statusGrantedThisTurn` 豁免位）⇒ 自己手番内授予 1 层 = 当前剩余 +
+ *   接下来 1 个**完整手番**。三处（本表 / 主规格 §3.2 / IR 与规则书）必须同词，常驻守卫在
+ *   `tests/gates/face15-wording.test.ts`——改措辞请三处一起改，别只改这里。
  */
 export function instructionText(face: number, terms: ThemeTerms): string {
   const row = INSTRUCTION_TABLE.find((x) => x.face === face);
