@@ -58,12 +58,12 @@ export function performAbility(state: State, seat: number, target?: number): Abi
       // 窃火者：**偷取** —— 目标少 1 枚、自己多 1 枚。
       // ⚠️ `transfer_resource` 的语义是「从 actor 转给 target」⇒ 此处**以目标为 actor**
       //   执行反向转移（复用既有 op，不新增算子）。
-      if (target === undefined) { return { ok: false, state, note: '偷取灵枢需要选择目标' }; }
+      if (target === undefined) { return { ok: false, state, note: `偷取{resource}需要选择目标` }; }
       if (target === seat) { return { ok: false, state, note: '不能偷自己' }; }
       const tp = state.players[target];
       if (tp === undefined || !tp.alive) { return { ok: false, state, note: '目标不存在或已出局' }; }
       if (tp.resource < passive.amount) {
-        return { ok: false, state, note: '目标灵枢不足（需 ' + String(passive.amount) + '）' };
+        return { ok: false, state, note: `目标{resource}不足（需 ${String(passive.amount)}）` };
       }
       const r = applyEffect({ state: next, actor: target }, { op: 'transfer_resource', amount: passive.amount, target: seat });
       if (!r.ok) { return { ok: false, state, note: r.note ?? '发动失败' }; }
@@ -72,7 +72,7 @@ export function performAbility(state: State, seat: number, target?: number): Abi
       //   ⚠️ 计价点**不是 op 本身**：`transfer_resource` 的语义是「actor 转给 target」，
       //   窃火者靠**交换 actor/target** 实现「目标 −1、自己 +1」⇒ 只有**被动发动**才是偷取。
       next = bumpCounterOf(next, seat, 'stolenTotal', passive.amount);
-      note = '偷取座' + String(target) + ' 的 ' + String(passive.amount) + ' 枚灵枢';
+      note = `偷取座${String(target)} 的 ${String(passive.amount)} 枚{resource}`;
       break;
     }
     case 'modify_judgement': {

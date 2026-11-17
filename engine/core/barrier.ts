@@ -108,8 +108,8 @@ export function resolveBarrier(state: State, actor: number, channel: 'place' | '
     ...next,
     log: [...next.log, {
       round: next.round, turnIndex: next.turnIndex, actor, kind: 'barrier',
-      message: '裂隙：放置封路印（-2 灵枢）—— 印对后来者生效',
+      message: `裂隙：放置封路印（-2 {resource}）—— 印对后来者生效`,
     }],
   };
-  return { ok: true, state: next, note: '裂隙：已放置封路印（-2 灵枢）' };
+  return { ok: true, state: next, note: `裂隙：已放置封路印（-2 {resource}）` };
 }

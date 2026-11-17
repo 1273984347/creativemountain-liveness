@@ -153,7 +153,7 @@ export function resolveCouncil(state: State): CouncilResult {
       tops.includes(p.seat) ? { ...p, resource: Math.max(0, p.resource - penalty) } : p,
     );
     next = { ...next, players };
-    return succeed(next, `山议裁定：座位 ${tops.join(', ')} 扣 ${penalty} 灵枢（3 人局不淘汰）`);
+    return succeed(next, `山议裁定：座位 ${tops.join(', ')} 扣 ${penalty} {resource}（3 人局不淘汰）`);
   }
   // 4 人及以上：放逐（需检查下限 / 凭证 / 否决）
   const floor = state.scales.exileFloor;

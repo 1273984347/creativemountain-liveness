@@ -117,7 +117,7 @@ function decodeKey(key: string): Action {
       // ⚠️ B18：`gate:resolve:<channel>`（三段）= 关隘通道选择；`gate:<id>-><seat>`（两段）= COMPARE。
       if (parts[1] === 'resolve') {
         const ch = need(parts[2]);
-        if (ch !== 'pay' && ch !== 'trial') { throw new Error(`key 关隘通道非法：${key}`); }
+        if (ch !== 'pay' && ch !== 'trial') { throw new Error(`key gate 通道非法：${key}`); }
         return { type: 'GATE_RESOLVE', actor: -1, channel: ch };
       }
       const [id, t] = idTarget(parts[1]);

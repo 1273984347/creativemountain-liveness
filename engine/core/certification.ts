@@ -155,7 +155,7 @@ export function certifyChallenge(state: State, actor: number, target: number): C
   if (((state.players[actor]?.exhaustedRounds) ?? 0) > 0) { return fail(state, '力竭期间不能发起质疑'); }
   const challenger = state.players[actor];
   if (challenger === undefined || challenger.resource < 1) {
-    return fail(state, '灵枢不足，无法发起质疑（需 1 灵枢）');
+    return fail(state, `{resource}不足，无法发起质疑（需 1 {resource}）`);
   }
   const players = state.players.map((p) => (p.seat === actor ? { ...p, resource: p.resource - 1 } : p));
   // ⚠️ B12：山主特权（规格 §4.1）——「认证时**首次**被质疑自动通过」⇒
@@ -177,7 +177,7 @@ export function certifyChallenge(state: State, actor: number, target: number): C
     return succeed(logged, '山主特权：本次质疑自动视为签印');
   }
   const next: State = { ...state, players, certification: { ...c, challenged: [...c.challenged, actor] } };
-  return succeed(next, '质疑已发起（-1 灵枢）');
+  return succeed(next, `质疑已发起（-1 {resource}）`);
 }
 /**
  * 认证人给出判定（§5.3.2）。
@@ -268,11 +268,11 @@ export function certifyAppeal(state: State, actor: number, target: number): Cert
   if (c.appealed.includes(actor)) { return fail(state, '本轮已申请过复议'); }
   const p = state.players[actor];
   if (p === undefined || p.resource < 2) {
-    return fail(state, '灵枢不足，无法申请复议（需 2 灵枢）');
+    return fail(state, `{resource}不足，无法申请复议（需 2 {resource}）`);
   }
   const players = state.players.map((x) => (x.seat === actor ? { ...x, resource: x.resource - 2 } : x));
   const next: State = { ...state, players, certification: { ...c, appealed: [...c.appealed, actor] } };
-  return succeed(next, '已申请复议（-2 灵枢）');
+  return succeed(next, `已申请复议（-2 {resource}）`);
 }
 
 /**
@@ -356,7 +356,7 @@ function applyAppealOutcome(state: State, target: number, challengerSeat: number
   const players = state.players.map((p) => (p.seat === target ? { ...p, resource: Math.max(0, p.resource - 1) } : p));
   let next: State = { ...state, players, certification: closed };
   next = applyFailJudgment(next, target);
-  return succeed(next, `${label}：复议失败，维持原判，待认证者 -1 灵枢并后退 1 格`);
+  return succeed(next, `${label}：复议失败，维持原判，待认证者 -1 {resource}并后退 1 格`);
 }
 
 /**
@@ -450,7 +450,7 @@ export function advanceCertificationRound(state: State): CertifyResult {
       certification: { ...emptyCertification(), round: 0, pending: [] },
     };
     const who = certified.map((s) => '座' + String(s)).join('、');
-    return succeed(next, `坐上活人席：${who}（席位数 +1，回到山道起点，可再次登顶再取席）`);
+    return succeed(next, `坐上活人席：${who}（席位数 +1，回到{path}起点，可再次登顶再取席）`);
   }
   // 未达成
   const pendingNow = state.certification.pending;
@@ -466,7 +466,7 @@ export function advanceCertificationRound(state: State): CertifyResult {
       players,
       certification: { ...emptyCertification(), pending: [] },
     };
-    return succeed(next, '两轮未达成，待认证者退回山道 60% 位置');
+    return succeed(next, `两轮未达成，待认证者退回{path} 60% 位置`);
   }
   // 进入下一轮
   const next: State = {

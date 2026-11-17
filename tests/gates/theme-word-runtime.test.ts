@@ -203,3 +203,124 @@ test('B79 前提：关隘文案里确实有「退 1 格并被封口」那条日�
   assert.ok(got.some((x) => x.includes('退 1 格并被封口')), '⇒ 没跑到 failGate，判据覆盖面不足');
   assert.ok(got.some((x) => x.includes('本关改为付费')), '⇒ 没跑试炼失败分支，210 行那条没被覆盖');
 });
+
+// ---------- T11：认证 / 被动 / 裂隙 / 山议 / 开发者串 ----------
+//
+// ⚠️ 修正 #4 命中处：计划写的 `certifyAppeal(s, 0)` 少一个参数，真实签名是
+//   `(state, actor, target)`（复议由待认证者本人发起 ⇒ target === actor）。
+//   按真实签名改**调用**，断言一字未放宽。
+import { certifyChallenge, certifyAppeal, certifySign, advanceCertificationRound } from '../../engine/core/certification.ts';
+import { resolveBarrier } from '../../engine/core/barrier.ts';
+import { performAbility } from '../../engine/core/abilities.ts';
+import { openCouncil, castVote, resolveCouncil } from '../../engine/core/council.ts';
+import { putPending } from '../engine/fixtures.ts';
+import { actionFromKey } from '../../engine/core/action-key.ts';
+
+const resState = (s: State, seat: number, resource: number): State => ({
+  ...s,
+  players: s.players.map((p) => (p.seat === seat ? { ...p, resource } : p)),
+});
+
+/** 认证相关：质疑（不足 / 成功）、复议（不足 / 成功）、达成与两轮未达成的两句 `{path}`。 */
+function certificationTexts(id: string): string[] {
+  const out: string[] = [];
+  const run = (r: { state: State; note?: unknown }, before: number) => out.push(...textsOf(r, before));
+  const base = installTheme(mk(5, 20260), themeOf(id));
+  const pending = putPending(base, [0]);
+
+  run(certifyChallenge(resState(pending, 1, 0), 1, 0), pending.log.length);      // :158 不足
+  run(certifyChallenge(resState(pending, 1, 5), 1, 0), pending.log.length);      // :180 成功
+
+  const judged = certifyChallenge(resState(pending, 1, 5), 1, 0).state;
+  run(certifyAppeal(resState(judged, 0, 0), 0, 0), judged.log.length);           // :271 不足
+  run(certifyAppeal(resState(judged, 0, 5), 0, 0), judged.log.length);           // :275 成功
+
+  // 达成 ⇒「回到{path}起点」（凑够签印数：门槛由 scales 决定，逐个签到人）
+  let signed = putPending(base, [0]);
+  for (const seat of signed.players.map((p) => p.seat)) {
+    if (seat === 0) { continue; }
+    signed = certifySign(signed, seat, 0).state;
+  }
+  run(advanceCertificationRound(signed), signed.log.length);                     // :453
+
+  // 两轮未达成 ⇒「退回{path} 60% 位置」
+  const noneSigned = putPending(base, [0]);
+  const r1 = advanceCertificationRound(noneSigned);
+  run(advanceCertificationRound(r1.state), r1.state.log.length);                 // :469
+  return out;
+}
+
+/** 裂隙放印（:111 日志 + :114 note）、身份被动窃火（:61/:66/:75）、3 人局山议裁定（:156）。 */
+function otherTexts(id: string): string[] {
+  const out: string[] = [];
+  const base = installTheme(mk(4, 20260), themeOf(id));
+
+  const rift = base.board.tiles.find((t) => t.kind === 'rift');
+  if (rift !== undefined) {
+    const s: State = { ...base, players: base.players.map((p) => (p.seat === 0 ? { ...p, position: rift.index, resource: 9 } : p)) };
+    const before = s.log.length;
+    out.push(...textsOf(resolveBarrier(s, 0, 'place'), before));                 // :111 / :114
+  }
+
+  // 窃火者型被动：真实形状是 `player.flags.passive`（passiveOf 就读它，身份 id 不参与发动）
+  // ⇒ 沿用 passive-abilities / exhaustion 的 withPassive 先例，不另发明一套挂载法。
+  const withPassive = (st: State, seat: number, passive: unknown): State => ({
+    ...st,
+    players: st.players.map((p) => (p.seat === seat ? { ...p, flags: { ...p.flags, passive } } : p)),
+  });
+  const emberState = withPassive(base, 0, { op: 'transfer_resource', amount: 1 });
+  out.push(String(performAbility(emberState, 0).note ?? ''));                     // :61
+  const poor = { ...emberState, players: emberState.players.map((p) => (p.seat === 1 ? { ...p, resource: 0 } : p)) };
+  out.push(String(performAbility(poor, 0, 1).note ?? ''));                        // :66
+  const rich = { ...emberState, players: emberState.players.map((p) => (p.seat === 1 ? { ...p, resource: 9 } : p)) };
+  const steal = performAbility(rich, 0, 1);
+  out.push(String(steal.note ?? ''));                                             // :75
+  out.push(...textsOf(steal, rich.log.length));
+
+  // 3 人局山议 ⇒ 扣资源不淘汰
+  const three = installTheme(mk(3, 20261), themeOf(id));
+  const opened = openCouncil(three);
+  if (opened.ok) {
+    let st = opened.state;
+    st = castVote(st, 0, 1).state;
+    st = castVote(st, 1, 2).state;
+    st = castVote(st, 2, 1).state;
+    const before = st.log.length;
+    const r = resolveCouncil(st);
+    out.push(...textsOf(r, before));                                              // :156
+  }
+  return out.filter((x) => x !== '');
+}
+
+test('B79：认证/裂隙/被动/山议的 note 与日志不含别套主题叶词', () => {
+  let checked = 0;
+  for (const id of IDS) {
+    for (const text of [...certificationTexts(id), ...otherTexts(id)]) {
+      checked += 1;
+      for (const w of foreignWords(id)) {
+        assert.equal(text.includes(w), false, `${id}：「${text}」含别套词「${w}」`);
+      }
+    }
+  }
+  assert.ok(checked >= IDS.length * 8, `只取到 ${String(checked)} 条 ⇒ 判据会空转`);
+});
+
+test('B79 前提：14 行的占位符各自到位（{resource} / {path} 都真的出现在文本里）', () => {
+  const got = [...certificationTexts('urban-psych'), ...otherTexts('urban-psych')];
+  const has = (token: string) => got.filter((x) => x.includes(token)).length;
+  assert.ok(has('{resource}') >= 4, `{resource} 只出现 ${String(has('{resource}'))} 次（质疑/复议/偷取/山议至少各一）：${JSON.stringify(got)}`);
+  assert.ok(has('{path}') >= 2, `{path} 只出现 ${String(has('{path}'))} 次（:453 与 :469）`);
+  assert.ok(got.some((x) => x.includes('回到{path}起点')), '⇒ :453 未覆盖');
+  assert.ok(got.some((x) => x.includes('退回{path} 60% 位置')), '⇒ :469 未覆盖');
+});
+
+test('B79：action-key 的开发者串改机制标识——不用占位符、也不含任何主题词（§2.1）', () => {
+  // 这条不进玩家眼睛：主题化只会让查 bug 的人对不上代码 ⇒ 判据是「既无叶词、也无占位符」。
+  // 抛错点在**解码**侧（actionFromKey 的 gate:resolve 分支），不在编码侧 ⇒ 按计划的位置取真实函数。
+  const bad = () => { try { actionFromKey('gate:resolve:xyz'); } catch (e) { return String((e as Error).message); } return ''; };
+  const msg = bad();
+  assert.ok(msg.length > 0, '前提：非法通道必须抛错');
+  assert.ok(msg.includes('gate 通道非法'), `实际消息：${msg}`);
+  for (const w of LEAF_WORDS) { assert.equal(msg.includes(w), false, `开发者串含主题词「${w}」：${msg}`); }
+  assert.equal(msg.includes('{'), false, `开发者串不该用占位符（没有出口会展开它）：${msg}`);
+});
