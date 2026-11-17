@@ -7,13 +7,14 @@
 // 覆盖自动增长（新代码天然被扫），后者要为每个文案点写一条正面断言，漏一个点就漏一类 bug。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, mkdirSync, cpSync, readFileSync, appendFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync, cpSync, readFileSync, appendFileSync, existsSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 import {
   leafWordsFromThemes, scanThemeWords, scanUnexpandedAlerts, scanFallbackWords, FALLBACK_BAN, listSources,
   SENTENCE_DOMAINS, SENTENCE_WHITELIST,
+  MECHANISM_HOMOGRAPHS, pureLeafWords, TESTS_WORD_REGISTRY, testsWhitelist, scanAssertionForms,
 } from '../../tools/theme-word-scan.mjs';
 import { SENTENCE_LEAVES } from '../../tools/theme-diff-check.mjs';
 import { TERM_TOKENS } from '../../engine/core/theme-text.ts';
@@ -176,4 +177,101 @@ test('§2.4 负样本：把「体力」塞回引擎副本 ⇒ 必须被报出（
   const hits = scanFallbackWords(dir, ['engine'], [FALLBACK]);
   assert.equal(hits.length, 1, `实际：${JSON.stringify(hits)}`);
   assert.match(hits[0] ?? '', /probe\.ts:1/);
+});
+
+// ---------- B79 §5 R5 / §5.2 R7（r1.7 常驻）：断言形式统一 + tests 域数据类登记 ----------
+//
+// R7 为什么在 r1.7 从「暂不常驻」升上来（用户裁定）：登记表本身就是这批的交付物之一，
+//   写完不判红 = 一张会随时间漂坏的说明书。升上来的前提是**把机制名同形词摘出去**——
+//   实测 tests/ 域 20 词全扫是 209 处 / 35 文件，其中「关隘 + 山道」占 103 处（§5.1.1 明令保留）。
+//   把一条域级裁定摊成 35 行文件级豁免，只会让登记表盖住真正要登记的 16 个数据类保留处。
+
+const PURE = pureLeafWords();
+const BASE_PURE = PURE.filter((w) => w.themes.includes('xianxia2026')).map((w) => w.word);
+
+test('R7 前提：tests 域禁字表 = 全表 − 机制名同形词，且豁免只声明一次', () => {
+  assert.deepEqual([...MECHANISM_HOMOGRAPHS].sort(), ['关隘', '山道'],
+    '⇒ 这两词在本仓同时是机制名（主规格 §3.4/§3.5）。要动这张表先改规格 §5.1.1 并写理由');
+  assert.equal(PURE.length, WORDS.length - MECHANISM_HOMOGRAPHS.length,
+    `减词数不对：全表 ${String(WORDS.length)} − 同形 ${String(MECHANISM_HOMOGRAPHS.length)} ≠ ${String(PURE.length)}`);
+  // 同形词必须**确实**在禁字表里（否则上面那个减法是在减不存在的东西，登记表也就少了一类真正的例外）
+  for (const w of MECHANISM_HOMOGRAPHS) {
+    assert.ok(WORDS.some((x) => x.word === w), `「${w}」不在叶词并集里 ⇒ 豁免了个空气`);
+  }
+});
+
+test('R7：tests 域未登记的主题词字面量为 0（数据类保留处逐文件登记）', () => {
+  assert.deepEqual(scanThemeWords(resolve('.'), ['tests'], PURE, testsWhitelist()), [],
+    '⇒ 要么中性化，要么在 tools/theme-word-scan.mjs 的 TESTS_WORD_REGISTRY 加一行并写理由（§5.2）');
+});
+
+test('R7 结构①：登记表行集合 ≡ 实际有命中的文件集合（新文件没登记 ⇒ 红；清零还留着 ⇒ 红）', () => {
+  const found = [...new Set(scanThemeWords(resolve('.'), ['tests'], PURE, new Map()).map((h) => h.split(':')[0]))].sort();
+  assert.deepEqual(found, [...TESTS_WORD_REGISTRY.map((r) => r.file)].sort(),
+    '⇒ 左多 = 有泄漏没登记；左少 = 条目已死（该删，留着就是下一次「顺手放行」的模板）');
+});
+
+test('R7 结构②：逐行核对——条目必须是真文件、必须有理由、词值集合不许漂', () => {
+  const byFile = new Map<string, Set<string>>();
+  for (const h of scanThemeWords(resolve('.'), ['tests'], PURE, new Map())) {
+    const f = h.split(':')[0] ?? '';
+    const w = /「(.*?)」/.exec(h)?.[1] ?? '';
+    if (!byFile.has(f)) { byFile.set(f, new Set()); }
+    byFile.get(f)?.add(w);
+  }
+  for (const r of TESTS_WORD_REGISTRY) {
+    const abs = resolve(r.file);
+    assert.ok(existsSync(abs) && statSync(abs).isFile(), `${r.file} ⇒ 条目必须是文件级，不许目录、子树或通配（§5.2 粒度定案）`);
+    assert.ok(r.reason.trim().length >= 12, `${r.file} 的理由太短（${r.reason}）：没有理由的条目等于没有条目`);
+    const found = [...(byFile.get(r.file) ?? new Set<string>())].sort();
+    assert.deepEqual(found, [...r.words].sort(),
+      `${r.file}：登记的词与实际命中的词不一致（左多 = 漏登记，左少 = 死词值）`);
+  }
+});
+
+test('R7 负样本：新文件冒出主题词 ⇒ 红；登记后放行；只登记别的词不算放行', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'b79-r7-'));
+  mkdirSync(join(dir, 'tests', 'engine'), { recursive: true });
+  writeFileSync(join(dir, 'tests', 'engine', 'probe.ts'), "export const s = '灵枢不足';\n", 'utf8');
+  assert.equal(scanThemeWords(dir, ['tests'], PURE, testsWhitelist()).length, 1,
+    '⇒ 登记表里没有这个新文件，必须红（放行表是逐文件的，不是「tests 域免检」）');
+  assert.equal(scanThemeWords(dir, ['tests'], PURE, testsWhitelist(
+    [{ file: 'tests/engine/probe.ts', words: ['灵枢'], reason: '探针条目' }])).length, 0,
+    '⇒ 登记「文件 + 该词」之后才放行');
+  assert.equal(scanThemeWords(dir, ['tests'], PURE, testsWhitelist(
+    [{ file: 'tests/engine/probe.ts', words: ['气血'], reason: '探针条目' }])).length, 1,
+    '⇒ 同文件里登记另一个词不构成放行：粒度是「文件 × 词值集合」，不是整文件免检');
+});
+
+test('R5：直接断言引擎结果的语句，期望值里不得出现主题词（两套写法不许混用）', () => {
+  const r = scanAssertionForms(resolve('.'), 'tests', PURE, BASE_PURE);
+  assert.deepEqual(r.offenders, [],
+    '⇒ 引擎交出的是占位符形态，断言就该写 /\\{resource\\}不足/；要测玩家看到的句子请显式走展开出口（§5.1）');
+  // 防空转：判据得真的读到引擎结果断言，否则「0 违规」只是没看见任何东西
+  assert.ok(r.statements >= 8, `认定的引擎结果断言语句只有 ${String(r.statements)} 条（今天 10 条）⇒ 判据瞎了`);
+  // §5.1 的另一半：基准主题的**展开后**断言必须还在（不许顺手把「灵枢」改成 {resource}）
+  assert.ok(r.baseExpanded >= 2,
+    `基准展开断言只剩 ${String(r.baseExpanded)} 条（今天 2 条：expand-theme-words 的期望串 + log-instruction 的「—— 灵枢 +1」）`
+    + '⇒ 把它们改成占位符形式就等于没人再测展开结果（Q3 乙被做成 Q3 甲）');
+});
+
+test('R5 负样本：五种形状各判一次——违规要红、三种合规不许误伤、折行也要抓到', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'b79-r5-'));
+  mkdirSync(join(dir, 'tests'), { recursive: true });
+  writeFileSync(join(dir, 'tests', 'probe.ts'), [
+    "assert.match(String(r.note), /灵枢不足/);",                                  // 1 违规：拿引擎原文案当判据
+    "assert.match(String(r.note), /\\{resource\\}不足/);",                         // 2 合规：占位符形态
+    "assert.match(logLineText(entry, terms), /灵枢不足/);",                        // 3 合规：显式走展开出口
+    "assert.equal(win.passed, true, '红牌胜出 ⇒ 通过灵枢');",                      // 4 合规：消息串不是期望值
+    "assert.match(",                                                              // 5 违规：折行，续行里的期望值
+    "  String(r.note),",
+    "  /关隘标价 3 灵枢/,",
+    ");",
+  ].join('\n') + '\n', 'utf8');
+  const r = scanAssertionForms(dir, 'tests', PURE, BASE_PURE);
+  assert.equal(r.offenders.length, 2, `应恰好报第 1、5 条：${JSON.stringify(r.offenders)}`);
+  assert.match(r.offenders[0] ?? '', /probe\.ts:1 /, `第 1 条位置不对：${String(r.offenders[0])}`);
+  assert.match(r.offenders[1] ?? '', /probe\.ts:5 /, `折行那条没被抓到 ⇒ 行级判据，漏一类 = 那一类永久残留`);
+  // ③ 那条同时喂了 baseExpanded 的哨：合规形状必须真的被认成「经出口的展开断言」
+  assert.equal(r.baseExpanded, 1, `baseExpanded=${String(r.baseExpanded)} ⇒ 下限哨读不到展开出口的形状，R5 的另一半就是空判据`);
 });
