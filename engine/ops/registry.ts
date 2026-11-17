@@ -258,7 +258,7 @@ export const OPS: OpHandlers = {
       position: next,
       turn: { ...pl.turn, movedThisTurn: true, moveBonus: 0 },
     });
-    state = withLog(state, ctx, 'move_forward', `前进 ${next - pl.position} 格${clamped ? '（到达峰顶）' : ''}`);
+    state = withLog(state, ctx, 'move_forward', `前进 ${next - pl.position} 格${clamped ? '（到达{peak}）' : ''}`);
     if (next === peak) {
       state = enterPeak(state, t.seat, ctx);
     }

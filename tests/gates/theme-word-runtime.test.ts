@@ -410,6 +410,7 @@ import type { DecisionRecord } from '../sim/policy.mjs';
 import { stateFromJson } from '../../engine/core/serialize.ts';
 import { logLineText } from '../../web/ui/log.ts';
 import { termExpander } from '../../web/ui/terms.ts';
+import { runTutorial } from '../../web/tutorial.ts';
 
 const OWN = (id: string) => (['resource', 'gate', 'path', 'peak', 'hp'] as const)
   .map((k) => (themeOf(id).terms as Record<string, string>)[k] as string);
@@ -525,4 +526,38 @@ test('B79 §2.4：heal 与力竭日志交出 {hp}，基准展开后是本套的 
     assert.ok(t(rawHeal).includes(hpWord), `${id}：heal 展开后应含「${hpWord}」`);
     assert.equal(/\{/.test(t(rawHeal)), false, '展开后不得残留占位符');
   }
+});
+
+// ---------- T15.2：{peak}（r1.6 并入本批的表外兜底词）----------
+
+test('B79 §2.4 r1.6：越过峰顶的日志交出 {peak}，四套展开后各说自己的 peak 词且不再出现兜底词', () => {
+  // 判据的落点是**引擎不再说默认值**：「峰顶」不是任何一套的 peak 词（封顶台/奇点台/道顶/天台），
+  // 它是 termsOf 里 peak 缺值时的兜底 —— T15.1「体力」的孪生兄弟，同一类 bug。
+  // ⚠️ peak 词从主题数据取（同源），不硬编码：这里要证的是「引擎交出占位符、出口换上本套词」，
+  //   不是「主题包恰好叫这几个名字」（那条由门⑤ 与 theme-leaf-upgrade 负责）。
+  let checked = 0;
+  for (const id of IDS) {
+    const theme = themeOf(id);
+    const own = theme.terms.peak as unknown;
+    assert.ok(typeof own === 'string' && own.length > 0, `前提失败：${id} 没有 peak 词 ⇒ 展开断言会空转`);
+    const base = installTheme(mk(4, 20260), theme);
+    const peak = base.board.peakIndex;
+    const before = base.log.length;
+    const r = applyEffect({ state: base, actor: 0 }, { op: 'move_forward', amount: peak + 10 } as never);
+    assert.equal(r.ok, true, `${id}：越界前进应被受理：${String(r.note)}`);
+    const line = textsOf({ state: r.state, note: r.note }, before).find((x) => x.includes('前进'));
+    assert.ok(line !== undefined && line.includes('（到达{peak}）'), `${id}：clamp 日志未走占位符：${line ?? '(没取到前进行)'}`);
+    const shown = termExpander(theme.terms)(line ?? '');
+    assert.ok(shown.includes(`（到达${own}）`), `${id}：展开后应含「到达${String(own)}」：${shown}`);
+    assert.equal(/\{/.test(shown), false, '展开后不得残留占位符');
+    assert.equal(shown.includes('峰顶'), false, `${id}：展开后仍在说兜底词：${shown}`);
+    // UI 侧同一叶：教学步骤走面板出口（B79 §4.3 第 4 类），落地后不该有花括号、也不该有兜底词
+    const certStep = runTutorial(theme, 3).find((s) => s.title === '活人认证');
+    assert.ok(certStep !== undefined, `${id}：教学没走到认证这一步 ⇒ 判据空转`);
+    assert.equal(/\{/.test(certStep.detail), false, `${id}：教学文案残留占位符：${certStep.detail}`);
+    assert.ok(certStep.detail.includes(String(own)), `${id}：教学没说本套 peak 词：${certStep.detail}`);
+    assert.equal(certStep.detail.includes('峰顶'), false, `${id}：教学仍在说兜底词：${certStep.detail}`);
+    checked += 1;
+  }
+  assert.equal(checked, IDS.length, '防空转：四套都得真的跑过');
 });

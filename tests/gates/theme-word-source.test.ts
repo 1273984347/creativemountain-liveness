@@ -135,7 +135,8 @@ test('§2.4 兜底词：engine/web 非注释行不得出现「体力」一类的
 });
 
 test('§2.4 表的自洽：FALLBACK_BAN 里每个词都必须在真实树上已经清零（否则守卫上线即红会被顺手注释）', () => {
-  assert.deepEqual(FALLBACK_BAN, ['体力'], '入表规则见 tools/theme-word-scan.mjs 的注释：只收已清零的词');
+  assert.deepEqual(FALLBACK_BAN, ['体力', '峰顶'],
+    '入表规则见 tools/theme-word-scan.mjs 的注释：只收已清零的词（「峰顶」r1.6 接线后入表）');
   for (const w of FALLBACK_BAN) {
     assert.deepEqual(scanFallbackWords(resolve('.'), SENTENCE_DOMAINS, [w]), [],
       `「${w}」还在表内却有命中 ⇒ 要么接线、要么把它移出黑名单，不许留着让守卫自红`);

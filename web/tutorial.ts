@@ -81,7 +81,7 @@ export function runTutorial(theme: ThemePack, playerCount = 3): TutorialStep[] {
       state = signed.ok ? signed.state : entered.state;
       steps.push({
         title: '活人认证',
-        detail: '座0 抵达峰顶 → 进入「待认证」，但这不算赢。需集齐 ' + certificationNeed(state) + ' 枚签印才算「坐上活人席」。座' + certifier.seat + ' 已签印。真实对局里其他玩家还可以选择「质疑」——出 3 道当场可验证的题，答对 2 问才算通过。',
+        detail: '座0 抵达' + t('{peak}') + ' → 进入「待认证」，但这不算赢。需集齐 ' + certificationNeed(state) + ' 枚签印才算「坐上活人席」。座' + certifier.seat + ' 已签印。真实对局里其他玩家还可以选择「质疑」——出 3 道当场可验证的题，答对 2 问才算通过。',
         state,
       });
     }
