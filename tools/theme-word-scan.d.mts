@@ -45,11 +45,20 @@ export declare function scanFallbackWords(
 
 // ---------- B79 T16：R5 断言形式 + R7 数据类登记表 ----------
 
-/** 机制名同形词（规格 §5.1.1 甲′）：域级豁免，只在这里声明一次。 */
-export declare const MECHANISM_HOMOGRAPHS: readonly string[];
+/**
+ * 只在 **tests 域**豁免的机制名同形词（B80 §3 R1'）。主域扫 `fullBanWords()`，不经过这里。
+ * 原名 `MECHANISM_HOMOGRAPHS` 已删除：语义从"全域豁免"窄成"仅 tests 域"，旧名不留（E135/E136 同族）。
+ */
+export declare const TESTS_DOMAIN_EXEMPT_WORDS: readonly string[];
 
-/** R7 在 tests 域用的禁字表 = 叶词并集 − 机制名同形词。 */
+/** R7 在 tests 域用的禁字表 = 叶词并集 − tests 域豁免词。 */
 export declare function pureLeafWords(root?: string): LeafWord[];
+
+/** 四套主题的**身份名**（去重排序，从 `theme.json` 的 `identities[].name` 派生；B80 §3 R1''）。 */
+export declare function identityWordsFromThemes(root?: string): string[];
+
+/** **主域**禁字表 = 句子层叶词 ∪ 身份名（B80 §3 R1/R1''，实测 58 词）。不给 R7 用。 */
+export declare function fullBanWords(root?: string): LeafWord[];
 
 /** R7 登记表的一行：一个文件 + 允许的词值 + 一行理由（规格 §5.2 粒度定案）。 */
 export interface ThemeWordRow {

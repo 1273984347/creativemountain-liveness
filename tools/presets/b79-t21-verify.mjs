@@ -5,7 +5,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { at, relOf, walkSources } from './common.mjs';
 import {
   leafWordsFromThemes, pureLeafWords, scanThemeWords, scanFallbackWords, SENTENCE_DOMAINS,
-  SENTENCE_WHITELIST, TESTS_WORD_REGISTRY, MECHANISM_HOMOGRAPHS, FALLBACK_BAN,
+  SENTENCE_WHITELIST, TESTS_WORD_REGISTRY, TESTS_DOMAIN_EXEMPT_WORDS, FALLBACK_BAN,
 } from '../theme-word-scan.mjs';
 
 const read = (p) => readFileSync(at(p), 'utf8');
@@ -13,24 +13,44 @@ const nonCommentLines = (p) => read(p).split('\n').filter((l) => !/^\s*(\/\/|\*|
 const line = (label, ok, detail) => console.log(`${ok ? '✓' : '✗'} ${label}${detail ? ' ｜ ' + detail : ''}`);
 
 // 1 · ThemeTerms 摊平叶数 ≡ TERM_LEAVES 项数
+//
+// ⚠️ 判据形状在 B80 T4 改过一次：原来钉的是 **B79 当时的计数**（`leafCount === 15`、`pairKeys.length === 5`），
+//   B80 把两个数都推进了（15→18、5→8）⇒ 照字面跑会常驻一条"看起来像回归"的 ✗，而复算入口长红
+//   等于没有入口（读的人分不清是这批做坏了还是下批正常推进）。改成 **B79 的键仍是子集** +
+//   **与主题数据摊平互验**：语义（B79 补的键都还在、表与数据不分叉）一字未松，计数不再写死。
+const B79_FLAT_LEAVES = ['hp', 'deck', 'resource', 'gate', 'path', 'peak',
+  'types.motion', 'types.attack', 'types.defense', 'types.utility',
+  'colors.red', 'colors.black', 'statuses.poison', 'statuses.slow', 'statuses.silence'];
 const tv = /const TERM_LEAVES = \[([\s\S]*?)\n\];/.exec(read('tools/theme-validate.mjs'))[1];
-const leafCount = [...tv.matchAll(/\[([^\]]+)\]/g)].length;
+const flatLeaves = [...tv.matchAll(/\['([a-z]+)'(?:,\s*'([a-z]+)')?\]/g)]
+  .map((m) => (m[2] === undefined ? m[1] : `${m[1]}.${m[2]}`));
+const leafCount = flatLeaves.length;
 const tt = /interface ThemeTerms \{([\s\S]*?)\n\}/.exec(read('engine/types/theme.ts'))[1];
 const topKeys = [...tt.matchAll(/^\s{2}readonly (\w+)/gm)].map((m) => m[1]);
 const hybrid = JSON.parse(read('themes/hybrid/theme.json'));
-line(`1 ThemeTerms 顶层键 = ${topKeys.length}（摊平叶 = ${leafCount}）· TERM_LEAVES = ${leafCount}`,
-  leafCount === 15, `hybrid terms.path=${hybrid.terms.path} · glossary.path=${hybrid.glossary.path}`);
+// 主题数据摊平（一层嵌套：types/colors/statuses）——第三处真值，用来和声明互验
+const dataFlat = Object.entries(hybrid.terms)
+  .flatMap(([k, v]) => ((v !== null && typeof v === 'object') ? Object.keys(v).map((a) => `${k}.${a}`) : [k]));
+const missingLeaves = B79_FLAT_LEAVES.filter((k) => !flatLeaves.includes(k));
+line(`1 TERM_LEAVES 摊平 = ${leafCount} · 主题数据摊平 = ${dataFlat.length} · ThemeTerms 顶层键 = ${topKeys.length}`
+  + ` · B79 的 15 键在位 = ${missingLeaves.length === 0}`,
+  leafCount === dataFlat.length && missingLeaves.length === 0,
+  `hybrid terms.path=${hybrid.terms.path} · glossary.path=${hybrid.glossary.path}`
+  + (missingLeaves.length === 0 ? '' : ` ⇒ 缺：${missingLeaves.join('/')}`));
 
 // 2 · termsOf() 无 ?? 回落
 const termsOfBody = /export function termsOf\(([\s\S]*?)\n\}/.exec(read('build/build-ir.mjs'))[0];
 line('2 build-ir termsOf() 无 ?? 回落', !termsOfBody.includes('??'));
 
-// 3 · 门⑤ 五键判等 + deck 豁免理由在位
+// 3 · 门⑤ 判等在位（B79 的五对仍是子集；B80 另加 rift/hazard/player 三对，不写死总数）
+const B79_PAIRS = ['hp↔HP', 'resource↔resource', 'gate↔gate', 'path↔path', 'peak↔peak'];
 const tvSrc = read('tools/theme-validate.mjs');
 const pairs = /const TERMS_GLOSSARY_PAIRS = \[([\s\S]*?)\];/.exec(tvSrc)?.[1] ?? '';
-const pairKeys = [...pairs.matchAll(/\['([a-z]+)',\s*'([A-Za-z]+)'\]/g)].map((m) => `${m[1]}↔${m[2]}`);
-line(`3 checkTermsGlossaryAgreement 在位 + 判等表 ${pairKeys.length} 对`,
-  /function checkTermsGlossaryAgreement/.test(tvSrc) && pairKeys.length === 5, pairKeys.join(' '));
+const pairKeys = [...pairs.matchAll(/\['([a-zA-Z]+)',\s*'([A-Za-z]+)'\]/g)].map((m) => `${m[1]}↔${m[2]}`);
+const missingPairs = B79_PAIRS.filter((p) => !pairKeys.includes(p));
+line(`3 checkTermsGlossaryAgreement 在位 + 判等表 ${pairKeys.length} 对 · B79 的五对在位 = ${missingPairs.length === 0}`,
+  /function checkTermsGlossaryAgreement/.test(tvSrc) && missingPairs.length === 0,
+  pairKeys.join(' ') + (missingPairs.length === 0 ? '' : ` ⇒ 丢：${missingPairs.join(' ')}`));
 
 // 4 · web/ 还读 glossary 的地方
 const glossaryLines = walkSources('web').flatMap((f) => nonCommentLines(relOf(f))
@@ -54,7 +74,7 @@ const testsUnregistered = scanThemeWords(at('.'), ['tests'], pureLeafWords(),
   new Map(TESTS_WORD_REGISTRY.map((r) => [r.file, [...r.words]])));
 line(`6 R1（${SENTENCE_DOMAINS.join('+')}，${words.length} 词）命中 = ${r1.length}`, r1.length === 0, r1.slice(0, 2).join(' | '));
 line(`6 兜底词（${FALLBACK_BAN.join('/')}）命中 = ${fb.length}`, fb.length === 0);
-line(`6 tests 域未登记命中 = ${testsUnregistered.length}（登记表 ${TESTS_WORD_REGISTRY.length} 条 · 同形豁免 ${MECHANISM_HOMOGRAPHS.join('/')}）`,
+line(`6 tests 域未登记命中 = ${testsUnregistered.length}（登记表 ${TESTS_WORD_REGISTRY.length} 条 · tests 域豁免 ${TESTS_DOMAIN_EXEMPT_WORDS.join('/')}）`,
   testsUnregistered.length === 0);
 
 // 7 · 白名单空集 + action-key 机制标识

@@ -14,12 +14,19 @@ import { join, resolve } from 'node:path';
 import {
   leafWordsFromThemes, scanThemeWords, scanUnexpandedAlerts, scanFallbackWords, FALLBACK_BAN, listSources,
   SENTENCE_DOMAINS, SENTENCE_WHITELIST,
-  MECHANISM_HOMOGRAPHS, pureLeafWords, TESTS_WORD_REGISTRY, testsWhitelist, scanAssertionForms,
+  TESTS_DOMAIN_EXEMPT_WORDS, identityWordsFromThemes, fullBanWords, pureLeafWords, TESTS_WORD_REGISTRY, testsWhitelist, scanAssertionForms,
 } from '../../tools/theme-word-scan.mjs';
 import { SENTENCE_LEAVES } from '../../tools/theme-diff-check.mjs';
 import { TERM_TOKENS } from '../../engine/core/theme-text.ts';
 
 const WORDS = leafWordsFromThemes();
+/**
+ * 主域（engine + web）禁字表 = 叶词 32 ∪ 身份名 26 = 58（B80 §3 R1/R1''）。
+ *
+ * R1 与它的全部负样本都用这张表；tests 域（R7）另用 `PURE`，两侧口径不同是**裁定**不是疏漏：
+ * 测试标题写「仲裁者」是在说机制角色，源码写「仲裁者」是在替某一套主题说话。
+ */
+const FULL = fullBanWords();
 
 test('R1 前提：禁字表从四套主题派生且非空转（32 词 = 八叶 × 四套，B80 §2.1 加三叶）', () => {
   assert.equal(WORDS.length, 32, `实际 ${String(WORDS.length)} 词：${WORDS.map((w) => w.word).join('/')}`);
@@ -38,9 +45,9 @@ test('R1 前提：扫描域是 engine + web，且**不含** build（规格 §5.4
   assert.equal(listSources(resolve('web')).length >= 8, true, '前提：界面侧确实扫到文件');
 });
 
-test('R1：engine/web 非注释行不含任何一套主题的五个叶词', () => {
+test('R1：engine/web 非注释行不含任何一套主题的叶词与身份名（58 词，B80 R1 收口）', () => {
   assert.deepEqual(
-    scanThemeWords(resolve('.'), SENTENCE_DOMAINS, WORDS, SENTENCE_WHITELIST), [],
+    scanThemeWords(resolve('.'), SENTENCE_DOMAINS, FULL, SENTENCE_WHITELIST), [],
     '⇒ 改用 {resource} 等占位符，由显示出口展开（B79 §4.1/§4.3）');
 });
 
@@ -62,7 +69,7 @@ test('R1 负样本：往临时副本塞一行主题词 ⇒ 扫描必须报出它
   const dir = mkdtempSync(join(tmpdir(), 'b79-r1-'));
   mkdirSync(join(dir, 'engine'), { recursive: true });
   writeFileSync(join(dir, 'engine', 'probe.ts'), "export const x = '灵枢不足';\n", 'utf8');
-  const hits = scanThemeWords(dir, ['engine'], WORDS, SENTENCE_WHITELIST);
+  const hits = scanThemeWords(dir, ['engine'], FULL, SENTENCE_WHITELIST);
   assert.equal(hits.length, 1, `实际：${JSON.stringify(hits)}`);
   assert.match(hits[0] ?? '', /probe\.ts:1 「灵枢」 叶=resource 主题=xianxia2026/);
 });
@@ -71,14 +78,14 @@ test('R1 负样本：整行注释不报（历史施工注记是证据，计数�
   const dir = mkdtempSync(join(tmpdir(), 'b79-r1c-'));
   mkdirSync(join(dir, 'engine'), { recursive: true });
   writeFileSync(join(dir, 'engine', 'probe.ts'), '// 扣 2 灵枢\n/* 关隘 */\n * 山道\nexport const x = 1;\n', 'utf8');
-  assert.deepEqual(scanThemeWords(dir, ['engine'], WORDS, SENTENCE_WHITELIST), []);
+  assert.deepEqual(scanThemeWords(dir, ['engine'], FULL, SENTENCE_WHITELIST), []);
 });
 
 test('R1 负样本：尾随注释**不豁免**——把词交给玩家的是前半段代码', () => {
   const dir = mkdtempSync(join(tmpdir(), 'b79-r1t-'));
   mkdirSync(join(dir, 'web'), { recursive: true });
   writeFileSync(join(dir, 'web', 'probe.ts'), "export const s = '灵枢'; // 说明\n", 'utf8');
-  const hits = scanThemeWords(dir, ['web'], WORDS, SENTENCE_WHITELIST);
+  const hits = scanThemeWords(dir, ['web'], FULL, SENTENCE_WHITELIST);
   assert.equal(hits.length, 1, `尾随注释被误豁免 ⇒ 实际：${JSON.stringify(hits)}`);
 });
 
@@ -86,9 +93,9 @@ test('R7 负样本：白名单放行某文件某词 ⇒ 同一行不再被报（
   const dir = mkdtempSync(join(tmpdir(), 'b79-r1w-'));
   mkdirSync(join(dir, 'engine'), { recursive: true });
   writeFileSync(join(dir, 'engine', 'probe.ts'), "export const x = '灵枢';\n", 'utf8');
-  assert.equal(scanThemeWords(dir, ['engine'], WORDS, new Map([['engine/probe.ts', ['灵枢']]])).length, 0);
+  assert.equal(scanThemeWords(dir, ['engine'], FULL, new Map([['engine/probe.ts', ['灵枢']]])).length, 0);
   // 但只放行别的词不算数（防「文件级放行 = 整文件免检」的误解）
-  assert.equal(scanThemeWords(dir, ['engine'], WORDS, new Map([['engine/probe.ts', ['关隘']]])).length, 1);
+  assert.equal(scanThemeWords(dir, ['engine'], FULL, new Map([['engine/probe.ts', ['关隘']]])).length, 1);
 });
 
 test('R1 真实树变异：往 engine 全树副本注入一行 ⇒ 必须恰好报出那一行（注入不可见就等于没测）', () => {
@@ -114,7 +121,7 @@ test('R1 真实树变异：往 engine 全树副本注入一行 ⇒ 必须恰好�
   assert.ok(leakLine.includes(leakWord), '前提失败：注入行不含禁字表词 ⇒ 这条样本没在测任何东西');
 
   // ② 命中必须恰好是注入那一行（行号 = 文件里的真实行号）
-  const hits = scanThemeWords(dir, ['engine'], WORDS, SENTENCE_WHITELIST);
+  const hits = scanThemeWords(dir, ['engine'], FULL, SENTENCE_WHITELIST);
   assert.equal(hits.length, 1, `实际：${JSON.stringify(hits)}`);
   assert.match(hits[0] ?? '', /engine\/core\/gate\.ts:/, '命中位置不对 ⇒ 扫的不是注入的那个文件');
   assert.equal(/:(\d+)\s/.exec(hits[0] ?? '')?.[1], String(at + 1), '行号应指向注入行');
@@ -192,14 +199,14 @@ const PURE = pureLeafWords();
 const BASE_PURE = PURE.filter((w) => w.themes.includes('xianxia2026')).map((w) => w.word);
 
 test('R7 前提：tests 域禁字表 = 全表 − 机制名同形词，且豁免只声明一次', () => {
-  assert.deepEqual([...MECHANISM_HOMOGRAPHS].sort(), ['关隘', '山道', '裂隙', '险径'],
+  assert.deepEqual([...TESTS_DOMAIN_EXEMPT_WORDS].sort(), ['关隘', '山道', '裂隙', '险径'],
     '⇒ 这四词在本仓同时是机制名（主规格 §3.4/§3.5 的通道格与地形类名；`rules-book-contract.mjs` 的 `specName`）。'
     + '裂隙/险径 由 B80 §3 R1 归入 tests 域豁免——主域照旧禁（R1 扫全表，不走这里）。'
     + '要再动这张表先改规格并写理由');
-  assert.equal(PURE.length, WORDS.length - MECHANISM_HOMOGRAPHS.length,
-    `减词数不对：全表 ${String(WORDS.length)} − 同形 ${String(MECHANISM_HOMOGRAPHS.length)} ≠ ${String(PURE.length)}`);
+  assert.equal(PURE.length, WORDS.length - TESTS_DOMAIN_EXEMPT_WORDS.length,
+    `减词数不对：全表 ${String(WORDS.length)} − 同形 ${String(TESTS_DOMAIN_EXEMPT_WORDS.length)} ≠ ${String(PURE.length)}`);
   // 同形词必须**确实**在禁字表里（否则上面那个减法是在减不存在的东西，登记表也就少了一类真正的例外）
-  for (const w of MECHANISM_HOMOGRAPHS) {
+  for (const w of TESTS_DOMAIN_EXEMPT_WORDS) {
     assert.ok(WORDS.some((x) => x.word === w), `「${w}」不在叶词并集里 ⇒ 豁免了个空气`);
   }
 });
@@ -276,6 +283,47 @@ test('R5 负样本：五种形状各判一次——违规要红、三种合规�
   assert.equal(r.offenders.length, 2, `应恰好报第 1、5 条：${JSON.stringify(r.offenders)}`);
   assert.match(r.offenders[0] ?? '', /probe\.ts:1 /, `第 1 条位置不对：${String(r.offenders[0])}`);
   assert.match(r.offenders[1] ?? '', /probe\.ts:5 /, `折行那条没被抓到 ⇒ 行级判据，漏一类 = 那一类永久残留`);
-  // ③ 那条同时喂了 baseExpanded 的哨：合规形状必须真的被认成「经出口的展开断言」
+  // ③ 那条同时喂了 baseExpanded 的哨：合规形状必须真的被认成「经出口的展开项」
   assert.equal(r.baseExpanded, 1, `baseExpanded=${String(r.baseExpanded)} ⇒ 下限哨读不到展开出口的形状，R5 的另一半就是空判据`);
+});
+
+// ---------- B80 R1''（身份名入主域禁字表）与 R1'（豁免表改名 + 只管 tests 域） ----------
+//
+// 为什么要 58 这个词表：T3 接完线后，引擎里再出现「守夜人」就是回归，而它**不在叶词表里**——
+// R1 只看得到 terms 的取值。身份名从 `themes/*/theme.json` 的 `identities[].name` 派生，
+// 手抄的表在第五套主题进来那天失效（规格 §3 R1''）。
+
+test('B80 R1\'\'：主域禁字表 = 叶词 32 ∪ 身份名 26 = 58（派生，去重）', () => {
+  const ids = identityWordsFromThemes();
+  assert.equal(ids.length, 26, `身份名去重后应 26（四套 × 8 = 32，同名 6 处），实际 ${String(ids.length)}`);
+  const full = fullBanWords();
+  const uniq = new Set(full.map((w) => w.word));
+  assert.equal(uniq.size, 58, `主域禁字表去重应 58 词，实际 ${String(uniq.size)}（表长 ${String(full.length)}）`);
+  assert.equal(full.length, uniq.size, '⇒ 表里有重复条目：并集没做掉，扫描会重复计数');
+  assert.equal(full.filter((w) => w.leaf === 'identity').length, 26, '身份名条目应 26 条');
+  // 同形冲突 = 0（规格 §3 R1'' 实测）：若有，说明机制名与身份名撞了，得改措辞而不是改表
+  for (const w of full.filter((x) => x.leaf === 'identity')) {
+    assert.equal(WORDS.some((x) => x.word === w.word), false,
+      `「${w.word}」既是身份名又是某套叶词 ⇒ 主域禁字表口径要先在规格里裁定`);
+  }
+});
+
+test('B80 R1\'\'：往引擎塞一句硬写身份名 ⇒ 必须红（子串匹配，不给"词组豁免"留门）', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'b80-id-'));
+  mkdirSync(join(dir, 'engine'), { recursive: true });
+  writeFileSync(join(dir, 'engine', 'probe.ts'),
+    "export const m = '守夜人：回合结束获得 1 点护盾';\n", 'utf8');
+  const hits = scanThemeWords(dir, ['engine'], fullBanWords(), SENTENCE_WHITELIST);
+  assert.equal(hits.length, 1, `注入不可见就等于没测（E136 同族）：${JSON.stringify(hits)}`);
+  assert.match(hits[0] ?? '', /engine\/probe\.ts:1 「守夜人」/);
+});
+
+test('B80 R1\'：豁免只在 tests 域生效——主域照判「裂隙」，且身份名不进 tests 域豁免', () => {
+  assert.deepEqual([...TESTS_DOMAIN_EXEMPT_WORDS].sort(), ['关隘', '山道', '裂隙', '险径'],
+    '⇒ 这四词同时是主规格 §3.4/§3.5 的机制名。改名（原 MECHANISM_HOMOGRAPHS）本身也是判据的一部分：'
+    + '语义从"全域豁免"窄成"仅 tests 域"，旧名继续挂着就是 E135/E136 的同款');
+  assert.ok(fullBanWords().some((w) => w.word === '裂隙'),
+    '⇒ 主域禁字表**含**裂隙（豁免不含它）——这是 R1 与 R1\' 的分工线');
+  assert.equal(PURE.some((w) => w.word === '守夜人'), false,
+    '⇒ tests 域的表仍是叶词口径：测试标题写身份名不红（规格 §3 R1\'\' 作用域），别顺手把 58 词喂给 R7');
 });

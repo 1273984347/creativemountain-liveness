@@ -104,30 +104,74 @@ export function scanThemeWords(root, domains, words, whitelist) {
 export const SENTENCE_WHITELIST = new Map();
 
 /**
- * 机制名同形词（规格 §5.1.1 甲′ 第二行）：**同时是机制名**的主题词取值。
+ * 只在 **tests 域**豁免的机制名同形词（B80 §3 R1'；原名 `MECHANISM_HOMOGRAPHS`，**已删不留别名**）。
+ *
+ * 语义从「全域豁免」窄成「仅 tests 域」⇒ 名字必须跟着变：名字看着还活着、含义已经换了，
+ * 就是 E135/E136 的同款（B79 的 R6 三条互指、代码零行正是这一族）。
  *
  * 主规格 §3.4/§3.5 与代码注释一直用「关隘」「山道」指代 `kind:'gate'` 的通道格与其路径；
  * 「裂隙」「险径」同理——它们是 §3.4 的**地形类名**（`tools/rules-book-contract.mjs` 的
  * `specName: '裂隙' / '险径'`，doc-sync C10 按五类地形逐条核对），测试与工具里说这两个词是在说机制。
  * 改测试措辞而不改主规格 ⇒ 两边分叉、doc-sync 链跟着动；改主规格 ⇒ 超出零行为批次范围 ⇒ 保留。
  *
- * ⚠️ **只管 tests 域**：主域（`engine/**`+`web/**`）的 R1 扫的是 `leafWordsFromThemes()` 全表，
- *   不经过这里 ⇒ 裂隙/险径 在源码里照样红（B80 §3 R1「不再在主域豁免」说的就是这个分工）。
+ * ⚠️ **主域不经过这张表**：R1 扫的是 `fullBanWords()`（含裂隙/险径）⇒ 源码里写这两个词照样红
+ *   （B80 §3 R1「不再在主域豁免」说的就是这个分工）。
+ * ⚠️ 表里每个词都必须**确实**是某套的叶词，否则就是"豁免了个空气"——由 R7 前提断言钉住。
+ *   `峰顶` 因此**不入表**：它不是任何一套的 `peak` 取值（封顶台/道顶/奇点台/天台），
+ *   管它的是下面那张 `FALLBACK_BAN` 兜底词网，两张网各管一类缺陷。
  * ⚠️ 域级豁免**只在这里声明一次**，不摊进各文件的白名单条目：摊进去就会让人以为「关隘」在某处
  *   是例外，而它全域都合法——一张 35 行、18 行理由相同的表只会盖住真正的数据类保留处（T16 实测）。
  */
-export const MECHANISM_HOMOGRAPHS = ['关隘', '山道', '裂隙', '险径'];
+export const TESTS_DOMAIN_EXEMPT_WORDS = ['关隘', '山道', '裂隙', '险径'];
 
-/** R7 在 `tests` 域用的禁字表 = 叶词并集 − 机制名同形词（规格 §5.2 r1.7）。 */
+/** R7 在 `tests` 域用的禁字表 = 叶词并集 − tests 域豁免词（规格 §5.2 r1.7）。 */
 export function pureLeafWords(root) {
-  return leafWordsFromThemes(root).filter((w) => !MECHANISM_HOMOGRAPHS.includes(w.word));
+  return leafWordsFromThemes(root).filter((w) => !TESTS_DOMAIN_EXEMPT_WORDS.includes(w.word));
+}
+
+/**
+ * 四套（或任意套）主题的**身份名**，去重排序（B80 §3 R1''）。
+ *
+ * 从 `theme.json` 的 `identities[].name` 派生，**不手抄** ⇒ 第五套主题一进来自动纳入
+ * （手抄的表在加主题那天变成「守着一份过期名单继续判绿」的空守卫，与 B78 R6 同族）。
+ * 实测 4 × 8 = 32 个名字去重后 26：`仲裁者` 三套同名，`守夜人 / 窃火者 / 山主 / 开路者` 两套同名。
+ */
+export function identityWordsFromThemes(root = 'themes') {
+  const names = new Set();
+  for (const entry of readdirSync(resolve(root))) {
+    let identities;
+    try {
+      identities = JSON.parse(readFileSync(resolve(root, entry, 'theme.json'), 'utf8')).identities;
+    } catch { continue; }                                     // 非主题目录（无 theme.json）跳过
+    for (const i of identities ?? []) {
+      if (typeof i?.name === 'string' && i.name.length > 0) { names.add(i.name); }
+    }
+  }
+  return [...names].sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * **主域**（`engine/**` + `web/**`）禁字表 = 句子层叶词 ∪ 身份名（B80 §3 R1 / R1''，实测 32 + 26 = 58）。
+ *
+ * 身份名为什么也要进：引擎硬写 `守夜人` 时，玩家是在一个没有"守夜人"这个角色的世界里看到它——
+ * 与 B79 的「灵枢」同病，而叶词表**看不见**它（身份名不是任何叶的取值，R1 因此一直漏这一类）。
+ *
+ * ⚠️ 这张表**不给 R7 用**：tests 域仍走 `pureLeafWords()`——测试标题写身份名不红（规格 §3 R1'' 作用域）。
+ */
+export function fullBanWords(root) {
+  const leaves = leafWordsFromThemes(root);
+  const seen = new Set(leaves.map((w) => w.word));
+  const identityEntries = identityWordsFromThemes(root)
+    .filter((word) => !seen.has(word))            // 同形时以叶词条目为准（实测两侧零冲突，测试里钉着）
+    .map((word) => ({ word, leaf: 'identity', themes: ['*'] }));
+  return [...leaves, ...identityEntries].sort((a, b) => a.word.localeCompare(b.word));
 }
 
 /**
  * R7 数据类保留处（规格 §5.2 r1.7）：**一条 = 一个文件 + 允许出现的词值 + 一行理由**。
  *
  * 为什么住在工具模块而不是测试文件里：这张表是**判据的数据本体**（和 `FALLBACK_BAN`、
- * `MECHANISM_HOMOGRAPHS` 同一类），测试负责断言它审计得起来。放测试里还会自相矛盾——
+ * `TESTS_DOMAIN_EXEMPT_WORDS` 同一类），测试负责断言它审计得起来。放测试里还会自相矛盾——
  * 表里要逐字写出「灵枢 / 算力 / 异能点」才能放行，写表这个动作本身就成了被测域里的主题词字面量。
  *
  * 三条常驻判据由 `tests/gates/theme-word-source.test.ts` 执行：
