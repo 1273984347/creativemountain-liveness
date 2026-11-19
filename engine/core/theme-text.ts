@@ -38,3 +38,32 @@ export function expandThemeWords(raw: string, terms: ThemeTerms): string {
   }
   return out;
 }
+
+/**
+ * `{identity:N}` —— 第 N 号座位在本套主题下的身份称谓（B80 §2.3）。
+ *
+ * 与 `expandThemeWords` 分两个函数、两种数据源：那一个查**静态词表**（`terms`），这一个查
+ * **运行时主体**（座位 → 玩家身份 → 主题身份表）。合成一个"大替换"就把两件不同的事糊成一团，
+ * 将来加 `{faction:N}` 时没有落点。
+ *
+ * ⚠️ 正则**每次调用新建**：带 `g` 的字面量正则带 `lastIndex` 状态，提到模块级常量复用会在
+ *   第二次调用时从中途开始匹配（静默少替换，且只在一条消息含两个占位符时才暴露——正是难查的那种）。
+ */
+export function expandIdentityNames(raw: string, nameOf: (seat: number) => string): string {
+  // 1) 先拒畸形：**剥掉合法 token 后**还剩 `{identity` 就是畸形。
+  //    ⚠️ 别用 `/\{identity(?!\d+\})/` 这类负向预查来判——合法 token 是 `{identity:0}`，
+  //    `{identity` 后面紧跟的是冒号而不是数字，那条式子会把**每个合法句子**判成畸形
+  //    （计划 T2 Step 3 的"更清晰等价版"就是这么写的，执行期修正 #14）。
+  const residueAfterValid = raw.replace(/\{identity:\d+\}/g, '');
+  if (residueAfterValid.includes('{identity')) {
+    throw new Error(`身份占位符格式非法：${raw}`);
+  }
+  // 2) 全局替换。名字里理论上不含占位符，仍循环到干净（上限 4 轮：数据被写坏时不无限循环）。
+  let out = raw;
+  for (let i = 0; i < 4 && /\{identity:\d+\}/.test(out); i += 1) {
+    out = out.replace(/\{identity:(\d+)\}/g, (_m, digits: string) => nameOf(Number(digits)));
+  }
+  // 3) 残留即抛：把裸 `{identity:3}` 印给玩家，和缺叶一样是缺陷（B79 的缺叶口径）。
+  if (out.includes('{identity')) { throw new Error(`身份占位符残留：${out}（句子：${raw}）`); }
+  return out;
+}

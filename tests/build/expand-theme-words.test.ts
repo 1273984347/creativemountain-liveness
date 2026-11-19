@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { expandThemeWords, TERM_TOKENS } from '../../engine/core/theme-text.ts';
+import { expandIdentityNames, expandThemeWords, TERM_TOKENS } from '../../engine/core/theme-text.ts';
 import { SENTENCE_LEAVES } from '../../tools/theme-diff-check.mjs';
 import type { ThemeTerms } from '../../engine/types/theme.ts';
 
@@ -77,4 +77,26 @@ test('TERM_TOKENS ≡ 展开集合，且不含 deck（同形词「指令」，�
 // 各自声明可以，**漂移不行**——漂移的后果是门⑧ 比了五个叶而 R1 只禁其中四个。
 test('B79 修正 #9：门⑧ 的 SENTENCE_LEAVES ≡ TERM_TOKENS（两处声明不许漂）', () => {
   assert.deepEqual([...SENTENCE_LEAVES].sort(), [...TERM_TOKENS].sort());
+});
+
+// ---------- B80 §2.3：`{identity:N}` 的解析机制 ----------
+//
+// 与上面的 `expandThemeWords` 分两个函数：那一个查**静态词表**（terms），这一个查**运行时主体**
+// （座位 → 玩家身份 → 主题身份表）。合成一个"大替换"就把两件事糊成一团，将来加 `{faction:N}` 没有落点。
+test('B80 {identity:N}：多个全部展开、格式错误抛错、无占位符恒等', () => {
+  const nameOf = (seat: number) => (seat === 0 ? '守闸人' : seat === 7 ? '塔主' : '座' + String(seat));
+  assert.equal(expandIdentityNames('{identity:0}：回合结束', nameOf), '守闸人：回合结束');
+  assert.equal(
+    expandIdentityNames('{identity:0} 把盾给了 {identity:7}', nameOf),
+    '守闸人 把盾给了 塔主', '⇒ 必须全局替换（无 g 的 replace 会漏第二个）');
+  assert.equal(expandIdentityNames('无称谓的句子', nameOf), '无称谓的句子', '恒等：出口可无条件调用');
+  assert.throws(() => expandIdentityNames('{identity:} 发言', nameOf), /身份占位符格式非法/,
+    '⇒ 花括号没写全不能悄悄漏过去（印给玩家就是 B78 页脚假话的形状）');
+  assert.throws(() => expandIdentityNames('{identity:1x} 发言', nameOf), /身份占位符格式非法/,
+    '⇒ 座位号不是纯数字也算畸形，不猜意图');
+  assert.throws(() => expandIdentityNames('{identity:9} 发言', () => { throw new Error('查无此人'); }),
+    /查无此人/, '⇒ 解析失败由调用侧抛出，本函数不吞');
+  // 连调两次必须同结果：带 g 的字面量正则若被提到模块级复用，第二次会从 lastIndex 起跑 ⇒ 静默漏替换
+  const raw = '{identity:0} 与 {identity:7}';
+  assert.equal(expandIdentityNames(raw, nameOf), expandIdentityNames(raw, nameOf));
 });

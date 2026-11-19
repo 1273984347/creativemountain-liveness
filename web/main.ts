@@ -14,7 +14,7 @@ import { uiAllows, uiBlockNotice, uiHasLegalTarget, uiCandidates, pendingGateHer
 import { resolveGate, resolveCompareGate } from '../engine/core/gate.ts';
 import { resolveBarrier } from '../engine/core/barrier.ts';
 import { THEMES, themeById } from './theme.ts';
-import { termExpander } from './ui/terms.ts';
+import { identityName, termExpander } from './ui/terms.ts';
 import { el, button, section } from './ui/dom.ts';
 import { renderBoard } from './ui/board.ts';
 import { renderHand, renderPlayers } from './ui/hand.ts';
@@ -473,7 +473,9 @@ function useAbility(target?: number): void {
 function renderActions(): HTMLElement {
   const theme = themeById(ui.themeId).theme;
   // 玩家可见文本的主题词展开器（B79 §4.3）——本函数是 notice / 面板 / 按钮的主要产地。
-  const t = termExpander(theme.terms);
+  // B80 §2.3：同一个 `t` 也负责 `{identity:N}`，解析器绑当前局的状态（越界/查无此人 ⇒ 抛错）。
+  const nameOf = (seat: number): string => identityName(ui.state, theme, seat);
+  const t = termExpander(theme.terms, nameOf);
   const seat = ui.seat;
   const player = ui.state.players[seat];
   const body: (Node | string)[] = [];
@@ -690,8 +692,10 @@ function render(): void {
   const root = document.getElementById('app');
   if (root === null) { return; }
   const theme = themeById(ui.themeId).theme;
-  const t = termExpander(theme.terms);
   const s = ui.state;
+  // B80 §2.3：日志与状态栏的身份称谓从**本次渲染的 state** 解析（`s` 就是下一行的 `ui.state`）。
+  const nameOf = (seat: number): string => identityName(s, theme, seat);
+  const t = termExpander(theme.terms, nameOf);
 
   const status = el('div', { class: 'status' });
   status.append(el('span', { text: '回合 ' + s.round + ' / 上限 ' + s.scales.globalRoundLimit }));
@@ -799,7 +803,7 @@ function render(): void {
     }));
   }
   panels.push(renderActions());
-  panels.push(section('日志', renderLog(s, 40, themeById(ui.themeId).theme.terms)));
+  panels.push(section('日志', renderLog(s, 40, themeById(ui.themeId).theme.terms, nameOf)));
 
   root.innerHTML = '';
   root.append(el('h1', { class: 'title', text: '创界山·活人认证 —— ' + theme.meta.name }));

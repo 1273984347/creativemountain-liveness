@@ -138,7 +138,10 @@ export function pureLeafWords(root) {
  * ⚠️ 粒度是**文件级**（§5.2 定案）：不是「词 × 行号」，也不许按目录整片放行。
  */
 export const TESTS_WORD_REGISTRY = [
-  { file: 'tests/gates/log-exit-expand.test.ts', words: ['安全闸', '算力', '封锁线', '异能点', '街区', '天台', '灵力', '灵枢'],
+  { file: 'tests/gates/log-exit-expand.test.ts',
+    words: ['安全闸', '算力', '封锁线', '异能点', '街区', '天台', '灵力', '灵枢',
+      // B80 §2.3：出口串两步的那条用例用 hybrid 的 {rift}/{resource} 期望串
+      '崩口', '灵能'],
     reason: '日志出口展开后的整句期望（四套各一条）：句子就是被测对象的渲染结果，§5.1 第二类' },
   { file: 'tests/build/expand-theme-words.test.ts',
     words: ['封顶台', '灵力', '灵枢', '灵能', '算力', '异能点', '安全闸',

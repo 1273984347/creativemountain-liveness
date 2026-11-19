@@ -102,3 +102,27 @@ test('B79 §3.4：web 侧不再从 glossary 取词（glossary 退回印刷层对
   }
   assert.deepEqual(offenders, [], '⇒ 改用 theme.terms（句子层唯一取词，门⑤ 逐叶校验）');
 });
+
+// ---------- B80 §2.3：出口的第二类数据源（身份称谓，运行时主体而非静态词表） ----------
+
+test('B80：日志出口串两步——同一条 message 里 {identity:N} 与 {resource} 都展开', () => {
+  const got = logLineText(
+    entry('passive', '{identity:0} 把盾给了 {identity:7}，花 2 {resource}'),
+    termsOf('scifi-ai'),
+    (seat) => (seat === 0 ? '守闸人' : seat === 7 ? '塔主' : '座' + String(seat)));
+  assert.equal(got, 'R3·T1 座2 守闸人 把盾给了 塔主，花 2 算力');
+  assert.equal(/\{/.test(got), false, '⇒ 展开后残留花括号就是漏印给玩家');
+});
+
+test('B80：两个解析器都缺省时原文透出（B79 的反证依赖这条，不许顺手加兜底）', () => {
+  const raw = '{identity:0} 与 {resource}';
+  assert.equal(logLineText(entry('passive', raw)).endsWith(raw), true,
+    '⇒ 缺省=不展开，不是"展开成默认词"：第三套兜底词就是从这里长出来的（B79 §3.2）');
+});
+
+test('B80：只绑 terms 没接解析器 ⇒ 含 {identity:N} 的句子抛错，纯词表句子照旧工作', () => {
+  const t = termExpander(termsOf('hybrid'));
+  assert.equal(t('{rift}：已放置封路印（-2 {resource}）'), '崩口：已放置封路印（-2 灵能）');
+  assert.throws(() => t('{identity:3} 发言'), /缺身份称谓解析器/,
+    '⇒ 接线漏了要当场炸，而不是把花括号印给玩家（与缺叶同一条口径）');
+});

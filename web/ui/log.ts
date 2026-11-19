@@ -7,7 +7,7 @@
 // B79：展开从「只碰 ask」扩成**全 kind 无条件**——note 会被插进 message（见 logLineText 注释）。
 
 import { instructionText } from '../../engine/core/instruction-table.ts';
-import { expandThemeWords } from '../../engine/core/theme-text.ts';
+import { expandIdentityNames, expandThemeWords } from '../../engine/core/theme-text.ts';
 import type { LogEntry, State } from '../../engine/core/state.ts';
 import type { ThemeTerms } from '../../engine/types/theme.ts';
 import { el } from './dom.ts';
@@ -20,17 +20,20 @@ import { el } from './dom.ts';
  *   插进了日志**，`registry.ts:707` 的「`N 号{gate}`」也是 log 行——只给 `ask` 开分支
  *   等于给占位符泄漏留门（取证见 `tests/gates/log-exit-expand.test.ts` 文件头）。
  * `ask` 的指令内容继续由结构化 `diceRoll` 展开（不解析消息文本，B78 的决定不变）。
- * `terms` 缺省 ⇒ 原文透出（占位符会露出来）：本函数不兜底，常驻防线是 R3（T14 跑真局）。
+ * B80 §2.3：`{identity:N}` 是同一条日志里的**第二类**数据源（座位 → 身份 → 称谓），
+ *   所以在词表展开之后再过一次 `expandIdentityNames`；两步都只在拿到对应解析器时才做。
+ * `terms` 与 `nameOf` 皆缺省 ⇒ 原文透出（占位符会露出来）：本函数不兜底，常驻防线是 R3（T14 跑真局）。
  */
-export function logLineText(entry: LogEntry, terms?: ThemeTerms): string {
-  const body = terms === undefined ? entry.message : expandThemeWords(entry.message, terms);
+export function logLineText(entry: LogEntry, terms?: ThemeTerms, nameOf?: (seat: number) => string): string {
+  const withWords = terms === undefined ? entry.message : expandThemeWords(entry.message, terms);
+  const body = nameOf === undefined ? withWords : expandIdentityNames(withWords, nameOf);
   const head = 'R' + entry.round + '·T' + entry.turnIndex + ' 座' + entry.actor + ' ' + body;
   if (entry.kind !== 'ask' || typeof entry.diceRoll !== 'number' || terms === undefined) { return head; }
   return head + ' —— ' + instructionText(entry.diceRoll, terms);
 }
 
 /** 渲染最近 N 条日志。`terms` 缺省时退回兜底句（引擎消息本身已可读，只是不含指令内容）。 */
-export function renderLog(state: State, limit = 40, terms?: ThemeTerms): HTMLElement {
+export function renderLog(state: State, limit = 40, terms?: ThemeTerms, nameOf?: (seat: number) => string): HTMLElement {
   const box = el('div', { class: 'log' });
   const items = state.log.slice(-limit);
   if (items.length === 0) {
@@ -38,7 +41,7 @@ export function renderLog(state: State, limit = 40, terms?: ThemeTerms): HTMLEle
     return box;
   }
   for (const entry of items) {
-    box.append(el('div', { class: 'log-line', text: logLineText(entry, terms) }));
+    box.append(el('div', { class: 'log-line', text: logLineText(entry, terms, nameOf) }));
   }
   return box;
 }
