@@ -15,45 +15,58 @@ import { resolve } from 'node:path';
 import { applyEffect } from '../../engine/ops/registry.ts';
 import { installTheme } from '../../engine/core/setup.ts';
 import { mk } from '../engine/fixtures.ts';
+import { TERM_TOKENS } from '../../engine/core/theme-text.ts';
+import { fullBanWords } from '../../tools/theme-word-scan.mjs';
 import type { State } from '../../engine/core/state.ts';
 
 const IDS = ['hybrid', 'scifi-ai', 'urban-psych', 'xianxia2026'];
 const themeOf = (id: string): any => JSON.parse(readFileSync(resolve('themes', id, 'theme.json'), 'utf8'));
-/**
- * 四套主题五个叶词的**并集**（R1 源码禁字表用的就是它）。
- *
- * `noUncheckedIndexedAccess` 下 `t[k]` 是 `string | undefined` ⇒ 显式收窄（叶子的齐备性
- * 由门 ⑤ 与 `tests/gates/theme-leaf-upgrade.test.ts` 保证，不在这里再兜一次值）。
- * ⚠️ 运行时守卫**不拿并集当判据**，用下面的 `foreignWords`。
- */
-const LEAF_WORDS = [...new Set(IDS.flatMap((id) => {
-  const t = themeOf(id).terms as Record<string, string | undefined>;
-  return ['resource', 'gate', 'path', 'peak', 'hp']
-    .map((k) => t[k])
-    .filter((v): v is string => typeof v === 'string' && v.length > 0);
-}))];
 
-/** 本主题自己的五个叶词。 */
-function ownWords(id: string): Set<string> {
+/** 八个句子层叶（顺序与 `TERM_TOKENS` 一致；等价性由 `expand-theme-words.test.ts` 常驻钉住）。 */
+const LEAF8 = ['resource', 'gate', 'path', 'peak', 'hp', 'rift', 'hazard', 'player'] as const;
+
+/** 一套主题的八个叶词取值（值而不是键）。 */
+function leafWordsOf(id: string): string[] {
   const t = themeOf(id).terms as Record<string, string | undefined>;
-  return new Set(['resource', 'gate', 'path', 'peak', 'hp']
-    .map((k) => t[k])
-    .filter((v): v is string => typeof v === 'string' && v.length > 0));
+  // `noUncheckedIndexedAccess` 下 `t[k]` 是 `string | undefined` ⇒ 显式收窄
+  //（叶子的齐备性由门 ⑤ 与 `tests/gates/theme-leaf-upgrade.test.ts` 保证，不在这里再兜一次值）
+  return LEAF8.map((k) => t[k]).filter((v): v is string => typeof v === 'string' && v.length > 0);
 }
 
 /**
- * 某套主题局里的「别套词」= 并集 − 本套五叶（B79 §5 R3 的取词口径）。
+ * 四套的**八叶取值 ∪ 身份名**并集 = 主域禁字表同一口径（B80 §3 R3，实测 58 词）。
+ *
+ * B79 时这里是 20 词（五叶）；T1 加了 rift/hazard/player、T4 加了身份名 ⇒ 判据覆盖面跟着走，
+ * **表从 `fullBanWords()` 派生**而不是在这里再抄一份：抄的那份会在下一批加叶时悄悄变短。
+ * ⚠️ 运行时守卫**不拿并集当判据**，用下面的 `foreignWords`。
+ */
+const ALL_WORDS = [...new Set(fullBanWords().map((w) => w.word))];
+
+/**
+ * 某套主题局里的「别套词」= 并集 − 本套合法词（B79 §5 R3 的取词口径，B80 扩到身份名）。
  *
  * 运行时**必须按当前主题取词**：引擎会把主题数据回显进日志——实测仙侠局里出现
  * `封口弃牌：座位 0（弃 灵枢符）`，「灵枢」是**它自己那张牌的名字**，完全合法。
  * 拿全局并集判就会把这种本套合规文本判成泄漏（评审那一轮纠正过的正是这个形状）。
+ * B80 多一类同名：`urban-psych` 的 `watchman` 也叫「守夜人」，所以本套身份名必须在 own 里。
+ *
  * 「引擎不许持有本主题的词」由 R1（源码零字面量）+ 每段的占位符存在断言负责，
  * 「别套的词不许串进来」由这里负责——两条判据合起来才闭合。
  */
 function foreignWords(id: string): string[] {
-  const own = ownWords(id);
-  return LEAF_WORDS.filter((w) => !own.has(w));
+  const own = new Set([...leafWordsOf(id), ...(themeOf(id).identities as Array<{ name: string }>).map((i) => i.name)]);
+  return ALL_WORDS.filter((w) => !own.has(w));
 }
+
+/**
+ * 占位符残留判据（B80 修正 #19）。
+ *
+ * ⚠️ 这里**必须派生**：B79 的实现是 `/\{(?:resource|gate|path|peak|hp)\}/` 五个名字硬枚举，
+ *   T1 加了三叶、T3 加了 `{identity:N}` 之后它对四类新占位符全盲——「日志干净」看起来有测试
+ *   守着，实际那条正则看不见（E135 同族：判据看不见 ≠ 缺陷不存在）。
+ *   现在叶名从 `TERM_TOKENS` 取，`identity` 单独并进同一个字符类。
+ */
+const RESIDUE_RE = new RegExp(`\\{(?:(?:${TERM_TOKENS.join('|')})\\}|identity(?::\\d+)?\\})`);
 
 /** 引擎文本 = 返回值 note + 新写进 log 的行（note 也会被 gate.ts 一类插进 message，见 B79 §4.3）。 */
 function textsOf(r: { ok?: boolean; state: State; note?: unknown }, beforeLogLen: number): string[] {
@@ -64,8 +77,13 @@ function textsOf(r: { ok?: boolean; state: State; note?: unknown }, beforeLogLen
 }
 
 test('B79：资源算子的日志与拒因不含任何主题叶词（接线后必须是占位符形态）', () => {
-  // 禁字表本身不许悄悄变短（收窄那一步若把某个叶滤掉，判据就会空转）：五叶 × 四套今天全不同 = 20
-  assert.equal(LEAF_WORDS.length, 20, `禁字表只有 ${String(LEAF_WORDS.length)} 词：${LEAF_WORDS.join('/')}`);
+  // 禁字表本身不许悄悄变短（收窄那一步若把某个叶滤掉，判据就会空转）：
+  // B80 起口径 = 八叶 32 ∪ 身份名 26 = 58（与主域 R1 同源，都出自 `fullBanWords()`）
+  assert.equal(ALL_WORDS.length, 58, `运行时禁字表应 58 词，实际 ${String(ALL_WORDS.length)}`);
+  assert.ok(foreignWords('scifi-ai').includes('守夜人'),
+    '前提防空转：scifi 局的别套词表必须含「守夜人」（xianxia/urban 的 watchman 名）⇒ 否则身份名判据是空集');
+  assert.ok(foreignWords('hybrid').includes('数据断层'),
+    '前提防空转：hybrid 局的别套词表必须含 scifi 的 rift 词「数据断层」⇒ 三新叶真进了判据，不是纸面扩表');
   let checked = 0;
   for (const id of IDS) {
     let state = installTheme(mk(4, 20260), themeOf(id));
@@ -322,7 +340,7 @@ test('B79：action-key 的开发者串改机制标识——不用占位符、也
   const msg = bad();
   assert.ok(msg.length > 0, '前提：非法通道必须抛错');
   assert.ok(msg.includes('gate 通道非法'), `实际消息：${msg}`);
-  for (const w of LEAF_WORDS) { assert.equal(msg.includes(w), false, `开发者串含主题词「${w}」：${msg}`); }
+  for (const w of ALL_WORDS) { assert.equal(msg.includes(w), false, `开发者串含主题词/身份名「${w}」：${msg}`); }
   assert.equal(msg.includes('{'), false, `开发者串不该用占位符（没有出口会展开它）：${msg}`);
 });
 
@@ -412,24 +430,27 @@ import { logLineText } from '../../web/ui/log.ts';
 import { termExpander } from '../../web/ui/terms.ts';
 import { runTutorial } from '../../web/tutorial.ts';
 
-const OWN = (id: string) => (['resource', 'gate', 'path', 'peak', 'hp'] as const)
+const OWN = (id: string) => LEAF8
   .map((k) => (themeOf(id).terms as Record<string, string>)[k] as string);
 
 test('B79 R3：四套真局（3/4/5 人各两局）的日志与 UI 拒因，按本主题展开后干净', async () => {
-  let logLines = 0, blockTexts = 0, ownSentences = 0;
+  let logLines = 0, blockTexts = 0, ownSentences = 0, identityLines = 0;
   const games: string[] = [];
 
   for (const id of IDS) {
     const theme = themeOf(id);
     const foreign = foreignWords(id);
     const own = OWN(id);
-    const t = termExpander(theme.terms);
+    // ⚠️ 拒因出口的解释器**每个局面各绑一次**（见下面 ② 里）：`{identity:N}` 要按当前 state 查身份，
+    //   绑在主题上等于假设"所有局面同一份状态"。
     for (const players of [3, 4, 5]) {
       for (let g = 0; g < 2; g++) {
+        // 采样写死（验收 9）：seed = 20260 + g*31 + players*7，四套共用同一串 ⇒ 复算时不需要引用别的批次
+        const seed = 20260 + g * 31 + players * 7;
         const bag: DecisionRecord[] = [];
         setRecorder(bag);
         try {
-          await playOne(theme, players, 20260 + g * 31 + players * 7);
+          await playOne(theme, players, seed);
         } finally { setRecorder(null); }
         assert.ok(bag.length > 0, `${id}/${String(players)} 人：仿真一个决策点都没记录 ⇒ 真局没跑起来`);
         games.push(`${id}/${String(players)}:${String(bag.length)} 个决策点`);
@@ -442,15 +463,26 @@ test('B79 R3：四套真局（3/4/5 人各两局）的日志与 UI 拒因，按�
           if (s.log.length > best.length) { best = s.log; bestState = s; }
         }
         assert.ok(best.length >= 10, `${id}/${String(players)} 人：真局只有 ${String(best.length)} 行日志 ⇒ 覆盖面不足`);
+        // B80 §2.3：`{identity:N}` 要第三个解析器（座位→身份→本套身份表），绑在**这条日志所属的那份状态**上
+        //   ——不是绑当前手番：`{identity:0}` 说的是 0 号座，跟谁在行动无关。
+        const sRef = bestState as State;
+        const ownNames = (theme.identities as Array<{ name: string }>).map((i) => i.name);
         for (const e of best) {
-          const shown = logLineText(e, theme.terms);
+          const shown = logLineText(e, theme.terms, (seat) => identityName(sRef, theme, seat));
           logLines += 1;
-          assert.equal(/\{(?:resource|gate|path|peak|hp)\}/.test(shown), false,
+          assert.equal(RESIDUE_RE.test(shown), false,
             `${id}：漏展开 ⇒「${shown}」⇒ 有一类文案没接进出口（R1/R2 抓不到这一类）`);
           for (const w of foreign) {
             assert.equal(shown.includes(w), false, `${id}：日志「${shown}」含别套词「${w}」`);
           }
           if (own.some((w) => shown.includes(w))) { ownSentences += 1; }
+          // ③ 称谓判定（B80 新增）：含 `{identity:N}` 的行必须展开成**本套**某个身份名。
+          //   别套名字已被上面的 foreign 抓走，这条抓的是另一种失效——主体整段丢了。
+          if (e.message.includes('{identity:')) {
+            identityLines += 1;
+            assert.ok(ownNames.some((n) => shown.includes(n)),
+              `${id}：被动/否决句没落到本套任何身份名 ⇒ 主体丢了：${shown}`);
+          }
         }
 
         // ② UI 拒因：拿真局面去试**会被挡**的动作形状。
@@ -458,6 +490,7 @@ test('B79 R3：四套真局（3/4/5 人各两局）的日志与 UI 拒因，按�
         //    （UI 与引擎同判是 R-1 的硬约束），扫它恒得 0 条，那就是一条空转判据。
         if (bestState !== null) {
           const s0 = bestState;
+          const t = termExpander(theme.terms, (seat) => identityName(s0, theme, seat));
           const hand = s0.players[0]?.hand ?? [];
           const attempts: Array<Parameters<typeof uiBlockNotice>[2]> = [
             ...hand.map((c) => ({ type: 'PLAY_CARD' as const, actor: 0, cardId: c.id })),
@@ -473,7 +506,7 @@ test('B79 R3：四套真局（3/4/5 人各两局）的日志与 UI 拒因，按�
             if (typeof n !== 'string') { continue; }
             blockTexts += 1;
             const shown = t(n);
-            assert.equal(/\{(?:resource|gate|path|peak|hp)\}/.test(shown), false,
+            assert.equal(RESIDUE_RE.test(shown), false,
               `${id}：拒因漏展开 ⇒「${shown}」`);
             for (const w of foreign) {
               assert.equal(shown.includes(w), false, `${id}：拒因「${shown}」含别套词「${w}」`);
@@ -485,8 +518,15 @@ test('B79 R3：四套真局（3/4/5 人各两局）的日志与 UI 拒因，按�
   }
   // 防空转：三个读数都得够量，否则上面的循环可能一次都没进
   assert.ok(logLines >= 200, `只收集到 ${String(logLines)} 条真局日志 ⇒ 判据会空转`);
+  assert.equal(games.length, IDS.length * 3 * 2,
+    `采样必须写死 = 四套 × 人数档 {3,4,5} × 每档 2 局 = ${String(IDS.length * 3 * 2)} 局，实际 ${String(games.length)} 局`);
   assert.ok(blockTexts >= 4, `只有 ${String(blockTexts)} 条真局拒因被检查（四套 × 若干局）⇒ 覆盖面不足：${games.join(' | ')}`);
   assert.ok(ownSentences >= 20, `只有 ${String(ownSentences)} 句带本主题叶词 ⇒ 展开可能整体没生效`);
+  // B80：24 局里必须真的出现过带称谓的句子，否则上面那条「③ 称谓判定」是空判据（E135 同族）。
+  //   下限 24 = 每个采样局平均一条（T5 实测现值 **192**，留了 8 倍余量：将来加减日志行不该惊动这条）。
+  //   ⚠️ 这条**不等于**八个句子都被触发过——覆盖面由 R9（T6）负责，它另有两条单元级反向钉。
+  assert.ok(identityLines >= 24,
+    `24 局里只有 ${String(identityLines)} 条含 {identity:N} 的日志 ⇒ ③ 那一条判据覆盖面不足（${games[0] ?? ''}…）`);
 });
 
 test('B79 R3 反证：故意不传 terms ⇒ 占位符会露出来（证明上一条的「干净」来自展开，不是来自恒等）', () => {
@@ -497,6 +537,21 @@ test('B79 R3 反证：故意不传 terms ⇒ 占位符会露出来（证明上�
   const shown = logLineText(entry, theme.terms);
   assert.equal(/\{/.test(shown), false, `展开后仍有花括号：${shown}`);
   assert.equal(shown.includes('算力'), true, `展开没用本主题词：${shown}`);
+});
+
+test('B80 修正 #19：漏展开判据本身要能被注入打红（八叶 + identity 各一次，且不误报干净句）', () => {
+  // 判据从 `TERM_TOKENS` 派生之后，"派生对了"也得有证据：逐个叶名造一条含占位符的句子，
+  // 要求 RESIDUE_RE 命中；再要求它对展开后的干净句子不命中（否则判据只是恒真）。
+  for (const token of TERM_TOKENS) {
+    assert.equal(RESIDUE_RE.test(`座2 支付 3 {${token}}通过`), true, `⇒ {${token}} 不在漏展开判据眼里 ⇒ 判据看不见这一类`);
+  }
+  assert.equal(RESIDUE_RE.test('{identity:0} 发言'), true, '⇒ {identity:N} 必须在判据里（B79 的五名枚举就是漏了这类）');
+  assert.equal(RESIDUE_RE.test('{identity} 发言'), true, '⇒ 缺座位号的畸形也算残留');
+  assert.equal(RESIDUE_RE.test('山议裁定：本次无人被放逐'), false, '⇒ 干净句子不许误报');
+  // 反向钉：把 B79 的老判据拿来对照，证明这次扩的是**看得见**的范围（老式子对四类新占位符全盲）
+  const LEGACY = /\{(?:resource|gate|path|peak|hp)\}/;
+  assert.equal(LEGACY.test('{rift}：已放置封路印'), false, '前提：老枚举确实看不见 {rift}（否则这条对照没有意义）');
+  assert.equal(RESIDUE_RE.test('{rift}：已放置封路印'), true, '⇒ 新判据看见它');
 });
 
 // ---------- T15.1：{hp} 两行（规格 §2.4 表外兜底词）----------

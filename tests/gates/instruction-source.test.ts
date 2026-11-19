@@ -16,10 +16,28 @@ import { readFileSync } from 'node:fs';
 import { performAction } from '../../engine/core/turn-runner.ts';
 import { INSTRUCTION_TABLE, instructionText } from '../../engine/core/instruction-table.ts';
 import { mk } from '../engine/fixtures.ts';
+import { fullBanWords } from '../../tools/theme-word-scan.mjs';
 
 const RUNNER = readFileSync('engine/core/turn-runner.ts', 'utf8');
-/** 任何一套主题的资源词 / 牌词：引擎日志一旦含其中之一，就说明它替某个主题作了主张。 */
-const THEME_WORDS = ['灵枢', '算力', '异能点', '灵能', '符箓', '指令库', '道箓'];
+/**
+ * 任何一套主题的词：引擎日志一旦含其中之一，就说明它替某个主题作了主张。
+ *
+ * B80 T5 起这张表**从主题数据派生**（原来手抄 7 个词：`灵枢/算力/异能点/灵能/符箓/指令库/道箓`）。
+ * 手抄的那份有两个毛病，正是本批一路在治的：
+ *   ① 加叶 / 加主题时它会悄悄变短（B80 的三新叶与身份名一个都不在里面）；
+ *   ② 抄的人得记得"哪些词算主题词"，而这个判断的真值住在 `themes/<id>/theme.json`。
+ * 口径 = 主域禁字表（八叶 32 ∪ 身份名 26）∪ 各套 `glossary.deck/hand`
+ *       （牌堆名/手牌名不是句子层叶——`deck` 因同形词「指令」被 §4.4 排除，
+ *        但**日志里出现「指令库」仍然是替 scifi 作主张**，所以这张网要比 R1 宽）。
+ */
+const IDS = ['xianxia2026', 'hybrid', 'scifi-ai', 'urban-psych'];
+const THEME_WORDS = [...new Set([
+  ...fullBanWords().map((w) => w.word),
+  ...IDS.flatMap((id) => {
+    const g = JSON.parse(readFileSync(`themes/${id}/theme.json`, 'utf8')).glossary as Record<string, string>;
+    return [g.deck, g.hand].filter((v): v is string => typeof v === 'string' && v.length > 0);
+  }),
+])];
 
 test('B78：日志消息体不再调用 instructionText（定义仍在文件里，由 Task 3/4 迁走）', () => {
   // 只判**调用**：`message: ...instructionText(` 这个形状就是「引擎把主题文案塞进日志」的证据。
