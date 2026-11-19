@@ -127,7 +127,7 @@ function decodeKey(key: string): Action {
     case 'barrier': {
       // ⚠️ B18-b：`barrier:resolve:<channel>`（三段）= 裂隙通道（放印 / 不放）。
       const ch = need(parts[2]);
-      if (ch !== 'place' && ch !== 'skip') { throw new Error(`key 裂隙通道非法：${key}`); }
+      if (ch !== 'place' && ch !== 'skip') { throw new Error(`key rift 通道非法：${key}`); }
       return { type: 'BARRIER_RESOLVE', actor: -1, channel: ch };
     }
     case 'cert': {

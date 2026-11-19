@@ -16,11 +16,11 @@
     "path": "索桥",
     "plain": "荒野",
     "boon": "灵地",
-    "hazard": "险径",
-    "rift": "裂隙",
+    "hazard": "险坡",
+    "rift": "崩口",
     "branch": "岔路",
     "gate": "阵门",
-    "player": "修士"
+    "player": "行道者"
   },
   "terms": {
     "hp": "气血",
@@ -29,6 +29,9 @@
     "gate": "阵门",
     "path": "索桥",
     "peak": "道顶",
+    "rift": "崩口",
+    "hazard": "险坡",
+    "player": "行道者",
     "types": {
       "motion": "位移",
       "attack": "攻击",

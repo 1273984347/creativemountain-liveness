@@ -1000,7 +1000,7 @@ if (args.out !== null) {
     peek_deck: '观星者 · 看牌堆顶',
     shield: '守夜人 · 回合末护盾',
     transfer_resource: '窃火者 · 偷资源',
-    modify_judgement: '织梦者 · 改险径判定',
+    modify_judgement: '织梦者 · 改地形判定',
     certify_free_pass: '山主 · 免质疑',
   };
   for (const op of Object.keys(PASSIVE_LABELS)) {

@@ -64,7 +64,7 @@ function resolveTile(state: State, seat: number): State {
             : p)),
           log: [...state.log, {
             round: state.round, turnIndex: state.turnIndex, actor: seat, kind: 'passive',
-            message: '[被动:modify_judgement] 织梦者改写了险径判定：安全通过',
+            message: '[被动:modify_judgement] 织梦者改写了{hazard}判定：安全通过',
           }],
         };
         break;
@@ -99,8 +99,8 @@ function resolveTile(state: State, seat: number): State {
         log: [...next.log, {
           round: next.round, turnIndex: next.turnIndex, actor: seat, kind: 'barrier',
           message: judged.blocked
-            ? '裂隙：撞上封路印 —— 黑牌，停 1 回合'
-            : '裂隙：撞上封路印 —— 红牌，通过',
+            ? '{rift}：撞上封路印 —— 黑牌，停 1 回合'
+            : '{rift}：撞上封路印 —— 红牌，通过',
         }],
       };
       break;

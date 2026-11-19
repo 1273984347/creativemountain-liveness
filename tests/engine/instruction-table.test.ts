@@ -16,6 +16,8 @@ const terms = (resource: string): ThemeTerms => ({
   hp: '灵力', deck: '符箓', resource, gate: '关隘',
   // B79 §3.1：path/peak 升格必填 ⇒ 补上（同 statuses 的先例：为契约补齐，不是为过编译放宽断言）。
   path: '山道', peak: '封顶台',
+  // B80 §2.1：rift/hazard/player 升格必填 ⇒ 同因补齐（这份夹具只测资源词替换，三叶取基准仙侠值）。
+  rift: '裂隙', hazard: '险径', player: '修士',
   types: { motion: '位移', attack: '攻击', defense: '防御', utility: '功能' },
   colors: { red: '红', black: '黑' },
   // T3 时 statuses 还不存在，故意没写；T10 把它变成必填 ⇒ 现在补上（不是为过编译而放宽断言）。

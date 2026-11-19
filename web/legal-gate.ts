@@ -303,7 +303,7 @@ export function uiBlockNotice(state: State, seat: number, action: Action): strin
     }
     case 'BARRIER_RESOLVE': {
       const b = pendingBarrierHere(state, seat);
-      if (b === null) { return '你当前不在可放印的裂隙格上，无需选择。'; }
+      if (b === null) { return '你当前不在可放印的{rift}格上，无需选择。'; }
       return null;
     }
     // ⚠️ **Task 5 替换本两支的 body**（`case` 标签保留）：写成显式 case 而不是 `default`，

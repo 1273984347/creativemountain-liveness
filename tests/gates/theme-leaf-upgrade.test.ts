@@ -43,7 +43,42 @@ test('B79 负样本：抹掉 terms.peak ⇒ 门⑤ 判红', () => {
   assert.ok(r.errors.some((e: string) => e.includes('terms.peak')), `实际错误：${JSON.stringify(r.errors)}`);
 });
 
-// ---------- B79 §3.3：补 B78 R6 欠的 `terms ↔ glossary` 五键判等（E136）----------
+// B80 §2.1：三新叶同规格——`TERM_LEAVES` 从 15 升到 18，缺任一键门⑤ 必须点名。
+// 写成循环而不是三条复制粘贴：少写一条的代价是「那一叶以后又能静默缺失」，
+// 而循环的覆盖面由 `NEW_LEAVES` 一处决定（与门⑤ 的表同形，漂了会被上面的八键测试抓住）。
+const NEW_LEAVES = ['rift', 'hazard', 'player'];
+
+test('B80：四套主题的 terms.rift / hazard / player 都是非空字符串', () => {
+  for (const id of IDS) {
+    const terms = read(id).terms as Record<string, unknown>;
+    for (const leaf of NEW_LEAVES) {
+      assert.equal(typeof terms[leaf], 'string', `${id} 的 terms.${leaf} 缺失 ⇒ 句子层 {${leaf}} 无词可展开`);
+      assert.ok((terms[leaf] as string).length > 0, `${id} 的 terms.${leaf} 为空串`);
+    }
+  }
+});
+
+test('B80 负样本：逐叶抹掉 terms.rift / hazard / player ⇒ 门⑤ 每叶都要点名（验收 1）', () => {
+  for (const leaf of NEW_LEAVES) {
+    const bad = read('hybrid');
+    (bad.terms as Record<string, unknown>)[leaf] = undefined;
+    const r = validateTheme(bad, schema);
+    assert.ok(r.errors.some((e: string) => e.includes(`terms.${leaf}`)),
+      `${leaf} 缺失未被判红 ⇒ 实际：${JSON.stringify(r.errors)}（门⑤ 的 TERM_LEAVES 没升到 18）`);
+  }
+});
+
+test('B80 §2.1.2 负样本：只改 hybrid 的 glossary 三键 ⇒ 判等抓三条（裁定不是口头承诺）', () => {
+  for (const leaf of NEW_LEAVES) {
+    const bad = read('hybrid') as unknown as { glossary: Record<string, string> };
+    bad.glossary[leaf] = '基准旧词';
+    const r = validateTheme(bad, schema);
+    assert.ok(r.errors.some((e: string) => e.includes(`terms.${leaf}`) && e.includes(`glossary.${leaf}`)),
+      `hybrid glossary.${leaf} 漂移未被判红 ⇒ 实际：${JSON.stringify(r.errors)}`);
+  }
+});
+
+// ---------- B79 §3.3：补 B78 R6 欠的 `terms ↔ glossary` 判等（E136）；B80 §2.1 把五键扩到八键 ----------
 //
 // B78 在 `ir-validate:42` 的注释、规格 §4、验收 12 三处互相引用「门⑤ 判等」，代码零行。
 // 运行时探针（记录 §6）实证：只改 `glossary.gate` ⇒ **0 条错误**；本轮连 path/peak 一起改，
@@ -52,9 +87,13 @@ test('B79 负样本：抹掉 terms.peak ⇒ 门⑤ 判红', () => {
 
 const EQUAL_PAIRS: readonly [string, string][] = [
   ['hp', 'HP'], ['resource', 'resource'], ['gate', 'gate'], ['path', 'path'], ['peak', 'peak'],
+  // B80 §2.1 三新叶。⚠️ hybrid 的 glossary 三键必须与 terms 同步（规格 §2.1.2 裁定）——
+  //   只换 terms 而 glossary 留着「裂隙 / 险径 / 修士」，下面两条负样本之外的**第一条**就会红三句，
+  //   而那正是判等该抓的「句子层与印刷层说两个词」，不是误报。
+  ['rift', 'rift'], ['hazard', 'hazard'], ['player', 'player'],
 ];
 
-test('B79 R4：四套主题的 terms↔glossary 五键今天确实等值（守卫落地不自红）', () => {
+test('B79 R4 / B80：四套主题的 terms↔glossary 八键今天确实等值（守卫落地不自红）', () => {
   for (const id of IDS) {
     const t = read(id) as unknown as { terms: Record<string, string>; glossary: Record<string, string> };
     for (const [leaf, key] of EQUAL_PAIRS) {
@@ -71,7 +110,7 @@ test('B79 R4 负样本：只改 glossary.gate ⇒ 门⑤ 判红（B78 验收 12 
     `实际错误：${JSON.stringify(r.errors)} ⇒ 判等还没实现或被绕过（E136 复发）`);
 });
 
-test('B79 R4 负样本：五键逐键篡改 ⇒ 每键都要报（少一键就是少一个守卫）', () => {
+test('B79 R4 / B80 负样本：八键逐键篡改 ⇒ 每键都要报（少一键就是少一个守卫）', () => {
   for (const [leaf, key] of EQUAL_PAIRS) {
     const bad = read('scifi-ai') as unknown as { glossary: Record<string, string> };
     bad.glossary[key] = 'XYZ';

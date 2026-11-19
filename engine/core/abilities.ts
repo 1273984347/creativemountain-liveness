@@ -80,7 +80,7 @@ export function performAbility(state: State, seat: number, target?: number): Abi
       const r = applyEffect({ state: next, actor: seat }, { op: 'modify_judgement', target: seat });
       if (!r.ok) { return { ok: false, state, note: r.note ?? '发动失败' }; }
       next = r.state;
-      note = '改写险径判定为安全';
+      note = '改写{hazard}判定为安全';
       break;
     }
     default:

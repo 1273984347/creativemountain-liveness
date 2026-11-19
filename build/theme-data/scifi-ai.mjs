@@ -43,6 +43,8 @@ export default {
     hp: '机体完整度', deck: '指令', resource: '算力', gate: '安全闸',
     // B79 §3.1：句子层 {path} / {peak}
     path: '轨道', peak: '奇点台',
+    // B80 §2.1：句子层 {rift} / {hazard} / {player}——三值与 glossary 同词（门⑤ 八对判等）
+    rift: '数据断层', hazard: '故障区', player: '行动者',
     types: { motion: '位移', attack: '攻击', defense: '防御', utility: '功能' },
     colors: { red: '红', black: '黑' },
     statuses: { poison: '中毒', slow: '减速', silence: '封口' },

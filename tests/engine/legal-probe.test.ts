@@ -314,7 +314,7 @@ const PROBE_CASES: readonly ProbeCase[] = [
   // ---- B18：关隘通道（GATE_RESOLVE）——不在关隘格上必拒 ----
   { label: 'GATE_RESOLVE@不在关隘格', scene: mk, action: { type: 'GATE_RESOLVE', actor: 0, channel: 'pay' }, ok: false, reasonRe: /{gate}/ },
   // ---- B18-b：裂隙通道（BARRIER_RESOLVE）——不在可放印的裂隙格上必拒 ----
-  { label: 'BARRIER_RESOLVE@不在裂隙格', scene: mk, action: { type: 'BARRIER_RESOLVE', actor: 0, channel: 'place' }, ok: false, reasonRe: /裂隙/ },
+  { label: 'BARRIER_RESOLVE@不在裂隙格', scene: mk, action: { type: 'BARRIER_RESOLVE', actor: 0, channel: 'place' }, ok: false, reasonRe: /\{rift\}/ },
 ];
 
 /** 用例里要「打一张真的牌」⇒ 取初始手牌第一张（mk 的后置断言保证人人有牌）。 */

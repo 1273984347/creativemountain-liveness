@@ -26,6 +26,8 @@ const TERM_LEAVES = [
   // B79 §3.1：句子层要用 {path} / {peak} ⇒ 必须是必填叶
   //   （此前它们只活在开放索引的 glossary 里，缺键不红，展开器只能静默兜底）
   ['path'], ['peak'],
+  // B80 §2.1：裂隙 / 险径 / 玩家称谓进句子层（{rift} / {hazard} / {player}），同理必填
+  ['rift'], ['hazard'], ['player'],
   ['types', 'motion'], ['types', 'attack'], ['types', 'defense'], ['types', 'utility'],
   ['colors', 'red'], ['colors', 'black'],
   // B78 §4 R4：三叶（不是四叶——skip_turn 只有动词位、无名词位读取点，见规格 R4 取证）
@@ -120,6 +122,8 @@ const MAX_SEATS = Math.max(...SCALES.map((s) => s.players));
  */
 const TERMS_GLOSSARY_PAIRS = [
   ['hp', 'HP'], ['resource', 'resource'], ['gate', 'gate'], ['path', 'path'], ['peak', 'peak'],
+  // B80 §2.1：三新叶同样两边一档（hybrid 的 glossary 三键随 terms 一起换词，见规格 §2.1.2）
+  ['rift', 'rift'], ['hazard', 'hazard'], ['player', 'player'],
 ];
 
 function checkTermsGlossaryAgreement(theme, err) {

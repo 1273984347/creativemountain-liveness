@@ -29,6 +29,9 @@
     "gate": "关隘",
     "path": "山道",
     "peak": "封顶台",
+    "rift": "裂隙",
+    "hazard": "险径",
+    "player": "修士",
     "types": {
       "motion": "位移",
       "attack": "攻击",

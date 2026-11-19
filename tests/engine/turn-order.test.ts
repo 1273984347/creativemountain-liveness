@@ -76,7 +76,7 @@ test('currentPlayer 按 turnOrder 轮转（不是按座位序）', () => {
   assert.deepEqual(seq, [...s.turnOrder], '手番顺序应与 turnOrder 逐位一致');
 });
 
-test('开局首个行动者是 turnOrder 的第一位', () => {
+test('开局第一个行动的席位是 turnOrder 的第一位', () => {
   const s = game(2024);
   assert.equal(currentPlayer(s), s.turnOrder[0]);
 });

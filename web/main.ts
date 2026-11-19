@@ -395,13 +395,13 @@ function resolveBarrierChannel(channel: 'place' | 'skip'): void {
   const action: Action = { type: 'BARRIER_RESOLVE', actor: seat, channel };
   // 门禁:裂隙提交 —— 拒绝不沉默。
   if (!uiAllows(ui.state, seat, action)) {
-    ui.notice = uiBlockNotice(ui.state, seat, action) ?? '当前无法在该裂隙格放置封路印。';
+    ui.notice = uiBlockNotice(ui.state, seat, action) ?? '当前无法在该{rift}格放置封路印。';
     render();
     return;
   }
   const r = resolveBarrier(ui.state, seat, channel);
   if (!r.ok) {
-    ui.notice = '裂隙结算失败：' + r.note;
+    ui.notice = '{rift}结算失败：' + r.note;
     render();
     return;
   }
@@ -527,10 +527,10 @@ function renderActions(): HTMLElement {
   // ⚠️ B18-b：停在**可放印的裂隙格** ⇒ 只显示裂隙面板（放印 / 不放）。
   const barrier = pendingBarrierHere(ui.state, seat);
   if (barrier !== null) {
-    body.push(el('div', { class: 'warn', text: t('裂隙：可花 ' + String(barrier.cost) + ' {resource} 在这一格放置「封路印」，让后来者必须判定。') }));
+    body.push(el('div', { class: 'warn', text: t('{rift}：可花 ' + String(barrier.cost) + ' {resource} 在这一格放置「封路印」，让后来者必须判定。') }));
     body.push(button('放置封路印（-' + String(barrier.cost) + '）', () => { resolveBarrierChannel('place'); }));
     body.push(button('不放置，直接通过', () => { resolveBarrierChannel('skip'); }));
-    return section('裂隙', ...body);
+    return section(t('{rift}'), ...body);
   }
   // ⚠️ B13：对峙未结算 ⇒ **只显示对峙面板**（回合阻塞，行棋/问天/出牌都暂不可用）。
   const duel = ui.state.duel;
@@ -695,7 +695,7 @@ function render(): void {
 
   const status = el('div', { class: 'status' });
   status.append(el('span', { text: '回合 ' + s.round + ' / 上限 ' + s.scales.globalRoundLimit }));
-  status.append(el('span', { text: '当前行动者 座' + currentPlayer(s) }));
+  status.append(el('span', { text: '当前' + t('{player}') + ' 座' + currentPlayer(s) }));
   // 行动顺序是**开局随机决定**的（B10）⇒ 显式展示，避免玩家以为「按座号轮」
   status.append(el('span', { text: '行动顺序 ' + s.turnOrder.map((x) => '座' + x).join('→') }));
   status.append(el('span', { text: '轮末 ' + (isRoundEnd(s) ? '是' : '否') }));

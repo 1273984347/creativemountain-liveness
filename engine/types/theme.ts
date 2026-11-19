@@ -439,6 +439,12 @@ export interface ThemeTerms {
   readonly path: string;
   /** 终点的词（B79 §3.1）：封顶台 / 奇点台 / 天台 / 道顶。句子层 `{peak}` 的取值。 */
   readonly peak: string;
+  /** 裂隙地形的词（B80 §2.1）：裂隙 / 崩口 / 数据断层 / 断桥。句子层 `{rift}` 的取值。 */
+  readonly rift: string;
+  /** 险径地形的词（B80 §2.1）：险径 / 险坡 / 故障区 / 危险区。句子层 `{hazard}` 的取值。 */
+  readonly hazard: string;
+  /** 对玩家的**通用称谓**（B80 §2.1）：修士 / 行道者 / 行动者 / 异能者。句子层 `{player}` 的取值。 */
+  readonly player: string;
   readonly types: {
     readonly motion: string;
     readonly attack: string;

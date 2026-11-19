@@ -29,6 +29,9 @@
     "gate": "安全闸",
     "path": "轨道",
     "peak": "奇点台",
+    "rift": "数据断层",
+    "hazard": "故障区",
+    "player": "行动者",
     "types": {
       "motion": "位移",
       "attack": "攻击",

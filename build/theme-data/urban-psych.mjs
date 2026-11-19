@@ -34,6 +34,8 @@ export default {
     hp: '精神值', deck: '异能牌', resource: '异能点', gate: '封锁线',
     // B79 §3.1：句子层 {path} / {peak}
     path: '街区', peak: '天台',
+    // B80 §2.1：句子层 {rift} / {hazard} / {player}——三值与 glossary 同词（门⑤ 八对判等）
+    rift: '断桥', hazard: '危险区', player: '异能者',
     types: { motion: '位移', attack: '攻击', defense: '防御', utility: '功能' },
     colors: { red: '红', black: '黑' },
     statuses: { poison: '中毒', slow: '减速', silence: '封口' },

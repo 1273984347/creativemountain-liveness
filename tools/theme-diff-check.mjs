@@ -53,7 +53,7 @@ export const MIN_DOMAIN_WORD_LEN = 2;
  * 让差异化去 import 渲染实现是把两件事焊死。**漂移由 T4 的测试钉住**
  * （`SENTENCE_LEAVES ≡ TERM_TOKENS`），不是靠人记得两边一起改。
  */
-export const SENTENCE_LEAVES = ['resource', 'gate', 'path', 'peak', 'hp'];
+export const SENTENCE_LEAVES = ['resource', 'gate', 'path', 'peak', 'hp', 'rift', 'hazard', 'player'];
 
 /** 深度比较前的规范化：对象键排序 ⇒ 与 JSON 键书写顺序无关。 */
 export function canonical(value) {

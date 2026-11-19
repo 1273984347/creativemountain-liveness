@@ -107,12 +107,16 @@ export const SENTENCE_WHITELIST = new Map();
  * 机制名同形词（规格 §5.1.1 甲′ 第二行）：**同时是机制名**的主题词取值。
  *
  * 主规格 §3.4/§3.5 与代码注释一直用「关隘」「山道」指代 `kind:'gate'` 的通道格与其路径；
+ * 「裂隙」「险径」同理——它们是 §3.4 的**地形类名**（`tools/rules-book-contract.mjs` 的
+ * `specName: '裂隙' / '险径'`，doc-sync C10 按五类地形逐条核对），测试与工具里说这两个词是在说机制。
  * 改测试措辞而不改主规格 ⇒ 两边分叉、doc-sync 链跟着动；改主规格 ⇒ 超出零行为批次范围 ⇒ 保留。
  *
+ * ⚠️ **只管 tests 域**：主域（`engine/**`+`web/**`）的 R1 扫的是 `leafWordsFromThemes()` 全表，
+ *   不经过这里 ⇒ 裂隙/险径 在源码里照样红（B80 §3 R1「不再在主域豁免」说的就是这个分工）。
  * ⚠️ 域级豁免**只在这里声明一次**，不摊进各文件的白名单条目：摊进去就会让人以为「关隘」在某处
  *   是例外，而它全域都合法——一张 35 行、18 行理由相同的表只会盖住真正的数据类保留处（T16 实测）。
  */
-export const MECHANISM_HOMOGRAPHS = ['关隘', '山道'];
+export const MECHANISM_HOMOGRAPHS = ['关隘', '山道', '裂隙', '险径'];
 
 /** R7 在 `tests` 域用的禁字表 = 叶词并集 − 机制名同形词（规格 §5.2 r1.7）。 */
 export function pureLeafWords(root) {
@@ -136,9 +140,12 @@ export function pureLeafWords(root) {
 export const TESTS_WORD_REGISTRY = [
   { file: 'tests/gates/log-exit-expand.test.ts', words: ['安全闸', '算力', '封锁线', '异能点', '街区', '天台', '灵力', '灵枢'],
     reason: '日志出口展开后的整句期望（四套各一条）：句子就是被测对象的渲染结果，§5.1 第二类' },
-  { file: 'tests/build/expand-theme-words.test.ts', words: ['封顶台', '灵力', '灵枢', '灵能', '算力', '异能点', '安全闸'],
+  { file: 'tests/build/expand-theme-words.test.ts',
+    words: ['封顶台', '灵力', '灵枢', '灵能', '算力', '异能点', '安全闸',
+      // B80 §2.1：三新叶的四套展开期望串（同一判据形状，只是叶从五张扩到八张）
+      '修士', '行道者', '行动者', '异能者', '崩口', '险坡', '数据断层', '故障区', '断桥', '危险区'],
     reason: '展开器唯一实现的四套期望串 + 「无占位符时恒等」的输入样本，主语就是这些词' },
-  { file: 'tests/engine/instruction-table.test.ts', words: ['灵力', '封顶台', '算力', '灵能', '异能点', '灵枢'],
+  { file: 'tests/engine/instruction-table.test.ts', words: ['灵力', '封顶台', '算力', '灵能', '异能点', '灵枢', '修士'],
     reason: '喂进 instructionText 的 terms(...) fixture 取值，以及基准套的展开后指令文案' },
   { file: 'tests/gates/theme-word-runtime.test.ts', words: ['安全闸', '封锁线', '阵门', '算力', '机体完整度', '灵力'],
     reason: 'R3 运行时取证的期望词表：别套词判据与「展开没用本主题词」的主语就是这些词值' },

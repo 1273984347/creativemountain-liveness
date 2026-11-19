@@ -26,6 +26,20 @@ test('五叶全展开（基准逐字 = 玩家现在看到的词）', () => {
     '灵枢不足：关隘标价 3，走山道绕到封顶台，灵力不低于初始值');
 });
 
+// B80 §2.1：三新叶各留一条「展开后是本套词」的正证据。缺了这类断言，扩表只证明**能展开**，
+// 不证明**展开成对的词**——四套里任何一套把 rift 写成别套的词，上面那条五叶断言看不见。
+test('B80 §2.1：三叶展开各说本套的话（rift / hazard / player 四套对照）', () => {
+  const want: Record<string, string[]> = {
+    xianxia2026: ['裂隙', '险径', '修士'], hybrid: ['崩口', '险坡', '行道者'],
+    'scifi-ai': ['数据断层', '故障区', '行动者'], 'urban-psych': ['断桥', '危险区', '异能者'],
+  };
+  for (const id of IDS) {
+    const shown = expandThemeWords('{rift}/{hazard}/{player}', termsOf(id));
+    assert.equal(shown, (want[id] ?? []).join('/'), `${id} 三叶展开不符：${shown}`);
+    assert.equal(/\{/.test(shown), false, `${id}：展开后残留占位符 ⇒ ${shown}`);
+  }
+});
+
 test('无占位符时恒等（出口可以无条件调用，不必分支）', () => {
   const s = '问天：掷出 2，执行第 2 条指令';
   for (const id of IDS) { assert.equal(expandThemeWords(s, termsOf(id)), s); }
@@ -52,7 +66,8 @@ test('缺叶抛错而不是静默留占位符（同 termWord 口径）', () => {
 });
 
 test('TERM_TOKENS ≡ 展开集合，且不含 deck（同形词「指令」，规格 §4.4）', () => {
-  assert.deepEqual([...TERM_TOKENS].sort(), ['gate', 'hp', 'path', 'peak', 'resource']);
+  // B80 §2.1：8 叶 = B79 的五叶 + rift / hazard / player。`deck` 依旧不在内（§4.4 同形词裁决仍成立）。
+  assert.deepEqual([...TERM_TOKENS].sort(), ['gate', 'hazard', 'hp', 'path', 'peak', 'player', 'resource', 'rift']);
   const raw = '{deck}不足';
   assert.equal(expandThemeWords(raw, termsOf('scifi-ai')), raw, '⇒ {deck} 不是占位符：原样留着，交给守卫而不是印给玩家');
 });

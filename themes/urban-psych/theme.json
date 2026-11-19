@@ -29,6 +29,9 @@
     "gate": "封锁线",
     "path": "街区",
     "peak": "天台",
+    "rift": "断桥",
+    "hazard": "危险区",
+    "player": "异能者",
     "types": {
       "motion": "位移",
       "attack": "攻击",

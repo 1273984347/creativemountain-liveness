@@ -13,10 +13,11 @@ import type { ThemeTerms } from '../types/theme.ts';
  *
  * ⚠️ 集合里**没有 `deck`**：`scifi-ai` 的 `terms.deck` 是「指令」，与四套共用的规则词
  *   「问天指令骰 / 第 N 条指令」同形（规格 §4.4）——接进句子层会把合规实现判红。
+ *   B80 §2.1 复核过：句层里 `deck` 一类六个 glossary 键**实测 0 处**，所以不是"暂不加"而是"无对象"。
  * 与 `tools/theme-diff-check.mjs` 的 `SENTENCE_LEAVES` 各自声明、由
- * `tests/build/expand-theme-words.test.ts` 钉住两者相等（漂移 = 门⑧ 比五叶而 R1 只禁四叶）。
+ * `tests/build/expand-theme-words.test.ts` 钉住两者相等（漂移 = 门⑧ 比 N 叶而 R1 只禁 M 叶，两边各错一半）。
  */
-export const TERM_TOKENS = ['resource', 'gate', 'path', 'peak', 'hp'] as const;
+export const TERM_TOKENS = ['resource', 'gate', 'path', 'peak', 'hp', 'rift', 'hazard', 'player'] as const;
 
 /**
  * 把 `{leaf}` 换成主题词。缺叶**抛错**，不静默保留占位符——

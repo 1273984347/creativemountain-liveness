@@ -86,16 +86,16 @@ export function resolveBarrier(state: State, actor: number, channel: 'place' | '
   const p = state.players[actor];
   if (p === undefined) { return { ok: false, state, note: '玩家不存在' }; }
   const tile = pendingBarrier(state, actor);
-  if (tile === null) { return { ok: false, state, note: '当前不在可放印的裂隙格上' }; }
+  if (tile === null) { return { ok: false, state, note: '当前不在可放印的{rift}格上' }; }
   if (channel === 'skip') {
     const next = {
       ...state,
       log: [...state.log, {
         round: state.round, turnIndex: state.turnIndex, actor, kind: 'barrier',
-        message: '裂隙：未放置封路印，直接通过',
+        message: '{rift}：未放置封路印，直接通过',
       }],
     };
-    return { ok: true, state: next, note: '裂隙：未放置封路印' };
+    return { ok: true, state: next, note: '{rift}：未放置封路印' };
   }
   // 放印：花 2 灵枢 → 在该格置印。
   // ⚠️ **放置当次不判定自己**（B18-b 更正 B17 裁定）：印只对**后来者**生效。
@@ -108,8 +108,8 @@ export function resolveBarrier(state: State, actor: number, channel: 'place' | '
     ...next,
     log: [...next.log, {
       round: next.round, turnIndex: next.turnIndex, actor, kind: 'barrier',
-      message: `裂隙：放置封路印（-2 {resource}）—— 印对后来者生效`,
+      message: `{rift}：放置封路印（-2 {resource}）—— 印对后来者生效`,
     }],
   };
-  return { ok: true, state: next, note: `裂隙：已放置封路印（-2 {resource}）` };
+  return { ok: true, state: next, note: `{rift}：已放置封路印（-2 {resource}）` };
 }

@@ -21,8 +21,10 @@ import { TERM_TOKENS } from '../../engine/core/theme-text.ts';
 
 const WORDS = leafWordsFromThemes();
 
-test('R1 前提：禁字表从四套主题派生且非空转（20 词 = 五叶 × 四套，今天全不同）', () => {
-  assert.equal(WORDS.length, 20, `实际 ${String(WORDS.length)} 词：${WORDS.map((w) => w.word).join('/')}`);
+test('R1 前提：禁字表从四套主题派生且非空转（32 词 = 八叶 × 四套，B80 §2.1 加三叶）', () => {
+  assert.equal(WORDS.length, 32, `实际 ${String(WORDS.length)} 词：${WORDS.map((w) => w.word).join('/')}`);
+  assert.equal(new Set(WORDS.map((w) => w.word)).size, WORDS.length,
+    `禁字表有重复词：${WORDS.map((w) => w.word).join('/')} ⇒ 两套同词会让 R1 少扫一侧（B80 §3 R1 计数口径）`);
   assert.deepEqual(SENTENCE_LEAVES, [...TERM_TOKENS], '前提：叶清单与展开器同源');
   // 每个叶都真的贡献了四个不同词 ⇒ 少一套主题或空转一个叶，这里就会短
   for (const leaf of SENTENCE_LEAVES) {
@@ -190,8 +192,10 @@ const PURE = pureLeafWords();
 const BASE_PURE = PURE.filter((w) => w.themes.includes('xianxia2026')).map((w) => w.word);
 
 test('R7 前提：tests 域禁字表 = 全表 − 机制名同形词，且豁免只声明一次', () => {
-  assert.deepEqual([...MECHANISM_HOMOGRAPHS].sort(), ['关隘', '山道'],
-    '⇒ 这两词在本仓同时是机制名（主规格 §3.4/§3.5）。要动这张表先改规格 §5.1.1 并写理由');
+  assert.deepEqual([...MECHANISM_HOMOGRAPHS].sort(), ['关隘', '山道', '裂隙', '险径'],
+    '⇒ 这四词在本仓同时是机制名（主规格 §3.4/§3.5 的通道格与地形类名；`rules-book-contract.mjs` 的 `specName`）。'
+    + '裂隙/险径 由 B80 §3 R1 归入 tests 域豁免——主域照旧禁（R1 扫全表，不走这里）。'
+    + '要再动这张表先改规格并写理由');
   assert.equal(PURE.length, WORDS.length - MECHANISM_HOMOGRAPHS.length,
     `减词数不对：全表 ${String(WORDS.length)} − 同形 ${String(MECHANISM_HOMOGRAPHS.length)} ≠ ${String(PURE.length)}`);
   // 同形词必须**确实**在禁字表里（否则上面那个减法是在减不存在的东西，登记表也就少了一类真正的例外）

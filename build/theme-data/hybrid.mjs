@@ -24,11 +24,12 @@ export default {
     path: '索桥',
     plain: '荒野',
     boon: '灵地',
-    hazard: '险径',
-    rift: '裂隙',
+    // B80 r1.3：三键与 terms 同步换词（门⑤ 八对判等 + 规则书按 glossary 渲染，两边必须同一个词）
+    hazard: '险坡',
+    rift: '崩口',
     branch: '岔路',
     gate: '阵门',
-    player: '修士',
+    player: '行道者',
   },
 
   /** 术语层（B77 规格 §6.2）：**十五叶齐备**——`types`/`colors` 是试炼题面的取词表，
@@ -37,6 +38,9 @@ export default {
     hp: '气血', deck: '道箓', resource: '灵能', gate: '阵门',
     // B79 §3.1：句子层 {path} / {peak}。path 与基准「山道」重词 ⇒ 门⑧ ②′ + 两两互异一起判（r1.3 定稿「索桥」）
     path: '索桥', peak: '道顶',
+    // B80 §2.1：句子层三新词。⚠️ glossary 的 rift/hazard/player 三键必须同步（规格 §2.1.2 裁定：
+    //   不换则门⑤ 八对判等红三条；换了，规则书首句「玩家扮演{{player}}」才不再印成仙侠套的「修士」）。
+    rift: '崩口', hazard: '险坡', player: '行道者',
     types: { motion: '位移', attack: '攻击', defense: '防御', utility: '功能' },
     colors: { red: '红', black: '黑' },
     statuses: { poison: '中毒', slow: '减速', silence: '封口' },
