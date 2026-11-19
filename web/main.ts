@@ -751,7 +751,7 @@ function render(): void {
       //   面板上的按钮本身已由 `uiAllows` 把关，这里再核一次是**提交路径**的闸（与投票同款双保险）。
       () => {
         const r = useCouncilVeto(s, ui.seat);
-        if (r.ok) { ui.state = r.state; ui.notice = '仲裁者否决：结算时本次放逐作废（每局 1 次）。'; }
+        if (r.ok) { ui.state = r.state; ui.notice = `{identity:${String(ui.seat)}}否决：结算时本次放逐作废（每局 1 次）。`; }
         else { ui.notice = r.note ?? '当前不可使用否决。'; }
         render();
       },

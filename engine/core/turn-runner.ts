@@ -64,7 +64,7 @@ function resolveTile(state: State, seat: number): State {
             : p)),
           log: [...state.log, {
             round: state.round, turnIndex: state.turnIndex, actor: seat, kind: 'passive',
-            message: '[被动:modify_judgement] 织梦者改写了{hazard}判定：安全通过',
+            message: `[被动:modify_judgement] {identity:${String(seat)}}改写了{hazard}判定：安全通过`,
           }],
         };
         break;
@@ -233,7 +233,7 @@ export function performAction(
       next = applyEffect({ state: next, actor: seat }, { op: 'move_by_dice', faces: 6 }).state;
       if (firstMoveBonus > 0) {
         // ⚠️ B12：被动日志统一用 `[被动:<op>]` 前缀 ⇒ 模拟器/测试可统计**自动型**被动的触发。
-        next = { ...next, log: [...next.log, { round: next.round, turnIndex: next.turnIndex, actor: seat, kind: 'passive', message: '[被动:move_forward] 开拓者：本回合首次移动 +' + String(firstMoveBonus) + ' 格' }] };
+        next = { ...next, log: [...next.log, { round: next.round, turnIndex: next.turnIndex, actor: seat, kind: 'passive', message: '[被动:move_forward] {identity:' + String(seat) + '}：本回合首次移动 +' + String(firstMoveBonus) + ' 格' }] };
       }
       const steps = next.lastDice;
       next = { ...next, log: [...next.log, { round: next.round, turnIndex: next.turnIndex, actor: seat, kind: 'move', message: `行棋：掷出 ${steps}，前进至第 ${next.players[seat]?.position ?? before} 格`, diceRoll: steps }] };
@@ -474,7 +474,7 @@ export function finishTurn(state: State, seat: number): State {
   const passive = passiveOf(next, seat);
   if (passive?.op === 'shield') {
     next = applyEffect({ state: next, actor: seat }, { op: 'shield', amount: passive.amount, target: seat }).state;
-    next = { ...next, log: [...next.log, { round: next.round, turnIndex: next.turnIndex, actor: seat, kind: 'passive', message: '[被动:shield] 守夜人：回合结束获得 ' + String(passive.amount) + ' 点护盾' }] };
+    next = { ...next, log: [...next.log, { round: next.round, turnIndex: next.turnIndex, actor: seat, kind: 'passive', message: '[被动:shield] {identity:' + String(seat) + '}：回合结束获得 ' + String(passive.amount) + ' 点护盾' }] };
   }
   // ⚠️ B75.2 更正：昼夜复位**不在**手番末 —— 规格 §6.5 的天机牌「本回合为夜」的
   //   「回合」= round（§3.1 术语：所有存活玩家各行动一次），手番末复位会让夜间

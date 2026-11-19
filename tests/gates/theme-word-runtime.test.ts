@@ -561,3 +561,53 @@ test('B79 §2.4 r1.6：越过峰顶的日志交出 {peak}，四套展开后各�
   }
   assert.equal(checked, IDS.length, '防空转：四套都得真的跑过');
 });
+
+// ---------- B80 §2.3：身份称谓的运行时取证（T3） ----------
+//
+// 这条是**本批真正的收益证明**（规格 §3 R3）：源码零字面量只证明没写死，运行时才证明
+// 玩家看到的名字对。所以这里让 `finishTurn` 真的跑一次 shield 被动，再走出口取玩家看到的句子。
+import { finishTurn } from '../../engine/core/turn-runner.ts';
+import { identityName } from '../../web/ui/terms.ts';
+
+/** 四套里 `passive.op === 'shield'` 那个身份的名字（实测值；改了主题数据这条会先在前提交错处报出来）。 */
+const SHIELD_NAME: Record<string, string> = {
+  xianxia2026: '守夜人', hybrid: '守关人', 'scifi-ai': '守闸人', 'urban-psych': '守夜人',
+};
+
+test('B80 T3：被动日志的身份称谓按主题展开（scifi 局是「守闸人」，不是「守夜人」）', () => {
+  const allShieldNames = [...new Set(Object.values(SHIELD_NAME))];
+  for (const id of IDS) {
+    const theme = themeOf(id);
+    const owner = theme.identities.find((i: any) => i.passive?.op === 'shield');
+    assert.ok(owner !== undefined, `${id} 主题里没有 shield 被动身份 ⇒ 前提不成立，这条会空转`);
+    assert.equal(owner.name, SHIELD_NAME[id],
+      `${id}：shield 被动的身份名是「${owner.name}」，与期望表不符 ⇒ 主题数据变了要同步这里`);
+
+    // ⚠️ 不手搓 `identityId`：引擎读的是 `players[seat].flags.passive`，而 flags 由
+    //   `installTheme` 从**开局随机分配**的身份派生（`setup.ts:58` + B10）⇒ 改了 `identityId`
+    //   而不改 flags，shield 分支根本不会跑（计划 T3 Step 1 的夹具就是这么假设的，实测红）。
+    //   所以这里跑一局真装配的 8 人局（8 身份发满 8 座），找出本局拿到 shield 的那个座位。
+    const state = installTheme(mk(8, 20260), theme);
+    const seat = state.players
+      .find((p) => (p.flags.passive as { op?: string } | undefined)?.op === 'shield')?.seat;
+    assert.ok(typeof seat === 'number',
+      `${id}：8 人局里没有座位拿到 shield 被动 ⇒ 身份分配方式变了，这条前提得重写（现在 flags：`
+      + JSON.stringify(state.players.map((p) => (p.flags.passive as { op?: string } | undefined)?.op ?? null)) + ')');
+
+    const before = state.log.length;
+    const after = finishTurn(state, seat);
+    const entry = after.log.slice(before).find((e) => e.message.includes('{identity:'));
+    assert.ok(entry !== undefined,
+      `座${String(seat)}：回合末没产出含 {identity:N} 的日志 ⇒ 接线没生效。实际新增 ${String(after.log.length - before)} 条：`
+      + JSON.stringify(after.log.slice(before).map((e) => e.message)));
+
+    const shown = logLineText(entry, theme.terms, (s) => identityName(after, theme, s));
+    assert.ok(shown.includes(SHIELD_NAME[id] ?? ''), `${id}：应展开成「${SHIELD_NAME[id]}」，实际 ${shown}`);
+    assert.equal(/\{/.test(shown), false, `${id}：展开后残留占位符 ⇒ ${shown}`);
+    // 反向钉：别套的 shield 称谓一个字都不许出现（`守夜人` 对 urban 是本套词，故按 own 排除）
+    const foreign = allShieldNames.filter((n) => n !== SHIELD_NAME[id]);
+    for (const f of foreign) {
+      assert.equal(shown.includes(f), false, `${id} 局的日志里出现别套称谓「${f}」⇒ ${shown}`);
+    }
+  }
+});

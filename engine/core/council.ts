@@ -88,7 +88,7 @@ export function useCouncilVeto(state: State, actor: number): CouncilResult {
   //   仲裁者的胜率从 24–28% 回落，同时保留「救他人」的战术价值（放逐谁仍然改变席位分布）。
   //   ⚠️ 判据用 `topVoted`（含**并列**最高票的全部座位）⇒ 并列时也不许自救。
   if (topVoted(state).includes(actor)) { return fail(state, '你不能为自己使用否决（只可救他人）'); }
-  return succeed({ ...state, council: { ...c, vetoUsed: true, vetoBy: actor } }, '仲裁者否决（每局 1 次）');
+  return succeed({ ...state, council: { ...c, vetoUsed: true, vetoBy: actor } }, `{identity:${String(actor)}}否决（每局 1 次）`);
 }
 
 /**
@@ -187,7 +187,7 @@ export function resolveCouncil(state: State): CouncilResult {
       // 计数写在结算即时目标**之前** ⇒ `veto_success` 这一局就能看到自己的计数器；
       // `settleImmediateGoals` 是**全局**的（检查所有玩家的 immediate 目标，不只否决者）。
       return succeed(settleImmediateGoals(bumpCounterOf(next, vetoBy, 'vetoCount', 1)),
-        '山议裁定：仲裁者否决，本次无人被放逐');
+        `山议裁定：{identity:${String(vetoBy)}}否决，本次无人被放逐`);
     }
     if (next.council.vetoUsed === true && vetoBy !== null) {
       return succeed(next, '山议：无人被放逐（下限保护 / 凭证；本局否决已使用但未阻止放逐）');

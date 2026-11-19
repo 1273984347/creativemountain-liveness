@@ -173,8 +173,8 @@ export function certifyChallenge(state: State, actor: number, target: number): C
       certification: { ...n.certification, signed: [...n.certification.signed, actor] },
     };
     // ⚠️ B12：被动日志统一用 `[被动:<op>]` 前缀（自动型被动的可观测性）。
-    const logged: State = { ...n, log: [...n.log, { round: n.round, turnIndex: n.turnIndex, actor, kind: 'passive', message: '[被动:certify_free_pass] 山主特权：本次质疑自动视为签印' }] };
-    return succeed(logged, '山主特权：本次质疑自动视为签印');
+    const logged: State = { ...n, log: [...n.log, { round: n.round, turnIndex: n.turnIndex, actor, kind: 'passive', message: `[被动:certify_free_pass] {identity:${String(actor)}}特权：本次质疑自动视为签印` }] };
+    return succeed(logged, `{identity:${String(actor)}}特权：本次质疑自动视为签印`);
   }
   const next: State = { ...state, players, certification: { ...c, challenged: [...c.challenged, actor] } };
   return succeed(next, `质疑已发起（-1 {resource}）`);

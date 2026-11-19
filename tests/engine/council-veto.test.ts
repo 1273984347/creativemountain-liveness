@@ -54,7 +54,11 @@ test('B75：成功否决 ⇒ 无人被放逐 + vetoCount+1 + 每局一次', () =
   assert.ok(v.ok, '前提：持权且票齐 ⇒ 否决必须被接受：' + String(v.note));
   const res = resolveCouncil(v.state);
   assert.ok(res.ok);
-  assert.match(String(res.note), /仲裁者否决/);
+  assert.equal(res.state.council.vetoBy, 0, '前提：本局否决者是 0 号座');
+  // B80 §2.3：句子里的主体必须是**否决者**的座位号（`council.vetoBy`），不是结算时的当前手番
+  //   ——`resolveCouncil(state)` 根本不收 actor，任何"默认取当前行动者"的实现都会在这里红。
+  assert.match(String(res.note), /\{identity:0\}否决/,
+    '⇒ 引擎交出的是带座位的占位符形态，不再硬写某一套的身份名（称谓由显示出口按主题展开）');
   assert.equal(res.state.players[1]?.alive, true, '被否决者必须存活');
   assert.equal(res.state.players[0]?.counters.vetoCount, 1);
   assert.equal(useCouncilVeto(res.state, 0).ok, false, '每局只能一次');
