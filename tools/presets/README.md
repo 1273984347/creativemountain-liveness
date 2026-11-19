@@ -19,6 +19,9 @@
 | `b79-t20-two-lines.mjs` | 把「59 − 54 = 5」追到行（基线 `theme.glossary.*` → 现 `{leaf}`） | B79 记录 §12.4 / §13、修正 #40 | stdout |
 | `b79-t21-verify.mjs` | 验收 §6 里**能机械复算**的条目一次跑完（只打印事实） | B79 记录 §14.2 / §14.3 | stdout（`✓/✗` 每行一条） |
 | `b79-t21-ruler.mjs` | 分类尺的四格复算：基线树 vs 现树 × 20 词 vs 22 词 | B79 记录 §14.2 末段（规格 r1.10 删第二处计数后，数只活在这里） | stdout |
+| `b80-scope.mjs` | B80 **施工面 + 禁字表规模**：glossary 14 键的句层字面量、身份/阵营名命中、"处 vs 行"合计（⚠️ 不是历史数，**T1/T3/T4 前后各跑一次**，做完 = 命中归零） | B80 规格 §0.1、记录 §2.2 | stdout |
+| `b80-wordcheck.mjs` | rift / hazard 候选词三查：撞不撞四套主题正文、engine+web+tests 里有没有、是否已是某套词值 | B80 规格 §2.1（hybrid「崩口 / 险坡」定稿） | stdout |
+| `b80-playerword.mjs` | player 候选词四查（同上 + 是否撞身份名），并列出四套身份名供语域对齐 | B80 规格 §2.1（hybrid「行道者」定稿） | stdout |
 
 ## 三条约定
 
