@@ -79,6 +79,21 @@ test('B79 修正 #9：门⑧ 的 SENTENCE_LEAVES ≡ TERM_TOKENS（两处声明�
   assert.deepEqual([...SENTENCE_LEAVES].sort(), [...TERM_TOKENS].sort());
 });
 
+// B80 T7：验收 11 要「三叶各至少一条基准展开证据」，且 R5 的 `baseExpanded` 下限要跟着涨。
+// 上面那条四套对照是**表驱动**的（期望值在 `want` 里），R5 的 `wrapped` 只认 assert 表达式里
+// 直接出现的出口调用 ⇒ 表驱动的那条它看不见。这里补三条**内联字面量**形状：
+// 期望串就是基准套玩家看到的句子，谁把它改回 `{rift}` 就等于把展开结果没人测了（会被 R5 抓）。
+test('B80 验收 11：三叶 + 称谓各一条基准内联展开证据（字面量期望，不经表格）', () => {
+  const x = termsOf('xianxia2026');
+  assert.equal(expandThemeWords('{rift}结算失败：花 2 {resource}通过{gate}', x),
+    '裂隙结算失败：花 2 灵枢通过关隘', '⇒ 含 {rift} 的句子在基准套必须印成「裂隙」');
+  assert.equal(expandThemeWords('{hazard}：判定失败，退 1 格', x), '险径：判定失败，退 1 格');
+  assert.equal(expandThemeWords('当前{player} 座 2', x), '当前修士 座 2');
+  assert.equal(expandIdentityNames('[被动:shield] {identity:4}：回合结束获得 1 点护盾',
+    (seat) => (seat === 4 ? '守夜人' : '座' + String(seat))),
+    '[被动:shield] 守夜人：回合结束获得 1 点护盾');
+});
+
 // ---------- B80 §2.3：`{identity:N}` 的解析机制 ----------
 //
 // 与上面的 `expandThemeWords` 分两个函数：那一个查**静态词表**（terms），这一个查**运行时主体**

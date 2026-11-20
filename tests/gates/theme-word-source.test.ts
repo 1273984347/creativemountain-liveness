@@ -261,8 +261,13 @@ test('R5：直接断言引擎结果的语句，期望值里不得出现主题词
   // 防空转：判据得真的读到引擎结果断言，否则「0 违规」只是没看见任何东西
   assert.ok(r.statements >= 8, `认定的引擎结果断言语句只有 ${String(r.statements)} 条（今天 10 条）⇒ 判据瞎了`);
   // §5.1 的另一半：基准主题的**展开后**断言必须还在（不许顺手把「灵枢」改成 {resource}）
-  assert.ok(r.baseExpanded >= 2,
-    `基准展开断言只剩 ${String(r.baseExpanded)} 条（今天 2 条：expand-theme-words 的期望串 + log-instruction 的「—— 灵枢 +1」）`
+  // 下限 2 → **4**（B80 验收 11）：B79 的两条（expand-theme-words 的五叶期望串 + log-instruction 的
+  // 「—— 灵枢 +1」）+ B80 T7 补的两条三叶内联展开（`{rift}…`→「裂隙…」、`{player}`→「修士」）。
+  // ⚠️ 计数只认**期望串里出现了基准叶词**的语句：同一批补的 `{hazard}`→「险径」与
+  //   `{identity:4}`→「守夜人」两条不被计入——险径在 tests 域豁免表里、守夜人是身份名而非叶词。
+  //   这是尺的定义而不是缺陷（它们各自仍然在测展开结果，只是不由这个计数器数）。
+  assert.ok(r.baseExpanded >= 4,
+    `基准展开断言只剩 ${String(r.baseExpanded)} 条（今天 4 条）`
     + '⇒ 把它们改成占位符形式就等于没人再测展开结果（Q3 乙被做成 Q3 甲）');
 });
 
