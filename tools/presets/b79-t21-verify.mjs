@@ -82,7 +82,9 @@ const akLines = nonCommentLines('engine/core/action-key.ts');
 line(`7 SENTENCE_WHITELIST.size = ${SENTENCE_WHITELIST.size}`, SENTENCE_WHITELIST.size === 0);
 line('7 action-key 用机制标识且非注释行不含叶词',
   akLines.some((l) => l.includes('key gate 通道非法')) && !words.some((w) => akLines.some((l) => l.includes(w.word))),
-  `残留「key 裂隙通道非法」（表外词 L-B79-4）= ${akLines.some((l) => l.includes('裂隙通道非法'))}`);
+  // 标签跟着 B80 改口径：`裂隙` 在 B79 是"表外词（L-B79-4）"，B80 T1 之后它是**叶词**、
+  // 由 R1 的 32 词表直接判 ⇒ 再说"表外"会把人指向一条已销账的遗留（#30/#31 同族：判据对、标签旧）。
+  `残留「key 裂隙通道非法」（裂隙 B80 起是叶词，R1 直接判；L-B79-4 已销）= ${akLines.some((l) => l.includes('裂隙通道非法'))}`);
 
 // 13 · 两条共享子串逐字保留
 const trialText = read('build/trial-text.mjs');
@@ -116,8 +118,11 @@ const stale = [];
 let explained = 0;
 for (const f of pointerFiles) {
   for (const l of read(f).split('\n')) {
+    // ⚠️ 「说明行」的标志不能写死批次号：B80 T8 把「按 B80 读」改成了「按 B82 读」（编号顺延），
+    //   那句话仍是刻意的读数说明，但硬编码的 `按 B80 读` 匹配不上 ⇒ 判据自己造出一条假残留（与 #21/#27/#30 同族）。
+    //   所以这里匹配的是**形状**「按 B<数字> 读」，不匹配某个具体编号。
     if (!/B79 (模型|输入|模型批)/.test(l)) continue;
-    (/(按 B80 读|现编号|原记 B79|编号已定)/.test(l) ? (explained += 1, null) : stale.push(`${f}: ${l.trim().slice(0, 60)}`));
+    (/(按\s*\*{0,2}B\d+\*{0,2}\s*读|现编号|原记 B79|编号已定)/.test(l) ? (explained += 1, null) : stale.push(`${f}: ${l.trim().slice(0, 60)}`));
   }
 }
 const b80Lines = pointerFiles.reduce((a, f) => a + read(f).split('\n').filter((l) => l.includes('B80')).length, 0);

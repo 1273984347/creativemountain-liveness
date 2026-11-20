@@ -20,7 +20,7 @@ import { SCALES } from '../engine/scales.ts';
  */
 export const EXPECTED_FALLBACK_COUNT = 0;
 
-/** `terms` 的十五叶路径（校验**叶子**而非顶层 6 个键：只查顶层时，`types` 缺一个也照样绿）。 */
+/** `terms` 的十八叶路径（B80 §2.1 由十五叶长成：句子层八叶 + `deck` = 九叶，再加 types 四 / colors 二 / statuses 三。校验**叶子**而非顶层 6 个键：只查顶层时，`types` 缺一个也照样绿）。 */
 const TERM_LEAVES = [
   ['hp'], ['deck'], ['resource'], ['gate'],
   // B79 §3.1：句子层要用 {path} / {peak} ⇒ 必须是必填叶

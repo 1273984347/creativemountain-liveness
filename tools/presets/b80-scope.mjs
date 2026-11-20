@@ -15,7 +15,7 @@ import { at, walkSources } from './common.mjs';
 
 const IDS = ['xianxia2026', 'hybrid', 'scifi-ai', 'urban-psych'];
 const DONE_B79 = new Set(['HP', 'resource', 'gate', 'path', 'peak']);   // 术语已进 terms 的键（hp 键名是 HP）
-const PENDING_B80 = new Set(['rift', 'hazard', 'player']);              // B80 本批要接的键
+const DONE_B80 = new Set(['rift', 'hazard', 'player']);                // B80 已接的键（收口复算 0 命中，见记录 §14.1）
 const LEAF8 = ['resource', 'gate', 'path', 'peak', 'hp', 'rift', 'hazard', 'player'];
 
 /** `--full`：把 24 处逐条列出（T1/T3 的开工原文表从这里抄，不靠记忆）。 */
@@ -47,7 +47,7 @@ console.log('键          状态        命中  样本');
 for (const k of glossaryKeys) {
   const vals = [...new Set(IDS.map((id) => themes[id].glossary?.[k]).filter((v) => typeof v === 'string' && v.length > 0))];
   const status = DONE_B79.has(k) ? 'B79 已接'
-    : PENDING_B80.has(k) ? 'B80 在途'
+    : DONE_B80.has(k) ? 'B80 已接'
       : vals.length > 1 ? '**待接**' : '四套同词';
   const hits = hitsOf(vals);
   console.log(`${k.padEnd(11)} ${status.padEnd(11)} ${String(hits.length).padStart(4)}  ${hits.slice(0, 3).join('  ') || '-'}`
