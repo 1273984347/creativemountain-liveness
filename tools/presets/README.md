@@ -23,6 +23,7 @@
 | `b80-wordcheck.mjs` | rift / hazard 候选词三查：撞不撞四套主题正文、engine+web+tests 里有没有、是否已是某套词值 | B80 规格 §2.1（hybrid「崩口 / 险坡」定稿） | stdout |
 | `b80-playerword.mjs` | player 候选词四查（同上 + 是否撞身份名），并列出四套身份名供语域对齐 | B80 规格 §2.1（hybrid「行道者」定稿） | stdout |
 | `b80-glossconflict.mjs` | 门⑤ 八对判等 ↔ 「`glossary` 不改」冲突的两面取证（只改 terms 会红几条 / 连 glossary 换会牵动什么） | B80 规格 §2.1.2（r1.3 裁定）、记录 §2.6 | stdout |
+| `batch-nav-count.mjs` | **批次导航自洽性**：分类总览的计数 ≡ 各小节标题括号数 ≡ 实际行数 ≡ `docs/批次/*.md` 文件数（单位定死为"一行 = 一个档案文件"） | B80 记录 §12.2（T8）、导航文件头的用法注 | stdout（不自洽 exit=1） |
 
 ## 三条约定
 
