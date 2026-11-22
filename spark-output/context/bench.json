@@ -1,0 +1,342 @@
+{
+  "skill": "bench",
+  "generated_at": "2026-11-23T01:58:00+08:00",
+  "project_name": "创界山·活人认证 — AI 补位座位",
+  "evidence_quality_note": "本轮为深拆（1-2 天当量）但**未获得任何竞品真实界面截图**：BGA bot 配置屏在登录墙后，王者托管弹窗只在视频/转述里。annotated_references 全部为「文档级 / 公告级」证据（官方开发者文档、官方公告、官方说明书、访谈原话、论文与复算数据），逐条标注来源类型，**未做交互级体验**。下游 Audit/Brief/Pitch 引用时不得表述为「实测过竞品界面」。",
+  "scope": {
+    "goal": "全面对标",
+    "dimensions": ["information-architecture", "interaction-patterns", "content-strategy", "performance"],
+    "time_budget": "深拆",
+    "dimensions_cut": ["visual-language（仅做标识层推断，未做视觉级拆解）", "accessibility", "mobile-experience"]
+  },
+  "competitors": [
+    {
+      "name": "Automa Factory 补位族（Charterstone / Root: The Clockwork Expansion / Euphoria / Tapestry / Pendulum）",
+      "tier": "direct",
+      "url": "https://stonemaiergames.com/games/charterstone/design-diary/",
+      "rationale": "同介质（实体桌）、同问题（替缺席的人类玩家上桌）、十年公开方法论与失败记录，且明确存在「多真人 + 自动机混桌」这一支"
+    },
+    {
+      "name": "Board Game Arena（zombie bot 与 solo automa 两套机制）",
+      "tier": "direct",
+      "url": "https://en.doc.boardgamearena.com/Bots_and_Artificial_Intelligence",
+      "rationale": "唯一一个把「补位接管」写进框架契约、且规定补位局不计统计的平台；其 game-development 文档给出可直接抄的实现判据"
+    },
+    {
+      "name": "王者荣耀 AI 托管 / 绝悟接管",
+      "tier": "direct",
+      "url": "https://pvp.qq.com/gicp/news/592/423016.html",
+      "rationale": "唯一亿级验证过的「程序接管一个座位、桌上其他真人因此继续玩」的交互：触发权在在场者、强度官方定调、反噬样本齐全"
+    },
+    {
+      "name": "雀魂自动摸切 / 天凤 60 秒强制摸切 + AI 隔离政策",
+      "tier": "indirect",
+      "url": "https://tenhou.net/man/",
+      "rationale": "竞技麻将给的是**反方立场**：不替人上桌，只替人保底；并且明文把 AI 隔离出最高段位场。是「补位」必须回应的行业保守答案"
+    },
+    {
+      "name": "Meta CICERO + LLM 社交推理复算群（Among Them / WOLF / MultiMind）",
+      "tier": "aspirational",
+      "url": "https://arxiv.org/html/2502.20426v1",
+      "rationale": "「有戏档」（发言层 AI）唯一的公开能力数据源，且包含翻车复核与第三方复算，可直接否掉/支撑我们的假设"
+    },
+    {
+      "name": "社交发言类桌游的 App 旁白路径（Bezier One Night App / Ravensburger Werwörter App）",
+      "tier": "indirect",
+      "url": "https://apps.apple.com/us/app/one-night/id728175611",
+      "rationale": "本族最重要的替代方案证据：行业解决「差人/差主持人」的办法是**自动化流程与计时**，而不是自动化一个座位"
+    }
+  ],
+  "feature_matrix": [
+    {
+      "task": "T1 缺席一个人的座位怎么被顶上（触发权在谁手上）",
+      "support": [
+        { "competitor": "王者荣耀 AI 托管", "level": "full", "steps": 2, "ux_quality": 4, "unique_approach": "触发权交给**留在局内的队友**而非缺席者：弹窗给在场方三个选项（跟随我/回基地/AI托管），约 30–90s 挂机后出现；不点则维持挂机状态" },
+        { "competitor": "BGA zombie bot", "level": "full", "steps": 0, "ux_quality": 3, "unique_approach": "全自动、无人可拒，且 bot 不作为注册玩家、不能成为 active player，动作用 $player_id 显式传参" },
+        { "competitor": "Charterstone Automas", "level": "full", "steps": 1, "ux_quality": 4, "unique_approach": "开局前声明：允许 Automas stand in for players who can't make it to a game night；明确可 ban" },
+        { "competitor": "Root Clockwork Expansion", "level": "full", "steps": 1, "ux_quality": 3, "unique_approach": "「can be used to fill out the player count in dozens of configurations」+「At least one player will need to keep it in check!」——把看管 AI 变成一项分配给真人的职责" },
+        { "competitor": "天凤", "level": "partial", "steps": 0, "ux_quality": 2, "unique_approach": "不补位：60 秒无操作强制摸切（保守动作兜底），掉线者名字标红，按摸切打完照常计入 Rate" },
+        { "competitor": "我们（现状）", "level": "none", "steps": 0, "ux_quality": 0, "unique_approach": "热座下拉 ui.seat，Player 无 controlledBy/isAI，无托管/代打概念" }
+      ]
+    },
+    {
+      "task": "T2 桌友如何被告知「这不是人」",
+      "support": [
+        { "competitor": "天凤", "level": "full", "steps": 0, "ux_quality": 4, "unique_approach": "「途中落ちプレーヤは名前を赤色で表示」——掉线者名字标红，公开、不可关闭、全员一致" },
+        { "competitor": "BGA", "level": "partial", "ux_quality": 2, "steps": 0, "unique_approach": "框架只有一个 iconClass 参数，**无强制 Bot/AI 角标、查不到任何必须标识的政策**；The Last Droids 因此被投诉 bot invisible" },
+        { "competitor": "王者荣耀", "level": "partial", "ux_quality": 2, "steps": 0, "unique_approach": "局内无公开 AI 角标，玩家靠行为特征识别（不聊天、出装离谱）；2025 年「巅峰赛塞人机」争议正源于未告知" },
+        { "competitor": "CICERO", "level": "none", "steps": 0, "ux_quality": 3, "unique_approach": "反向样本：发言以普通私信出现、无标识，40 局无人当场识破；学界据此要求 bot-or-not laws" },
+        { "competitor": "我们", "level": "unknown", "steps": 0, "ux_quality": 0, "unique_approach": "面对面局天然公开（桌上都知道是补位），但 web/Host 端目前无座位类型概念" }
+      ]
+    },
+    {
+      "task": "T3 AI 回合的操作开销（谁替它动手）",
+      "support": [
+        { "competitor": "Automa 手法族（World Wonders / Grand Austria Hotel / Charterstone）", "level": "full", "steps": 1, "ux_quality": 4, "unique_approach": "翻一张牌 + 顶/中/底三级降级 + 即时结算；无个人版图、只复用本体图标；Grand Austria Hotel 明文「Further benefits depicted on guest card are never applied」= 砍掉引擎收益只留交互" },
+        { "competitor": "Pendulum", "level": "full", "steps": 0, "ux_quality": 4, "unique_approach": "实时段把两个 bot 合并成一个「只占位不计分」的玩家，专门用来降负担" },
+        { "competitor": "波多黎各典藏版自动机", "level": "partial", "ux_quality": 2, "steps": 3, "ux_quality_note": "投诉原文：「需要替自动机结算」", "unique_approach": "反面：操作负担转嫁给真人" },
+        { "competitor": "王者荣耀", "level": "full", "steps": 0, "ux_quality": 5, "unique_approach": "实时制下无人替它操作——这是数字端对「零操作开销」的天然满足，实体桌做不到" },
+        { "competitor": "我们", "level": "none", "steps": 0, "ux_quality": 0, "unique_approach": "热座意味着任何程序座位默认由桌主任代操作，正好落在被骂最狠的那一格" }
+      ]
+    },
+    {
+      "task": "T4 AI 回合的等待体感",
+      "support": [
+        { "competitor": "Root Clockwork", "level": "full", "ux_quality": 4, "steps": 0, "unique_approach": "评测实测：bot 不会长考，反而比真人更快" },
+        { "competitor": "BGA 框架", "level": "none", "ux_quality": 0, "steps": 0, "unique_approach": "对 bot 回合时长/思考提示**没有任何要求**（只有 giveExtraTime() 面向真人）——这是空白，不是标准" },
+        { "competitor": "天凤", "level": "full", "ux_quality": 3, "steps": 0, "unique_approach": "不等待：60 秒超时直接执行保守动作，把「等人」变成「等计时器」" },
+        { "competitor": "我们（实测数字）", "level": "partial", "ux_quality": 2, "steps": 0, "unique_approach": "GPU p50 33.5ms / p95 52.2ms；CPU p50 498.5ms / p95 703.2ms；sidecar READY 17.2s（实测 >30s）——单次决策可接受，开局一次冷场不可接受" }
+      ]
+    },
+    {
+      "task": "T5 强度/难度的可调与验收",
+      "support": [
+        { "competitor": "Automa（Pedersen）", "level": "full", "ux_quality": 4, "steps": 0, "unique_approach": "控分不控智能 + 删行动（AI 不做收入/建造/酿酒）+ 难度档与特质卡（Root）+ Turczi 的 difficulty/personality 双轴；验收：Scythe 自动机 300+ 外部测试，人类胜率判据 25–30%" },
+        { "competitor": "王者荣耀", "level": "full", "ux_quality": 3, "steps": 0, "unique_approach": "官方声明「比对应挂机的玩家水平低一些但看起来会更聪明，更偏防御性，绝不拖后腿」；未见专门改弱的公告" },
+        { "competitor": "BGA", "level": "partial", "ux_quality": 2, "steps": 0, "unique_approach": "平台层无难度选择器，难度靠各游戏自建开局选项；官方元数据规则：混档取最低" },
+        { "competitor": "我们", "level": "partial", "ux_quality": 0, "steps": 0, "unique_approach": "P6 与启发式 agreeRate 37.08%，预研 §2.4 明令不下强度结论——目前无可用的强度验收口径" }
+      ]
+    },
+    {
+      "task": "T6 发言/谈判/辩护环节 AI 怎么处理（本项目高潮所在）",
+      "support": [
+        { "competitor": "Automa Factory", "level": "none", "ux_quality": 0, "steps": 0, "unique_approach": "Pedersen 明文否定：「They work horribly for games that rely on humans as social animals…I have made an Automa for The Mind just for the sheer silliness of the idea, the end result unsurprisingly sucked. Games like Werewolf, Charades, and Telestrations are obvious examples where an Automa won't cut it.」" },
+        { "competitor": "Bezier One Night App / Werwörter App", "level": "partial", "ux_quality": 4, "steps": 0, "unique_approach": "行业实际路径：自动化**夜晚旁白与计时**（automates the night time narration…provides a timer / Die App übernimmt die Funktion des Spielleiters），内容仍由真人产出；**不自动化座位**" },
+        { "competitor": "BGA", "level": "none", "ux_quality": 0, "steps": 0, "unique_approach": "已上线列表无 Diplomacy / BSG / Avalon / The Resistance；含隐藏身份的 Coup/Werewolves/Decrypto 里只有 Conspiracy 有 bot 且官方注明不是真 AI" },
+        { "competitor": "One Night 系狼人杀", "level": "partial", "ux_quality": 4, "steps": 0, "unique_approach": "第三条路：**把人数下限从 8 压到 3**，用规则设计消掉「差人」而不是补人" },
+        { "competitor": "CICERO / LLM 群", "level": "partial", "ux_quality": 2, "steps": 0, "unique_approach": "唯一真做了发言层的先例，但：humor/sarcasm/self-deprecation 0/25 从未使用；说服力 10.9% < 人类 21.1%；agent 更早被票出（1.18 vs 0.90 票，胜率 26.2% vs 40.0%）" },
+        { "competitor": "我们", "level": "none", "steps": 0, "ux_quality": 0, "unique_approach": "certifyAnswer 题面依赖真人语义判断；规格 :1055 理由 1 正是冲这一条写的" }
+      ]
+    },
+    {
+      "task": "T7 中途真人回来了怎么交还座位（迟到 ≠ 缺席）",
+      "support": [
+        { "competitor": "BGA zombie", "level": "full", "ux_quality": 3, "steps": 0, "unique_approach": "接管期结果**不计入统计**（The game's results no longer count toward statistics），归属问题从根上消掉" },
+        { "competitor": "王者荣耀", "level": "full", "ux_quality": 2, "steps": 0, "unique_approach": "本人照样扣信誉分、接管期成绩不还给本人（百里守约 14-7-8 仍被罚）；但重连后交还的界面文案未验证" },
+        { "competitor": "雀魂/天凤", "level": "full", "ux_quality": 1, "steps": 0, "unique_approach": "托管/摸切期间打出的牌**不可撤销且照常计入战绩**（贴吧实录：听牌时掉线，回来发现录像里自动打了别张放双响）；天凤限再入场 5 次" },
+        { "competitor": "我们", "level": "none", "steps": 0, "ux_quality": 0, "unique_approach": "无任何归属/计分/交还口径，且认证与山议是**不可回退的历史事件**，一旦被 AI 说掉就还不回来" }
+      ]
+    }
+  ],
+  "interaction_patterns": [
+    { "pattern_name": "在场者授权接管（跟随我/回基地/AI托管）", "competitor": "王者荣耀", "description": "弹窗给留在局内的队友而非缺席者，约 30–90s 挂机后出现，不点则维持原状；决策权归属明确", "screenshot_ref": "ref-3", "borrow_or_avoid": "borrow" },
+    { "pattern_name": "三级降级链（主选→次选→兜底重抽）", "competitor": "World Wonders / Grand Austria Hotel", "description": "翻一张自动机牌，卡面指示的目标若不可用则依次降级，仍不可用则弃牌重抽；保证永远不会卡在该动作上", "screenshot_ref": "ref-1", "borrow_or_avoid": "borrow" },
+    { "pattern_name": "空壳化（删掉不影响他人的内部状态）", "competitor": "Automa Factory", "description": "for an Automa, the shell is empty；机器人有的东西玩家必须知道才能执行，因此隐藏状态一律砍掉", "screenshot_ref": "ref-1", "borrow_or_avoid": "borrow" },
+    { "pattern_name": "只占位不计分的合并座位", "competitor": "Pendulum", "description": "实时段把两个 bot 并成一个只占位不计分的玩家，专门降低桌负担", "screenshot_ref": "ref-1", "borrow_or_avoid": "borrow" },
+    { "pattern_name": "看管职责分配给某个真人", "competitor": "Root: The Clockwork Expansion", "description": "At least one player will need to keep it in check!——把「盯着 AI」写成一项桌内角色，而不是所有人的隐性负担", "screenshot_ref": "ref-1", "borrow_or_avoid": "borrow" },
+    { "pattern_name": "超时执行保守动作", "competitor": "天凤", "description": "60 秒无操作即强制摸切：系统不等聪明决策，只做最不动别人利益的一格；把等待变成计时器", "screenshot_ref": "ref-4", "borrow_or_avoid": "borrow" },
+    { "pattern_name": "接管期成绩不计入统计", "competitor": "BGA zombie / 王者荣耀", "description": "BGA 明文补位局不计统计；王者侧 AI 赢了本人仍被扣信誉分——两处都在切断「用 AI 替我打」的收益", "screenshot_ref": "ref-2", "borrow_or_avoid": "borrow" },
+    { "pattern_name": "无强制标识的 bot 面板", "competitor": "Board Game Arena", "description": "框架只给一个 iconClass，官方无「必须标明机器人」政策；The Last Droids 因此被投诉看不见 bot", "screenshot_ref": "ref-2", "borrow_or_avoid": "avoid" },
+    { "pattern_name": "静默把 AI 混进真人局", "competitor": "王者荣耀巅峰赛人机（未告知）", "description": "2025 年集中爆发的「到底谁才是真人」信任崩塌；对局内识别只能靠行为特征", "screenshot_ref": "ref-3", "borrow_or_avoid": "avoid" },
+    { "pattern_name": "让真人替 AI 结算", "competitor": "波多黎各典藏版自动机", "description": "高频投诉原文「我个人不是很喜欢自动机，需要替自动机结算」——操作负担转嫁回桌面", "screenshot_ref": "ref-1", "borrow_or_avoid": "avoid" },
+    { "pattern_name": "全桌被迫集火 AI", "competitor": "Root Automated Alliance", "description": "stopping them from winning often requires most (if not all) other players targeting them，被评 least fun faction to add in as a bot；MultiMind 侧同构：agent 更早被票出", "screenshot_ref": "ref-1", "borrow_or_avoid": "avoid" },
+    { "pattern_name": "只翻牌加战力、与玩家行动脱钩", "competitor": "Rolling Realms 设想 / 沙丘自动机 / 远古大陆自动机", "description": "it would just be a complex way to generate a semi-random number of victory points；远古大陆随机控种族让玩家撞天敌", "screenshot_ref": "ref-1", "borrow_or_avoid": "avoid" },
+    { "pattern_name": "AI 自由接话", "competitor": "CICERO / Among Them", "description": "输出 token 越多胜率越低（r=-0.070）、说服句越多胜率越低（-0.237）、CICERO 说服力 10.9% 低于人类 21.1%；31/640 局把思考链打进公开发言造成人格穿帮", "screenshot_ref": "ref-5", "borrow_or_avoid": "avoid" }
+  ],
+  "castle_vs_shack": {
+    "durable_advantages": [
+      "Automa Factory 的十年方法论与 300+ 局外部测试样本库（Scythe 自动机量级），以及 BGG 上玩家自制自动机的社区生态——这是 know-how + 测试时间壁垒，我们一个人不可能在 v1 内追平，只能借它公开的原则（绕开走）",
+      "王者荣耀绝悟的训练基础设施（RL、GPU 集群、相当于人类数百年对局量的自我对弈）——本地单 HTML 离线包场景下完全不可复现（绕开走）",
+      "webDiplomacy 的 5 分钟 blitz 匿名联赛生态——CICERO 能「上桌」的前提是平台本身允许匿名与快节奏；实体桌游没有等价分发面（绕开走，且这是 CICERO 教训不可直接类比的部分）",
+      "BGA 的框架级契约（bot 作为 game state action、不计统计、$player_id 显式传参）是多年平台演进的产物，能借模式不能借实现（绕开走）"
+    ],
+    "mimicable_advantages": [
+      "三级降级链（主选→次选→兜底重抽），一张卡写完 AI 的一个动作",
+      "零隐藏状态 / 空壳化：AI 的内部状态只保留会影响他人的字段",
+      "手番时长上限：翻 1 张牌 + ≤3 步即时结算，无收入阶段、无个人版图、复用本体图标",
+      "难度=控分 + 删行动，不控智能（Root 难度档与特质卡、Turczi 的 difficulty/personality 双轴）",
+      "在场者决定是否让 AI 入座（王者的三选弹窗）",
+      "公开、不可关闭、全员一致的座位标识（天凤掉线标红）",
+      "接管期成绩不计入本人统计（BGA zombie / 王者本人照罚）",
+      "超时兜底执行保守动作（天凤 60s 强制摸切）",
+      "把「看管 AI」写成分配给某个真人的显式职责（Root）",
+      "App/程序只做旁白与计时，内容留给真人（Bezier / Werwörter）",
+      "把人数下限做低，而不是补人（One Night 3–10 人无需主持人）"
+    ]
+  },
+  "visual_strategy_decision": {
+    "choice": "lean-in",
+    "scope_note": "本轮未做视觉级拆解（visual-language 维度被砍），此判断仅覆盖「程序座位的标识语言」这一层，来自 IA/内容证据，不得当作整体视觉策略基线使用",
+    "rationale": "程序座位的标识在行业里已经形成共识语义：公开、不可关闭、一眼可辨（天凤标红、Charterstone 把 Automas 当独立实体命名、BGA 面板独立）。这一块做差异化没有收益、只有成本——标识不显眼换来的正是「到底谁才是真人」那类信任反噬。真正该 diverge 的是牌面与主题层（我们有 4 套主题包与 B79 句子层），与座位标识无关。",
+    "reference_landscape": [
+      "天凤：掉线者名字标红（最省的公开标识范式）",
+      "BGA：独立玩家面板 + iconClass，但无强制标签（反面）",
+      "王者荣耀：局内无 AI 角标，靠行为特征识别（反面）",
+      "Charterstone / Root：把机器人当具名实体写进规则书（Automas / Clockwork Vagabond），命名即标识",
+      "雀魂：把「自动」做成玩家主动开的四个档位（里/胡/明/切），标识退化为开关状态"
+    ]
+  },
+  "takeaways": [
+    {
+      "id": "takeaway-1", "action": "borrow",
+      "description": "「稳座」不需要模型，也不需要新机制——行业判据已经写死：AI 手番 = 翻一张卡 + ≤3 步即时结算，无收入阶段、无个人版图、复用本体既有动作图标",
+      "copy_check": { "why_it_works": "自动机的设计目标不是模拟人决策而是保住其他真人的体验（Automa 六原则第 6 条 + BGA「you do not need to develop a full artificial intelligence」+ 王者「绝不拖队伍后腿」三源撞车）", "context_match": "yes", "side_effects": "AI 会显得可预测（Tenpenny Parks 的 Becky 因 predictable 被嫌），需靠牌库构造造「渐进策略感」补" },
+      "source_competitor": "Automa Factory / BGA / 王者荣耀", "target_design_area": "engine/core 的 AI 座位决策器 + web 座位面板"
+    },
+    {
+      "id": "takeaway-2", "action": "borrow",
+      "description": "每个 AI 动作必须写成三级降级链（主选→次选→兜底重抽），非法目标根本不许进入它的决策集；验收方式=构造「所有目标已被占/已死」的极端局，验证它仍能出牌",
+      "copy_check": { "why_it_works": "World Wonders 的顶/中/底与 Grand Austria Hotel 的 discard-and-redraw 都靠这个消灭「AI 卡住」这个最致命失败", "context_match": "yes——我们的 probeAction/isolatedState 已经在做合法性折叠，天然适配", "side_effects": "兜底动作若过于保守会让 AI 看起来没参与；需要给兜底档也留一条可被起哄的公开效果" },
+      "source_competitor": "World Wonders / Grand Austria Hotel", "target_design_area": "engine/core/legal.ts + probe.ts 的候选折叠；缺的 applyAction 统一提交口必须内建降级语义"
+    },
+    {
+      "id": "takeaway-3", "action": "borrow",
+      "description": "AI 座位零隐藏状态：要么全桌公开，要么「空壳化」只保留会影响他人的字段；认证/山议若必须依赖 AI 的私密信息，改成「结果型公开」",
+      "copy_check": { "why_it_works": "机器人有的东西玩家必须知道才能执行（Origin Story 因此受阻）；同时它直接命中我们已有的红线「模型只见公开信息」，两条约束一次满足", "context_match": "yes", "side_effects": "公开化的座位会让它在投票/对峙里失去策略纵深——但按 MultiMind 数据，它本来就会被优先票出，纵深价值有限" },
+      "source_competitor": "Automa Factory（空壳原则）+ 本项目预研红线", "target_design_area": "engine 状态可见性 + 主题包 IR"
+    },
+    {
+      "id": "takeaway-4", "action": "borrow",
+      "description": "让 AI 的价值锚定在 denial / 占位 / 抢先达标，不锚定得分效率；判据是「真人因为它在场而改变一次决策」",
+      "copy_check": { "why_it_works": "Pedersen：Automa 会要求行动空间、轮抽、封锁路线，但不收集资源、不建造、不拿 VP——只做会让真人改动作的那部分；而控分只能造紧张感，造不出互动", "context_match": "partial——我们是竞速登顶 + 认证，「占位」等价物是抢占关隘/山议票/认证席位，需要重新定义", "side_effects": "纯 denial 型座位容易变成「讨厌但无害」，被真人优先集火（Root Automated Alliance 的教训）" },
+      "source_competitor": "Automa Factory / Root", "target_design_area": "关隘、裂隙、山议、对峙的 AI 策略层 + scales.ts 的 seatWeight/threshold"
+    },
+    {
+      "id": "takeaway-5", "action": "borrow",
+      "description": "把「要不要 AI 入座」的决定权交给在场的人（对齐王者的三选弹窗），并在规则里写死：补位局不给那位缺席本人记成绩",
+      "copy_check": { "why_it_works": "触发权在在场者=消除「被塞一个机器上桌」的愤怒；成绩不归属本人=切断「不如让 AI 替我打」的套利（BGA zombie 不计统计、王者本人照罚，两家同向）", "context_match": "yes——面对面桌天然有「全桌同意」这道程序，成本极低", "side_effects": "如果补位无代价且不记成绩，它可能稀释到场承诺（王者「还不如挂机了」的原话正是这个形状）" },
+      "source_competitor": "王者荣耀 / BGA zombie", "target_design_area": "开局流程 + 终局结算 §5.7/§5.8 + 规则书补位章节"
+    },
+    {
+      "id": "takeaway-6", "action": "borrow",
+      "description": "超时兜底优先于智能：座位在超过 T 秒内没有决策时，自动执行「最不动别人利益」的保守动作，把等待变成计时器",
+      "copy_check": { "why_it_works": "天凤 60 秒强制摸切是运行二十年的成熟答案；它同时解决「冷场」和「AI 太聪明」两个抱怨，因为它根本不做选择", "context_match": "partial——我们的回合里有不可回退事件（认证答题、对峙出牌、投票），保守动作必须定义成「弃权」而不是「随便选一个」", "side_effects": "弃权次数上限需要设，否则座位变成隐形玩家，回到「占位不玩」的老问题" },
+      "source_competitor": "天凤", "target_design_area": "回合与行动系统（advanceAuto 语义需反向使用：它替玩家决策，我们要的是超时兜底不决策）"
+    },
+    {
+      "id": "takeaway-7", "action": "borrow",
+      "description": "给「有戏档」加两条硬约束：发言必须能回指到已登记的意图/动作键（对不上直接丢弃），且台词长度与条数限量",
+      "copy_check": { "why_it_works": "CICERO 有意图条件生成 + 一致性过滤器仍被复核出预谋欺骗与矛盾消息；Among Them 数据显示说服句越多胜率越低（-0.237）、token 越多胜率越低", "context_match": "yes——我们已有 actionKey 编解码，回指校验有现成锚点", "side_effects": "限量会让 AI 在发言局里存在感低，与「被起哄」目标相冲；需要用质量档位而不是数量补偿" },
+      "source_competitor": "CICERO / Among Them", "target_design_area": "有戏档的台词层 + termExpander/句子层（B79）"
+    },
+    {
+      "id": "takeaway-8", "action": "borrow",
+      "description": "补位座位必须有恩怨计数（谁对它违约、谁帮过它），否则人类会对它任意撒谎——实测撒谎率 3.7% vs 对人的 0.6%",
+      "copy_check": { "why_it_works": "复算结论写明原因：人类认为它不记仇；WOLF 侧则显示怀疑会被纵向累积记账（52%→>60%），说明「被记账」本身就是有效约束", "context_match": "yes——引擎已有目标计数器/人缘线可接", "side_effects": "记仇的 AI 会开始针对特定玩家，可能触发「被迫集火」第 4 类失败" },
+      "source_competitor": "CICERO 第三方复算 / WOLF", "target_design_area": "engine/core 计数器 + 山议/认证交互"
+    },
+    {
+      "id": "takeaway-9", "action": "avoid",
+      "description": "不要做「看不见是什么」的座位：标识必须公开、不可关闭、全桌一致（BGA 无强制标签 → The Last Droids 投诉 invisible；王者无角标 → 2025「到底谁才是真人」潮；学界据此提 bot-or-not laws）",
+      "source_competitor": "Board Game Arena / 王者荣耀", "target_design_area": "web 座位面板 + Host 看板"
+    },
+    {
+      "id": "takeaway-10", "action": "avoid",
+      "description": "不要让任何真人替 AI 抽/选/弃/结算——热座模式下这是默认结局，也正是波多黎各典藏版被骂的那一条；凡需要人类判断的分支，直接从 AI 行动集里删除",
+      "source_competitor": "波多黎各典藏版 / Automa 原则 5", "target_design_area": "web/main.ts 热座交互 + Host 端旁白职责划分"
+    },
+    {
+      "id": "takeaway-11", "action": "avoid",
+      "description": "不要造出「全桌被迫集火才能压住」的座位：Root 的 Automated Alliance 因 stopping them from winning often requires most (if not all) other players targeting them 被评作 least fun faction to add in as a bot；MultiMind 同构数据（agent 1.18 票 vs 人类 0.90 票）",
+      "source_competitor": "Root Clockwork / MultiMind", "target_design_area": "AI 强度曲线 + 对峙/山议的收益结构"
+    },
+    {
+      "id": "takeaway-12", "action": "avoid",
+      "description": "不要把 AI 简化成「翻牌加战力/生成一个半随机分数」：Rolling Realms 的设想被否（it would just be a complex way to generate a semi-random number of victory points），沙丘与远古大陆自动机是同一类坑（后者还会随机制造天敌）",
+      "source_competitor": "Rolling Realms / 沙丘 / 远古大陆", "target_design_area": "算子注册表里 AI 座位可使用的算子集合"
+    },
+    {
+      "id": "takeaway-13", "action": "avoid",
+      "description": "不要在 v1 让 AI 参与发言层：Pedersen 明文说自动机在依赖人类作为社会动物的游戏里「工作得很糟」，他给 The Mind 做自动机「结果不出意料地烂」，并点名 Werewolf / Charades / Telestrations 是 Automa won't cut it 的一族——而我们的认证高潮就在这一族里",
+      "source_competitor": "Automa Factory / BGA 缺席先例", "target_design_area": "认证流程设计 + 有戏档排期"
+    },
+    {
+      "id": "takeaway-14", "action": "avoid",
+      "description": "规则书不能写得过简：Tapestry 自动机被批评 too succinct…challenging for people who learn best from reading examples——我们的验收判据里必须含「5 名真人在无人讲解下按规则书跑通补位局」",
+      "source_competitor": "Tapestry", "target_design_area": "规则书构建 + doc-sync 门禁"
+    },
+    {
+      "id": "takeaway-15", "action": "match",
+      "description": "行业标配一：把缺席者座位的状态做成可 ban / 可选（Charterstone 明确可 ban、Root 是独立扩展、Stonemaier 用「a few cards」压成本）——补位能力必须是开关，不能是默认",
+      "source_competitor": "Charterstone / Root / Stonemaier", "target_design_area": "开局配置屏"
+    },
+    {
+      "id": "takeaway-16", "action": "match",
+      "description": "行业标配二：难度做成 2–3 档且只体现在分数阈值或多移动一枚标记上（Root difficulty adjusters + trait modifiers、Tiwanaku 困难档多走一步、BGA 元数据混档取最低）",
+      "source_competitor": "Root / Tiwanaku / BGA", "target_design_area": "scales.ts 每档补 AI 参数位"
+    },
+    {
+      "id": "takeaway-17", "action": "match",
+      "description": "行业标配三：验收靠分阶段真人局与外部测试人数说话（co-designers → 每次几位新眼睛 → 规则书自足性；Scythe 300+；人类胜率判据 25–30%）——我们至少要给出一个缩放后的量化验收线，不能只用「跑通 100 组模拟」交差",
+      "source_competitor": "Automa Factory / Stonemaier", "target_design_area": "release 检查与真人局验收口径"
+    },
+    {
+      "id": "takeaway-18", "action": "avoid",
+      "description": "别把「补位」当成唯一解：行业有两条更便宜的绕行路径已被验证——① 程序只做旁白与计时，内容留真人（Bezier / Werwörter）；② 直接把人数下限做低（One Night 3–10 人无需主持人）。**而我们的引擎本来就支持 3–8 人**，所以差一个人时「按 5 人规模表开局」今天就能做",
+      "source_competitor": "Bezier / Werwörter / One Night 设计史", "target_design_area": "方向层：Frame 的 lean 与规格 §7 的范围裁定"
+    }
+  ],
+  "annotated_references": [
+    {
+      "id": "ref-1",
+      "competitor": "Automa Factory（Charterstone / Root / World Wonders / Grand Austria Hotel / Pendulum / Euphoria / Tapestry）",
+      "screen_or_url": "https://stonemaiergames.com/games/charterstone/design-diary/ ; https://zatu.com/blogs/interviews/qa-with-morten-monrad-pedersen ; https://cardboardclash.wordpress.com/2018-05-12/interview-with-morten-monrad-pedersen/ ; https://www.ultraboardgames.com/grand-austria-hotel/solo.php",
+      "annotation": "看哪里：三句原话构成本次的判据来源——①「enable Automas to stand in for players who can't make it to a game night」与「make the game work with any number of humans and Automas」（补位是被明确设计出来的目标）；②「building an empty shell…the shell is empty」+「removing the internal state of the opponent that does not directly affect the player」（空壳化）；③ Grand Austria Hotel 的 discard-and-redraw 与「Further benefits depicted on guest card are never applied」（三级降级 + 砍引擎收益只留交互）。证据类型：设计日志与设计师访谈，非界面。",
+      "category": "pattern"
+    },
+    {
+      "id": "ref-2",
+      "competitor": "Board Game Arena 框架文档（zombie mode 与 Bots/AI）",
+      "screen_or_url": "https://doc.studio.boardgamearena.com/framework-documentation/back-end/zombie-mode/ ; https://en.doc.boardgamearena.com/Bots_and_Artificial_Intelligence",
+      "annotation": "看哪里：「You do not need to develop a full artificial intelligence」；「The game's results no longer count toward statistics」；僵尸只按 currently visible information 贪心、不得提前结束游戏、不能成为 active player、动作用 $player_id 传参；以及「Connecting AI as real player probably a violation of accepted use policy」。这是唯一一份把「补位」写成实现契约的公开文档。证据类型：官方开发者文档，未登录实测。",
+      "category": "pattern"
+    },
+    {
+      "id": "ref-3",
+      "competitor": "王者荣耀 AI 托管",
+      "screen_or_url": "https://pvp.qq.com/gicp/news/592/423016.html ; https://pvp.qq.com/coming/v2/system/wtc_v31.html ; https://www.9game.cn/wzry/11611102.html",
+      "annotation": "看哪里：官方强度声明「并不希望 AI 能够 CARRY 比赛…强度并不会主宰比赛胜负的走向…比对应挂机的玩家水平低一些但看起来会更聪明，更偏防御性但也绝不会拖队伍的后腿」；触发文案「你的队友暂时离开了游戏，是否需要他们协助你作战呢？」（第三方转述，弹窗原文未官方核验）；在场者三选（跟随我/回基地/AI托管）；以及官方频道广播「审判系统发现玩家某某某有挂机行为，计算后将自动处罚」。证据类型：官方公告 + 攻略转述混合，已标可信度分层。",
+      "category": "strength"
+    },
+    {
+      "id": "ref-4",
+      "competitor": "天凤 / 雀魂",
+      "screen_or_url": "https://tenhou.net/man/ ; https://www.bilibili.com/video/BV1Ac411p7GX ; https://tieba.baidu.com/p/6755986664",
+      "annotation": "看哪里：天凤说明书「60秒间マウス动作/キー入力が无い場合は强制で『ツモ切り』モード」、「途中落ちプレーヤは名前を赤色で表示」（桌友侧公开标识的最省成本先例）、「サーバから切断された場合の結果…はい。ツモ切りで最後までプレイした结果が反映されます」（不可回退且照常计入），以及「AIで段位戦を打つ场合の注意事项」三条：鳳凰卓对战禁止、须取专用 ID、被举报判定骚扰即停 ID——竞技场景对程序上桌的官方立场是隔离而非补位。雀魂侧则是四个玩家主动开关（里/胡/明/切）。",
+      "category": "pattern"
+    },
+    {
+      "id": "ref-5",
+      "competitor": "CICERO 与 LLM 社交推理复算群",
+      "screen_or_url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC11117051/ ; https://arxiv.org/html/2406.04643v1 ; https://arxiv.org/html/2502.20426v1 ; https://arxiv.org/html/2510.11389v1 ; https://arxiv.org/html/2504.18039v4",
+      "annotation": "看哪里：有戏档的能力天花板全在这五份里——humor/sarcasm/self-deprecation 在 640 局里 0 次使用；说服句数量与胜率负相关（-0.237）；CICERO 说服力 10.9% < 人类 21.1%；人类对 CICERO 撒谎率 3.7% vs 对人 0.6%（原因：认为它不记仇）；agent 更早被票出（1.18 vs 0.90 票，胜率 26.2% vs 40.0%）；31/640 局思考链泄漏进公开发言。另注：CICERO 的「匿名插入、无逐局知情同意」是我们的伦理不适用项（面对面桌天然公开），不得混用。",
+      "category": "anti-pattern"
+    },
+    {
+      "id": "ref-6",
+      "competitor": "社交发言类的绕行路径（Bezier One Night App / Ravensburger Werwörter App / One Night 规则设计 / Three Nights: Moonfall）",
+      "screen_or_url": "https://apps.apple.com/us/app/one-night/id728175611 ; https://apps.apple.com/cn/app/werw%C3%B6rter/id1441535259 ; https://store.steampowered.com/app/5012890/Three_Nights_Moonfall/",
+      "annotation": "看哪里：行业对「发言类游戏差人」的实际解法不是补位座位，而是 ① 程序当主持人：automates the night time narration…provides a timer for the day phase / Die App übernimmt die Funktion des Spielleiters, so dass jeder Spieler in eine Rolle schlupfen und mitspielen kann；② 规则把下限压低（One Night 3–10 人无需 GM）。「Fill the empty seats with bots」这句只在电子端出现。这一条是本次对『稳座』方向最直接的挑战证据。",
+      "category": "pattern"
+    },
+    {
+      "id": "ref-7",
+      "competitor": "自动机失败样本集（Root Automated Alliance / Tenpenny Parks / Viticulture Tuscany / Rolling Realms / Scythe / Tapestry / 沙丘 / 远古大陆 / 波多黎各典藏版）",
+      "screen_or_url": "https://www.geeksundergrace.com/tabletop/review-root-the-clockwork-expansion/ ; https://opinionatedgamers.com/2026-01-09/solo-gaming-2025-the-end-of-the-year-edition/ ; https://www.bilibili.com/video/BV19fToz9E2F ; https://post.m.smzdm.com/p/akogr6gk/",
+      "annotation": "看哪里：六类失败根因各有一句原话可引——可预测致无聊（the solo bot, named Becky, plays a solid but predictable game）、集火被迫（stopping them from winning often requires most if not all other players targeting them / least fun faction to add in as a bot）、静态偏袒 AI（Pedersen 自评 too static and lopsided in the Automa's favor）、与玩家行动脱钩（it would just be a complex way to generate a semi-random number of victory points）、换皮不换脑（players have missed）、规则书过简（too succinct…challenging for people who learn best from reading examples）；中文侧两条：「需要替自动机结算」、「很难用正常节奏应对」。",
+      "category": "anti-pattern"
+    },
+    {
+      "id": "ref-8",
+      "competitor": "信任侵蚀样本（王者荣耀巅峰赛人机争议 / BGA Premium AI 提案）",
+      "screen_or_url": "https://tieba.baidu.com/p/9623098574 ; https://ngabbs.com/read.php?tid=44462901 ; https://forum.boardgamearena.com/viewtopic.php?t=52500 ; https://forum.boardgamearena.com/viewtopic.php?t=46160",
+      "annotation": "看哪里：「匹配10把8把是人机」「你哪知道谁是真人」（未告知的静默接管，2025 集中爆发）；BGA 侧「Why is the bot in solo mode invisible?」（标识缺失）；以及 2026-11 的付费 AI 对手提案遭遇社区敌意、官方无回应——注意区分：敌意针对「AI 顶替真人当对手」，不是「AI 顶替缺席者」，我们在文案里必须把这两件事分开表述。",
+      "category": "anti-pattern"
+    }
+  ],
+  "handoff": {
+    "to_audit": [
+      "takeaway-9（座位标识是否公开不可关闭）与 takeaway-10（是否有任何环节要真人替 AI 结算）——这两条是热座 web 端必查项",
+      "takeaway-6 的超时兜底与 takeaway-1 的手番时长上限，用于走查补位局节奏",
+      "takeaway-14 的规则书可自学性"
+    ],
+    "to_brief": [
+      "visual_strategy_decision：lean-in（仅限程序座位标识这一层，非整体视觉策略）",
+      "castle_vs_shack.durable_advantages：Automa Factory 的方法论与测试规模、绝悟的训练基建——v1 明确绕开，不硬刚",
+      "takeaway-18：把「5 人规模表可直接开局」作为策略维度的候选，与 AI 补位并列评估"
+    ],
+    "to_pitch": [
+      "ref-1（Automa 三源撞车：别做真 AI）、ref-3（王者强度声明原文 + 在场者授权弹窗）、ref-4（天凤标红与 60s 兜底）、ref-6（Pedersen 点名发言类游戏不可做自动机）、ref-7（有戏档能力数据：幽默 0/25、话多有害、不记仇被欺负）"
+    ]
+  }
+}

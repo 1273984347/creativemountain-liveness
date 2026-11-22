@@ -1,0 +1,100 @@
+{
+  "skill": "prd",
+  "generated_at": "2026-11-23T03:30:00+08:00",
+  "project_name": "创界山·活人认证 — AI 补位座位",
+  "direction": "稳座（1 个 AI 补位座位，5 真人 + 1 程序座位，6 人档）",
+  "prd_file": "spark-output/prd/ai-seat-fill.md",
+  "sections_summary": {
+    "summary": "为聚会桌游《创界山·活人认证》新增一个程序座位（稳座档）：约好的 6–8 人局临时少一人时顶上那张椅子，让局照样开成，而桌上另外 5 个会玩的人不觉得这局被拖废",
+    "primary_persona": "大林（31 岁聚会局长）；打分人是桌上另外 5 个会玩的人（买家 ≠ 打分人，AC 写给后者）",
+    "product_goal": "让「差一个人」不再是「这一局作废」的理由，同时不让另外 5 个人付出体验税",
+    "success_metrics": [
+      { "metric": "补位名场面增益（NSM，A 组 6 人档+AI − B 组 5 人档）", "target": "≥ +1.0 次/局 且「想换回真人」人次 = 0", "timeframe": "3 周 6 局（3A+3B，≥2 seed）" },
+      { "metric": "AI 手番墙钟耗时中位", "target": "≤ 人类同局中位 1.0×，绝对 ≤ 3000ms", "timeframe": "首 3 局" },
+      { "metric": "真人代操作次数", "target": "= 0（底线）", "timeframe": "首局即判" },
+      { "metric": "AI 参与的认证/质疑事件数", "target": "≥ 1.0 次/局", "timeframe": "首 3 局" },
+      { "metric": "非法动作率 / 兜底降级占比", "target": "0 / ≤ 25%", "timeframe": "每次构建（并入 release:check）" },
+      { "metric": "组局兑现率", "target": "≥ 60%，含 ≥2 场真实缺人场景", "timeframe": "60 天" },
+      { "metric": "位次极差（补位档单列）", "target": "≤ 8pp 报告 / ≤ 14pp 门禁 / RMS ≤ 6.5pp", "timeframe": "每档 100 局固定 seed" }
+    ],
+    "feature_count": 5,
+    "in_scope_features": [
+      "S1 程序座位自走（controlledBy + applyAction 统一提交口 + 启发式决策器 + 三级降级链 + 零隐藏状态 + 手番时长上限）",
+      "S2 公开不可关闭标识 + 在场者授权（任一在场者可否决）+ 补位局成绩不归属本人 + 可 ban 开关",
+      "S3 认证/关隘参与（签印权分支 A/B，依赖 Ask 1）",
+      "S4 迟到者中途交还（不回退历史事件）",
+      "S5 度量落地（12 项缺口 = 10 must + 2 should；观察员面板折叠侧栏 + 当场表 + 导出扩字段）"
+    ],
+    "out_of_scope_features": [
+      "sidecar/模型接入（撞确定性 + 发布包零增量 + loopback 三红线）",
+      "AI 自由文本发言层（点名/有戏档，前置=恩怨计数）",
+      "半桌（1–3 真人）与全 AI / 挂机旁观局",
+      "Host 原型落地与 host↔phone 实时同步",
+      "线上异步验活人；主题全量差异化"
+    ],
+    "critical_assumption": "一个能合法、不卡轮、不冷场的补位座位，就能把「不欢而散」接住 —— 机制半边有证据（release 模拟跑局 + 平衡报告），社会半边 0 证据（probe.json participants=0）",
+    "mvp_stories": ["S1 哑 AI 最小可玩切片", "S5 最小埋点集（game_start 含 seed+aiSeat / seat_control_assigned / human_takeover_click / 导出扩字段）", "B 组对照（按 5 人档开局作为显式开局选项）", "S2 标识与在场者授权"],
+    "gates_before_implementation": [
+      "G1 ✅ 已裁 2026-11-23T04:05：Ask 1 = A（AI 无签印权、不持活人席）⇒ 不动 engine/scales.ts、不重基线；S3 塌为分支 A，B（可被签印不计入 N）为唯一无损升级路径",
+      "G2 ✅ 已裁：Ask 2 = yes（v1 只做稳座，有戏推 v2 不并线）⇒ 不碰 sidecar，三条红线一条不掀，可独立于 B82 模型批立项",
+      "G3 ✅ 已裁：拆两态 seat_offline_temporary / seat_filled_by_ai；AI 兜底超时 120s，离线代决开放 120s（两个独立旋钮，暂取同值）⇒ S1 施工解锁",
+      "G4 ⚠️ 待做（工程项，不依赖签字）：seed 可指定并进导出——web/main.ts:95 与 :112 现写死 42，tutorial.ts:40 用 20261107 同样固定",
+      "G5 ✅ 已定：落地端 = web 单文件端（热座、真引擎、离线包），不落 Host（creativemountain-host/src/flows/shared/mock-data.ts:1 不接引擎；flow-web 已把引擎接线与 host↔phone 同步列为 out_of_scope_this_run）",
+      "Ask 3 ✅ 已办（2026-11-23，提交 d153af9 之后的规格 v2.2 落地）：§7 范围裁定改写 + 新增 §7.5 补位稳座 + 四处范围条款同步修正（概览 / §7 HeuristicPolicy 句 / §13.2 范围表 / §13.3 延后表）+ 修订记录 v2.2；因 Ask 1=A，数值口径未动 ⇒ 无重基线。brief.out_of_scope 第 4 条按 (b) 加限定语澄清、不放宽",
+      "判读规则修订（选 A 的隐性成本，务必看）：若 A 组 NSM 增益 ≤ 0，不得直接关批次——必须先补跑一臂 A′（=B 选项，可被签印但不计入 N，同样不改 scales、不违反主题）。A′ 仍 ≤0 才判零代码方案够用；A′ >0 则判「A 太弱而非补位没用」并升级为 B。实拍局因此从 6 局增至 8 局"
+    ]
+  },
+  "blocking_conflict": {
+    "id": "seat-absence-semantics",
+    "source_a": "spark-output/context/edge.json → states_matrix[flow2/Cert Focus].states[offline-no-network]，implemented:false，原文「座X 待同步，不把缺席当成弃权」+ fallback「超时后可主持人代决」",
+    "source_b": ["bench.takeaway-6（超时执行保守动作，天凤 60s 强制摸切）", "bench.takeaway-10（AI 手番不得要求真人代为结算）", "metric.driver_metrics[D2] 目标 = 0", "metric.driver_metrics[D3]（无参与即判隐形座位）"],
+    "why_they_diverge": "Edge 那条针对「人还在场、只是链路未同步」，等待的对象存在，判弃权是对真人的不公；本链针对「这个人根本不在场」，等待的对象不存在。是两种状态，不是同一条规则的两种写法。",
+    "proposed_resolution": "状态机拆两档：seat_offline_temporary（沿用 Edge 原意，代决仅超时 ≥2 分钟后开放且必须落 human_takeover_click）/ seat_filled_by_ai（永不索取真人操作，超时保守动作，无合法招记 ai_forfeit）；两档须由 seat_control_assigned.controlledBy 可区分，否则 D2 底线指标会被合法代决污染而永远判红",
+    "status": "✅ 已裁（2026-11-23T04:05，签字人=用户本人）：采「拆两态」；超时阈值两旋钮各 120s（AI 兜底 / 离线代决开放，暂取同值但保持独立可调）",
+    "implementation_precondition": "两态区分依赖新增 seat_control_assigned.controlledBy；该字段未落地前，D2 底线指标 human_takeover_click==0 会被合法的离线代决污染，读数不可信",
+    "ask1_ratified": {
+      "choice": "A｜无签印权、不持活人席",
+      "scales_impact": "engine/scales.ts 不动 ⇒ 门⑨ 逐字节 + release 100 组基线原样沿用，无需重基线登记",
+      "measurement_confound": "选 A 后 AI 仅剩路径压制/关隘/票数三类在场方式，6 人档那两格强度（threshold 3→4、seatWeight 16→20）对真人实际不可用 ⇒ A−B 之差混入第二个变量（签印权缺失），增益 ≤0 无法单独归因于「补位没用」",
+      "reading_rule_amendment": "增益 ≤0 时先补跑 A′（B 选项，不计入 N，同样不改 scales、不违反主题），A′ 仍 ≤0 才关批次；C 永不试",
+      "grudge_implementation_correction": "作废「counters.ts 加一项即可、不动门禁」的旧说法。证据：Player.counters 属冻结契约域（tests/engine/state-contract.test.ts:132；B76 用例明写缺字段必须红），计数器名见于主规格与 docs/批次/B61-其余六类目标计数器写入-执行记录.md，且 engine/goals/registry.ts + settle.ts 消费 counters ⇒ 新增一类计数器按先例需规格同步。v1 改为零契约做法：恩怨由 vetoBy / stolenTotal / successfulChallenges + State.log{actor,round,kind} 离线回放算出，仅在新增扫描脚本里多一段聚合"
+    }
+  },
+  "design_asset_verification": {
+    "method": "对 stories / check / edge / sitemap / flow-web 五个主链 context 文件整词检索 AI|机器人|托管|补位|代打|程序座位|单人|bot|robot|npc|solo（含 -i 整词 ai）",
+    "result": "零命中；唯一命中的「缺席」4 处均为真人掉线语义",
+    "conclusion": "Section 6 全部设计资产为「待生成」，非遗漏而是事实。可复用的既有件：web/main.ts:245 导出（只需扩字段）、web/main.ts 真引擎接线、Host 14 屏布局语言、page-host-setup 配置槽位",
+    "carry_over_constraints": [
+      "edge.json Setup 既有错误态「人数不足(<3) 至少 3 人才能开局」在本方向下需被修订而非继承（补位改变了「人数不足」的定义）",
+      "check.findings[0] accessibility minor 未修：「待认证仍以星号 + 颜色为主传达」⇒ 补位标识不得重演同类缺陷",
+      "check.findings[1] copy minor 未修：「『模拟…』11 处异常态演示按钮对用户可见」⇒ 补位不得再新增用户可见的演示型按钮",
+      "check.findings[7] edge-states minor 未修：剩余 12 个 should/nice 态未实现 ⇒ 补位新增异常态与这 12 项同批登记，不单独开分支"
+    ]
+  },
+  "ac_traceability_note": {
+    "inherited_baseline_acs": [
+      "story-2「铺垫期每个朋友手上都有可做的动作，没人长时间干等」→ S1 的「不卡轮」口径",
+      "story-4「认证开始时全桌视线都转向答题者」→ NSM 的同频定义",
+      "story-5「一局里全桌注意力 100% 集中的时刻 ≥3 次」→ NSM 阈值基线（brief.design_criteria 同源）",
+      "story-3「被放逐者出局后仍有可参与动作」→ S1 边缘情况：AI 座位被放逐后只保留投票类参与",
+      "story-6「能理解为什么他赢——席位权重 + 距峰顶格数公示清楚」→ S3 分支 C 的反对依据（seatWeight 20 越界风险）"
+    ],
+    "ac_count_total": 28,
+    "ac_count_method": "实测：grep '^- Given ' = 19 条 Given/When/Then；grep '^- (边缘情况|空状态)' = 9 条；合计 28 条工程可验收条目（初稿误写 24，已就地改正）",
+    "stories_count": 5,
+    "ratio_ok": true,
+    "ratio_detail": "28 ≥ 5 × 2 = 10，满足「AC ≥ stories × 2」质量标准"
+  },
+  "source_skills": {
+    "brief": true, "stories": true, "sitemap": true, "flow_web": true, "flow_mobile": false,
+    "frame": true, "scope": false, "check": true, "edge": true, "probe": true, "bench": true, "pitch": true, "metric": true, "journey": true, "retro": true
+  },
+  "thin_sections": [
+    "solution_feature_scope：本链未跑 Stories，5 个 Story 由 frame-ai-seat + pitch + metric 派生，design_touchpoints 为推导值而非评审值",
+    "design_assets：主链零命中，Section 6 全部待生成",
+    "success_targets：人类胜率 25–30% 引自外部基准而非本项目实测；degrade ≤25%、弃权 ≤15% 为可验收性初值，首局后须重标",
+    "problem_frequency：「差一个人」从未出现在 11-07 痛点列表与 Probe 研究问题中，频率证据为 n=1 自述事件",
+    "pending_gates：G1/G2/G3 未决，S3 整节在 G1 前不可施工"
+  ],
+  "line_count_self_check_note": "本文档刻意不为满足「≥500 行」的模板标准而填充；超出密度的部分以 prd.json 的结构化字段承载（gates / blocking_conflict / asset_verification / ac_traceability），交给 coding agent 时两者一并给出"
+}

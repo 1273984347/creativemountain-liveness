@@ -8,7 +8,7 @@
   使用方式（详见 chain-protocol §九）：
     1. 读取本模板原文
     2. 扫描项目目录 `spark-output/context/*.json`，构造 STATE 对象
-    3. 将本文件中唯一占位符 `/*__SPARK_STATE_INJECT__*/null` 替换为 STATE JSON
+    3. 将本文件中唯一占位符 `/*__SPARK_STATE_INJECT__*/{"project":"创界山·活人认证","generated_at":"2026-11-22T19:11:27.092Z","contexts":{"frame":{"done":true,"summary":"两份锚点：11-07 面对面局 + 11-23 AI 补位","fields":{}},"probe":{"done":true,"summary":"研究方案与访谈大纲就绪，0 真人未采集","fields":{}},"brief":{"done":true,"summary":"一页纸设计简报","fields":{}},"journey":{"done":true,"summary":"用户旅程地图","fields":{}},"stories":{"done":true,"summary":"用户故事集","fields":{}},"sitemap":{"done":true,"summary":"站点地图 IA 骨架","fields":{}},"flow-web":{"done":true,"summary":"主屏 flow 已交付","fields":{}},"edge":{"done":true,"summary":"异常态六档穷举","fields":{}},"check":{"done":true,"summary":"设计走查","fields":{}},"qa":{"done":true,"summary":"设计验收（还原度）","fields":{}},"retro":{"done":true,"summary":"链路复盘","fields":{}},"bench":{"done":true,"summary":"6 竞品深拆 → 18 条 takeaways（文档级）","fields":{}},"pitch":{"done":true,"summary":"6 段成稿 + 5 个 Asks（听众=签字人自己）","fields":{}},"metric":{"done":true,"summary":"NSM=补位名场面增益 A−B；12 项埋点缺口","fields":{}},"prd":{"done":true,"summary":"8 段 + 5 Story；Ask1=A/Ask2=yes/G3 已裁，Ask3 已落 v2.2","fields":{}}}}` 替换为 STATE JSON
     4. 写入 `spark-output/dashboard.html`（覆盖式）
 
   STATE 形态：
@@ -225,7 +225,7 @@
 // ===========================================================
 // STATE 注入点（chain-protocol §九 Step 6 由各 Skill 替换）
 // ===========================================================
-const STATE = /*__SPARK_STATE_INJECT__*/{"project":"创界山·活人认证","generated_at":"2026-11-07T20:51:08.133Z","description":"爱情公寓虚构桌游「创界山」2026 重制 · 为聚会整活型玩家调优「策略×现场表演」体验","contexts":{"brief":{"done":true,"summary":"一页纸锚定：策略×现场表演，3 维策略，Chalk 横版","fields":{}},"check":{"done":true,"summary":"v2复查：0 Blocker/0 Major(3已守)/8 Minor，链路一致性全绿","fields":{}},"edge":{"done":true,"summary":"host异常态14屏37态；16 must全落码验证，剩should/nice为边界与离线细节","fields":{}},"flow-web":{"done":true,"summary":"主屏React原型(Spark)：4flow14屏，build+lint 0错，异常态全落码","fields":{}},"frame":{"done":true,"summary":"聚会整活型大林画像，押方向A，关键假设#1待真人验证","fields":{}},"journey":{"done":true,"summary":"单局体验假设旅程，6 stage，2 流失风险，待 Probe 验证","fields":{}},"probe":{"done":true,"summary":"验证方案就绪，0 真人数据，假设#1 未验证","fields":{}},"qa":{"done":true,"summary":"还原度验收：0/0/5 minor，全走token；5 minor已落码修复","fields":{}},"retro":{"done":true,"summary":"全链复盘(设计过程口径)：outcome全inconclusive；4 worked/4 didnt/4 surprises/4 recs；metric未跑=最大缺口","fields":{}},"sitemap":{"done":true,"summary":"多端IA：Web主屏+手机私牌端，25页5跨端flow，标注现状/缺口","fields":{}},"stories":{"done":true,"summary":"6 个假设故事，P0 三支柱，5 个⭐关键假设，待验证","fields":{}}}};
+const STATE = /*__SPARK_STATE_INJECT__*/null;
 
 // 默认空状态兜底（模板未被注入时仍可预览结构）
 const EFFECTIVE_STATE = STATE || {

@@ -1,0 +1,119 @@
+{
+  "skill": "pitch",
+  "generated_at": "2026-11-23T02:20:00+08:00",
+  "project_name": "创界山·活人认证 — AI 补位座位",
+  "audience": "self-decision",
+  "audience_note": "标准枚举为 pm|design-lead|vp-or-exec|stakeholder|peer-design|mixed；本次听众是签字人自己，故自定义为 self-decision。Retro 消费本字段时应知：Asks 的拍板结果只能由用户本人回填，不存在第三方决策记录",
+  "format": "doc",
+  "duration_equivalent": "5min",
+  "pitch_file": "spark-output/pitch/ai-seat-fill.md",
+  "sections": {
+    "the_bet": {
+      "one_liner": "我押「稳座」——一个只保证不塌、故意不最优的程序座位，让差一个人的局照样开成",
+      "success_metric": "一场 5 真人 + 1 程序座位的实拍局中：全桌注意力集中次数 ≥3（沿用 brief.design_criteria.quantitative[0]），且散场无人要求把那把椅子换回真人"
+    },
+    "why_now": "三源撞车说明「程序座位」的成熟答案已存在且不需要语言模型（Automa 六原则精简 / BGA「you do not need to develop a full artificial intelligence」/ 王者「比本人弱但看起来更聪明、绝不拖后腿」）；用户疤痕具体：那晚散在「凑数的人不会玩、撑不住」；11-07 至今 Probe 仍 0 真人，补位是把 playtest 门槛从 6 真人降到 5 真人的唯一杠杆；窗口（发言/隐藏身份类系统性无程序座位）既可能是空白也可能是「做不了」，只能被实拍证伪。反面时间信号：BGA 本月付费 AI 对手提案遭社区敌意，但敌意针对「顶替真人当对手」而非「顶替缺席者」，文案必须分开",
+    "user_jtbd": {
+      "persona_name": "大林",
+      "persona_description": "31 岁聚会局长；这条线上他的损失不是输掉一局，是「我组的局当着我的面散掉」；而打分的是桌上另外 5 个会玩的人",
+      "jtbd": "当约好的 6–8 人局临时少一个人，大林想在不把不会玩的朋友塞进座位的前提下照样把局开成，从而那一局不被单个座位拖废、不半途散场；让那 5 个会玩的人觉得他总能攒成一场不塌的局；感到「局被我救住了」/ 避免「当着我的面不欢而散」的难堪",
+      "not_for": "全 AI / 半桌（1–3 真人）不在 v1：填补量是名场面稀释曲线，0 真人时没人在验活人"
+    },
+    "direction": {
+      "chosen": "稳座：AI 位的唯一 KPI 是不塌（动作永远合法、不卡轮、不冷场，犯错像新手而不是像 bug）",
+      "chosen_id": "稳座",
+      "alternatives_considered": [
+        "点名（有戏档）：不押 v1 —— humor/sarcasm/self-deprecation 在 640 局里 0 次使用、话多与胜率负相关、CICERO 说服力 10.9% 低于人类 21.1%、P6 agreeRate 37.08%，且它是唯一必须掀开三条 sidecar 红线的一档",
+        "装置（只服务设计者跑观测）：不押为独立产品，采纳为验收路径 —— 短期玩家价值 0，真实风险是装置做完就停手",
+        "零代码方案（差人时按 5 人档开局）：Bench 带回的第 4 备选，也是对本方向最不利的一条 —— scales.ts 实测 5/6 人档山道/关隘/山议间隔/放逐下限/持印门槛全同，只差认证题卡 14→16、签印门槛 3→4、局长 60→70、seatWeight 16→20，故免费方案保住八成体验；未被证伪，留给 Ask 4 的实拍局判定"
+      ],
+      "why_this_one": "那晚散在不塌上而不是散在没人说话上；稳座可完全不依赖模型交付，因此不撞确定性门禁与发布包零增量，是一个人能验收完的量级；且隐形档与有戏档刚好切在红线两侧，顺序由构建纪律决定而非偏好",
+      "key_risk": "真人桌对「刻意不聪明但守规则」的座位会不会反而更不耐烦（它看起来像故障而非新手）；以及补位可能压根不解决「约不到人」——这条痛点从未出现在 11-07 的痛点列表里",
+      "critical_assumption": "一个能合法、不卡轮、不冷场的补位座位，就能把「不欢而散」接住：机制半边有证据（仓内 release 模拟跑局 + 平衡报告），社会半边 0 证据（probe.json participants=0）",
+      "how_we_will_know_if_wrong": "实拍局出现任一即判错：① 有人主动说「宁可等那个不来的人」；② 要求把程序座位「换回真人试试」；③ 全桌注意力集中 < 3 次。此时转向零代码方案并关闭本批次"
+    },
+    "design_decisions": [
+      {
+        "decision": "AI 手番 = 翻一张卡 + ≤3 步即时结算；零隐藏状态；每个动作带三级降级链（主选→次选→兜底重抽）",
+        "rationale": "三源独立撞车说「别做真 AI」；降级链消灭最致命失败态「AI 卡住不来」；零隐藏状态同时命中预研红线「模型只见公开信息」",
+        "evidence": "bench.ref-1（World Wonders 顶/中/底；Grand Austria Hotel discard-and-redraw 且明文砍掉引擎收益只留交互）、bench.ref-2（BGA：仅按 currently visible information、不得提前结束游戏）、takeaway-1/2/3",
+        "related_screen": "补位座位面板（未设计）"
+      },
+      {
+        "decision": "座位标识公开、不可关闭、全桌一致；接管由在场者授权；补位局不给缺席本人记成绩",
+        "rationale": "标识缺失与静默接管已被两条独立证据证伪；成绩不归属本人切断「不如让 AI 替我打」的套利",
+        "evidence": "bench.ref-2（BGA 无强制标签→invisible 投诉）、ref-3（王者在场者三选弹窗 + 百里守约 14-7-8 仍被罚）、ref-4（天凤掉线者名字标红）、ref-8（2025 人机混入未告知→「你哪知道谁是真人」）",
+        "related_screen": "开局配置屏 / Host 看板（未设计）"
+      },
+      {
+        "decision": "超时兜底动作定义为「弃权」而非代决，并设弃权上限",
+        "rationale": "天凤 60s 强制摸切能同时消掉冷场与「太聪明」，但我们的认证答题/对峙出牌/山议投票是不可回退的历史事件，AI 说掉就还不回来；无上限则座位退化为隐形玩家",
+        "evidence": "bench.ref-4（天凤说明书：60s 强制摸切、结果照常计入、再入场限 5 次）、takeaway-6；engine/core/advance.ts 的 advanceAuto 语义相反（替玩家决策），不可复用",
+        "related_screen": "回合条 / 弃权态（未设计）"
+      }
+    ],
+    "asks": [
+      {
+        "ask": "AI 座位在活人认证里有没有签印权？三选一：无 / 有但不计入 N / 有且计入 N（并连带回答它能否持有活人席）",
+        "why_needed": "决定要不要动 scales.ts 的 threshold（3→4）与 seatWeight（16→20）。scales.ts:44-50 写明终局得分 = 活人席数 × seatWeight − 距峰顶格数：AI 可持席位等于凭空供应 20 分席位价值；AI 可签印等于机器人替「这是活人」作保，主题当场空转",
+        "decision_needed_by": "2026-11-27（本周五）前",
+        "impact_if_no_decision": "批次量级估不出、开工即返工；门⑨ 逐字节与 release 100 组基线是否重新基线无法定，而重基线是影响后续所有批次的口径决定"
+      },
+      {
+        "ask": "是否同意 v1 只做「稳座」，「点名/有戏」明确推到 v2 且不并线？（yes / no）",
+        "why_needed": "有戏档开工即掀开三条 sidecar 红线（确定性复现路径、离线单 HTML 包零增量、CPU p50 498.5ms 每决策）；能力数据显示它现在做大概率做成「无聊的自动发言」；两档并线等于两档都不可验收",
+        "decision_needed_by": "2026-11-27（本周五）前",
+        "impact_if_no_decision": "范围不冻结，规格与规则书要按两套口径写，doc-sync 门禁必然判红"
+      },
+      {
+        "ask": "是否正式改口径：把规格 §7 :1055「V1 不做 AI 陪练」与 Brief out_of_scope 第 4 条「不做 AI 陪练对手」改写为「V1 做补位稳座，不做陪练/对抗 AI」，并承认理由 2（五决策面≈半个 B3）仍有效？（yes / no）",
+        "why_needed": "这是签字问题不是技术问题：不改就是背着文档明令禁止的方向开工，规则书与规格会说谎，而本项目的三处同步纪律（规格/规则书/源码）正靠口径一致成立；承认理由 2 等于批准按半个 B3 计工作量而非「加个小功能」",
+        "decision_needed_by": "2026-11-30 前（开工之前，不是之后）",
+        "impact_if_no_decision": "批次无法立项；做完再改口径会把一次方向决策变成一次补文档的劳动"
+      },
+      {
+        "ask": "是否承诺在两周内排一场 5 真人 + 1 程序座位（启发式哑 AI，不接模型）的实拍局？（yes / no）",
+        "why_needed": "社会半边是唯一证据缺口，也是 Probe 挂空 16 天的同一个缺口；该场局不需要模型即可跑，且一次同时回答「补位救不救得了局」与「AI 不够聪明到底是不是问题」；若哑 AI 够用，技术路线缩到引擎侧，三条红线永不重开",
+        "decision_needed_by": "本周五（2026-11-27）前定日期与人数，2026-12-06 前完成",
+        "impact_if_no_decision": "v1 没有验收线（外部基准：人类胜率 25–30%、规则书可自学性），只能拿模拟跑局交差；而全座位启发式托管与「5 真人盯着 1 个程序座位」不是同一件事"
+      },
+      {
+        "ask": "补位能力是否必须做成开局可 ban 的开关？（yes / no）",
+        "why_needed": "行业标配三（takeaway-15）：Charterstone 明确可 ban、Root 独立扩展、Stonemaier 要求「只用几张卡」。不做开关即默认每局都有机器人在场，会直接触发「拉新人入坑被堵死」这条隐形档的已知代价",
+        "decision_needed_by": "2026-12-06 前，与实拍局同期",
+        "impact_if_no_decision": "规则书要写两版补位口径，Host 配置屏无法排期"
+      }
+    ],
+    "decision_outcomes": [
+      { "ask_id": 1, "decided_at": "2026-11-23T04:05+08:00", "decided_by": "用户本人", "outcome": "A｜无签印权、不持活人席", "vs_agent_recommendation": "建议是 B，用户选 A（更保守，主题完整性优先）", "consequence_positive": "不动 engine/scales.ts ⇒ 不重基线，门⑨ 与 release 100 组口径原样沿用；Ask 3 的数值口径部分作废", "consequence_negative": "引入测量混淆：A−B 之差混入「签印权缺失」这个第二变量，增益 ≤0 无法单独归因于补位无用；代价 = 实拍局从 6 局增至 8 局（强制追加 A′ 臂）", "reversal_path": "A′（=B 选项）无损可回退；C 永不试" },
+      { "ask_id": 2, "decided_at": "2026-11-23T04:05+08:00", "decided_by": "用户本人", "outcome": "yes｜v1 只做稳座，有戏推 v2 不并线", "vs_agent_recommendation": "一致", "consequence_positive": "不碰 sidecar ⇒ 三条红线（确定性复现 / 发布包零增量 / loopback-only）一条不掀；补位批次可独立于 B82 模型批", "consequence_negative": "隐形档副作用仍在（堵死「拉新人入坑」），须由 metric 的真人新手上桌 Counter 长期盯", "note": "恩怨地基的 v1 实现口径已更正为零契约变更（用 vetoBy / stolenTotal / successfulChallenges + State.log 离线回放），不再新增 counters 字段" },
+      { "ask_id": "G3", "decided_at": "2026-11-23T04:05+08:00", "decided_by": "用户本人", "outcome": "拆两态 seat_offline_temporary / seat_filled_by_ai；两旋钮阈值各 120s", "vs_agent_recommendation": "一致（采建议项）", "consequence_positive": "S1 施工解锁；D2 底线读数恢复干净", "precondition": "依赖新增 seat_control_assigned.controlledBy；未落地前两态不可区分" },
+      { "ask_id": 3, "status": "✅ 已办（2026-11-23，规格 v2.2）", "outcome": "§7 范围裁定改写 + 新增 §7.5 补位稳座（C1–C10）+ 四处范围条款同步（概览 / §7 / §13.2 / §13.3）+ 修订记录 v2.2；brief.out_of_scope 第 4 条采 (b) 加限定语澄清、不放宽；因 Ask 1=A ⇒ 数值口径未动、无重基线。落地时另发现并修正两处自身失误（frame-ai-seat.json 半角引号致坏 JSON；B80 §14.2 误删 L-B79-2 行首，已复原，净差异仅 1 insertion）", "note": "范围口径改写（规格 §7 :1055 + Brief out_of_scope 第 4 条）仍需在开工前完成；因选 A，数值口径不再需要改，理由 2（≈半个 B3）继续有效" },
+      { "ask_id": 4, "status": "⚠️ 仍未办（且样本量已上调为 8 局）", "note": "实拍局日期本周五（2026-11-27）前要定；这是整条链唯一真正的证据缺口" },
+      { "ask_id": 5, "status": "未拍（可 ban 开关，12-06 前）" }
+    ],
+    "risk_table": [
+      { "type": "Value", "risk": "嫌点可能是节奏对不上而非笨；补位可能不解决「约不到人」（该痛点从未进 11-07 痛点列表）", "mitigation": "5 真人 + 启发式哑 AI 实拍一局，只观察另外 4 人", "owner": "用户本人（招募那 5 位）" },
+      { "type": "Viability", "risk": "规格 :1055 与 Brief out_of_scope 双双明令不做；理由 2「五决策面≈半个 B3」仍有效", "mitigation": "Ask 3 显式改口径并三处同步", "owner": "用户本人" },
+      { "type": "Feasibility", "risk": "缺口在宿主层：无 applyAction 统一提交口、Player 无 controlledBy、FacePolicy 只在 tests/ 不得提升、advanceAuto 语义相反", "mitigation": "稳座档刻意不碰模型，工程面收到「统一提交口 + 受控座位」两项", "owner": "用户本人" },
+      { "type": "Scope/平衡", "risk": "AI 参与签印或持席会动 scales.ts 数值 ⇒ 门⑨ 逐字节与 release 100 组基线作废", "mitigation": "Ask 1 先定签印权，再定基线策略", "owner": "用户本人" }
+    ]
+  },
+  "source_skills": {
+    "frame": true, "scope": false, "audit": false, "brief": true,
+    "stories": true, "flow_web": true, "flow_mobile": false,
+    "check": true, "qa": true, "edge": true, "probe": true, "bench": true, "retro": true
+  },
+  "source_caveats": [
+    "check / edge / qa 属于 11-07 面对面主链，未作为「为 AI 座位做过的验证」引用，仅用于沿用设计标准与 ≥3 次名场面的定量判据",
+    "bench 全部为文档级/公告级/论文级证据，零截图，不得表述为实测",
+    "probe.json participants=0、themes/personas 为空，禁止下游当作已验证洞察"
+  ],
+  "thin_sections": [
+    "design_decisions：补位座位尚未设计任何屏幕，3 条均为机制/契约层决策；建议 /flow-web 补「补位座位面板 + 弃权态 + 标识」",
+    "the_bet 的第二判据（无人要求换回真人）尚无采集手段，需在实拍局观察协议里补一条"
+  ],
+  "unresolved_by_this_pitch": [
+    "第 4 备选（零代码按 5 人档开局）未被证伪，被留在桌面上而非推翻；它的生死取决于 Ask 4 的实拍局"
+  ]
+}

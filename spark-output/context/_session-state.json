@@ -1,9 +1,25 @@
 {
-  "current_skill": "flow-web",
+  "current_skill": "prd",
   "workspace_path": "D:/<repo>/creativemountain-host",
   "original_workspace_path": "D:/<repo>",
-  "completed_skills": ["brief", "frame", "probe", "journey", "stories", "sitemap", "flow-web"],
-  "current_phase": "Phase C 完成（主屏 flow-web 已交付；手机私牌端待 flow-mobile）",
-  "next_hint": "check / flow-mobile / edge",
-  "updated_at": "2026-11-07T19:40:00Z"
+  "completed_skills": [
+    "brief",
+    "frame",
+    "probe",
+    "journey",
+    "stories",
+    "sitemap",
+    "flow-web",
+    "check",
+    "edge",
+    "qa",
+    "retro",
+    "bench",
+    "pitch",
+    "metric",
+    "prd"
+  ],
+  "current_phase": "AI 补位方向：Ask1=A / Ask2=yes / G3 拆两态120s / G5 web端 已裁，Ask3 已落地（规格 v2.2 + 门禁修复 d153af9，13 门全绿 + release 100 组零漂移）；仍待办：G4 seed、Ask4 实拍局(8局)、Ask5 可ban开关、S1/S3 施工",
+  "next_hint": "extract / flow-mobile / scope",
+  "updated_at": "2026-11-22T19:11:27.207Z"
 }
