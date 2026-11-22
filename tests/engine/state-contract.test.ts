@@ -8,12 +8,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 import { createInitialState, clearTurnStates, EMPTY_TURN, type State } from '../../engine/core/state.ts';
 import { performAction, advanceTurn } from '../../engine/core/turn-runner.ts';
 import { currentPlayer } from '../../engine/core/round.ts';
 // B75：council.vetoBy 的读取侧容错要用真实山议局面与真实结算入口。
 import { castVote, resolveCouncil } from '../../engine/core/council.ts';
+import { emptyCertification } from '../../engine/core/certification.ts';
+import { installTheme } from '../../engine/core/setup.ts';
+import type { ThemePack } from '../../engine/types/theme.ts';
 import { councilScene, mk } from './fixtures.ts';
 
 test('State 契约：Player 带 turn 回合内临时状态，初始为 EMPTY_TURN', () => {
@@ -169,4 +173,31 @@ test('B77：EMPTY_TURN 显式含 statusGrantedThisTurn=false，且 clearTurnStat
       .map((p) => ({ ...p, turn: { ...p.turn, statusGrantedThisTurn: true } })),
   };
   assert.equal(clearTurnStates(dirty).players[0]!.turn.statusGrantedThisTurn, false, 'round 末安全网必须清掉');
+});
+
+// ---------- 2026-11-23 缺口取证补登：空认证状态的**三处产地**必须同源 ----------
+//
+// 「一张干净的认证桌」在项目里有三份**手写**字面量，而不是三处调用同一个工厂：
+//   · `engine/core/certification.ts` 的 `emptyCertification()`（流程内重置用）
+//   · `engine/core/state.ts` 的 `createInitialState`（新建局）
+//   · `engine/core/setup.ts` 的 `resetForNewGame`（换主题重开）
+// 三份的**值**漂移 TS 抓不到（`round: 1` 在三处都合法），而 `round` 从 0 变 1 正是 B9
+// 修掉的那个「第 1 轮空转 ⇒ 兜底触发率 96%」的成因。⇒ 这里不重构调用关系
+// （`certification.ts` 反向 import `state.ts` 会撞上 flow.ts 文件头写明的循环依赖约束），
+// 只把「三处产出必须逐字段相等」钉住：任何一处单独改动即红。
+test('空认证状态三处产地逐字段同源（新建局 / 换主题重开 / 流程内重置）', () => {
+  const base = createInitialState({ players: 3, seed: 1, deckSize: 40 });
+  const clean = emptyCertification();
+  const fresh = base.certification;
+  const theme = JSON.parse(readFileSync(resolve('themes', 'xianxia2026', 'theme.json'), 'utf8')) as ThemePack;
+  const reinstalled = installTheme(base, theme).certification;
+
+  assert.deepEqual({ ...fresh }, { ...clean },
+    'state.ts 的手写字面量已与 emptyCertification() 漂移');
+  assert.deepEqual({ ...reinstalled }, { ...clean },
+    'setup.ts resetForNewGame 的手写字面量已与 emptyCertification() 漂移');
+  // 单独把最要紧的一条值摆出来：deepEqual 的红话说不出「为什么是这条」。
+  assert.equal(fresh.round, 0, '新建局必须是「第 1 轮尚未开始」（B9：round 从 0 起，否则第 1 轮空转）');
+  assert.equal(reinstalled.round, 0, '换主题重开同样从 0 起');
+  assert.equal(clean.pending.length, 0);
 });

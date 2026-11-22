@@ -697,6 +697,19 @@ function render(): void {
   const nameOf = (seat: number): string => identityName(s, theme, seat);
   const t = termExpander(theme.terms, nameOf);
 
+  /**
+   * 引擎提交的公共收口：成功换新局，失败保持原局并重绘。
+   *
+   * ⚠️ 「失败不解释」在这一条收口上是**有意**的，不是疏漏：按钮可点性已由 `uiAllows` 过闸，
+   *   走到这里 yet 被拒只可能是「面板过期 / 局面已被别处推进」，重绘即自愈。
+   *   需要把拒因说出去的入口（否决 / 互签 / 复议票 / 质疑 / 合规裁定）各自保留自己的分支，
+   *   **不走本收口**——R-2「拒绝不沉默」的差异是语义的一部分，抽进公共形状就等于抹平它。
+   */
+  const commit = (r: { readonly ok: boolean; readonly state: State }): void => {
+    ui.state = r.ok ? r.state : s;
+    render();
+  };
+
   const status = el('div', { class: 'status' });
   status.append(el('span', { text: '回合 ' + s.round + ' / 上限 ' + s.scales.globalRoundLimit }));
   status.append(el('span', { text: '当前' + t('{player}') + ' 座' + currentPlayer(s) }));
@@ -742,11 +755,9 @@ function render(): void {
           render();
           return;
         }
-        const r = castVote(s, ui.seat, target);
-        ui.state = r.ok ? r.state : s;
-        render();
+        commit(castVote(s, ui.seat, target));
       },
-      () => { const r = resolveCouncil(s); ui.state = r.ok ? r.state : s; render(); },
+      () => commit(resolveCouncil(s)),
       // ⚠️ B75：否决 —— 入口只有引擎的 `useCouncilVeto` 一处；被拒时把 note 交出去（拒绝不沉默）。
       //   面板上的按钮本身已由 `uiAllows` 把关，这里再核一次是**提交路径**的闸（与投票同款双保险）。
       () => {
@@ -760,7 +771,7 @@ function render(): void {
   // 认证面板
   if (needsCertificationAction(s) || s.certification.pending.length > 0) {
     panels.push(renderCertification(s, theme, ui.seat, {
-      onSign: (target) => { const r = certifySign(s, ui.seat, target); ui.state = r.ok ? r.state : s; render(); },
+      onSign: (target) => commit(certifySign(s, ui.seat, target)),
       onChallenge: (target, questions) => {
         const ch = certifyChallenge(s, ui.seat, target);
         if (!ch.ok) { alert(t(ch.note ?? '无法发起质疑')); return; }
@@ -768,9 +779,9 @@ function render(): void {
         ui.state = withLog;
         render();
       },
-      onAbstain: (target) => { const r = certifyAbstain(s, ui.seat, target); ui.state = r.ok ? r.state : s; render(); },
-      onJudge: (target, passed) => { const r = certifyAnswer(s, ui.seat, target, passed); ui.state = r.ok ? r.state : s; render(); },
-      onAppeal: (target) => { const r = certifyAppeal(s, ui.seat, target); ui.state = r.ok ? r.state : s; render(); },
+      onAbstain: (target) => commit(certifyAbstain(s, ui.seat, target)),
+      onJudge: (target, passed) => commit(certifyAnswer(s, ui.seat, target, passed)),
+      onAppeal: (target) => commit(certifyAppeal(s, ui.seat, target)),
       onMutualSign: (target) => {
         // ⚠️ **B67：双人互验的互签**（§5.5）—— 待认证者本人给另一位待认证者签印。
         //   与 `onSign`（认证人签待认证者）**语义不同** ⇒ 走独立入口 `certifyMutualSign`。

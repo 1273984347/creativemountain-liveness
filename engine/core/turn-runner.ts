@@ -125,13 +125,6 @@ function resolveTile(state: State, seat: number): State {
   }
   return next;
 }
-/**
- * 开局：发牌已在 createInitialState 完成；此处只补开局天机与首回合准备。
- */
-export function startGame(state: State): State {
-  return state;
-}
-
 // 20 面指令表**不在本文件**（B78 §4 R3）：唯一出处是 `engine/core/instruction-table.ts`，
 // 消费方是 `web/ui/log.ts` 与 `build/build-ir.mjs`；引擎只报骰面与指令序号（见 :275/:418 的 ask 日志）。
 
