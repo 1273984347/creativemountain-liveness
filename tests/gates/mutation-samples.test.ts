@@ -15,7 +15,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { runNode } from './harness.ts';
+import { runNode, toLf, toCrlf, assertCrlfInjected } from './harness.ts';
 import { DOC_SYNC_INCLUDE, makeIsolatedRepo, removeIsolatedRepo } from '../../tools/repo-copy.mjs';
 
 const ROOT = process.cwd();
@@ -133,15 +133,43 @@ test('负样本：规格为 CRLF 行尾时 doc-sync 仍判绿（行尾稳健性�
   const dir = makeIsolatedRepo(ROOT, DOC_SYNC_INCLUDE);
   try {
     const specPath = resolve(dir, SPEC_REL);
-    const original = readFileSync(specPath, 'utf8');
-    const crlf = original.replace(/\r?\n/g, '\r\n');
-    assert.notEqual(crlf, original, '必须真的转换行尾，否则证明不了任何东西');
+    // 旧写法（作废留痕，勿删）：
+    //   const original = readFileSync(specPath, 'utf8');
+    //   const crlf = original.replace(/\r?\n/g, '\r\n');
+    //   assert.notEqual(crlf, original, '必须真的转换行尾，否则证明不了任何东西');
+    // ⇒ 前提「源是 LF」由环境决定：`core.autocrlf=true` 且无 `.gitattributes` 时，
+    //   副本里读到 CRLF 是合法状态，于是转换变空操作、守卫假红（见下方「守卫自证」）。
+    const lf = toLf(readFileSync(specPath, 'utf8'));
+    const crlf = toCrlf(lf);
+    assertCrlfInjected(lf, crlf);
     writeFileSync(specPath, crlf, 'utf8');
     const run = runNode([resolve(dir, 'tools', 'doc-sync.mjs')], { cwd: dir });
     assert.equal(run.code, 0, `CRLF 下 doc-sync 必须判绿（不得误报）：\n${run.output}`);
   } finally {
     removeIsolatedRepo(dir);
   }
+});
+
+// ---------- 守卫自证：行尾变体构造不得依赖源文件当前行尾 ----------
+//
+// ⚠️ **2026-11-23 门② 假红复盘（作废留痕，不删旧代码说明）**：
+//   上一节旧写法是 `original.replace(/\r?\n/g, '\r\n')` + 断言「必须真的转换行尾」。
+//   它把**环境状态**当成了**被测事实**：仓库 `core.autocrlf=true` 且无 `.gitattributes`
+//   ⇒ 工作树文件被物化成 CRLF 是合法常态（本仓现存 `docs/预研/data/decisions-sample.jsonl`
+//   与 `p0-smoke-choice.json` 即 `i/lf w/crlf`，`git status` 对此沉默）。
+//   源已是 CRLF 时那次 replace 是**空操作** ⇒ 守卫报「必须真的转换行尾」——假红。
+//   取证：插桩 8 轮全量套件期间规格文件 mtime 与字节数**完全未变** ⇒ 不存在写者与竞态，
+//   纯粹是前提不成立。⇒ 现在改为「先归一化成 LF，再构造 CRLF 变体，并证明注入真的发生」。
+test('守卫自证：CRLF 变体构造在源已是 CRLF 时仍必须产生真差', () => {
+  const alreadyCrlf = 'a\r\nb\r\nc\r\n';
+  // 旧写法在这个输入上必须是空操作 —— 这一条就是把假红根因钉在文档上，不许后来人重犯
+  assert.equal(alreadyCrlf.replace(/\r?\n/g, '\r\n'), alreadyCrlf,
+    '旧写法在 CRLF 源上表现为空操作（这正是 2026-11-23 假红的成因）');
+  // 新写法：无论源是 LF、CRLF 还是 mixed，都必须得到「LF 基线 + 真差 CRLF 变体」
+  const base = toLf(alreadyCrlf);
+  assertCrlfInjected(base, toCrlf(base));
+  const mixed = 'a\nb\r\nc\r\n';
+  assertCrlfInjected(toLf(mixed), toCrlf(toLf(mixed)));
 });
 
 // ---------- 负样本：覆盖边界表**逐条对应**（B52）----------

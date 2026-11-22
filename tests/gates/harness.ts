@@ -6,6 +6,7 @@
 // 为什么需要它：把「人为制造一处漂移 → 必须判红」从验收清单里的一句话
 // 变成**每次跑测试都在验的常驻用例**——否则门禁交付后没人会再验它。
 
+import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
@@ -78,3 +79,40 @@ export function runNodeTest(glob: string | readonly string[]): GateRun {
   const globs = typeof glob === 'string' ? [glob] : glob;
   return runNode(['--test', ...globs]);
 }
+
+// ---------- 行尾（EOL）变体构造：单一出处 ----------
+//
+// ⚠️ 为什么必须收进 harness，而不是各测试文件自己写：两处「CRLF 行尾稳健性」样本
+//   原本各写了一份 `s.replace(/\r?\n/g, '\r\n')`，**前提漂移到两个方向**（2026-11-23 复盘）：
+//   · `mutation-samples` 那份断言「转换必须真的改变内容」⇒ 源已是 CRLF 时空操作 **假红**；
+//   · `doc-sync-c8-negative` 那份没有 prove-injection 断言 ⇒ 源已是 CRLF 时空操作仍判绿 **假绿**。
+//   而 `core.autocrlf=true` + 无 `.gitattributes` 让「工作树是 CRLF」成为合法常态
+//   （本仓现存 `docs/预研/data/decisions-sample.jsonl`、`p0-smoke-choice.json` 即 `i/lf w/crlf`），
+//   所以前提不能依赖环境——**同一口径只留一处实现**（B52 / E92 老规矩）。
+
+/** 归一化成 LF：作为行尾样本的**基线**，与源文件被 git 物化成什么行尾无关。 */
+export function toLf(s: string): string {
+  return s.replace(/\r\n/g, '\n');
+}
+
+/** 由 LF 基线构造 CRLF 变体（内部先归一化，保证输入形状已知）。 */
+export function toCrlf(s: string): string {
+  return toLf(s).replace(/\n/g, '\r\n');
+}
+
+/** 计数（`split` 长度减一），避免各处再写一份正则计数口径。 */
+const countOf = (s: string, needle: string): number => s.split(needle).length - 1;
+
+/**
+ * **证明注入真的发生**（对齐「变异探针必须自证注入」纪律）：
+ * ① 变体必须与基线不同；② `\r\n` 数必须恰好等于基线换行数；③ 不得残留裸 CR。
+ * 任一不满足，说明这条行尾样本什么都没测——**宁可比样本更早红，也不要静默空操作**。
+ */
+export function assertCrlfInjected(lf: string, crlfVariant: string): void {
+  const lines = countOf(lf, '\n');
+  assert.ok(lines > 0, 'LF 基线不含换行 ⇒ 行尾样本没有可构造的变体（源形状异常，别装作测过了）');
+  assert.notEqual(crlfVariant, lf, 'CRLF 变体必须真的改变内容，否则本样本什么都没测');
+  assert.equal(countOf(crlfVariant, '\r\n'), lines, `CRLF 变体的 \\r\\n 数必须等于基线换行数（期望 ${lines}）`);
+  assert.equal(countOf(crlfVariant, '\r'), lines, '不得残留裸 CR：每个 CR 都必须与 LF 成对');
+}
+

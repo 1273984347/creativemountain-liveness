@@ -20,6 +20,7 @@ import {
   COVERAGE_BOUNDARIES,
   parseSpecCoverageRows,
 } from '../../tools/coverage-boundaries.mjs';
+import { assertCrlfInjected, toCrlf, toLf } from './harness.ts';
 
 const SPEC_PATH = resolve('docs/superpowers/specs/2026-11-07-creative-mountain-liveness-design.md');
 
@@ -154,10 +155,20 @@ test('C8 负样本：id 互换必须报「第 N 条错位」（顺序层可达�
 //   ⇒ 现在解析改为**纯行级**定位（取第一个连续表格块）⇒ 与换行符无关。
 //   本例把规格转成 CRLF ⇒ 结果必须与 LF **完全一致**（仍是 12 条、仍判绿）。
 test('C8：规格为 CRLF 行尾时解析结果必须与 LF 一致（行尾稳健性回归锁）', () => {
-  const crlf = REAL_SPEC.replace(/\r?\n/g, '\r\n');
+  // 旧写法（作废留痕）：`const crlf = REAL_SPEC.replace(/\r?\n/g, '\r\n');`
+  // ⚠️ 它**没有证明注入发生** ⇒ 当规格被 git 物化成 CRLF（`core.autocrlf=true` 且无
+  //   `.gitattributes`，本仓现存 `i/lf w/crlf` 文件即为实例）时，replace 是空操作，
+  //   这条回归锁会**照常判绿**——假红看得见，假绿看不见，后者更危险。
+  // ⇒ 现在走 harness 的单一口径：先归一化出 LF 基线，再构造 CRLF，并自证注入。
+  const lf = toLf(REAL_SPEC);
+  const crlf = toCrlf(lf);
+  assertCrlfInjected(lf, crlf);
+  const parsedLf = parseSpecCoverageRows(lf);
   const parsed = parseSpecCoverageRows(crlf);
+  assert.equal(parsedLf.ids.length, 12, 'LF 基线本身必须解析出 12 条（否则基线就是坏的）');
   assert.equal(parsed.ids.length, 12, 'CRLF 下必须仍解析出 12 条（不得吃进后续章节的表格行）');
-  assert.deepEqual(parsed.ids, CODE_IDS, 'CRLF 下的 id 序列必须与 LF 完全一致');
+  assert.deepEqual(parsed.ids, parsedLf.ids, 'CRLF 与 LF 的解析结果必须逐字一致');
+  assert.deepEqual(parsed.ids, CODE_IDS, 'CRLF 下的 id 序列必须与机器清单完全一致');
   const r = check(crlf);
   assert.equal(r.ok, true, `CRLF 下 C8 必须判绿：${r.detail}`);
 });

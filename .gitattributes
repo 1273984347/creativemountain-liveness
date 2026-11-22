@@ -1,0 +1,32 @@
+# 统一以 LF 物化工作树。
+#
+# 起因（2026-11-23 复盘）：本机 `core.autocrlf=true`，而仓库此前**没有** `.gitattributes`
+#   ⇒ 任何一次 git 物化都会把 LF blob 落成 **CRLF 工作树文件**，并且 `git status` 对此沉默
+#   （diff 时按 autocrlf 归一化，看着"干净"）。本仓当时现存两个实例：
+#   `docs/预研/data/decisions-sample.jsonl`、`docs/预研/data/p0-smoke-choice.json`（`i/lf w/crlf`）。
+#   后果不是风格问题：门禁两处「CRLF 行尾稳健性」样本把「源是 LF」当成前提 ⇒
+#   一处**假红**（门② `tests/gates/mutation-samples.test.ts` 的「必须真的转换行尾」），
+#   一处**假绿**（`tests/gates/doc-sync-c8-negative.test.ts` 的回归锁静默空操作仍判绿）。
+# 守卫已改为与源行尾无关（单一口径见 `tests/gates/harness.ts` 的 toLf / toCrlf / assertCrlfInjected）；
+# 本文件负责把环境歧义本身消掉，免得下一个样本再踩同一个前提。
+* text=auto eol=lf
+
+# 二进制：既不做行尾转换，也不做差异处的关键字匹配
+*.pdf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.bmp binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.eot binary
+*.zip binary
+*.gz binary
+*.safetensors binary
+*.onnx binary
+*.bin binary
