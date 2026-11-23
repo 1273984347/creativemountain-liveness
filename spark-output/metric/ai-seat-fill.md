@@ -2,7 +2,7 @@
 
 - **生成时间**：2026-11-23T02:55:00+08:00
 - **数据工具**：自建（`State.log` 引擎内建事件源 + `web/main.ts:175` 导出存档 + B85 独立实拍页的 `PlaytestEventStore` / 观察员面板）。**不引入任何第三方分析 SDK** —— 离线单 HTML 双击即玩、发布包零增量、sidecar loopback-only 三条红线会同时被违反；合规上也不收集个人字段
-- **现有埋点覆盖**：**partial**（机器侧 14 个 `kind` 已可用；B85 已补齐实拍墙钟、接管、同频、面板注视与局后自报；真人数据仍为 0）
+- **现有埋点覆盖**：**partial**（`State.log` 现有 16 个 `kind`：14 个既有事件 + B84 的 `ai_action_committed` / `ai_forfeit`；B85 已补齐实拍墙钟、接管、同频、面板注视与局后自报；真人数据仍为 0）
 - **复盘节奏**：每局一次，当场结
 - **Owner**：设计师自己 —— 且 owner = 观察员 = 参与者，三重角色未分离，是本蓝图最大的风险项（见下）
 
@@ -11,7 +11,7 @@
 - **构建**：`npm run build` → `dist/创界山-活人认证-实拍.html`。
 - **URL 配置**：打开实拍 HTML 后追加 `?playtest=1&seed=<uint32>&aiSeat=<0..5>`；固定 6 人局，`aiSeat` 为程序座位。
 - **导出**：观察员侧栏「导出实拍记录」生成 `创界山-实拍-<seed>-<aiSeat>.json`，含 `schema/config/metadata/events/snapshot`；`snapshot` 保留序列化 `State.log`，墙钟与观察事件不写回 `State.log`。
-- **Ask 4 = `ready_to_schedule`**：采集工具已就绪，仍缺用户确定日期与 5 位真人参与者。
+- **Ask 4 = `ready_to_schedule`（ready to schedule once date, 5 participants, and recruitment questions are set）**：采集工具已就绪，仍缺确定日期、5 位真人参与者与 K8 两道招募问题。
 - **Ask 5 仍未拍板**：生产 AI 座位选择器 / 可 ban 开关未实现；独立实拍页不是生产功能，也不进入发布包。
 
 ---
@@ -22,7 +22,7 @@
 | --- | --- | --- | --- |
 | H1 | **测量工具进入被测量系统**：你选了实时面板，而面板本身是新的注视点 | NSM 的核心事件是"全桌朝向同一人"。屏幕上有计数器，"看屏幕"就会与"看答题者"混淆 —— 既能抬高也能压低计数 | 面板**只给观察员看**、折叠侧栏；「记一次同频」**必须人按，不得由面板事件自动计入**；导出 JSON 是唯一真值源。**做不到侧栏隔离就退回导出离线扫，不要实时面板** |
 | H2 | **观察员正在打牌** | "全桌注意力集中"要求你看向另外 5 个人，而你那一局在管自己的手牌和认证题面。漏记的方向还不可控：你越投入，漏得越多 | 把外部视角转成**内部自报 + 日志锚点**：机器从 log 给出锚点轮次，局后每人回答「刚才第 4 轮那次质疑，你是不是全桌都在看谁」。你只按一次键 + 收 5 份自报，不占任何座位 |
-| H3 | **seed 恒为 42** | `web/main.ts:95` 与 `:112` 写死 `seed: 42`，UI 无入口。实拍攒 3 局得到的是同一分布的 3 次复现，不是 3 个独立样本 —— 所有跨局稳定性结论作废 | **B84 已补 seed UI/export；B85 实拍 URL 必须显式带 `seed`**。A/B 至少 2 个不同 seed；未记录的局仍降级为"单局个案" |
+| H3 | **历史默认 seed=42；多局复用同一 seed 仍会失去样本独立性** | B84 前 UI 无 seed 入口；现在 `web/main.ts` 已提供 seed 输入，B85 实拍 URL 也可显式指定。若实拍仍复用同一 seed，得到的只是同一分布的复现，跨局稳定性结论作废 | **B84 已补 seed UI/export；B85 实拍 URL 必须显式带 `seed` 并写入 `config.seed`**。A/B 至少 2 个不同 seed；未记录的局仍降级为"单局个案" |
 | H4 | **引擎 log 是逻辑时间，没有墙钟时间** | "不卡轮"是本方向的 KPI，但 `LogEntry` 只有 `round`/`turnIndex`，测不出桌上真正等了多久 —— 而这正是被替代者（新手人类）最被嫌弃的地方 | **B85 已在独立实拍页新增 `ai_turn_duration_ms` 与 `human_turn_duration_ms`**，随实拍 JSON 导出且不写回 `State.log`；没有这条，Driver 1 仍为空话 |
 
 ---
@@ -50,8 +50,8 @@ mean(每局全桌同频时刻数 | A 组：5 真人 + 1 程序座位，按 6 人
 | D1 | AI 手番墙钟耗时中位 | `median(ai_turn_duration_ms)` vs `median(human_turn_duration_ms)` | ≤ 人类同局中位 1.0×，绝对 ≤ 3000ms | `ai_turn_duration_ms`, `human_turn_duration_ms` | ✅ exists（B85 实拍页） |
 | D2 | 真人代操作次数 | `count(human_takeover_click)/局` | **= 0**（底线非优化项） | `human_takeover_click`, `seat_control_assigned` | ✅ exists（B84/B85） |
 | D3 | AI 参与的认证/质疑事件数 | `count(cert_event where actor/target == aiSeat)/局` | ≥ 1.0（低于 1 判"隐形座位"） | `cert_event` | ⚠️ partial（待验签印是否落 log） |
-| D4 | 非法动作率 + 降级深度 | `count(legal==false)/count(*)`；`degrade_level` 分布 | 非法率 **0**；兜底档占比 ≤ 25% | `ai_action_committed`, `ai_forfeit` | ⚠️ partial |
-| D5 | 组局兑现率 | `因补位开成的局 / 原计划缺人的局` | ≥ 60%（3 周内 ≥2 场是真实缺人场景） | `game_start`, `new_player_introduced` | ❌ missing |
+| D4 | 非法动作率 + 降级深度 | `count(legal==false)/count(*)`；`degradeLevel` 分布 | 非法率 **0**；兜底档占比 ≤ 25% | `ai_action_committed`, `ai_forfeit` | ✅ exists（B84/B85；120s timeout 对 B85 同步自动步 N/A） |
+| D5 | 组局兑现率 | `因补位开成的局 / 原计划缺人的局` | ≥ 60%（3 周内 ≥2 场是真实缺人场景） | `game_start`, `new_player_introduced` | ⚠️ partial（`game_start` 已存在；局外分母仍缺） |
 
 切片维度统一按：A/B 组、决策面（move/gate/trial/duel/山议/认证）、主题包（4 套）、seed、真人新手在场与否、第 1/2/3 局。
 
@@ -70,6 +70,8 @@ D5 特别说明：分母（谁本来要来、实际来了几个）**只能局外
 | D5 | **真人新手上桌次数** | 补位一旦可用，"拉不熟的人凑数"这条入坑路径就消失（Frame 显式记录的隐形档代价） | ≥ 1/4 局；连续 4 局为 0 就把"邀请真人新手"写进组局规则，不靠自觉 |
 | 测量有效性 | **面板注意力窃取比** | 面板成为新注视点，把要测的东西测没了 | `count(gaze_panel)/count(table_attention_peak) ≤ 0.3`，超过退回离线扫 |
 
+**B85 弃权口径**：实拍 AI 走同步 `runSeatStep`，不经过 120s 等待；`reason=='timeout'` 对 B85 为 **N/A**。本切片只统计 `blocked` / `illegal_choice` / `engine_rejected` 等同步原因，不把未实现的超时分支写成已覆盖。
+
 ---
 
 ## 💊 Health Metrics（5 个，阈值全部来自仓库既有数值，不是我编的）
@@ -79,24 +81,24 @@ D5 特别说明：分母（谁本来要来、实际来了几个）**只能局外
 | 位次胜率极差（补位档**单列**） | B80 平衡底线 | `balance.ts:28` 报告口径 **≤8pp**；`:41` 门禁 **≤14pp**；`:49` RMS **≤6.5pp**（固定 seed 1000 × 每档 100 局） | >8pp 单列告警；>14pp 阻断发布。⚠️ 复述 `scales.ts:44-50`：seatWeight ≥ 山道长度时席位成绝对优势，极差会从 1–3pp 反弹到 **13pp**（实测标定） |
 | 关隘试炼通过率 | B26 标定区间 | 逐牌区间：`t_mirror [85,100]`、`t_sword [85,100]`、`t_oath [45,70]`（`balance.ts:60`） | 任一越界即停，先归因再谈数值 |
 | **门⑨ 冒烟 + release 100 组基线一致性** | 确定性复现路径不被补位/模型污染 | **逐字节一致**（不是"接近"） | 漂移即按 E116 停下归因；**若 Ask 1 裁定要改 scales 数值，必须显式申报重基线并写进规格，禁止悄悄过** |
-| 导出可测性 | 该局数据是否作废 | 含 themeId + log + 非默认 seed ⇒ **100%** | 任意一局作废即当场补跑，不留到攒样本 |
+| 导出可测性 | 该局数据是否作废 | 含 `config.seed` + `metadata.themeId` + 可解析且含 `log` 的 `snapshot` ⇒ **100%** | 任意一局作废即当场补跑，不留到攒样本 |
 | 非法动作率 | 引擎契约（`performAction` 拒绝时返回引用相等） | **0** | 出现 1 次按缺陷处理，门禁红而非回归阈值红 |
 
 ---
 
-## 🔧 埋点缺口清单（给工程师；共 12 项 = 10 must + 2 should；must 覆盖 11 类事件名，因墙钟一行含 AI 与人类两个事件）
+## 🔧 埋点状态清单（原缺口，共 12 项 = 10 must + 2 should；must 覆盖 11 类事件名，因墙钟一行含 AI 与人类两个事件）
 
 ### 🔴 Must
 
 | 事件 | 触发时机 | 字段 | 频率 | 位置 / 待办 | 状态 |
 | --- | --- | --- | --- | --- | --- |
-| `game_start` | `newGame()` 后 | themeId/players/mode/**seed**/**aiSeat** | 每局 1 | `web/main.ts:109-121`，**先加 seed 入口（现写死 42）** | ⚠️ 部分 |
-| `seat_control_assigned` | 开局装配逐座位 | seat/controlledBy/policyId | 每局 N | `engine/core/state.ts` 的 `Player` 增 `controlledBy` + `setup.ts:103` 写 setup 行 | ❌ |
-| `ai_action_committed` | AI 动作落账 | round/seat/actionKey/legal/**degrade_level**/source | 每次 | 缺的统一提交口 `applyAction(state, action)`（现分派 11 类） | ❌ |
-| `ai_forfeit` | 超时或无合法招弃权 | round/seat/reason | 事件即报 | **新增 `LogEntry.kind`（现词表无）** + 同步模拟器前缀扫描契约 | ❌ |
+| `game_start` | B85 实拍页 `newGame()` 与 AI 座位配置后 | seed/aiSeat；metadata 另含 themeId/players/mode | 每局 1 | `web/main.ts` 实拍初始化 + `web/playtest-events.ts`；B84 seed UI/export 已存在 | ✅ exists（实拍事件，不进 `State.log`） |
+| `seat_control_assigned` | 开局装配及实拍 aiSeat 配置 | seat/controlledBy（无 policyId） | 每局 N | `engine/core/state.ts` 的 `Player.controlledBy` + `web/main.ts::applyPlaytestAiSeat`；随 State/snapshot 导出，不是独立 LogEntry | ✅ exists |
+| `ai_action_committed` | AI 动作落账 | round/turnIndex/seat/actionKey/durationMs/**degradeLevel**/seatMode/legal/source | 每次 | `engine/core/seat-runner.ts` 经 `applyAction` 写引擎日志；`web/playtest-controller.ts` 写完整实拍事件（source 当前 heuristic） | ✅ exists |
+| `ai_forfeit` | 同步无合法动作或被拒绝；120s timeout 对 B85 同步自动步 **N/A** | round/turnIndex/seat/reason/durationMs/**seatMode** | 事件即报 | `engine/core/seat-runner.ts` 写含 seatMode 的引擎日志；`web/playtest-controller.ts` 写含 durationMs 的实拍事件 | ✅ exists（同步弃权；timeout N/A） |
 | `ai_turn_duration_ms` / `human_turn_duration_ms` | 轮到→产出动作 | round/seat/durationMs | 每手番 | `web/playtest-controller.ts` UI 侧墙钟；只进实拍事件表 | ✅ exists |
-| `human_takeover_click` | 真人替非自己控制的座位点按钮 | seat/control | 事件即报 | `web/playtest-controller.ts`；面板/工具栏内部点击不计入 | ✅ exists |
-| `cert_event` | 质疑启动/签印落账/判定 | round/actor/target/signs_count/threshold/result/**ai_participated** | 事件即报 | `certification.ts` —— **先验签印计数是否已完整落 log**（当前仅见 `[被动:certify_free_pass]` 一处 `kind:'passive'`） | ⚠️ 待验 |
+| `human_takeover_click` | 真人替非自己控制的座位点按钮 | seat/control | 事件即报 | `web/playtest-controller.ts`；面板/工具栏内部点击不计入；只进 `PlaytestEventStore`，不进 `State.log` | ✅ exists |
+| `cert_event` | 质疑启动/签印落账/判定 | round/actor/target/signs_count/threshold/result/**ai_participated** | 事件即报 | `certification.ts` —— **先验签印计数是否已完整落 log**（当前仅见 `[被动:certify_free_pass]` 一处 `kind:'passive'`）；B85 不合成该事件 | ⚠️ 待验（不在 B85 范围） |
 | `table_attention_peak` | 观察员判定全桌朝向同一人 ≥3s | **anchorRound/anchorLogIndex**/focusSeat/durationSec | 事件即报 | 可折叠观察员侧栏「记一次同频」；锚点指回 `State.log` | ✅ exists |
 | `post_game_poll` | 局后 15 分钟内每位真人 3 题 | seat/wantHumanBack/wouldReplay/feltRobotic/recalledPeakCount/oneLineAnomaly | 每局×每人 | 实拍侧栏局后自报表；草稿跨重渲染保留 | ✅ exists |
 | `game_export_snapshot` | 点「导出实拍记录」 | schema/config/metadata/events/snapshot | 每局 1+ | `web/playtest-panel.ts` → `创界山-实拍-<seed>-<aiSeat>.json`；含实拍事件与序列化 State | ✅ exists |
@@ -105,7 +107,7 @@ D5 特别说明：分母（谁本来要来、实际来了几个）**只能局外
 
 | `gaze_panel`（seat/durationMs，**显式「开始看面板 / 结束看面板」，不自动监听注意力**）· `new_player_introduced`（局外一行表） |
 
-现有可复用事件源（14 个 `kind`）：`setup / move / ask / card / equip / passive / status / duel / gate / trial / barrier / exhaustion / heaven / goal`，`actor` = 座位号，`-1` = 系统行。
+现有可复用事件源（16 个 `kind`）：`setup / move / ask / card / equip / passive / status / duel / gate / trial / barrier / exhaustion / heaven / goal / ai_action_committed / ai_forfeit`，`actor` = 座位号，`-1` = 系统行。
 
 ---
 
@@ -113,7 +115,7 @@ D5 特别说明：分母（谁本来要来、实际来了几个）**只能局外
 
 | 验收标准 | 观测 | 缺口 |
 | --- | --- | --- |
-| 散场无人要求换回真人（Pitch 判据） | `post_game_poll.want_human_back == false` × 5 | must |
+| 散场无人要求换回真人（Pitch 判据） | `post_game_poll.wantHumanBack == false` × 5 | must |
 | 全桌注意力集中 ≥3 次/局（Brief 定量） | `table_attention_peak`/局 | must |
 | 铺垫期人均分心 <2 次（Brief 定量） | `handset_peek`/`gaze_panel` 人次 | should |
 | 人类胜率 25–30%（外部基准 takeaway-17） | 模拟 + 实拍名次分布；⚠️ P6 agreeRate 37.08% 且预研明令不下强度结论 ⇒ v1 只能以启发式档给数 | must |
@@ -146,12 +148,12 @@ D5 特别说明：分母（谁本来要来、实际来了几个）**只能局外
 
 ---
 
-## 实拍前状态核对（Ask 4 已就绪，仍待用户排期）
+## 实拍前状态核对（采集条件就绪，排期输入仍待齐）
 
 1. **✅ seed 可指定并进导出（B84）**；B85 实拍 URL 还必须显式带 `seed`，否则所有跨局结论作废（H3）。
 2. **✅ `seat_control_assigned.controlledBy` 与 `aiSeat` 可识别（B84）**；否则 A/B 无法分组，NSM 无法计算。
 3. **⚠️ 验清签印/认证事件是否完整落 log** —— 决定 D3 可不可测；这是一次读代码就能定的事，不要靠猜。
 4. **✅ 观察员面板已折叠进侧栏（B85）**；同频必须人按，注视面板必须显式开始/结束，实拍 JSON 是唯一真值源。
-5. **✅ Ask 4 = `ready_to_schedule`**：采集链路已就绪，剩余输入仅为用户确定日期与 5 位真人参与者；按 8 局排期。**Ask 5 生产开关仍未拍板、未实现，实拍页不是生产功能。**
+5. **⚠️ Ask 4 = `ready_to_schedule`（ready to schedule once date, 5 participants, and recruitment questions are set）**：采集链路已就绪，仍缺确定日期、5 位真人参与者与 K8 两道招募问题；齐备后按 8 局排期。**Ask 5 生产开关仍未拍板、未实现，实拍页不是生产功能。**
 
 > 另需向下游申报的一条：`tools/` 的取证脚本纪律是「不收敛、不依赖 CWD、argv 数组调 git、历史锚点固定 `BATCH_BASE=7ab2995`」。**新增的日志扫描脚本要按同一把尺登记**，否则今天量出的增益数，下个批次无法复算 —— 这正是 B79 里已经踩过的坑。

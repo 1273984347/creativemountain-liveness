@@ -472,13 +472,18 @@ git commit -m "build(B85): 发布包排除实拍页并锁定生产页无实拍�
 - `table_attention_peak` / `gaze_panel` / `post_game_poll` → `exists`
 - `game_export_snapshot` → 增加实拍事件导出说明
 - 新增 `playtest_build: dist/创界山-活人认证-实拍.html`
+- **同步清理历史残留**：`game_start` / `seat_control_assigned` / `ai_action_committed` / `ai_forfeit` 状态改为 B84/B85 实际状态；字段名用 `degradeLevel` / `seatMode`；不得再写“seed 写死 42 / UI 无入口”。`ai_forfeit` 的 120s timeout 分支在 B85 同步自动步中不触发，需明确标注而非假装已实现。
 
 `playtest-field-sheet.md`：
 - K3（接管点击）、K5（墙钟）、K6（观察面板）标 ✅。
+- K4 标 ✅（`ai_forfeit.seatMode` 已存在；120s timeout 在 B85 同步自动步中不触发，明确写 N/A）。
+- K7 标 ✅（Ask 1=A 的引擎拒绝与活人席保护已落地）。
+- K8 保持 ☐（招募两问是用户侧前置）。
 - 使用步骤改为：构建 → 打开实拍 HTML → 填 URL 参数 → 5 真人局 → 导出 JSON → 按当场表录入。
 
 `prd.json` / `prd.md`：
-- Ask 4 状态 = `ready_to_schedule`，仍缺用户定日期与参与者。
+- Ask 4 状态 = `ready_to_schedule`，口径改为 **ready to schedule once date, 5 participants, and recruitment questions are set**；仍缺用户定日期、5 位参与者与 K8 两道招募问题。
+- S5 字段/验收同步 `anchorRound` / `anchorLogIndex`、`degradeLevel` / `seatMode` / `oneLineAnomaly`；Ask 1 已裁为 A；`human_takeover_click` 在实拍事件表而非 `State.log`；`cert_event` 明确不在 B85 范围。
 - 明确 **Ask 5 生产开关仍未实现**，实拍页不是生产功能。
 
 - [ ] **Step 2: 验证文档与 JSON**

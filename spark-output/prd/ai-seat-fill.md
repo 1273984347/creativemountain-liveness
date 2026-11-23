@@ -3,7 +3,7 @@
 - **生成时间**：2026-11-23T03:30:00+08:00
 - **数据源**：10 个上游 Skill（frame-ai-seat / frame / brief / probe / bench / pitch / metric / stories / check / edge / sitemap / flow-web）
 - **完整度**：**moderate**
-- **本链状态**：**Ask 1 / Ask 2 / Ask 3 与 G1–G5 已办**；S1 核心与 B85 实拍采集已落地。**Ask 4 = `ready_to_schedule`**，仍缺用户确定日期与 5 位真人参与者；**Ask 5 生产开关仍未拍板、未实现**。
+- **本链状态**：**Ask 1 / Ask 2 / Ask 3 与 G1–G5 已办**；S1 核心与 B85 实拍采集已落地。**Ask 4 = `ready_to_schedule`（ready to schedule once date, 5 participants, and recruitment questions are set）**，仍缺确定日期、5 位真人参与者与 K8 两道招募问题；**Ask 5 生产开关仍未拍板、未实现**。
 - **本链未跑 Stories**：Section 6 的 5 个 Story 由 frame-ai-seat + pitch + metric 直接派生，**未经 Stories Skill 拆解**，故其 design_touchpoints 是推导值而非评审值（记入 thin_sections）。
 
 ---
@@ -12,13 +12,13 @@
 
 > **S1 核心已实现（2026-11-24）**：seed 可指定并随导出保留；`controlledBy` / `applyAction` / `HeuristicPolicy` / `runSeatStep` 已落地并有真实决策点回归。**生产 AI 座位开关仍未实现**，因为 Ask 5 未拍；S3 的质疑/作答路径仍未开放。
 >
-> **B85 实拍采集已就绪（2026-11-24）**：`npm run build` 生成 `dist/创界山-活人认证-实拍.html`，打开后追加 `?playtest=1&seed=<uint32>&aiSeat=<0..5>`。实拍页具备 AI/人类墙钟、接管点击、可折叠观察员面板、同频/注视/局后自报与 JSON 导出；事件不进入 `State.log`，实拍页不进入发布包。**Ask 4 = `ready_to_schedule`**：仅缺用户确定日期与 5 位真人参与者。**独立实拍页不是生产功能；Ask 5 的生产 AI 座位选择器 / 可 ban 开关仍未实现。**
+> **B85 实拍采集已就绪（2026-11-24）**：`npm run build` 生成 `dist/创界山-活人认证-实拍.html`，打开后追加 `?playtest=1&seed=<uint32>&aiSeat=<0..5>`。实拍页具备 AI/人类墙钟、接管点击、可折叠观察员面板、同频/注视/局后自报与 JSON 导出；墙钟、接管与观察事件只进入 `PlaytestEventStore`，不进入 `State.log`（B84 的 `ai_action_committed` / `ai_forfeit` 仍写引擎日志），实拍页不进入发布包。**Ask 4 = `ready_to_schedule`（ready to schedule once date, 5 participants, and recruitment questions are set）**：仍缺确定日期、5 位真人参与者与 K8 两道招募问题。**独立实拍页不是生产功能；Ask 5 的生产 AI 座位选择器 / 可 ban 开关仍未实现。**
 
 > **✅ 2026-11-23T04:05 状态更新（签字人=用户本人）**：**G1 / G2 / G3 / G5 已裁**；**Ask 3 已于同日落地**（规格 **v2.2**：§7 改写 + 新增 §7.5 + 四处范围条款同步；`brief.out_of_scope` 采限定语）。当时剩余前置只有 **G4（seed 可指定并进导出）**；该工程项已于 **2026-11-24** 随 S1 核心完成。
 > 同批次还落了一项**门禁工具修复**（提交 `d153af9`）：行尾负样本不再依赖源文件 EOL，并补上 `doc-sync-c8-negative` 缺失的 prove-injection（原为静默假绿），另加 `.gitattributes`；发现登记为 **L-B80-4**。验证 = `npm run gate` 13 门全绿。
 > - **G1 = A**（AI 无签印权、不持活人席）⇒ **不动 `engine/scales.ts`、不重基线**；S3 塌为分支 A。**副作用必读**：A 让 A−B 之差混入第二个变量（那两格强度在 A 下对真人不可用），故"增益 ≤0"不可直接判方向失败——必须先补跑 A′ 臂（详见 §4 判读规则与 `gates-decision-sheet.md`）。
 > - **G2 = yes**（v1 只做稳座）⇒ sidecar 三条红线一条不掀，补位可独立于 B82 立项。恩怨地基改走**零契约变更**路径（`vetoBy`/`stolenTotal`/`successfulChallenges` + `State.log` 离线回放），**不新增 `counters.ts` 字段**——我先前"加一项即可、不动门禁"的说法已作废，证据见 `tests/engine/state-contract.test.ts:132` 与 B61 批次先例。
-> - **G3 = 拆两态**，AI 兜底超时 120s、离线代决开放 120s（两个独立旋钮，暂取同值）⇒ **S1 解锁**；前置条件是 `seat_control_assigned.controlledBy` 先落地，否则 D2 读数不可信。
+> - **G3 = 拆两态**，AI 兜底超时 120s、离线代决开放 120s（两个独立旋钮，暂取同值）⇒ **S1 解锁**；前置条件是 `seat_control_assigned.controlledBy` 先落地，否则 D2 读数不可信。B85 实拍 AI 为同步自动步，不实现 120s timeout 分支，对该切片为 N/A。
 > - **G5 = web 单文件端**（Host 不接引擎）。
 
 | # | 前置项 | 为什么是前置而不是待办 | 卡住哪一节 |
@@ -178,7 +178,7 @@
 - Given 轮到 AI 座位，When 桌上**没有任何人触碰控件**，Then 该手番完成且 `human_takeover_click` 计数为 0 —— **这是本 Story 的硬底线，任意一次 > 0 即判负并暂停平衡讨论**
 - Given 构造极端局（全部合法目标已被占/已死/已放逐），When AI 必须行动，Then 它仍能通过降级链产出动作，且不提前结束游戏（对齐 BGA 文档"不得提前结束游戏"）
 - Given AI 手番，When 从轮转到该座位起计时，Then `ai_turn_duration_ms` 中位数 ≤ 同局人类手番中位数 × 1.0，且绝对值 ≤ 3000ms
-- Given 超时（阈值见 §0 G3 裁决），When AI 未能产出动作，Then 执行保守动作并记 `ai_forfeit{reason:'timeout'}`；一局内 `reason=='timeout'` 占比 ≤ 15%，连续两局 > 25% 判该档不可用
+- Given 后续实现的 120s 超时分支（阈值见 §0 G3 裁决），When AI 未能产出动作，Then 执行保守动作并记 `ai_forfeit{reason:'timeout'}`；该验收对 B85 同步自动步为 **N/A**，B85 只验同步 blocked/rejected 弃权
 - 边缘情况：AI 座位被放逐后 —— 沿用主链"出局仍有参与动作"的既有设计意图（`stories.json` story-3），v1 只保留投票类参与，不保留操作类参与
 - 空状态：某轮 `getLegalActions` 返回空集 —— 不得静默跳过（会触发"隐形座位"误判），必须记 `ai_forfeit{reason:'no_legal'}` 并在日志行显式可见
 
@@ -194,7 +194,7 @@
 
 **已生成的设计资产**：**待生成**（本节全部）。可参照的既有实现语言：`creativemountain-host/src/flows/flow1-host-dashboard/flow1-host-dashboard.tsx`（座位与看板布局）、`web/main.ts` + `web/ui/log.ts`（真引擎接线端，落地首选）。
 
-**待澄清问题**：① §0 G3 状态机两档命名与超时阈值；② AI 座位被放逐后是否保留投票权（涉及 D3）；③ `degrade_level` 是否需要暴露给玩家看到（暴露可能反而提示"它在勉强"）。
+**待澄清问题**：① §0 G3 状态机两档命名与超时阈值；② AI 座位被放逐后是否保留投票权（涉及 D3）；③ `degradeLevel` 是否需要暴露给玩家看到（暴露可能反而提示"它在勉强"）。
 
 ---
 
@@ -297,24 +297,26 @@
 
 ### Story S5 — 让这套东西能被真的测出来（P1，工程交付项，不是产品功能）
 
-> **S5 实拍切片状态（2026-11-24）**：B85 已在独立实拍页落地 `human_takeover_click`、AI/人类墙钟、`table_attention_peak`、`gaze_panel`、`post_game_poll` 与实拍 JSON 导出；`cert_event` 完整性与生产 AI 开关不在本切片内。Ask 4 现为 `ready_to_schedule`。
+> **S5 实拍切片状态（2026-11-24）**：B84/B85 已提供 `game_start`、`seat_control_assigned`（State/snapshot 的 `controlledBy`）、`ai_action_committed`、`ai_forfeit`，B85 另已在独立实拍页落地 `human_takeover_click`、AI/人类墙钟、`table_attention_peak`、`gaze_panel`、`post_game_poll` 与实拍 JSON 导出。`human_takeover_click` 在 `PlaytestEventStore`，不在 `State.log`；`cert_event` 完整性与生产 AI 开关不在 B85 范围内。Ask 4 = `ready_to_schedule`，但须确定日期、5 位参与者并补齐 K8 招募两问后才可排期。
 
 **Job**：把 `metric.json` 的 12 项缺口落成代码，否则 §4 全部指标是空话
 
-**In Scope（按 `metric.instrumentation_gaps` 一一对齐，12 项 = 10 must + 2 should；must 覆盖 11 类事件名）**
-- `game_start`（含 **seed** 与 **aiSeat**）· `seat_control_assigned` · `ai_action_committed`（含 `degrade_level`、`source`）· `ai_forfeit`（**新增 `LogEntry.kind`**，现 14 词表无对应值）· `ai_turn_duration_ms` + `human_turn_duration_ms`（墙钟，UI 侧）· `human_takeover_click` · `cert_event`（含 `ai_participated`）· `table_attention_peak`（带 `anchor_round`/`anchor_log_index`）· `post_game_poll`（含 `one_line_anomaly`）· `gaze_panel` · `new_player_introduced` · 现有 `导出` 扩字段
+**In Scope（原 `metric.instrumentation_gaps` 12 项中的 B84/B85 实拍切片）**
+- `game_start`（含 **seed** 与 **aiSeat**，metadata 另含 themeId/players/mode）· `seat_control_assigned`（State/snapshot 的 `controlledBy`，不是独立 LogEntry）· `ai_action_committed`（含 `degradeLevel`、`seatMode`、`source`）· `ai_forfeit`（含 `seatMode`；120s timeout 对 B85 同步自动步为 N/A）· `ai_turn_duration_ms` + `human_turn_duration_ms`（墙钟，实拍事件表）· `human_takeover_click`（实拍事件表，不进 `State.log`）· `table_attention_peak`（带 `anchorRound`/`anchorLogIndex`）· `post_game_poll`（含 `oneLineAnomaly`）· `gaze_panel` · 实拍 JSON 导出
 - 观察员面板**折叠进侧栏**，"记一次同频"必须人按、不得由面板事件自动计入
 - 一张当场表（8 格 + 5 份自报），局后 15 分钟跑完
 
-**Out of Scope**
+**Out of Scope（B85）**
+- `cert_event` 的完整认证事件合成与 `ai_participated` 验收；该缺口仍待后续核查引擎日志，不能把 B85 写成已覆盖
+- `new_player_introduced` 代码埋点（继续用局外当场表）与生产 AI 座位开关
 - 任何第三方分析 SDK（**离线单 HTML 双击即玩 / 发布包零增量 / loopback-only 三条红线同时被违反**）
 - 自动注视监听（自动监听本身就在抢注意力）
 
 **验收标准**
-- Given 跑完一局并按导出，When 解析导出信封，Then 含 `themeId` + 完整 `log` + **非默认 seed** + `aiSeat` 构成；缺一即该局数据作废并当场补跑
-- Given AI 座位在局中，When 任一真人点击属于该座位的控件，Then `human_takeover_click` 计数 +1 且日志行可见（可核）
-- Given 观察员按下"记一次同频"，When 保存，Then 事件带可回指的 `anchor_log_index`，事后能定位到具体 log 行
-- Given 未拍 Ask 1，When 构建 `cert_event`，Then `ai_participated` 字段按 G1 结果决定存在与否——**不得默认写入**（会污染 A/B 分组）
+- Given 跑完一局并按导出，When 解析实拍信封，Then 含 `config.seed` + `config.aiSeat` + `metadata.themeId` + 可解析且含完整 `log` 的 `snapshot`；缺一即该局数据作废并当场补跑
+- Given AI 座位在局中，When 任一真人点击属于该座位的控件，Then `PlaytestEventStore` 的 `human_takeover_click` 计数 +1 且导出事件可见（可核）；该事件不写入 `State.log`
+- Given 观察员按下"记一次同频"，When 保存，Then 实拍事件带可回指的 `anchorRound` / `anchorLogIndex`，事后能定位到具体 log 行
+- Given Ask 1=A 已裁定，When 构建 B85 实拍导出，Then 不合成 `cert_event` 或 `ai_participated`；完整认证事件与 AI 参与认证指标留待后续范围，不阻塞本次实拍采集
 - 边缘情况：墙钟计时在页面失焦时不中断也不虚增（计时器实现须复用主链已登记的 `setInterval` 缺口整改，见 `flow-web.missing_spark_components`）
 - 新增日志扫描脚本须遵循 `tools/` 纪律：不收敛、不依赖 CWD、argv 数组调 git、历史锚点固定 —— 否则今天量出的增益数下个批次无法复算
 
@@ -389,8 +391,8 @@
 **上线考虑**
 
 - **上线前须通知谁**：唯一签字人本人——**Ask 3（规格 §7 `:1055` 与 Brief `out_of_scope` 第 4 条的口径改写）必须在开工前完成**，否则规则书与规格会说谎，`doc-sync` 门禁判红。无客服/法务/团队，但有**那 5 位朋友**：需要他们承诺一晚（Pitch Ask 4）。
-- **是否 soft launch**：是，且形态明确——**v1 不发玩家版，只发实拍局版**：B85 独立实拍页已就绪，Ask 4 = `ready_to_schedule`，待用户确定日期与 5 位真人参与者；先在 1–2 场真实缺人局里跑，通过 NSM ≥ +1.0 与 D2 = 0 两条硬线后再考虑随包发布。**实拍页不是生产功能；Ask 5 的生产开关仍未拍板、未实现。** 增益 ≤ 0 即关闭方向。
-- **上线后头 2 周监测什么**：① `human_takeover_click` 是否真的为 0（判体验生死）② `ai_forfeit` 超时占比 ≤ 15% ③ AI 认证参与 ≥ 1/局 ④ 每局"桌友指出异常并被归类"≥ 1 次（防"黑箱式零代操作"）⑤ 门⑨ 与 release 100 组一致性（若动了数值则查是否已申报重基线）。
+- **是否 soft launch**：是，且形态明确——**v1 不发玩家版，只发实拍局版**：B85 独立实拍页已就绪，Ask 4 = `ready_to_schedule`（ready to schedule once date, 5 participants, and recruitment questions are set），待确定日期、5 位真人参与者并补齐 K8 招募两问；先在 1–2 场真实缺人局里跑，通过 NSM ≥ +1.0 与 D2 = 0 两条硬线后再考虑随包发布。**实拍页不是生产功能；Ask 5 的生产开关仍未拍板、未实现。** 增益 ≤ 0 即关闭方向。
+- **上线后头 2 周监测什么**：① `human_takeover_click` 是否真的为 0（判体验生死）② B85 同步弃权占比 ≤ 15%（120s timeout 对 B85 为 N/A）③ AI 认证参与 ≥ 1/局（`cert_event` 不在 B85 范围，待后续口径）④ 每局"桌友指出异常并被归类"≥ 1 次（防"黑箱式零代操作"）⑤ 门⑨ 与 release 100 组一致性（若动了数值则查是否已申报重基线）。
 - **作废条件（不是"没达标"，是"结论不可信"）**：导出缺 seed 或缺 log ⇒ 该局作废；Ask 1 未拍而写入 `ai_participated` ⇒ A/B 分组失效；用实时面板自动计入同频 ⇒ NSM 作废。
 
 ---
@@ -399,6 +401,6 @@
 >
 > 1. **Solution & Feature Scope（Section 6）**：本链**未跑 Stories**，5 个 Story 由 frame-ai-seat + pitch + metric 直接派生；design_touchpoints 为推导值，未经设计走查。建议补跑 `/stories` 或至少让 S1–S3 过一次 `/check`。
 > 2. **设计资产**：交叉检索确认主链**零命中** AI/补位相关资产，故全部标"待生成"——这不是遗漏，是事实。可复用的只有 `web/main.ts` 的真引擎接线与 Host 14 屏布局语言。
-> 3. **Section 4 的目标值多为"首版外部基准 + 保守阈值"**：`人类胜率 25–30%` 来自 `bench.takeaway-17` 的行业基准而非本项目实测；`degrade_level ≤ 25%`、`弃权 ≤ 15%` 是我为可验收性设的初值，**首局后须重标**。诚实标注：本文档不含任何已验证的补位实测数。
+> 3. **Section 4 的目标值多为"首版外部基准 + 保守阈值"**：`人类胜率 25–30%` 来自 `bench.takeaway-17` 的行业基准而非本项目实测；`degradeLevel ≤ 25%`、`弃权 ≤ 15%` 是我为可验收性设的初值，**首局后须重标**。诚实标注：本文档不含任何已验证的补位实测数。
 > 4. **§2 未解决项**：「差一个人」这一痛点从未出现在 11-07 的痛点列表与 Probe 研究问题里，其频率证据仍是 **n=1 的一次自述事件**。§8 的实拍局是第一次真正的抽样机会。
-> 5. **G1/G2/G3/G4/G5 与 Ask 3 已办**；Ask 4 已就绪待排期，Ask 5 生产开关仍未拍、未实现。
+> 5. **G1/G2/G3/G4/G5 与 Ask 3 已办**；Ask 4 采集已就绪，但须确定日期、5 位参与者并补齐 K8 招募两问后才可排期；Ask 5 生产开关仍未拍、未实现。
