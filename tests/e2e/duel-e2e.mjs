@@ -33,6 +33,7 @@ const errors = [];
 page.on('console', (m) => { if (m.type() === 'error') { errors.push(m.text()); } });
 page.on('pageerror', (e) => { errors.push('pageerror: ' + e.message); });
 await page.goto(url);
+// B85 Task 4：默认发布页不得夹带实拍观察员文案或面板类名。
 const productionHtml = readFileSync(file, 'utf8');
 assert.equal(productionHtml.includes('实拍观察员'), false, '生产 HTML 不得包含观察员文案');
 assert.equal(productionHtml.includes('playtest-panel'), false, '生产 HTML 不得包含实拍面板类名');
