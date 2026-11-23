@@ -581,7 +581,7 @@ type State = {
   round: number;             // 所有存活玩家各行动一次 = 1 个 round（§3.1）
   turnOrder: number[];       // 行动顺序：座位序列（开局随机决定，B10）——先手不绑定固定座位
   turnIndex: number;         // 当前手番在 round 内的位置
-  players: Player[];         // 体力/灵枢/手牌/装备/身份/阵营/位置/印记/待认证/力竭标记
+  players: Player[];         // 玩家数组：体力/灵枢/手牌/装备/身份/阵营/位置/印记/待认证/力竭/座位控制者
   board: Board;              // 地形与格位（格位 + 峰顶）
   decks: Decks;              // 各类牌堆（主牌库/弃牌堆/造物牌堆/天机/试炼/认证题）
   scales: ScalesRow;         // 当前局规模配置（§8）
@@ -604,9 +604,7 @@ type State = {
 };
 ```
 
-```ts
-controlledBy: 'human' | 'ai'; // 座位控制者；旧存档缺省按 human 归一化
-```
+**`Player` 增补字段（v2.3；属于 `players` 数组元素，不是 `State` 顶层字段）**：`controlledBy: 'human' | 'ai'`，表示座位控制者；旧存档缺省按 `human` 归一化。
 
 > **字段集由代码派生、规格反拍**：本节字段集与 `engine/core/state.ts` 的 `State` 接口**逐字段一致**，由 `tools/doc-sync.mjs` 的 **C9 检查**强制（字段名清单从 `engine/core/state.ts` **自动扫描派生**，非手抄——手抄清单本身会成为第二事实源）。
 >
