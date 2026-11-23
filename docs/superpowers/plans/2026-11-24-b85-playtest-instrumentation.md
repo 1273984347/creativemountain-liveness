@@ -318,7 +318,8 @@ pt.on('console', (m) => { if (m.type() === 'error') { ptErrors.push(m.text()); }
 pt.on('pageerror', (e) => { ptErrors.push('pageerror: ' + e.message); });
 await pt.goto(playtestUrl);
 await pt.getByRole('button', { name: '记一次同频' }).click();
-await pt.getByRole('button', { name: '记一次看面板' }).click();
+await pt.getByRole('button', { name: '开始看面板' }).click();
+await pt.getByRole('button', { name: '结束看面板' }).click();
 const ptDownloadPromise = pt.waitForEvent('download');
 await pt.getByRole('button', { name: '导出实拍记录' }).click();
 const ptDownload = await ptDownloadPromise;
@@ -343,8 +344,8 @@ Expected: FAIL，实拍 HTML 或面板不存在。
 
 `renderPlaytestPanel` 使用现有 `el/button/section`，包含：
 - 标题「实拍观察员」+ 当前 seed / AI 座位。
-- 「记一次同频」：读取焦点座位输入（默认当前 AI 座位）与持续秒数输入（默认 3），写 `table_attention_peak`，`anchorLogIndex = state.log.length - 1`。
-- 「记一次看面板」：写 `gaze_panel`，座位取当前操作者，时长由面板内累计。
+- 「记一次同频」：读取焦点座位输入（默认当前 AI 座位）与持续秒数输入（默认 3），写 `table_attention_peak`，`anchorLogIndex = state.log.length - 1`。焦点/时长与局后自报草稿必须保存在按 store 隔离的运行时状态中，**不得因 AI 重渲染而重置**。
+- 「开始看面板 / 结束看面板」：显式计时；结束时才写 `gaze_panel`，座位取当前操作者。不得用面板展开时长冒充实际注视时长。
 - 「导出实拍记录」：`Blob` + `URL.createObjectURL` 下载 `创界山-实拍-<seed>-<aiSeat>.json`。
 - 局后 5 人自报表单：`wantHumanBack` 复选框、`wouldReplay` 1–5、`feltRobotic` 1–5、`recalledPeakCount` 数字、`oneLineAnomaly` 单行文本；每次提交写一条 `post_game_poll`。
 - 事件计数摘要：同频、接管、AI 动作、弃权。
@@ -378,6 +379,17 @@ Expected: PASS；生产页与实拍页 `consoleErrors` 均为空。
 git add web/playtest-panel.ts web/playtest-main.ts esbuild.config.mjs package.json web/playtest-controller.ts web/main.ts tests/e2e/duel-e2e.mjs
 git commit -m "feat(B85): 独立实拍页、观察员面板与本地记录导出"
 ```
+
+---
+
+#### Fix round 1：数据完整性修复
+
+- [x] 先扩展 E2E 并观察 RED：旧面板没有「开始看面板 / 结束看面板」；焦点座位在重渲染后由 `4` 重置为 `2`；局后自报座位在重渲染后由 `1` 重置为 `0`。
+- [x] 焦点座位、持续秒数与局后自报全部字段保存在按 `PlaytestEventStore` 隔离的 `WeakMap` 运行时草稿中；每次渲染恢复，成功提交自报后重置。
+- [x] `gaze_panel` 改为显式开始/结束；开始只记录计时起点与操作者，结束才写事件。重渲染不会重置计时，也不再用面板展开时长代替注视时长。
+- [x] E2E 使用 Playwright 假时钟验证开始前 500ms 不计入、显式注视约 125ms 计入、计时中重渲染仍只产生一条事件。
+- [x] 局后自报增加行为覆盖：通过现有存档/读档入口进入终局（不新增生产钩子），填写全部字段、重渲染验证草稿、提交、重置并导出校验 `post_game_poll`。
+- [x] 复跑 `npm run typecheck && npm run build:only && node tests/e2e/duel-e2e.mjs` 全部通过。
 
 ---
 

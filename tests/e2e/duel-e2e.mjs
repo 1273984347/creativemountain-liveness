@@ -143,9 +143,18 @@ const currentTurnText = await pt.locator('.status').first().innerText();
 const currentTurnSeat = Number(/当前\S* 座(\d+)/.exec(currentTurnText)?.[1]);
 const operatorSeat = [0, 1, 3, 4, 5].find((seat) => seat !== currentTurnSeat);
 assert.notEqual(operatorSeat, undefined, '应能选择与当前手番不同的真人操作者');
+await pt.getByLabel('焦点座位').selectOption('4');
+await pt.getByLabel('持续秒数').fill('7.5');
 await pt.locator('select').nth(3).selectOption(String(operatorSeat));
+assert.equal(await pt.getByLabel('焦点座位').inputValue(), '4', 'AI 重渲染后保留焦点座位草稿');
+assert.equal(await pt.getByLabel('持续秒数').inputValue(), '7.5', 'AI 重渲染后保留持续秒数草稿');
 await pt.getByRole('button', { name: '记一次同频' }).click();
-await pt.getByRole('button', { name: '记一次看面板' }).click();
+await pt.clock.install();
+await pt.clock.runFor(500);
+await pt.getByRole('button', { name: '开始看面板' }).click();
+await pt.locator('select').nth(3).selectOption(operatorSeat === 0 ? '1' : '0');
+await pt.clock.runFor(125);
+await pt.getByRole('button', { name: '结束看面板' }).click();
 const ptDownloadPromise = pt.waitForEvent('download');
 await pt.getByRole('button', { name: '导出实拍记录' }).click();
 const ptDownload = await ptDownloadPromise;
@@ -161,13 +170,68 @@ assert.equal(JSON.parse(ptData.snapshot).state.players[2].controlledBy, 'ai', '�
 const attention = ptData.events.find((e) => e.type === 'table_attention_peak');
 const gaze = ptData.events.find((e) => e.type === 'gaze_panel');
 assert.ok(attention);
-assert.equal(attention.focusSeat, 2);
-assert.equal(attention.durationSec, 3);
+assert.equal(attention.focusSeat, 4);
+assert.equal(attention.durationSec, 7.5);
 assert.ok(Number.isInteger(attention.anchorRound));
 assert.ok(attention.anchorLogIndex >= 0);
 assert.ok(gaze);
-assert.equal(gaze.seat, operatorSeat, '看面板事件必须取当前 UI 操作者');
-assert.ok(gaze.durationMs >= 0);
+assert.equal(ptData.events.filter((e) => e.type === 'gaze_panel').length, 1, '看面板事件只能在结束时写入一次');
+assert.equal(gaze.seat, operatorSeat, '看面板事件必须取开始时的 UI 操作者');
+assert.ok(gaze.durationMs >= 120 && gaze.durationMs < 500,
+  '看面板时长只能来自显式开始到结束，不包含面板展开时间');
+
+// 用现有存档/读档入口把同一实拍局置于终局，不增加任何生产测试钩子。
+const finishedSave = JSON.parse(ptData.snapshot);
+finishedSave.state.phase = '终局';
+finishedSave.state.outcome = { finished: true, winners: [0], reason: 'fallback' };
+const saveEnvelope = JSON.stringify({
+  v: 2,
+  themeId: await pt.locator('select').nth(0).inputValue(),
+  state: JSON.stringify(finishedSave),
+});
+await pt.evaluate((save) => localStorage.setItem('creativemountain.save.v2', save), saveEnvelope);
+await pt.getByRole('button', { name: '读档' }).click();
+await pt.locator('.badge.win').waitFor();
+assert.equal(await pt.getByRole('button', { name: '提交自报' }).isEnabled(), true, '终局后开放局后自报');
+await pt.getByLabel('自报座位').selectOption('1');
+await pt.getByLabel('愿意再玩').selectOption('5');
+await pt.getByLabel('感到机械').selectOption('2');
+await pt.getByLabel('记得的同频次数').fill('4');
+await pt.getByRole('checkbox', { name: '想换回真人' }).check();
+await pt.getByLabel('一句异常').fill('测试异常');
+await pt.locator('select').nth(3).selectOption('5');
+assert.equal(await pt.getByLabel('自报座位').inputValue(), '1', '重渲染后保留自报座位草稿');
+assert.equal(await pt.getByLabel('愿意再玩').inputValue(), '5', '重渲染后保留再玩意愿草稿');
+assert.equal(await pt.getByLabel('感到机械').inputValue(), '2', '重渲染后保留机械感草稿');
+assert.equal(await pt.getByLabel('记得的同频次数').inputValue(), '4', '重渲染后保留同频回忆草稿');
+assert.equal(await pt.getByRole('checkbox', { name: '想换回真人' }).isChecked(), true, '重渲染后保留换回真人草稿');
+assert.equal(await pt.getByLabel('一句异常').inputValue(), '测试异常', '重渲染后保留异常描述草稿');
+await pt.getByRole('button', { name: '提交自报' }).click();
+await pt.locator('select').nth(3).selectOption('0');
+assert.equal(await pt.getByLabel('自报座位').inputValue(), '0', '成功提交后重置自报座位');
+assert.equal(await pt.getByLabel('愿意再玩').inputValue(), '3', '成功提交后重置再玩意愿');
+assert.equal(await pt.getByLabel('感到机械').inputValue(), '3', '成功提交后重置机械感');
+assert.equal(await pt.getByLabel('记得的同频次数').inputValue(), '0', '成功提交后重置同频回忆');
+assert.equal(await pt.getByRole('checkbox', { name: '想换回真人' }).isChecked(), false, '成功提交后重置换回真人');
+assert.equal(await pt.getByLabel('一句异常').inputValue(), '', '成功提交后重置异常描述');
+const pollDownloadPromise = pt.waitForEvent('download');
+await pt.getByRole('button', { name: '导出实拍记录' }).click();
+const pollDownload = await pollDownloadPromise;
+const pollData = JSON.parse(readFileSync(await pollDownload.path(), 'utf8'));
+const pollEvent = pollData.events.find((e) => e.type === 'post_game_poll');
+assert.ok(pollEvent);
+const { seq: pollSeq, ts: pollTs, ...pollPayload } = pollEvent;
+assert.deepEqual(pollPayload, {
+  type: 'post_game_poll',
+  seat: 1,
+  wantHumanBack: true,
+  wouldReplay: 5,
+  feltRobotic: 2,
+  recalledPeakCount: 4,
+  oneLineAnomaly: '测试异常',
+});
+assert.ok(Number.isInteger(pollSeq));
+assert.ok(Number.isFinite(pollTs));
 assert.equal(ptErrors.length, 0);
 await pt.close();
 await browser.close();
