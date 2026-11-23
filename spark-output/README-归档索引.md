@@ -81,9 +81,10 @@
 - ✅ **G5 = web 单文件端落地**（Host 原型不接引擎，`mock-data.ts:1`）。
 - ✅ **Ask 3 已办**（规格升 **v2.2**）：§7 范围裁定改写（三条理由逐条处置，v1.2 原文照录于「裁定沿革」块，**未推翻任何一条**）+ 新增 **§7.5 补位稳座**（定义 / KPI「不塌」/ 硬约束 C1–C10 / 验收判据 / 开放项）+ **四处范围条款同步**（概览 `:79`、§7 `HeuristicPolicy` 句、§13.2 范围表、§13.3 延后表）+ 修订记录 v2.2；`brief.out_of_scope` 第 4 条按 **(b)** 加限定语澄清、**不放宽**。
 - ✅ **门禁工具修复**（提交 `d153af9`）：行尾负样本不再依赖源 EOL（`tests/gates/harness.ts` 单一口径 `toLf` / `toCrlf` / `assertCrlfInjected`）；补上 `doc-sync-c8-negative` 缺失的 prove-injection（原为**静默假绿**）；新增 `.gitattributes`（`* text=auto eol=lf` + 二进制豁免）。该发现登记为 **L-B80-4（收口后补登）**。验证：`tsc` 0 错、两文件合跑 20/20、`npm run gate` ⇒ **13 门全绿**。
-- ⚠️ **仍待办**：Ask 4 定日期并按 8 局排期 · Ask 5 可 ban 开关 · G4 `seed` 可指定并进导出（现写死 42）· S1/S3 施工（G1–G3 已解锁，S3 的 `certifyAnswer` 替代方案仍是开放项）。
+- ✅ **S1 核心已实现（2026-11-24）**：G4 seed UI/export、`Player.controlledBy` + 旧存档归一化、`applyAction`、`HeuristicPolicy`、`runSeatStep` + AI 日志均已落地；默认人类路径 `npm run gate` **13/13**、`npm run release:check` **100/100 逐组零漂移**。
+- ⚠️ **仍待办**：Ask 4 定日期并按 8 局排期 · Ask 5 可 ban 开关（生产 AI 座位开关仍 blocked）· S1 `seat_offline_temporary` 计时器 · S3 质疑/作答/复议（G1–G3 已解锁，`certifyAnswer` 替代方案仍是开放项）。
 
-> **一句话给下一轮**：子链的工程缺口不在模型（启发式就够），在**宿主层三件**——统一提交口 `applyAction`、`Player.controlledBy`、墙钟计时；以及一个会让所有跨局结论作废的 `seed: 42`。
+> **一句话给下一轮**：S1 核心已落地；下一轮先拍 Ask 5 再接生产开关，Ask 4 实拍与 S3 仍待办，模型/sidecar/网络与 Host 多端不在本批范围。
 
 
 
