@@ -54,7 +54,12 @@ export function deserializeState(data: unknown): State {
   // 兼容旧档（B13 之前无 duel / publicCards）⇒ 补默认值
   const duel = rest.duel ?? null;
   const publicCards = rest.publicCards ?? [];
-  return { ...rest, turnOrder, liveSeats, duel, publicCards, rng: Rng.fromSnapshot(rngRaw.initialSeed, rngRaw.snapshot) };
+  // 兼容旧档（v2.3 之前无 controlledBy）⇒ 座位默认由真人控制
+  const players = rest.players.map((p) => ({
+    ...p,
+    controlledBy: p.controlledBy ?? 'human',
+  }));
+  return { ...rest, players, turnOrder, liveSeats, duel, publicCards, rng: Rng.fromSnapshot(rngRaw.initialSeed, rngRaw.snapshot) };
 }
 
 /** 序列化为 JSON 文本。 */
