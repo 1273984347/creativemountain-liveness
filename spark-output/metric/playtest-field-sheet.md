@@ -1,5 +1,16 @@
 # 实拍局当场表 · AI 补位座位（稳座档）— Ask 4 执行件
 
+> **状态：Ask 4 = `ready_to_schedule`。** B85 实拍采集已就绪，仍缺用户确定日期与 5 位真人参与者。Ask 5 生产开关仍未拍板、未实现；本表使用的独立实拍页不是生产功能，也不进入发布包。
+
+## 使用步骤
+
+1. **构建**：在仓库根运行 `npm run build`。
+2. **打开实拍 HTML**：`dist/创界山-活人认证-实拍.html`（不是生产页 `创界山-活人认证.html`）。
+3. **填 URL 参数**：在地址后追加 `?playtest=1&seed=<uint32>&aiSeat=<0..5>`，例如 `?playtest=1&seed=123456&aiSeat=2`；固定 6 人局，`aiSeat` 为程序座位。
+4. **跑 5 真人局**：5 位真人 + 1 AI；同频由观察员按「记一次同频」，看面板按「开始看面板 / 结束看面板」。
+5. **导出 JSON**：终局后收齐 5 份自报，点「导出实拍记录」，保存 `创界山-实拍-<seed>-<aiSeat>.json`。
+6. **按当场表录入**：JSON 归档到 `spark-output/playtest/`，再把局次、锚点、计数与 5 份自报转录到本表。
+
 **局次**：____ ｜ **臂**：☐ A（5真人+1AI·6人档） ☐ B（5真人·5人档） ☐ A′（AI可被签印但不计入N） ｜ **日期时间**：________ ｜ **地点**：________
 
 | 项目 | 填写 |
@@ -10,9 +21,9 @@
 | 出席真人（5 位，写座位号+昵称） | 座__ ____ / 座__ ____ / 座__ ____ / 座__ ____ / 座__ ____ |
 | 缺的是谁 / 缺的类型 | ☐临时放鸽子 ☐迟到 ☐长期凑不齐 ☐无（本为测试而组） |
 | 今晚是否有真人新手第一次上桌 | ☐有（座位号____） ☐无 |
-| 观察员 | **你自己**（局中只允许按一次「同频」键，其余全部靠局后自报） |
+| 观察员 | **你自己**（局中按「记一次同频」，显式开始/结束记录看面板；局后收 5 份自报） |
 
-> ⚠️ **作废三条**（任一成立即本局不计入样本，须当场补跑）：① 导出缺 `seed` 或缺 `log`；② 同频次数由面板自动计入而非人按；③ 未拍板的 `seat_mode` 字段缺失导致兜底与掉线混记。
+> ⚠️ **作废三条**（任一成立即本局不计入样本，须当场补跑）：① 实拍 JSON 缺 `config.seed`、`events` 或 `snapshot` 文本无法解析 / 解析后缺 `log`；② 同频次数由面板自动计入而非人按；③ `ai_forfeit.seatMode` 缺失，导致补位与掉线混记。
 
 ---
 
@@ -20,12 +31,12 @@
 
 | # | 闸 | 落在哪 | ☐ |
 | --- | --- | --- | --- |
-| K1 | `seed` 可在 UI 指定 + 进导出信封 | `web/main.ts:95`、`:112` 现写死 `42`；`exportSave()` `web/main.ts:245` | ☐ |
-| K2 | `seat_control_assigned.controlledBy` 落地并进导出 | `engine/core/state.ts` 的 `Player`（现无该字段）+ `engine/core/setup.ts:103` | ☐ |
-| K3 | `human_takeover_click` 埋点（热座各动作路径） | `web/main.ts:227-240` + `:270/:289/:305/:332/:376/:402` | ☐ |
+| K1 | `seed` 可在 UI 指定 + 进导出信封 | B84 `web/seed.ts` / `web/main.ts`；B85 URL 参数再次显式锁定 | ✅ |
+| K2 | `seat_control_assigned.controlledBy` 落地并进导出 | B84 `engine/core/state.ts` / `engine/core/setup.ts` | ✅ |
+| K3 | `human_takeover_click` 埋点（热座各动作路径） | B85 `web/playtest-controller.ts` + `web/main.ts` 点击捕获 | ✅ |
 | K4 | `ai_forfeit` 带 `seat_mode` + 超时阈值 **120s** | 新增 `LogEntry.kind`；同步模拟器前缀扫描契约 | ☐ |
-| K5 | 墙钟计时 `ai_turn_duration_ms` / `human_turn_duration_ms` | UI 侧（`LogEntry` 只有 `round`/`turnIndex` 逻辑时间） | ☐ |
-| K6 | 观察员面板**折叠进侧栏**，「记一次同频」必须人按 | 做不到就把面板整个关掉，改导出离线扫 | ☐ |
+| K5 | 墙钟计时 `ai_turn_duration_ms` / `human_turn_duration_ms` | B85 `web/playtest-controller.ts`；实拍事件表，不进 `State.log` | ✅ |
+| K6 | 观察员面板**折叠进侧栏**，「记一次同频」必须人按 | B85 `web/playtest-panel.ts`；支持显式注视计时与局后自报 | ✅ |
 | K7 | Ask 1=A 已生效：AI **不可签印、不可持席**，点它签印须给机制原因（不静默） | `engine/core/certification.ts` | ☐ |
 | K8 | 招募表加两问（Probe 从没问过）：「最近三个月有没有被拉去凑过数？那一晚怎么收场的？」 | 招募环节 | ☐ |
 

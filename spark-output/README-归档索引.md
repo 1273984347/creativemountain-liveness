@@ -4,11 +4,11 @@
 
 ## ⚠️ 诚实标注（请先读）
 
-- 本链路 **probe 采集 0 真人数据、项目未上线、无埋点**。除「范围纪律（out_of_scope 遵守）」外，方向 A 与关键假设 **验证结论一律为 inconclusive**。
+- 本链路 **probe 采集 0 真人数据、项目未上线、生产页无新增实拍埋点**。B85 已提供独立实拍页与本地事件导出，但尚无真人局数据；除「范围纪律（out_of_scope 遵守）」外，方向 A 与关键假设 **验证结论一律为 inconclusive**。
 - 下游/新团队消费时，**不得把假设性产物当已验证洞察**；Retro 的 outcome 判定均为待真人局回填。
-- 唯一能证伪方向 A 的实验：**跑一场 6 人真人局 + 观察协议**（probe 已备好方案与大纲）。
+- 唯一能证伪方向 A 的实验：**跑 5 真人 + 1 程序座位局 + 观察协议**；B85 实拍采集已就绪，Ask 4 = `ready_to_schedule`，仍缺用户确定日期与参与者。
 - **2026-11-23 新增子链（§E）同样 0 真人数据**：其 NSM 是**减法**（A 组 − B 组），在 8 局实拍跑完之前**一个数都没有**；该子链的 `bench` 证据为**文档级、零截图**，不得表述为"实测过竞品界面"。
-- 子链的**范围前提**：本方向与本文档 §A 的 `brief.out_of_scope` 第 4 条「不做 AI 陪练对手」及主规格 `:1055`「V1 不做 AI 陪练」**直接冲突**，改口径（Ask 3）尚未办理——**在 Ask 3 完成前开工即属违规施工**。
+- 子链的**范围前提已办理**：Ask 3 已把主规格与 Brief 的口径改写为「V1 做补位稳座，不做陪练/对抗 AI」（规格 v2.2），未放宽其他范围。
 
 ---
 
@@ -58,8 +58,8 @@
 | `frame-ai-seat.json` | 子链方向锚点：疤痕因果链=凑数的人不会玩/撑不住、5 机会点、三方向（稳座/点名/装置）、押稳座、6 条压测条件 |
 | `bench.json` | 6 竞品 × 4 维度、功能矩阵 T1–T7、18 条 takeaways（borrow 8/avoid 7/match 3）、lean-in（仅座位标识层）。⚠️ 文档级证据、零截图 |
 | `pitch.json` | 6 段叙事（听众=签字人自己）+ **5 个 Asks 的四元字段** + `decision_outcomes[6]`（含"建议 B、用户选 A"的_override 记录_） |
-| `metric.json` | NSM=补位名场面增益（A−B）、5 Drivers / 6 Counters / 5 Health、12 项埋点缺口（10 must）、4 条方法论危害、6 条失败阈值 |
-| `prd.json` | 8 段工程交付摘要、5 个开工前置的**裁定值**、G3 冲突全记录、设计资产零命中核验、28 条 AC 反向链 |
+| `metric.json` | NSM=补位名场面增益（A−B）、5 Drivers / 6 Counters / 5 Health、12 项埋点缺口（10 must）、4 条方法论危害、6 条失败阈值；B85 实拍事件与 `playtest_build` 状态已回写 |
+| `prd.json` | 8 段工程交付摘要、5 个开工前置的**裁定值**、G3 冲突全记录、设计资产零命中核验、28 条 AC 反向链；Ask 4=`ready_to_schedule`，Ask 5 未实现 |
 
 ### 人类可读产物
 
@@ -69,7 +69,7 @@
 | `bench/ai-seat-fill.md` | 竞品拆解全文（含证据类型声明与 D→C 对应表） |
 | `pitch/ai-seat-fill.md` | Pitch 全文（6 段 + 5 Asks 表 + 判错信号） |
 | `metric/ai-seat-fill.md` | 度量蓝图全文（NSM / 四层 / 埋点清单 / 验收反向链） |
-| **`metric/playtest-field-sheet.md`** | **Ask 4 执行件：可打印当场表 + 局前 8 闸 + 8 局排期 + 判读表**（唯一能把子链从"已裁"推到"有数据"的东西） |
+| **`metric/playtest-field-sheet.md`** | **Ask 4 执行件：构建/URL 配置步骤 + 可打印当场表 + 局前闸（K3/K5/K6 已绿）+ 8 局排期 + 判读表** |
 | `prd/ai-seat-fill.md` | 8 段 PRD（386 行 / 5 Story / 28 AC；§0.1 记 G3 冲突） |
 | `prd/gates-decision-sheet.md` | 开工前置裁决单 + **✅ 已裁记录**（A / yes / 拆两态 120s）+ A 造成的判读规则修订 |
 
@@ -82,9 +82,11 @@
 - ✅ **Ask 3 已办**（规格升 **v2.2**）：§7 范围裁定改写（三条理由逐条处置，v1.2 原文照录于「裁定沿革」块，**未推翻任何一条**）+ 新增 **§7.5 补位稳座**（定义 / KPI「不塌」/ 硬约束 C1–C10 / 验收判据 / 开放项）+ **四处范围条款同步**（概览 `:79`、§7 `HeuristicPolicy` 句、§13.2 范围表、§13.3 延后表）+ 修订记录 v2.2；`brief.out_of_scope` 第 4 条按 **(b)** 加限定语澄清、**不放宽**。
 - ✅ **门禁工具修复**（提交 `d153af9`）：行尾负样本不再依赖源 EOL（`tests/gates/harness.ts` 单一口径 `toLf` / `toCrlf` / `assertCrlfInjected`）；补上 `doc-sync-c8-negative` 缺失的 prove-injection（原为**静默假绿**）；新增 `.gitattributes`（`* text=auto eol=lf` + 二进制豁免）。该发现登记为 **L-B80-4（收口后补登）**。验证：`tsc` 0 错、两文件合跑 20/20、`npm run gate` ⇒ **13 门全绿**。
 - ✅ **S1 核心已实现（2026-11-24）**：G4 seed UI/export、`Player.controlledBy` + 旧存档归一化、`applyAction`、`HeuristicPolicy`、`runSeatStep` + AI 日志均已落地；默认人类路径 `npm run gate` **13/13**、`npm run release:check` **100/100 逐组零漂移**。
-- ⚠️ **仍待办**：Ask 4 定日期并按 8 局排期 · Ask 5 可 ban 开关（生产 AI 座位开关仍 blocked）· S1 `seat_offline_temporary` 计时器 · S3 质疑/作答/复议（G1–G3 已解锁，`certifyAnswer` 替代方案仍是开放项）。
+- ✅ **B85 实拍采集已就绪（2026-11-24）**：独立页 `dist/创界山-活人认证-实拍.html`，URL 配置 `?playtest=1&seed=<uint32>&aiSeat=<0..5>`；`human_takeover_click`、AI/人类墙钟、同频、面板注视、局后自报与 JSON 导出均已实现。事件不进入 `State.log`，实拍页不进入发布包，生产页无实拍标识。
+- ⚠️ **Ask 4 = `ready_to_schedule`**：仅缺用户确定实拍日期与 5 位真人参与者，按 8 局排期。
+- ⚠️ **仍待办**：Ask 5 可 ban 开关（生产 AI 座位开关仍未拍、未实现；实拍页不是生产功能）· S1 `seat_offline_temporary` 计时器 · S3 质疑/作答/复议（G1–G3 已解锁，`certifyAnswer` 替代方案仍是开放项）。
 
-> **一句话给下一轮**：S1 核心已落地；下一轮先拍 Ask 5 再接生产开关，Ask 4 实拍与 S3 仍待办，模型/sidecar/网络与 Host 多端不在本批范围。
+> **一句话给下一轮**：S1 核心与 B85 实拍采集已落地；Ask 4 可由用户定日期与参与者后开跑，Ask 5 仍须先拍再生产开关；S3 仍待办，模型/sidecar/网络与 Host 多端不在本批范围。
 
 
 
@@ -113,8 +115,8 @@
 
 ## 结转的缺口（下一轮 / 下个项目）
 
-- **真人 playtest 0 人** —— 假设#1 唯一证伪实验，最高优先。
-- **metric 已跑，但只覆盖 AI 补位子链**（`context/metric.json`，2026-11-23）——主链「单局 ≥3 次全桌集中 / 铺垫人均分心 <2」两项仍无**无补位场景**下的埋点载体；且蓝图里 10 项 must 埋点**尚未落码**，Retro 的假设验证因此仍停在 inconclusive，直到 §E 的当场表跑完 8 局。
+- **真人 playtest 0 人** —— 假设#1 唯一证伪实验，最高优先；B85 采集已就绪，Ask 4 待用户定日期与 5 位真人参与者。
+- **metric 已跑，但只覆盖 AI 补位子链**（`context/metric.json`，2026-11-23；B85 状态回写 2026-11-24）——主链「单局 ≥3 次全桌集中 / 铺垫人均分心 <2」两项仍无**无补位场景**下的埋点载体；子链 10 项 must 中 B85 已落实拍墙钟/接管/同频/注视/自报/导出，`cert_event` 等仍待核，Retro 的假设验证因此仍停在 inconclusive，直到 §E 的当场表跑完 8 局。
 - **flow-mobile 未跑** —— 多端已定，手机私牌端（私密手牌/出题/签印/投票/复议/旁观）未落地。
 - **host↔phone 实时同步层未实现** —— 原型用 mock，多端为纸面架构；须保留引擎与九道门禁、仅拆分 UI。
 
