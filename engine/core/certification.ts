@@ -2,7 +2,7 @@
 //
 // §5.1 进入条件 · §5.2 门槛公式 · §5.3 签印/质疑/复议/合规 · §5.4 题目来源 · §5.5 双人互验
 
-import type { State } from './state.ts';
+import { isAiSeat, type State } from './state.ts';
 import type { CertificationState } from './flow.ts';
 import { passiveOf } from './passives.ts';
 import { bumpCounterOf } from './counters.ts';
@@ -117,6 +117,7 @@ export function certifySign(state: State, actor: number, target: number): Certif
   const c = state.certification;
   if (!c.pending.includes(target)) { return fail(state, `座位 ${target} 不在待认证状态`); }
   if (!isCertifier(state, actor)) { return fail(state, `座位 ${actor} 不是认证人`); }
+  if (isAiSeat(state, actor)) { return fail(state, '程序座位没有签印权'); }
   if (hasUsedCertificationTurn(state, actor)) { return fail(state, '本轮已用过认证机会'); }
   let next: State = { ...state, certification: { ...c, signed: [...c.signed, actor] } };
   next = addSignature(next, target, 1);
@@ -435,22 +436,40 @@ export function advanceCertificationRound(state: State): CertifyResult {
     //   ⇒ 「先登顶」从**终局条件**降格为**领先 1 席**，后者可被后来者追平。
     //   改造前：首个登顶者 77.6% 直接获胜（位次胜率极差 12.7pp，严格单调）。
     const liveSeats = { ...state.liveSeats };
-    for (const seat of certified) {
+    const humanCertified = certified.filter((seat) => !isAiSeat(state, seat));
+    const aiCertified = certified.filter((seat) => isAiSeat(state, seat));
+    for (const seat of humanCertified) {
       liveSeats[seat] = (liveSeats[seat] ?? 0) + 1;
     }
     // 封顶者回到山道起点、解除待认证锁定 ⇒ 可再次登顶再取席；仍留在场上当认证人。
     const players = state.players.map((p) =>
       certified.includes(p.seat) ? { ...p, position: 0, pendingCert: false } : p,
     );
+    const log = aiCertified.length === 0 ? state.log : [
+      ...state.log,
+      ...aiCertified.map((seat) => ({
+        round: state.round, turnIndex: state.turnIndex, actor: seat,
+        kind: 'certify', message: '程序座位完成验证，但不获得活人席',
+      })),
+    ];
     const next: State = {
       ...state,
       players,
       liveSeats,
+      log,
       // 认证流程复位 ⇒ 该玩家再次登顶时可开启新的认证轮
       certification: { ...emptyCertification(), round: 0, pending: [] },
     };
-    const who = certified.map((s) => '座' + String(s)).join('、');
-    return succeed(next, `坐上活人席：${who}（席位数 +1，回到{path}起点，可再次登顶再取席）`);
+    const notes: string[] = [];
+    if (humanCertified.length > 0) {
+      const who = humanCertified.map((s) => '座' + String(s)).join('、');
+      notes.push(`坐上活人席：${who}（席位数 +1，回到{path}起点，可再次登顶再取席）`);
+    }
+    if (aiCertified.length > 0) {
+      const who = aiCertified.map((s) => '座' + String(s)).join('、');
+      notes.push(`程序座位完成验证：${who}（不获得活人席，回到{path}起点，可再次登顶）`);
+    }
+    return succeed(next, notes.join('；'));
   }
   // 未达成
   const pendingNow = state.certification.pending;
@@ -515,6 +534,7 @@ export function certifyMutualSign(state: State, actor: number, target: number): 
   if (!c.pending.includes(actor) || !c.pending.includes(target)) {
     return fail(state, '互签要求双方都在待认证状态');
   }
+  if (isAiSeat(state, actor)) { return fail(state, '程序座位没有签印权'); }
   if (actor === target) { return fail(state, '不能与自己互签'); }
   // ⚠️ **同轮只能互签一次**：复用已有的 `signed` 数组记录「本轮已用过认证机会」的座位。
   //   ⚠️ **为什么复用而不新增字段**：规格 §6.2 的 State 契约**已冻结**（B1 起「不再变更」）⇒

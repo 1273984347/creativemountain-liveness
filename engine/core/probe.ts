@@ -24,6 +24,20 @@ export function isolatedState(state: State): State {
   return { ...state, rng: Rng.fromSnapshot(state.rng.initialSeed, state.rng.snapshot()) };
 }
 
+/**
+ * 合法候选描述动作规则，不消费座位控制者策略。
+ *
+ * `certifySign` / `certifyMutualSign` 直接调用会拒绝 AI，因此试跑这两类动作时仅在隔离副本上
+ * 归一化为 human；AI 禁止集仍由 `applyAction` 在真实提交边界强制执行。
+ */
+function controllerNeutralState(state: State, seat: number): State {
+  if (state.players[seat]?.controlledBy !== 'ai') { return state; }
+  return {
+    ...state,
+    players: state.players.map((p) => p.seat === seat ? { ...p, controlledBy: 'human' } : p),
+  };
+}
+
 // ============================ probeAction：把「引擎拒了」折叠成一个判据 ============================
 //
 // 引擎表达拒绝的方式**不止一种**，Task 5 的试跑式枚举要依赖单一判据，故在这里统一折叠：
@@ -150,14 +164,22 @@ export function probeAction(state: State, action: Action): ProbeResult {
     case 'GATE_RESOLVE': { const r = resolveGate(s, action.actor, action.channel); return byFlag(r.ok, r.note, r.state, s); }
     // ⚠️ B18-b：裂隙通道（放印 / 不放）。
     case 'BARRIER_RESOLVE': { const r = resolveBarrier(s, action.actor, action.channel); return byFlag(r.ok, r.note, r.state, s); }
-    case 'CERTIFY_SIGN': { const r = certifySign(s, action.actor, action.target); return byFlag(r.ok, r.note, r.state, s); }
+    case 'CERTIFY_SIGN': {
+      const from = controllerNeutralState(s, action.actor);
+      const r = certifySign(from, action.actor, action.target);
+      return byFlag(r.ok, r.note, r.state, from);
+    }
     case 'CERTIFY_CHALLENGE': { const r = certifyChallenge(s, action.actor, action.target); return byFlag(r.ok, r.note, r.state, s); }
     case 'CERTIFY_ABSTAIN': { const r = certifyAbstain(s, action.actor, action.target); return byFlag(r.ok, r.note, r.state, s); }
     case 'CERTIFY_APPEAL': { const r = certifyAppeal(s, action.actor, action.target); return byFlag(r.ok, r.note, r.state, s); }
     case 'CERTIFY_ANSWER': { const r = certifyAnswer(s, action.actor, action.target, action.passed); return byFlag(r.ok, r.note, r.state, s); }
     case 'CERTIFY_APPEAL_VOTE': { const r = certifyAppealVote(s, action.actor, action.target, action.overturn); return byFlag(r.ok, r.note, r.state, s); }
     // ⚠️ B67：双人互验的互签（§5.5）—— 待认证者给另一位待认证者签印。
-    case 'CERTIFY_MUTUAL_SIGN': { const r = certifyMutualSign(s, action.actor, action.target); return byFlag(r.ok, r.note, r.state, s); }
+    case 'CERTIFY_MUTUAL_SIGN': {
+      const from = controllerNeutralState(s, action.actor);
+      const r = certifyMutualSign(from, action.actor, action.target);
+      return byFlag(r.ok, r.note, r.state, from);
+    }
     // ⚠️ B68：对峙选牌（§3.3）—— 引擎入口 `submitDuelCard` 返回 `{ok, state, note}` 契约。
     case 'DUEL_SUBMIT_CARD': { const r = submitDuelCard(s, action.actor, action.cardId); return byFlag(r.ok, r.note, r.state, s); }
     // ⚠️ B75：装备走 `performAction` 的 equip 分支（与 PLAY_CARD 同一入口，只是 action 标签不同）

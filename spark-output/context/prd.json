@@ -3,6 +3,20 @@
   "generated_at": "2026-11-23T03:30:00+08:00",
   "project_name": "创界山·活人认证 — AI 补位座位",
   "direction": "稳座（1 个 AI 补位座位，5 真人 + 1 程序座位，6 人档）",
+  "implementation_status": "core_done_ui_blocked_on_ask5",
+  "implemented": [
+    "G4 seed UI/export",
+    "Player.controlledBy + legacy normalization",
+    "applyAction dispatcher",
+    "HeuristicPolicy",
+    "runSeatStep + AI logs"
+  ],
+  "not_implemented": [
+    "production AI seat selector",
+    "Ask5 ban switch",
+    "seat_offline_temporary timer",
+    "S3 challenge/answer"
+  ],
   "prd_file": "spark-output/prd/ai-seat-fill.md",
   "sections_summary": {
     "summary": "为聚会桌游《创界山·活人认证》新增一个程序座位（稳座档）：约好的 6–8 人局临时少一人时顶上那张椅子，让局照样开成，而桌上另外 5 个会玩的人不觉得这局被拖废",

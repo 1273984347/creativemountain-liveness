@@ -18,6 +18,9 @@ import { dealInitialHands } from './hand.ts';
 /** 阶段。 */
 export type Phase = '天机' | '行动' | '山议' | '认证' | '终局';
 
+/** 座位控制者。 */
+export type SeatController = 'human' | 'ai';
+
 /**
  * 玩家身上的**回合内临时状态**（规格 §6.2 B1 锁定契约）。
  *
@@ -75,6 +78,8 @@ export const EMPTY_TURN: PlayerTurnState = {
 export interface Player {
   /** 座位号（0 起） */
   readonly seat: number;
+  /** 座位控制者；旧存档缺省按 human 归一化（v2.3）。 */
+  readonly controlledBy: SeatController;
   /** 是否存活 */
   readonly alive: boolean;
   /** 当前体力 */
@@ -133,6 +138,12 @@ export interface LogEntry {
   readonly trialId?: string;
   /** 试炼是否通过（`kind='trial'` 时给出）—— B23：失败 ⇒ 改为付费（`gate_fallback_pay`） */
   readonly trialPassed?: boolean;
+  /** AI 动作事件的动作键（默认人类路径不写，v2.3）。 */
+  readonly actionKey?: string;
+  /** AI 动作事件的策略降级档位（默认人类路径不写，v2.3）。 */
+  readonly degradeLevel?: 1 | 2 | 3;
+  /** AI 事件来源模式（默认人类路径不写，v2.3）。 */
+  readonly seatMode?: 'seat_filled_by_ai' | 'seat_offline_temporary';
 }
 
 /** 各类牌堆（规格 §6.2）。 */
@@ -225,6 +236,11 @@ export interface State {
   readonly outcome: Outcome;
 }
 
+/** 座位是否由程序控制；旧存档缺 controlledBy 时 serialize 层已归一化为 human。 */
+export function isAiSeat(state: State, seat: number): boolean {
+  return state.players[seat]?.controlledBy === 'ai';
+}
+
 /** 构造初始状态的参数。 */
 export interface InitialStateOptions {
   /** 玩家人数（3–8） */
@@ -267,6 +283,7 @@ export function createInitialState(opts: InitialStateOptions): State {
   const hpBase = scales.threshold + 5;
   const players: Player[] = Array.from({ length: opts.players }, (_, seat) => ({
     seat,
+    controlledBy: 'human',
     alive: true,
     hp: hpBase,
     hpMax: hpBase,
