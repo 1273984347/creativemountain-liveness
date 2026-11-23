@@ -29,6 +29,7 @@ import { runTutorial } from './tutorial.ts';
 import { DEFAULT_SEED, parseSeed } from './seed.ts';
 import { PlaytestController } from './playtest-controller.ts';
 import { PlaytestEventStore, parsePlaytestConfig } from './playtest-events.ts';
+import { renderPlaytestPanel, setPlaytestPanelOperator } from './playtest-panel.ts';
 
 declare const PLAYTEST_MODE: boolean;
 let playtest: PlaytestController | null = null;
@@ -114,12 +115,26 @@ const ui: Ui = {
   notice: null,
 };
 
+function applyPlaytestAiSeat(state: State): State {
+  if (!PLAYTEST_MODE) { return state; }
+  const config = parsePlaytestConfig(location.search);
+  if (config === null) { return state; }
+  return {
+    ...state,
+    players: state.players.map((player) => ({
+      ...player,
+      controlledBy: player.seat === config.aiSeat ? 'ai' as const : 'human' as const,
+    })),
+  };
+}
+
 function newGame(): void {
   const theme = themeById(ui.themeId).theme;
   ui.state = installTheme(
     createInitialState({ players: ui.playerCount, seed: ui.seed, deckSize: theme.counts.deckTotal }),
     theme,
   );
+  ui.state = applyPlaytestAiSeat(ui.state);
   ui.seat = 0;
   ui.pendingTargetCardId = null;
   ui.pendingAbility = false;
@@ -217,6 +232,7 @@ function renderToolbar(): HTMLElement {
     if (n === ui.playerCount) { opt.selected = true; }
     countSel.append(opt);
   }
+  if (PLAYTEST_MODE) { countSel.disabled = true; }
   countSel.addEventListener('change', () => {
     ui.playerCount = Number(countSel.value) as Ui['playerCount'];
     newGame();
@@ -854,7 +870,9 @@ function render(): void {
   for (const p2 of panels) {
     root.append(typeof p2 === 'string' ? document.createTextNode(p2) : p2);
   }
-  if (playtest !== null) {
+  if (PLAYTEST_MODE && playtest !== null) {
+    setPlaytestPanelOperator(playtest.store, playtest.getSeat());
+    root.append(renderPlaytestPanel(playtest.store, ui.state, () => performance.now()));
     playtest.afterRender(ui.state);
   }
 }
@@ -865,8 +883,6 @@ if (PLAYTEST_MODE) {
     ui.playerCount = 6;
     ui.seed = config.seed;
     newGame();
-    ui.state = { ...ui.state, players: ui.state.players.map((p) =>
-      p.seat === config.aiSeat ? { ...p, controlledBy: 'ai' } : p) };
     const store = new PlaytestEventStore(config);
     store.setMetadata({ themeId: ui.themeId, players: 6, mode: ui.mode });
     store.record({ type: 'game_start', seed: config.seed, aiSeat: config.aiSeat });

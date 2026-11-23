@@ -33,6 +33,9 @@ const errors = [];
 page.on('console', (m) => { if (m.type() === 'error') { errors.push(m.text()); } });
 page.on('pageerror', (e) => { errors.push('pageerror: ' + e.message); });
 await page.goto(url);
+const productionHtml = readFileSync(file, 'utf8');
+assert.equal(productionHtml.includes('实拍观察员'), false, '生产 HTML 不得包含观察员文案');
+assert.equal(productionHtml.includes('playtest-panel'), false, '生产 HTML 不得包含实拍面板类名');
 
 const seedInput = page.locator('input[aria-label="Seed"]');
 await seedInput.fill('123456');
@@ -120,6 +123,53 @@ const logHasDuel = /对峙/.test(bodyAll);
 const publicShown = /场上公开/.test(bodyAll);
 // 结算应执行（败者后退 / 平局弃牌 ⇒ 日志里有结算描述）
 const settled = /后退|平局|落败|抽 1 张/.test(bodyAll);
+
+// B85 Task 3：独立实拍页、观察员动作与本地 JSON 导出。
+const playtestUrl = 'file:///' + file.replace('创界山-活人认证.html', '创界山-活人认证-实拍.html')
+  .split('/').map((s, i) => (i === 0 ? s : encodeURIComponent(s))).join('/')
+  + '?playtest=1&seed=123456&aiSeat=2';
+const pt = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+const ptErrors = [];
+pt.on('console', (m) => { if (m.type() === 'error') { ptErrors.push(m.text()); } });
+pt.on('pageerror', (e) => { ptErrors.push('pageerror: ' + e.message); });
+await pt.goto(playtestUrl);
+assert.equal(await pt.locator('.players .player').count(), 6, '实拍局固定为 6 人');
+assert.equal(await pt.locator('select').nth(1).isDisabled(), true, '实拍局不得切换人数');
+await pt.getByRole('button', { name: '新开一局' }).click();
+assert.equal(await pt.getByLabel('焦点座位').inputValue(), '2', '焦点座位默认当前 AI 座位');
+assert.equal(await pt.getByLabel('持续秒数').inputValue(), '3', '同频持续默认 3 秒');
+assert.equal(await pt.getByLabel('自报座位').locator('option').count(), 5, '局后自报覆盖 5 位真人');
+const currentTurnText = await pt.locator('.status').first().innerText();
+const currentTurnSeat = Number(/当前\S* 座(\d+)/.exec(currentTurnText)?.[1]);
+const operatorSeat = [0, 1, 3, 4, 5].find((seat) => seat !== currentTurnSeat);
+assert.notEqual(operatorSeat, undefined, '应能选择与当前手番不同的真人操作者');
+await pt.locator('select').nth(3).selectOption(String(operatorSeat));
+await pt.getByRole('button', { name: '记一次同频' }).click();
+await pt.getByRole('button', { name: '记一次看面板' }).click();
+const ptDownloadPromise = pt.waitForEvent('download');
+await pt.getByRole('button', { name: '导出实拍记录' }).click();
+const ptDownload = await ptDownloadPromise;
+const ptPath = await ptDownload.path();
+const ptData = JSON.parse(readFileSync(ptPath, 'utf8'));
+assert.equal(ptDownload.suggestedFilename(), '创界山-实拍-123456-2.json');
+assert.equal(ptData.schema, 1);
+assert.equal(ptData.config.seed, 123456);
+assert.equal(ptData.config.aiSeat, 2);
+assert.equal(ptData.metadata.players, 6);
+assert.equal(typeof ptData.snapshot, 'string');
+assert.equal(JSON.parse(ptData.snapshot).state.players[2].controlledBy, 'ai', '新开实拍局必须保留 URL 指定的 AI 座位');
+const attention = ptData.events.find((e) => e.type === 'table_attention_peak');
+const gaze = ptData.events.find((e) => e.type === 'gaze_panel');
+assert.ok(attention);
+assert.equal(attention.focusSeat, 2);
+assert.equal(attention.durationSec, 3);
+assert.ok(Number.isInteger(attention.anchorRound));
+assert.ok(attention.anchorLogIndex >= 0);
+assert.ok(gaze);
+assert.equal(gaze.seat, operatorSeat, '看面板事件必须取当前 UI 操作者');
+assert.ok(gaze.durationMs >= 0);
+assert.equal(ptErrors.length, 0);
+await pt.close();
 await browser.close();
 
 const out = {
@@ -137,6 +187,7 @@ const out = {
   publicShown,
   settled,
   consoleErrors: errors,
+  playtestConsoleErrors: ptErrors,
 };
 console.log(JSON.stringify(out, null, 2));
-process.exit(errors.length === 0 && unlocked && duelGone && publicShown && settled ? 0 : 1);
+process.exit(errors.length === 0 && ptErrors.length === 0 && unlocked && duelGone && publicShown && settled ? 0 : 1);

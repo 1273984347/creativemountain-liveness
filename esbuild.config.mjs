@@ -22,29 +22,29 @@ const root = process.env.CM_BUILD_ROOT !== undefined
 
 await mkdir(resolve(root, 'dist'), { recursive: true });
 
-const result = await build({
-  entryPoints: [resolve(root, 'web/main.ts')],
-  bundle: true,
-  format: 'iife',
-  target: ['es2022'],
-  minify: true,
-  write: false,
-  charset: 'utf8',
-  legalComments: 'none',
-  loader: { '.json': 'json' },
-});
-
-const js = result.outputFiles[0].text;
-
 // 样式外置到 web/styles.css，构建时内联进单文件。
 const css = await readFile(resolve(root, 'web/styles.css'), 'utf8');
 
-const html = `<!DOCTYPE html>
+async function buildHtml(entry, define, outName, title) {
+  const result = await build({
+    entryPoints: [resolve(root, entry)],
+    bundle: true,
+    format: 'iife',
+    target: ['es2022'],
+    minify: true,
+    write: false,
+    charset: 'utf8',
+    legalComments: 'none',
+    loader: { '.json': 'json' },
+    define,
+  });
+  const js = result.outputFiles[0].text;
+  const html = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>创界山·活人认证</title>
+<title>${title}</title>
 <style>
 ${css}
 </style>
@@ -56,7 +56,11 @@ ${js}
 </script>
 </body>
 </html>`;
+  const outPath = resolve(root, 'dist', outName);
+  await writeFile(outPath, html, 'utf8');
+  console.log(`built → ${outPath} (${(html.length / 1024).toFixed(1)} KB)`);
+  return outPath;
+}
 
-const outPath = resolve(root, 'dist/创界山-活人认证.html');
-await writeFile(outPath, html, 'utf8');
-console.log(`built → ${outPath} (${(html.length / 1024).toFixed(1)} KB)`);
+await buildHtml('web/main.ts', { PLAYTEST_MODE: 'false' }, '创界山-活人认证.html', '创界山·活人认证');
+await buildHtml('web/playtest-main.ts', { PLAYTEST_MODE: 'true' }, '创界山-活人认证-实拍.html', '创界山·活人认证（实拍）');

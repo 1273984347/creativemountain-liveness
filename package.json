@@ -10,6 +10,7 @@
     "test:engine": "node --test \"tests/engine/**/*.test.ts\"",
     "test:gates": "node --test \"tests/gates/**/*.test.ts\"",
     "test:e2e": "npm run build:only && node tests/e2e/duel-e2e.mjs",
+    "test:e2e:playtest": "npm run build:only && node tests/e2e/duel-e2e.mjs",
     "doc-sync": "node tools/doc-sync.mjs",
     "build": "npm run typecheck && node esbuild.config.mjs",
     "build:only": "node esbuild.config.mjs",

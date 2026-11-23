@@ -72,6 +72,10 @@ export class PlaytestController {
     this.now = options.now ?? (() => performance.now());
   }
 
+  getSeat(): number {
+    return this.options.getSeat();
+  }
+
   afterRender(state: State): void {
     this.store.setSnapshot(stateToJson(state));
     if (state.outcome.finished || this.running) { return; }
