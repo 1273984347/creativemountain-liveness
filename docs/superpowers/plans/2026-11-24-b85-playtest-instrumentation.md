@@ -216,7 +216,7 @@ Expected: FAIL，模块不存在。
 `PlaytestController` 职责：
 - `afterRender` 记录当前手番开始时间；若当前 `round/turnIndex/seat` 变化，重置 `turnStartedAt = now()`。
 - 若当前手番是 AI 座位，或任一 AI 座位存在合法流程候选（山议/认证/对峙），调度一个 `setTimeout(..., 0)`；`running` 防重入。非当前手番的行动面候选不会被调度。
-- 单步只处理一个 AI 座位：`start = now()` → `runSeatStep(state, seat, policy, getMode())` → `end = now()` → 写 `ai_turn_duration_ms` 与 `ai_action_committed` / `ai_forfeit` → `setState` → `requestRender`。
+- 单步只处理一个 AI 座位：`start = now()` → `runSeatStep(state, seat, policy, getMode())` → `end = now()` → 写 `ai_turn_duration_ms` 与 `ai_action_committed` / `ai_forfeit` → `setState` → **先将 `running` 置 false，再 `requestRender()`**，确保同步重渲染能进入 `afterRender`、更新新回合计时并调度后续 AI 流程。
 - 用 `stateSignature(state)` 防重复：包含 `round/turnIndex/phase`、所有座位 `position/pendingCert/statuses`、`certification`、`council.votes`、`duel`、关隘/裂隙阻塞；forfeit 后签名不变则不重试。
 - `captureHumanClick(control, target)`：忽略 `.playtest-panel` 与 `.toolbar` 内的点击；若 `getSeat()` 是 AI 座位，写 `human_takeover_click`；否则用动作前记录的 `round/turnIndex` 写 `human_turn_duration_ms`。
 - 不把任何时间写进 `State.log`；每次 `setState` 后调用 `store.setSnapshot(stateToJson(state))`，保证导出含可回放终局。

@@ -205,3 +205,51 @@ test('AI 单步墙钟记录 runSeatStep 的真实耗时', async () => {
   assert.equal(events(store).find((e) => e.type === 'ai_action_committed')?.durationMs, 25);
 });
 
+test('同步重渲染按 AI 行动后的真人手番记录墙钟', async () => {
+  let state = aiState();
+  state = { ...state, turnOrder: [2, 0, 1, 3, 4, 5], turnIndex: 0 };
+  let t = 100;
+  const store = new PlaytestEventStore({ seed: 7, aiSeat: 2 });
+  const c = new PlaytestController({
+    getState: () => state, getSeat: () => currentPlayer(state), getMode: () => 'standard',
+    setState: (s) => { state = s; },
+    requestRender: () => { t = 200; c.afterRender(state); },
+    now: () => t,
+  }, store);
+  c.afterRender(state);
+  await tick();
+  t = 250;
+  c.captureHumanClick('问天', {} as HTMLElement);
+  const duration = events(store).find((e) => e.type === 'human_turn_duration_ms');
+  assert.deepEqual(duration, {
+    type: 'human_turn_duration_ms', round: 1, turnIndex: 1, seat: 0,
+    durationMs: 50, seq: duration?.seq, ts: duration?.ts,
+  });
+});
+
+test('同步重渲染无需额外渲染即可调度后续 AI 流程候选', async () => {
+  const base = councilScene(6, 7);
+  let state: State = {
+    ...base,
+    players: base.players.map((p) => p.seat === 2 || p.seat === 3
+      ? { ...p, controlledBy: 'ai' as const }
+      : p),
+  };
+  let renderCount = 0;
+  const store = new PlaytestEventStore({ seed: 7, aiSeat: 2 });
+  const c = new PlaytestController({
+    getState: () => state, getSeat: () => currentPlayer(state), getMode: () => 'standard',
+    setState: (s) => { state = s; },
+    requestRender: () => { renderCount += 1; c.afterRender(state); },
+    now: () => 0,
+  }, store);
+  c.afterRender(state);
+  await tick();
+  await tick();
+  const committed = events(store).filter((e) => e.type === 'ai_action_committed');
+  assert.deepEqual(committed.map((e) => e.seat), [2, 3]);
+  assert.equal(renderCount, 2);
+  assert.equal(state.council.votes[2] !== undefined, true);
+  assert.equal(state.council.votes[3] !== undefined, true);
+});
+

@@ -158,6 +158,8 @@ export class PlaytestController {
     }
     this.options.setState(result.state);
     this.store.setSnapshot(stateToJson(result.state));
+    // requestRender 可能同步回调 afterRender；先释放运行锁，让它处理 AI 行动后的新局面。
+    this.running = false;
     this.options.requestRender();
   }
 }
