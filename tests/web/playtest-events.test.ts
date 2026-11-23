@@ -39,6 +39,23 @@ test('实拍配置：必须显式 playtest=1 + 合法 seed + 0..5 的 aiSeat', (
   }
 });
 
+test('事件表：构造时拒绝非法 seed 与 aiSeat 配置', () => {
+  for (const seed of [-1, 1.5, 4294967296, Number.NaN, Number.POSITIVE_INFINITY]) {
+    assert.throws(() => new PlaytestEventStore({ seed, aiSeat: 2 }), /seed/);
+  }
+  for (const aiSeat of [-1, 6, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+    assert.throws(() => new PlaytestEventStore({ seed: 7, aiSeat }), /aiSeat/);
+  }
+
+  for (const config of [
+    { seed: 0, aiSeat: 0 },
+    { seed: 4294967295, aiSeat: 5 },
+  ]) {
+    const data = new PlaytestEventStore(config).toJSON() as PlaytestExport;
+    assert.deepEqual(data.config, config);
+  }
+});
+
 test('事件表：导出包含 schema、配置、元数据与快照，更新后取最新值', () => {
   const config = { seed: 7, aiSeat: 2 };
   const store = new PlaytestEventStore(config);
@@ -58,6 +75,17 @@ test('事件表：导出包含 schema、配置、元数据与快照，更新后�
   assert.equal(data.snapshot, '{"round":2}');
 });
 
+test('事件表：setMetadata 拒绝非 6 人配置', () => {
+  const store = new PlaytestEventStore({ seed: 7, aiSeat: 2 });
+  for (const players of [0, 5, 7, 6.5, Number.NaN]) {
+    assert.throws(
+      () => store.setMetadata({ themeId: 'default', players, mode: 'standard' }),
+      /players/,
+    );
+  }
+  assert.equal((store.toJSON() as PlaytestExport).metadata, null);
+});
+
 test('事件表：保留全部事件字段并补 seq 与 Date.now 时间戳', () => {
   const store = new PlaytestEventStore({ seed: 7, aiSeat: 2 });
   const events: PlaytestEvent[] = [
@@ -65,7 +93,7 @@ test('事件表：保留全部事件字段并补 seq 与 Date.now 时间戳', ()
     { type: 'ai_turn_start', round: 1, turnIndex: 0, seat: 2 },
     { type: 'ai_action_committed', round: 1, turnIndex: 0, seat: 2,
       actionKey: 'play:card-1', durationMs: 25, degradeLevel: 1,
-      seatMode: 'seat_filled_by_ai' },
+      seatMode: 'seat_filled_by_ai', legal: true, source: 'heuristic' },
     { type: 'ai_turn_duration_ms', round: 1, turnIndex: 0, seat: 2, durationMs: 25 },
     { type: 'ai_forfeit', round: 2, turnIndex: 1, seat: 2, reason: 'no_legal_action',
       durationMs: 10, seatMode: 'seat_filled_by_ai' },

@@ -1,4 +1,4 @@
-import { parseSeed } from './seed.ts';
+import { MAX_SEED, parseSeed } from './seed.ts';
 
 export interface PlaytestConfig {
   readonly seed: number;
@@ -10,7 +10,8 @@ export type PlaytestEvent =
   | { readonly type: 'ai_turn_start'; readonly round: number; readonly turnIndex: number; readonly seat: number }
   | { readonly type: 'ai_action_committed'; readonly round: number; readonly turnIndex: number;
       readonly seat: number; readonly actionKey: string; readonly durationMs: number;
-      readonly degradeLevel: 1 | 2 | 3; readonly seatMode: 'seat_filled_by_ai' }
+      readonly degradeLevel: 1 | 2 | 3; readonly seatMode: 'seat_filled_by_ai';
+      readonly legal: boolean; readonly source: 'heuristic' | 'model' }
   | { readonly type: 'ai_turn_duration_ms'; readonly round: number; readonly turnIndex: number;
       readonly seat: number; readonly durationMs: number }
   | { readonly type: 'ai_forfeit'; readonly round: number; readonly turnIndex: number;
@@ -54,6 +55,12 @@ export class PlaytestEventStore {
   private events: RecordedPlaytestEvent[] = [];
 
   constructor(config: PlaytestConfig) {
+    if (!Number.isInteger(config.seed) || config.seed < 0 || config.seed > MAX_SEED) {
+      throw new Error('Invalid playtest config seed: expected uint32');
+    }
+    if (!Number.isInteger(config.aiSeat) || config.aiSeat < 0 || config.aiSeat > 5) {
+      throw new Error('Invalid playtest config aiSeat: expected integer in 0..5');
+    }
     this.config = { ...config };
   }
 
@@ -68,6 +75,9 @@ export class PlaytestEventStore {
   }
 
   setMetadata(metadata: { themeId: string; players: number; mode: string }): void {
+    if (metadata.players !== 6) {
+      throw new Error('Invalid playtest metadata players: expected 6');
+    }
     this.metadata = { ...metadata };
   }
 

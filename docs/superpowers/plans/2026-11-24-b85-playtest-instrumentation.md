@@ -86,7 +86,8 @@ export type PlaytestEvent =
   | { readonly type: 'ai_turn_start'; readonly round: number; readonly turnIndex: number; readonly seat: number }
   | { readonly type: 'ai_action_committed'; readonly round: number; readonly turnIndex: number;
       readonly seat: number; readonly actionKey: string; readonly durationMs: number;
-      readonly degradeLevel: 1 | 2 | 3; readonly seatMode: 'seat_filled_by_ai' }
+      readonly degradeLevel: 1 | 2 | 3; readonly seatMode: 'seat_filled_by_ai';
+      readonly legal: boolean; readonly source: 'heuristic' | 'model' }
   | { readonly type: 'ai_turn_duration_ms'; readonly round: number; readonly turnIndex: number;
       readonly seat: number; readonly durationMs: number }
   | { readonly type: 'ai_forfeit'; readonly round: number; readonly turnIndex: number;
@@ -105,7 +106,7 @@ export type PlaytestEvent =
 
 实现要点：
 - `parsePlaytestConfig` 用 `URLSearchParams`；`playtest` 必须严格等于 `1`；seed 复用 `web/seed.ts::parseSeed`；实拍局固定 6 人，`aiSeat` 只接受 `0..5` 整数。
-- `PlaytestEventStore` 为每个事件补 `seq` 与 `ts`（`Date.now`，仅实拍页使用）；`toJSON()` 输出 `{schema:1, config, metadata, events, snapshot}`，`metadata` 记录主题/人数/模式，`snapshot` 由控制器在每次状态变化后通过 `setSnapshot(stateToJson(state))` 更新，供锚点回放。
+- `PlaytestEventStore` 为每个事件补 `seq` 与 `ts`（`Date.now`，仅实拍页使用）；构造时校验 config 的 seed 为 uint32、aiSeat 为 0..5，`setMetadata` 强制 players===6；`toJSON()` 输出 `{schema:1, config, metadata, events, snapshot}`，`metadata` 记录主题/人数/模式，`snapshot` 由控制器在每次状态变化后通过 `setSnapshot(stateToJson(state))` 更新，供锚点回放。
 - `reset()` 清空事件但保留 config。
 
 - [ ] **Step 4: 跑测试确认绿**
