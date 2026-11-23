@@ -27,6 +27,11 @@ import { renderCouncil } from './ui/council.ts';
 import { renderCertification } from './ui/cert.ts';
 import { runTutorial } from './tutorial.ts';
 import { DEFAULT_SEED, parseSeed } from './seed.ts';
+import { PlaytestController } from './playtest-controller.ts';
+import { PlaytestEventStore, parsePlaytestConfig } from './playtest-events.ts';
+
+declare const PLAYTEST_MODE: boolean;
+let playtest: PlaytestController | null = null;
 
 /** UI 全局状态。 */
 interface Ui {
@@ -849,6 +854,37 @@ function render(): void {
   for (const p2 of panels) {
     root.append(typeof p2 === 'string' ? document.createTextNode(p2) : p2);
   }
+  if (playtest !== null) {
+    playtest.afterRender(ui.state);
+  }
 }
 
+if (PLAYTEST_MODE) {
+  const config = parsePlaytestConfig(location.search);
+  if (config !== null) {
+    ui.playerCount = 6;
+    ui.seed = config.seed;
+    newGame();
+    ui.state = { ...ui.state, players: ui.state.players.map((p) =>
+      p.seat === config.aiSeat ? { ...p, controlledBy: 'ai' } : p) };
+    const store = new PlaytestEventStore(config);
+    store.setMetadata({ themeId: ui.themeId, players: 6, mode: ui.mode });
+    store.record({ type: 'game_start', seed: config.seed, aiSeat: config.aiSeat });
+    playtest = new PlaytestController({
+      getState: () => ui.state,
+      getSeat: () => ui.seat,
+      getMode: () => ui.mode,
+      setState: (s) => { ui.state = s; },
+      requestRender: render,
+      now: () => performance.now(),
+    }, store);
+    document.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement | null;
+      const control = target?.closest('button')?.textContent?.trim();
+      if (target !== null && control !== undefined && control !== '') {
+        playtest?.captureHumanClick(control, target);
+      }
+    }, true);
+  }
+}
 render();
