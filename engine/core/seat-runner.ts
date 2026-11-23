@@ -47,39 +47,70 @@ export function runSeatStep(
     return { state, action: null, accepted: false, degradeLevel: 3, reason: 'offline_mode_not_implemented' };
   }
   const legal = getLegalActions(state, seat);
-  const action = policy.choose(state, seat, legal);
-  if (action === null) { return forfeit(state, seat, seatMode, 'blocked'); }
-  if (action.actor !== seat || !legal.some((a) => actionKey(a) === actionKey(action))) {
-    return forfeit(state, seat, seatMode, 'illegal_choice');
+  if (legal.length === 0) {
+    const action = policy.choose(state, seat, legal);
+    return action === null ? forfeit(state, seat, seatMode, 'blocked')
+      : forfeit(state, seat, seatMode, 'illegal_choice');
   }
+  let remaining = legal;
+  let lastReason = 'illegal_choice';
+  let lastRuleReason: 'wrong_turn' | 'engine_rejected' | null = null;
   const turnOnly = new Set<Action['type']>([
     'MOVE', 'ROLL_WHEEL', 'PLAY_CARD', 'ABILITY', 'COMPARE',
     'GATE_RESOLVE', 'BARRIER_RESOLVE', 'PASS', 'EQUIP_CARD', 'RECUPERATE',
   ]);
-  if (turnOnly.has(action.type) && currentPlayer(state) !== seat) {
-    return forfeit(state, seat, seatMode, 'wrong_turn');
+  // C5 三级降级：每次把已尝试键从候选集移除后再问策略；最多尝试合法候选数，杜绝死循环。
+  for (let attempt = 0; attempt < legal.length; attempt += 1) {
+    const action = policy.choose(state, seat, remaining);
+    if (action === null) {
+      return forfeit(state, seat, seatMode, lastRuleReason ?? 'blocked');
+    }
+    const key = actionKey(action);
+    const matched = remaining.find((a) => actionKey(a) === key);
+    if (matched !== undefined) {
+      remaining = remaining.filter((a) => actionKey(a) !== key);
+    }
+    if (action.actor !== seat || matched === undefined) {
+      // 策略反复返回候选集外键时，保留此前真实规则拒绝的原因（既有 ai_forfeit 契约）。
+      if (lastRuleReason === null) { lastReason = 'illegal_choice'; }
+      continue;
+    }
+    if (turnOnly.has(action.type) && currentPlayer(state) !== seat) {
+      lastReason = 'wrong_turn';
+      lastRuleReason = 'wrong_turn';
+      continue;
+    }
+    if (action.type === 'DUEL_SUBMIT_CARD'
+      && state.duel !== null
+      && action.actor !== state.duel.seatA
+      && action.actor !== state.duel.seatB) {
+      lastReason = 'wrong_turn';
+      lastRuleReason = 'wrong_turn';
+      continue;
+    }
+    const actionRound = state.round;
+    const actionTurnIndex = state.turnIndex;
+    const next = applyAction(state, action, mode);
+    if (next === state) {
+      lastReason = 'engine_rejected';
+      lastRuleReason = 'engine_rejected';
+      continue;
+    }
+    const degradeLevel = policyBand(action);
+    return {
+      state: {
+        ...next,
+        log: [...next.log, {
+          round: actionRound, turnIndex: actionTurnIndex, actor: seat,
+          kind: 'ai_action_committed', message: `程序座位行动：${actionKey(action)}`,
+          actionKey: actionKey(action), degradeLevel, seatMode,
+        }],
+      },
+      action,
+      accepted: true,
+      degradeLevel,
+      reason: 'committed',
+    };
   }
-  if (action.type === 'DUEL_SUBMIT_CARD'
-    && state.duel !== null
-    && action.actor !== state.duel.seatA
-    && action.actor !== state.duel.seatB) {
-    return forfeit(state, seat, seatMode, 'wrong_turn');
-  }
-  const next = applyAction(state, action, mode);
-  if (next === state) { return forfeit(state, seat, seatMode, 'engine_rejected'); }
-  const degradeLevel = policyBand(action);
-  return {
-    state: {
-      ...next,
-      log: [...next.log, {
-        round: next.round, turnIndex: next.turnIndex, actor: seat,
-        kind: 'ai_action_committed', message: `程序座位行动：${actionKey(action)}`,
-        actionKey: actionKey(action), degradeLevel, seatMode,
-      }],
-    },
-    action,
-    accepted: true,
-    degradeLevel,
-    reason: 'committed',
-  };
+  return forfeit(state, seat, seatMode, lastReason);
 }

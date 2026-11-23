@@ -5,6 +5,7 @@ import { heuristicPolicy } from '../../engine/core/heuristic-policy.ts';
 import type { SeatPolicy } from '../../engine/core/heuristic-policy.ts';
 import type { State } from '../../engine/core/state.ts';
 import { actionKey } from '../../engine/core/action-key.ts';
+import { currentPlayer } from '../../engine/core/round.ts';
 import { startDuel } from '../../engine/core/duel.ts';
 import { certifyMutualSign, certifySign, advanceCertificationRound } from '../../engine/core/certification.ts';
 import { exiledScene, mk, pendingScene, putPending } from './fixtures.ts';
@@ -24,6 +25,41 @@ test('AI 座位提交合法动作并写 actionKey/degradeLevel/seatMode', () => 
   assert.equal(event?.actionKey, actionKey(r.action));
   assert.equal(event?.degradeLevel, r.degradeLevel);
   assert.equal(event?.seatMode, 'seat_filled_by_ai');
+});
+
+test('AI 动作事件记录提交前手番，不跟随后置推进', () => {
+  const base = mk(4, 7);
+  const seat = currentPlayer(base);
+  const s = withAi(base, seat);
+  const policy: SeatPolicy = {
+    choose: (_state, _seat, legal) => legal.find((a) => a.type === 'MOVE') ?? null,
+  };
+  const r = runSeatStep(s, seat, policy, 'standard');
+  assert.equal(r.accepted, true);
+  assert.equal(r.state.turnIndex, s.turnIndex + 1, '前提：MOVE 必须推进手番');
+  const event = r.state.log.at(-1);
+  assert.equal(event?.kind, 'ai_action_committed');
+  assert.equal(event?.round, s.round);
+  assert.equal(event?.turnIndex, s.turnIndex);
+});
+
+test('AI 动作事件记录跨回合前的 round/turnIndex', () => {
+  const base = mk(4, 7);
+  const lastTurn = base.players.filter((p) => p.alive).length - 1;
+  const atRoundEnd: State = { ...base, turnIndex: lastTurn };
+  const seat = currentPlayer(atRoundEnd);
+  const s = withAi(atRoundEnd, seat);
+  const policy: SeatPolicy = {
+    choose: (_state, _seat, legal) => legal.find((a) => a.type === 'MOVE') ?? null,
+  };
+  const r = runSeatStep(s, seat, policy, 'standard');
+  assert.equal(r.accepted, true);
+  assert.equal(r.state.round, s.round + 1, '前提：末位手番必须跨 round');
+  assert.equal(r.state.turnIndex, 0);
+  const event = r.state.log.at(-1);
+  assert.equal(event?.kind, 'ai_action_committed');
+  assert.equal(event?.round, s.round);
+  assert.equal(event?.turnIndex, lastTurn);
 });
 
 test('策略返回候选集外动作时拒绝并写 ai_forfeit', () => {
@@ -66,6 +102,36 @@ test('自定义策略提交 AI 禁止动作时由提交口拒绝并写 ai_forfei
   assert.equal(r.state.log.at(-1)?.seatMode, 'seat_filled_by_ai');
 });
 
+test('首选被引擎拒绝后排除该键并改选合法弃权', () => {
+  const base = pendingScene(4, 7);
+  const s = withAi(base, 1);
+  const sign = { type: 'CERTIFY_SIGN', actor: 1, target: 0 } as const;
+  let calls = 0;
+  const policy: SeatPolicy = {
+    choose: (_state, _seat, legal) => {
+      calls += 1;
+      if (calls === 1) {
+        assert.ok(legal.some((a) => actionKey(a) === actionKey(sign)), '前提：首轮候选含被禁签印');
+        return sign;
+      }
+      assert.equal(legal.some((a) => actionKey(a) === actionKey(sign)), false,
+        '回落候选必须排除已尝试且被拒绝的动作键');
+      const abstain = legal.find((a) => a.type === 'CERTIFY_ABSTAIN');
+      assert.ok(abstain, '前提：弃权仍是合法替代动作');
+      return abstain;
+    },
+  };
+  const r = runSeatStep(s, 1, policy, 'standard');
+  assert.equal(r.accepted, true);
+  assert.equal(r.action?.type, 'CERTIFY_ABSTAIN');
+  assert.equal(r.reason, 'committed');
+  assert.equal(r.degradeLevel, 1, '降级档位取最终被接受动作的 policyBand');
+  assert.equal(calls, 2, '应在首次引擎拒绝后恰好再调用一次策略');
+  assert.equal(r.state.log.at(-1)?.kind, 'ai_action_committed');
+  assert.equal(r.state.log.some((l) => l.kind === 'ai_forfeit'), false,
+    '已有合法替代动作时不得提前弃权');
+});
+
 test('认证入口直接调用也拒绝 AI 认证人签印/互签', () => {
   const base = pendingScene(4, 7);
   const s = withAi(base, 1);
@@ -95,6 +161,27 @@ test('AI 待认证者即使被真人签够，也不获得活人席', () => {
   assert.equal(closed.state.liveSeats[0], undefined, 'AI 不得持有活人席');
   assert.equal(closed.state.players[0]?.position, 0, 'AI 认证结束后回到山道起点');
   assert.equal(closed.state.players[0]?.pendingCert, false, 'AI 认证结束后仍回到山道');
+  assert.match(closed.note ?? '', /程序座位完成验证/);
+  assert.doesNotMatch(closed.note ?? '', /坐上活人席/);
+  const explanation = closed.state.log.find((l) => l.actor === 0 && l.message === '程序座位完成验证，但不获得活人席');
+  assert.ok(explanation, 'AI 认证完成必须留下显式状态日志，不得静默无效');
+  assert.equal(explanation.kind, 'certify');
+});
+
+test('混合认证结算只给真人活人席，note 分别说明两类结果', () => {
+  const base = putPending(mk(4, 7), [0, 1]);
+  const s = withAi(base, 0);
+  const signedAi = certifySign(s, 2, 0);
+  assert.equal(signedAi.ok, true);
+  const signedHuman = certifySign(signedAi.state, 3, 1);
+  assert.equal(signedHuman.ok, true);
+  const closed = advanceCertificationRound(signedHuman.state);
+  assert.equal(closed.ok, true);
+  assert.equal(closed.state.liveSeats[0], undefined);
+  assert.equal(closed.state.liveSeats[1], 1);
+  assert.match(closed.note ?? '', /坐上活人席：座1/);
+  assert.match(closed.note ?? '', /程序座位完成验证：座0/);
+  assert.ok(closed.state.log.some((l) => l.actor === 0 && l.message === '程序座位完成验证，但不获得活人席'));
 });
 
 test('人类座位不产生 AI 事件', () => {
