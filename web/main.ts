@@ -26,12 +26,14 @@ import { renderLog } from './ui/log.ts';
 import { renderCouncil } from './ui/council.ts';
 import { renderCertification } from './ui/cert.ts';
 import { runTutorial } from './tutorial.ts';
+import { DEFAULT_SEED, parseSeed } from './seed.ts';
 
 /** UI 全局状态。 */
 interface Ui {
   state: State;
   themeId: string;
   playerCount: 3 | 4 | 5 | 6 | 7 | 8;
+  seed: number;
   mode: 'standard' | 'newbie';
   seat: number;
   /** 正在选目标的卡牌 id（null = 不在选目标模式） */
@@ -92,11 +94,12 @@ const initialTheme = themeById(THEMES[0]?.id ?? 'xianxia2026').theme;
 
 const ui: Ui = {
   state: installTheme(
-    createInitialState({ players: 4, seed: 42, deckSize: initialTheme.counts.deckTotal }),
+    createInitialState({ players: 4, seed: DEFAULT_SEED, deckSize: initialTheme.counts.deckTotal }),
     initialTheme,
   ),
   themeId: initialTheme.meta.id,
   playerCount: 4,
+  seed: DEFAULT_SEED,
   mode: 'newbie',
   seat: 0,
   pendingTargetCardId: null,
@@ -109,7 +112,7 @@ const ui: Ui = {
 function newGame(): void {
   const theme = themeById(ui.themeId).theme;
   ui.state = installTheme(
-    createInitialState({ players: ui.playerCount, seed: 42, deckSize: theme.counts.deckTotal }),
+    createInitialState({ players: ui.playerCount, seed: ui.seed, deckSize: theme.counts.deckTotal }),
     theme,
   );
   ui.seat = 0;
@@ -141,6 +144,7 @@ function loadGame(): void {
       ui.themeId = themeId;
     }
     ui.state = state;
+    ui.seed = state.seed;
     ui.playerCount = ui.state.players.length as Ui['playerCount'];
     render();
   } catch (e) {
@@ -172,6 +176,7 @@ function importSave(): void {
           ui.themeId = themeId;
         }
         ui.state = state;
+        ui.seed = state.seed;
         ui.playerCount = ui.state.players.length as Ui['playerCount'];
         render();
       } catch (e) {
@@ -224,6 +229,28 @@ function renderToolbar(): HTMLElement {
     render();
   });
   bar.append(el('label', { class: 'lbl', text: '模式' }), modeSel);
+  // Seed（新开一局生效；非法输入保留上一次有效值）
+  const seedInput = el('input', {
+    class: 'sel seed-input',
+    type: 'number',
+    min: '0',
+    max: '4294967295',
+    step: '1',
+    value: String(ui.seed),
+    'aria-label': 'Seed',
+  });
+  seedInput.addEventListener('input', () => {
+    const parsed = parseSeed(seedInput.value);
+    if (parsed === null) {
+      seedInput.setAttribute('aria-invalid', 'true');
+      seedInput.setAttribute('title', 'Seed 须为 0–4294967295 的整数；新开一局仍使用上一次有效值。');
+      return;
+    }
+    ui.seed = parsed;
+    seedInput.removeAttribute('aria-invalid');
+    seedInput.removeAttribute('title');
+  });
+  bar.append(el('label', { class: 'lbl', text: 'Seed' }), seedInput);
   // 座位切换（热座：谁在操作就选谁）
   const seatSel = el('select', { class: 'sel' });
   for (const p of ui.state.players) {

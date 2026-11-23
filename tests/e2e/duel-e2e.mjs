@@ -2,10 +2,12 @@
 //
 // 目标：稳定触发对峙 → 双方各自选牌 → 揭晓结算 → 回合解锁 → 页面无报错。
 //
-// ⚠️ 为什么不用内置浏览器手点：UI 的 seed 固定 ⇒ 同一局轨迹可复现，
+// ⚠️ 为什么不用内置浏览器手点：同一 seed 下轨迹可复现，门⑩固定使用 42，
 //   靠随机行棋撞对峙既慢又不可靠（实测 11 轮未命中）；
 //   Playwright 能高速重试（换主题/人数 ⇒ 换 rng 轨迹）⇒ 命中率高且成本低。
 
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 
@@ -31,6 +33,21 @@ const errors = [];
 page.on('console', (m) => { if (m.type() === 'error') { errors.push(m.text()); } });
 page.on('pageerror', (e) => { errors.push('pageerror: ' + e.message); });
 await page.goto(url);
+
+const seedInput = page.locator('input[aria-label="Seed"]');
+await seedInput.fill('123456');
+await page.getByRole('button', { name: '新开一局' }).click();
+const downloadPromise = page.waitForEvent('download');
+await page.getByRole('button', { name: '导出' }).click();
+const download = await downloadPromise;
+const downloadPath = await download.path();
+assert.ok(downloadPath, '导出必须产生可读文件');
+const envelope = JSON.parse(readFileSync(downloadPath, 'utf8'));
+const saved = JSON.parse(envelope.state);
+assert.equal(saved.seed, 123456, '导出必须保留 UI 指定的 seed');
+assert.equal(saved.rng.initialSeed, 123456, 'RNG 初始种子必须与 UI 指定值一致');
+await seedInput.fill('42');
+await page.getByRole('button', { name: '新开一局' }).click();
 
 const selects = page.locator('select');
 const statusText = () => page.locator('.status').first().innerText();
