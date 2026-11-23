@@ -597,12 +597,16 @@ type State = {
   duel: DuelState | null;             // 待决对峙：双方座位 + 各自已锁定的亮牌（B13，§3.3）
   publicCards: PublicCard[];         // 本 round 公开的亮牌（留在场上公开，round 末清空，B13）
   log: LogEntry[];                    // 日志（B23：`kind='trial'` 的条目带 `trialId` / `trialPassed` ⇒ 试炼通过率可机器统计）
+  // AI 事件可选元数据（默认人类路径不写，v2.3）：
+  // actionKey?: string; degradeLevel?: 1 | 2 | 3; seatMode?: 'seat_filled_by_ai' | 'seat_offline_temporary';
   // ---- 以下为认证 / 山议 / 结局流程状态（B3）----
   certification: CertificationState;  // 认证流程状态（§5）
   council: CouncilState;              // 山议流程状态（§5.6）
   outcome: Outcome;                   // 对局结局（§5.7–§5.8）
 };
 ```
+
+AI 运行器只写 `kind='ai_action_committed'` 或 `kind='ai_forfeit'`；两类事件都必须带 `seatMode`，动作事件还必须带 `actionKey` / `degradeLevel`。元数据缺省不影响旧存档与旧日志解析。
 
 **`Player` 增补字段（v2.3；属于 `players` 数组元素，不是 `State` 顶层字段）**：`controlledBy: 'human' | 'ai'`，表示座位控制者；旧存档缺省按 `human` 归一化。
 

@@ -2,7 +2,7 @@
 //
 // §5.1 进入条件 · §5.2 门槛公式 · §5.3 签印/质疑/复议/合规 · §5.4 题目来源 · §5.5 双人互验
 
-import type { State } from './state.ts';
+import { isAiSeat, type State } from './state.ts';
 import type { CertificationState } from './flow.ts';
 import { passiveOf } from './passives.ts';
 import { bumpCounterOf } from './counters.ts';
@@ -117,6 +117,7 @@ export function certifySign(state: State, actor: number, target: number): Certif
   const c = state.certification;
   if (!c.pending.includes(target)) { return fail(state, `座位 ${target} 不在待认证状态`); }
   if (!isCertifier(state, actor)) { return fail(state, `座位 ${actor} 不是认证人`); }
+  if (isAiSeat(state, actor)) { return fail(state, '程序座位没有签印权'); }
   if (hasUsedCertificationTurn(state, actor)) { return fail(state, '本轮已用过认证机会'); }
   let next: State = { ...state, certification: { ...c, signed: [...c.signed, actor] } };
   next = addSignature(next, target, 1);
@@ -436,6 +437,7 @@ export function advanceCertificationRound(state: State): CertifyResult {
     //   改造前：首个登顶者 77.6% 直接获胜（位次胜率极差 12.7pp，严格单调）。
     const liveSeats = { ...state.liveSeats };
     for (const seat of certified) {
+      if (isAiSeat(state, seat)) { continue; }
       liveSeats[seat] = (liveSeats[seat] ?? 0) + 1;
     }
     // 封顶者回到山道起点、解除待认证锁定 ⇒ 可再次登顶再取席；仍留在场上当认证人。
@@ -515,6 +517,7 @@ export function certifyMutualSign(state: State, actor: number, target: number): 
   if (!c.pending.includes(actor) || !c.pending.includes(target)) {
     return fail(state, '互签要求双方都在待认证状态');
   }
+  if (isAiSeat(state, actor)) { return fail(state, '程序座位没有签印权'); }
   if (actor === target) { return fail(state, '不能与自己互签'); }
   // ⚠️ **同轮只能互签一次**：复用已有的 `signed` 数组记录「本轮已用过认证机会」的座位。
   //   ⚠️ **为什么复用而不新增字段**：规格 §6.2 的 State 契约**已冻结**（B1 起「不再变更」）⇒

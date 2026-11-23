@@ -138,6 +138,12 @@ export interface LogEntry {
   readonly trialId?: string;
   /** 试炼是否通过（`kind='trial'` 时给出）—— B23：失败 ⇒ 改为付费（`gate_fallback_pay`） */
   readonly trialPassed?: boolean;
+  /** AI 动作事件的动作键（默认人类路径不写，v2.3）。 */
+  readonly actionKey?: string;
+  /** AI 动作事件的策略降级档位（默认人类路径不写，v2.3）。 */
+  readonly degradeLevel?: 1 | 2 | 3;
+  /** AI 事件来源模式（默认人类路径不写，v2.3）。 */
+  readonly seatMode?: 'seat_filled_by_ai' | 'seat_offline_temporary';
 }
 
 /** 各类牌堆（规格 §6.2）。 */
