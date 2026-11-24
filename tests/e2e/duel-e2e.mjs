@@ -400,6 +400,41 @@ assert.deepEqual(JSON.parse(targetData.snapshot).state.players.map((player) => p
 assert.equal(ptErrors.length, 0);
 await pt.close();
 
+// 实拍页缺失/非法 URL 配置时，读档与导入仍须让 UI 人数跟随存档，不能强写成 6。
+const playtestBaseUrl = playtestUrl.slice(0, playtestUrl.indexOf('?'));
+const invalidConfigPage = await browser.newPage();
+const invalidConfigErrors = [];
+invalidConfigPage.on('console', (m) => { if (m.type() === 'error') { invalidConfigErrors.push(m.text()); } });
+invalidConfigPage.on('pageerror', (e) => { invalidConfigErrors.push('pageerror: ' + e.message); });
+const fivePlayerState = installTheme(createInitialState({
+  players: 5, seed: 888, deckSize: getScales(5).deckTotal,
+}), playtestTheme);
+const fivePlayerEnvelope = JSON.stringify({
+  v: 2, themeId: playtestTheme.meta.id, state: stateToJson(fivePlayerState),
+});
+for (const search of ['', '?playtest=1&seed=bad&aiSeat=2']) {
+  await invalidConfigPage.goto(playtestBaseUrl + search);
+  await invalidConfigPage.evaluate((save) => localStorage.setItem('creativemountain.save.v2', save), fourPlayerEnvelope);
+  await invalidConfigPage.getByRole('button', { name: '读档' }).click();
+  assert.equal(await invalidConfigPage.locator('.players .player').count(), 4);
+  assert.equal(await invalidConfigPage.locator('select').nth(1).inputValue(), '4',
+    '无有效实拍配置时，读档 UI 人数必须跟随 4 人存档');
+  assert.equal(await invalidConfigPage.getByLabel('Seed').inputValue(), '999');
+
+  const invalidChooserPromise = invalidConfigPage.waitForEvent('filechooser');
+  await invalidConfigPage.getByRole('button', { name: '导入' }).click();
+  const invalidChooser = await invalidChooserPromise;
+  await invalidChooser.setFiles({
+    name: 'five-player.json', mimeType: 'application/json', buffer: Buffer.from(fivePlayerEnvelope),
+  });
+  await invalidConfigPage.waitForFunction(() => document.querySelector('input[aria-label="Seed"]')?.value === '888');
+  assert.equal(await invalidConfigPage.locator('.players .player').count(), 5);
+  assert.equal(await invalidConfigPage.locator('select').nth(1).inputValue(), '5',
+    '无有效实拍配置时，导入 UI 人数必须跟随 5 人存档');
+}
+assert.equal(invalidConfigErrors.length, 0);
+await invalidConfigPage.close();
+
 // K7：程序座位尝试签印时，UI 必须显示引擎拒因，不得静默重绘。
 // 用生产页隔离实拍 AI 自动调度，确保点击发生在未被推进的同一认证局面。
 const certTheme = JSON.parse(readFileSync(resolve(ROOT, 'themes', 'xianxia2026', 'theme.json'), 'utf8'));

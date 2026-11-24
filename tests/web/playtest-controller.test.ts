@@ -113,6 +113,46 @@ test('点击 AI 座位控件记录 human_takeover_click，点击真人控件记�
     && e.seat === 0 && e.round === 1 && e.turnIndex === 1 && e.durationMs === 500));
 });
 
+test('真人同一手番多次点击只记录一次耗时，AI 每次点击都记录接管', () => {
+  let state = aiState();
+  state = { ...state, turnOrder: [2, 0, 1, 3, 4, 5], turnIndex: 1 };
+  let operatorSeat = 0;
+  let t = 100;
+  const store = new PlaytestEventStore({ seed: 7, aiSeat: 2 });
+  const c = new PlaytestController({
+    getState: () => state, getSeat: () => operatorSeat, getMode: () => 'standard',
+    setState: (s) => { state = s; }, requestRender: () => {}, now: () => t,
+  }, store);
+  c.afterRender(state);
+  t = 250;
+  c.captureHumanClick('card:first', {} as HTMLElement);
+  t = 400;
+  c.captureHumanClick('target-seat:1', {} as HTMLElement);
+
+  operatorSeat = 2;
+  t = 450;
+  c.captureHumanClick('card:ai-first', {} as HTMLElement);
+  t = 500;
+  c.captureHumanClick('target-seat:1', {} as HTMLElement);
+
+  operatorSeat = 1;
+  state = { ...state, turnIndex: 2 };
+  t = 600;
+  c.afterRender(state);
+  t = 650;
+  c.captureHumanClick('card:next-turn', {} as HTMLElement);
+
+  const recorded = events(store);
+  assert.deepEqual(recorded.filter((e) => e.type === 'human_turn_duration_ms').map((e) => ({
+    turnIndex: e.turnIndex, seat: e.seat, durationMs: e.durationMs,
+  })), [
+    { turnIndex: 1, seat: 0, durationMs: 150 },
+    { turnIndex: 2, seat: 1, durationMs: 50 },
+  ]);
+  assert.deepEqual(recorded.filter((e) => e.type === 'human_takeover_click').map((e) => e.control),
+    ['card:ai-first', 'target-seat:1']);
+});
+
 test('实拍面板和工具栏内点击不记录接管或耗时', () => {
   let state = aiState();
   const store = new PlaytestEventStore({ seed: 7, aiSeat: 2 });

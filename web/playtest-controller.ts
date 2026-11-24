@@ -62,6 +62,7 @@ export class PlaytestController {
   private readonly now: () => number;
   private turnKey: string | null = null;
   private turnStartedAt = 0;
+  private humanTurnDurationRecorded = false;
   private scheduled = false;
   private running = false;
   private generation = 0;
@@ -82,6 +83,7 @@ export class PlaytestController {
     this.generation += 1;
     this.turnKey = null;
     this.turnStartedAt = 0;
+    this.humanTurnDurationRecorded = false;
     this.scheduled = false;
     this.running = false;
     this.forfeitedSignatures.clear();
@@ -96,6 +98,7 @@ export class PlaytestController {
     if (turnKey !== this.turnKey) {
       this.turnKey = turnKey;
       this.turnStartedAt = this.now();
+      this.humanTurnDurationRecorded = false;
     }
     if (this.scheduled) { return; }
 
@@ -131,7 +134,7 @@ export class PlaytestController {
       this.store.record({ type: 'human_takeover_click', seat, control });
       return;
     }
-    if (this.turnKey === null) { return; }
+    if (this.turnKey === null || this.humanTurnDurationRecorded) { return; }
     const [round, turnIndex] = this.turnKey.split(':');
     this.store.record({
       type: 'human_turn_duration_ms',
@@ -140,6 +143,7 @@ export class PlaytestController {
       seat,
       durationMs: Math.max(0, this.now() - this.turnStartedAt),
     });
+    this.humanTurnDurationRecorded = true;
   }
 
   private schedulableSeat(state: State, currentSeat: number): number | null {

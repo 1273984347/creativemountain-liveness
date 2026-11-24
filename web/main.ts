@@ -204,10 +204,10 @@ function loadGame(): void {
       ui.themeId = themeId;
     }
     ui.state = normalizePlaytestState(state);
-    if (PLAYTEST_MODE) {
-      const config = parsePlaytestConfig(location.search);
+    const config = PLAYTEST_MODE ? parsePlaytestConfig(location.search) : null;
+    if (config !== null) {
       ui.playerCount = 6;
-      ui.seed = config?.seed ?? ui.seed;
+      ui.seed = config.seed;
     } else {
       ui.seed = state.seed;
       ui.playerCount = ui.state.players.length as Ui['playerCount'];
@@ -244,10 +244,10 @@ function importSave(): void {
           ui.themeId = themeId;
         }
         ui.state = normalizePlaytestState(state);
-        if (PLAYTEST_MODE) {
-          const config = parsePlaytestConfig(location.search);
+        const config = PLAYTEST_MODE ? parsePlaytestConfig(location.search) : null;
+        if (config !== null) {
           ui.playerCount = 6;
-          ui.seed = config?.seed ?? ui.seed;
+          ui.seed = config.seed;
         } else {
           ui.seed = state.seed;
           ui.playerCount = ui.state.players.length as Ui['playerCount'];
