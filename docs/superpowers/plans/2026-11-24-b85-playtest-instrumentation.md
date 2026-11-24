@@ -473,11 +473,12 @@ git commit -m "build(B85): 发布包排除实拍页并锁定生产页无实拍�
 - `game_export_snapshot` → 增加实拍事件导出说明
 - 新增 `playtest_build: dist/创界山-活人认证-实拍.html`
 - **同步清理历史残留**：`game_start` / `seat_control_assigned` / `ai_action_committed` / `ai_forfeit` 状态改为 B84/B85 实际状态；字段名用 `degradeLevel` / `seatMode`；不得再写“seed 写死 42 / UI 无入口”。`ai_forfeit` 的 120s timeout 分支在 B85 同步自动步中不触发，需明确标注而非假装已实现。
+- **度量公式按真实事件修正**：非法动作率不能统计 `ai_action_committed where legal=false`（该事件只收合法动作），应统计 `ai_forfeit` 的 `illegal_choice` / `engine_rejected`；弃权率不能只统计 timeout（B85 不触发 timeout），应统计全部同步弃权原因。事件 kind 清单必须从代码派生并包含 `certify`。
 
 `playtest-field-sheet.md`：
 - K3（接管点击）、K5（墙钟）、K6（观察面板）标 ✅。
 - K4 标 ✅（`ai_forfeit.seatMode` 已存在；120s timeout 在 B85 同步自动步中不触发，明确写 N/A）。
-- K7 标 ✅（Ask 1=A 的引擎拒绝与活人席保护已落地）。
+- K7 标 ✅（Ask 1=A 的引擎拒绝与活人席保护已落地，且实拍页 UI 必须把拒绝原因显示出来，不得静默重绘）。
 - K8 保持 ☐（招募两问是用户侧前置）。
 - 使用步骤改为：构建 → 打开实拍 HTML → 填 URL 参数 → 5 真人局 → 导出 JSON → 按当场表录入。
 
@@ -504,6 +505,13 @@ Expected: 全部 PASS。
 git add spark-output/metric/ai-seat-fill.md spark-output/metric/playtest-field-sheet.md spark-output/context/metric.json spark-output/context/prd.json spark-output/prd/ai-seat-fill.md spark-output/README-归档索引.md
 git commit -m "docs(B85): Ask 4 实拍采集就绪状态回写"
 ```
+
+- [x] **Fix round 2 / K7**：`web/main.ts::onSign` 不再走静默通用 `commit`；引擎拒绝时保留原局并把 `note` 写入 `ui.notice`。E2E 用真实引擎构造 6 人认证局面、AI 操作者点击「签印 座0」，断言显示 `程序座位没有签印权`。未改引擎或规则。
+- [x] **Fix round 2 / 事件清单**：从 `engine/**/*.ts` 的 `withLog` 第 3 参、`LogEntry.kind` 与 `LOG_KIND` 写入点派生 **68** 个 `State.log.kind`，完整同步 `metric.json` / `metric.md`，包含 `certification.ts` 的 `certify`。
+- [x] **Fix round 2 / D4**：非法动作率改为 `count(ai_forfeit.reason ∈ {illegal_choice, engine_rejected}) / count(ai_turn_start)`；`ai_action_committed` 只含 `legal=true`，退出分子。
+- [x] **Fix round 2 / 弃权率**：改为 `count(ai_forfeit) / count(ai_turn_start)`，统计全部同步弃权原因；120s timeout 对 B85 仍为 N/A，不再把公式写成 timeout-only。
+- [x] **Fix round 2 / R8**：PRD 风险改为「多局误复用同一 seed」，写明 B84 UI / B85 URL 已可指定并导出 seed。
+- [x] **Fix round 2 / A′**：Metric Markdown 失败表与 PRD 中残留的「增益 ≤0 直接关批次」改为先跑 A′；A′ 仍 ≤0 才关闭，A′ >0 升级 B 并重跑 A 组基线。
 
 ---
 

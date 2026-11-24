@@ -819,7 +819,17 @@ function render(): void {
   // 认证面板
   if (needsCertificationAction(s) || s.certification.pending.length > 0) {
     panels.push(renderCertification(s, theme, ui.seat, {
-      onSign: (target) => commit(certifySign(s, ui.seat, target)),
+      onSign: (target) => {
+        // 认证面板可能由 UI 门禁放行、但引擎仍拒绝（例如程序座位没有签印权）。
+        // 不得走静默的通用 commit：保留原局并把引擎 note 显示给桌友。
+        const r = certifySign(s, ui.seat, target);
+        if (!r.ok) {
+          ui.notice = '签印未落账：' + (r.note ?? '引擎未给出原因');
+          render();
+          return;
+        }
+        commit(r);
+      },
       onChallenge: (target, questions) => {
         const ch = certifyChallenge(s, ui.seat, target);
         if (!ch.ok) { alert(t(ch.note ?? '无法发起质疑')); return; }

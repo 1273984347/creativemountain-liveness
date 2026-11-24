@@ -2,7 +2,7 @@
 
 - **生成时间**：2026-11-23T02:55:00+08:00
 - **数据工具**：自建（`State.log` 引擎内建事件源 + `web/main.ts:175` 导出存档 + B85 独立实拍页的 `PlaytestEventStore` / 观察员面板）。**不引入任何第三方分析 SDK** —— 离线单 HTML 双击即玩、发布包零增量、sidecar loopback-only 三条红线会同时被违反；合规上也不收集个人字段
-- **现有埋点覆盖**：**partial**（`State.log` 现有 16 个 `kind`：14 个既有事件 + B84 的 `ai_action_committed` / `ai_forfeit`；B85 已补齐实拍墙钟、接管、同频、面板注视与局后自报；真人数据仍为 0）
+- **现有埋点覆盖**：**partial**（`State.log` 现有 **68** 个 `kind`，按 `engine/**/*.ts` 的 `withLog` 第 3 参、`LogEntry.kind` 字面量与 `statuses.ts::LOG_KIND` 派生，完整清单见文末；B85 已补齐实拍墙钟、接管、同频、面板注视与局后自报；真人数据仍为 0）
 - **复盘节奏**：每局一次，当场结
 - **Owner**：设计师自己 —— 且 owner = 观察员 = 参与者，三重角色未分离，是本蓝图最大的风险项（见下）
 
@@ -39,7 +39,7 @@ mean(每局全桌同频时刻数 | A 组：5 真人 + 1 程序座位，按 6 人
 - **目标**：≥ **+1.0 次/局**，且 A 组「想换回真人」人次 **= 0**
 - **时点**：3 周内 6 局（3A + 3B，同一批 5 位真人，≥2 个不同 seed）
 - **业务对齐**：`brief.business_goal[1]`「单局产出 ≥3 次全桌名场面」/ `brief.design_criteria.quantitative[0]`「单局全桌注意力集中 ≥3 次」/ `pitch.the_bet` 第二判据
-- **为什么是这个**：这个减法**直接判掉本方向唯一的生死问题** —— 补位买到的是 6 人档多出来的那两格强度旋钮（签印门槛 3→4、seatWeight 16→20），还是"按 5 人档开局就够了"。**B 组就是 Pitch 第 4 备选（bench.takeaway-18）—— 把它做成对照组，而不是口头承认它。** 比 AI 胜率高，因为胜率不是价值交换；比满意度分好，因为它是行为计数；比名场面绝对值好，因为绝对值分不清"补位带来的"和"这批人本来就玩得开"。
+- **为什么是这个**：这个减法**直接判掉本方向唯一的生死问题** —— 补位买到的是 6 人档多出来的那两格强度旋钮（签印门槛 3→4、seatWeight 16→20），还是"按 5 人档开局就够了"。**B 组就是 Pitch 第 4 备选（bench.takeaway-18）—— 把它做成对照组，而不是口头承认它。** Ask 1=A 下增益 ≤0 不能直接归因于补位无效，必须先补跑 A′；A′ 仍 ≤0 才判免费方案胜出并关闭。比 AI 胜率高，因为胜率不是价值交换；比满意度分好，因为它是行为计数；比名场面绝对值好，因为绝对值分不清"补位带来的"和"这批人本来就玩得开"。
 
 ---
 
@@ -50,7 +50,7 @@ mean(每局全桌同频时刻数 | A 组：5 真人 + 1 程序座位，按 6 人
 | D1 | AI 手番墙钟耗时中位 | `median(ai_turn_duration_ms)` vs `median(human_turn_duration_ms)` | ≤ 人类同局中位 1.0×，绝对 ≤ 3000ms | `ai_turn_duration_ms`, `human_turn_duration_ms` | ✅ exists（B85 实拍页） |
 | D2 | 真人代操作次数 | `count(human_takeover_click)/局` | **= 0**（底线非优化项） | `human_takeover_click`, `seat_control_assigned` | ✅ exists（B84/B85） |
 | D3 | AI 参与的认证/质疑事件数 | `count(cert_event where actor/target == aiSeat)/局` | ≥ 1.0（低于 1 判"隐形座位"） | `cert_event` | ⚠️ partial（待验签印是否落 log） |
-| D4 | 非法动作率 + 降级深度 | `count(legal==false)/count(*)`；`degradeLevel` 分布 | 非法率 **0**；兜底档占比 ≤ 25% | `ai_action_committed`, `ai_forfeit` | ✅ exists（B84/B85；120s timeout 对 B85 同步自动步 N/A） |
+| D4 | 非法动作率 + 降级深度 | `count(ai_forfeit.reason ∈ {illegal_choice, engine_rejected}) / count(ai_turn_start)`；`degradeLevel` 分布 | 非法率 **0**；兜底档占比 ≤ 25% | `ai_forfeit`, `ai_turn_start`, `ai_action_committed` | ✅ exists（`ai_action_committed` 只收合法动作；120s timeout 对 B85 同步自动步 N/A） |
 | D5 | 组局兑现率 | `因补位开成的局 / 原计划缺人的局` | ≥ 60%（3 周内 ≥2 场是真实缺人场景） | `game_start`, `new_player_introduced` | ⚠️ partial（`game_start` 已存在；局外分母仍缺） |
 
 切片维度统一按：A/B 组、决策面（move/gate/trial/duel/山议/认证）、主题包（4 套）、seed、真人新手在场与否、第 1/2/3 局。
@@ -70,7 +70,9 @@ D5 特别说明：分母（谁本来要来、实际来了几个）**只能局外
 | D5 | **真人新手上桌次数** | 补位一旦可用，"拉不熟的人凑数"这条入坑路径就消失（Frame 显式记录的隐形档代价） | ≥ 1/4 局；连续 4 局为 0 就把"邀请真人新手"写进组局规则，不靠自觉 |
 | 测量有效性 | **面板注意力窃取比** | 面板成为新注视点，把要测的东西测没了 | `count(gaze_panel)/count(table_attention_peak) ≤ 0.3`，超过退回离线扫 |
 
-**B85 弃权口径**：实拍 AI 走同步 `runSeatStep`，不经过 120s 等待；`reason=='timeout'` 对 B85 为 **N/A**。本切片只统计 `blocked` / `illegal_choice` / `engine_rejected` 等同步原因，不把未实现的超时分支写成已覆盖。
+**B85 弃权口径**：实拍 AI 走同步 `runSeatStep`，不经过 120s 等待；`reason=='timeout'` 对 B85 为 **N/A**。弃权率 = `count(ai_forfeit) / count(ai_turn_start)`，分子统计 `blocked` / `illegal_choice` / `engine_rejected` / `wrong_turn` 等全部同步弃权，不能只数 timeout 而把指标结构性算成 0。
+
+**B85 非法动作口径**：`ai_action_committed` 只记录 `legal=true`，不能用它统计非法动作。非法动作率 = `count(ai_forfeit where reason ∈ {illegal_choice, engine_rejected}) / count(ai_turn_start)`，分母覆盖全部 AI 尝试。
 
 ---
 
@@ -107,7 +109,7 @@ D5 特别说明：分母（谁本来要来、实际来了几个）**只能局外
 
 | `gaze_panel`（seat/durationMs，**显式「开始看面板 / 结束看面板」，不自动监听注意力**）· `new_player_introduced`（局外一行表） |
 
-现有可复用事件源（16 个 `kind`）：`setup / move / ask / card / equip / passive / status / duel / gate / trial / barrier / exhaustion / heaven / goal / ai_action_committed / ai_forfeit`，`actor` = 座位号，`-1` = 系统行。
+现有可复用事件源（**68** 个 `State.log.kind`，按 `engine/**/*.ts` 写入点派生）：`add_to_deck / ai_action_committed / ai_forfeit / ask / barrier / cancel_vote / card / certify / certify_extra_round / certify_extra_signer / certify_forbid_challenge / certify_free_pass / clear_flag / compare_cards / create_card / damage / disarm / discard_opponent / discard_self / double_next_vote / draw_cards / duel / equip / equip_card / exempt_from_vote / exhaust_card / exhaustion / extra_roll / extra_signatures_required / extra_vote / gain_card / gain_resource / gate / gate_fallback_pay / goal / heal / heaven / keep_die / modify_judgement / move / move_backward / move_by_dice / move_forward / move_relative_to / move_to_tile / passive / peak / peek_deck / place_barrier / random_from_deck / remove_from_deck / reroll / roll_opponent / set_die_result / set_flag / set_phase / set_resource / setup / shield / spend_resource / spirit_wheel / status / swap_deck_top / swap_position / teleport / transfer_resource / trial / vote_modifier`，`actor` = 座位号，`-1` = 系统行。`certify` 来自 `engine/core/certification.ts` 的 AI 认证完成说明，不再漏记。
 
 ---
 
@@ -129,7 +131,7 @@ D5 特别说明：分母（谁本来要来、实际来了几个）**只能局外
 
 | 信号 | 判读 | 动作 |
 | --- | --- | --- |
-| NSM 增益 ≤ 0 | 零代码按 5 人档开局够用 | **本批次关闭**，方向转"5 人档体验调优"，回到 Pitch Ask 4，不进 Ask 3 的规格翻案 |
+| NSM 增益 ≤ 0 | **不得直接关批次**；Ask 1=A 使 6 人档两格强度对真人不可用，A−B 混入第二变量 | 先补跑第 7–8 局 **A′**（可被签印但不计入 N，不改 scales）。A′ 仍 ≤0 才判零代码按 5 人档开局够用并关闭；A′ >0 判「A 太弱而非补位没用」，升级为 B 并重跑 A 组基线；C 永不试 |
 | 代操作任意一次 > 0 | 补位体验判负（比新手人类更差） | 先修交互与统一提交口，**暂停一切平衡讨论** |
 | 非法动作率 > 0 | 工程缺陷，不是体验问题 | 门禁红，阻断发布，不进产品评审 |
 | 一局"想换回真人" ≥ 2 人次 | 用户明确不接受 | 立即转 B 组，该场作为反例存档 |

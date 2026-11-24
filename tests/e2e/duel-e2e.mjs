@@ -10,6 +10,11 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
+import { advanceCertificationRound, enterPendingCertification } from '../../engine/core/certification.ts';
+import { createInitialState } from '../../engine/core/state.ts';
+import { installTheme } from '../../engine/core/setup.ts';
+import { stateToJson } from '../../engine/core/serialize.ts';
+import { getScales } from '../../engine/scales.ts';
 
 // ⚠️ `CM_REPO_ROOT` 指向**仓库根**（默认 cwd）：副本里跑本脚本时用它解析 playwright ——
 //   隔离副本没有 node_modules ⇒ 直接 `import 'playwright'` 会解析失败。
@@ -235,6 +240,47 @@ assert.ok(Number.isInteger(pollSeq));
 assert.ok(Number.isFinite(pollTs));
 assert.equal(ptErrors.length, 0);
 await pt.close();
+
+// K7：程序座位尝试签印时，UI 必须显示引擎拒因，不得静默重绘。
+// 用生产页隔离实拍 AI 自动调度，确保点击发生在未被推进的同一认证局面。
+const certTheme = JSON.parse(readFileSync(resolve(ROOT, 'themes', 'xianxia2026', 'theme.json'), 'utf8'));
+let certState = installTheme(createInitialState({
+  players: 6,
+  seed: 123456,
+  deckSize: getScales(6).deckTotal,
+}), certTheme);
+certState = {
+  ...certState,
+  players: certState.players.map((player) => player.seat === 2
+    ? { ...player, controlledBy: 'ai' }
+    : player),
+};
+certState = {
+  ...certState,
+  players: certState.players.map((player) => player.seat === 0
+    ? { ...player, position: certState.board.peakIndex }
+    : player),
+};
+const pending = enterPendingCertification(certState, 0);
+assert.equal(pending.ok, true, '前提：座 0 进入待认证必须成功');
+const opened = advanceCertificationRound(pending.state);
+assert.equal(opened.ok, true, '前提：第 1 轮认证必须成功');
+const certPage = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+await certPage.goto(url);
+const certEnvelope = JSON.stringify({
+  v: 2,
+  themeId: certTheme.meta.id,
+  state: stateToJson(opened.state),
+});
+await certPage.evaluate((save) => localStorage.setItem('creativemountain.save.v2', save), certEnvelope);
+await certPage.getByRole('button', { name: '读档' }).click();
+await certPage.locator('select').nth(3).selectOption('2');
+await certPage.getByRole('button', { name: '签印 座0' }).click({ timeout: 1000 });
+await certPage.locator('.warn').filter({ hasText: '程序座位没有签印权' }).waitFor({
+  state: 'visible',
+  timeout: 1000,
+});
+await certPage.close();
 await browser.close();
 
 const out = {

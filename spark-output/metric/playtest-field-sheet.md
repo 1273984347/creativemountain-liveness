@@ -37,7 +37,7 @@
 | K4 | `ai_forfeit` 带 `seatMode`；120s timeout 对 B85 同步自动步 **N/A** | B84 `engine/core/seat-runner.ts` 写引擎日志；B85 `web/playtest-controller.ts` 写实拍事件。同步 `setTimeout(..., 0)` 无 120s 超时分支 | ✅ |
 | K5 | 墙钟计时 `ai_turn_duration_ms` / `human_turn_duration_ms` | B85 `web/playtest-controller.ts`；实拍事件表，不进 `State.log` | ✅ |
 | K6 | 观察员面板**折叠进侧栏**，「记一次同频」必须人按 | B85 `web/playtest-panel.ts`；支持显式注视计时与局后自报 | ✅ |
-| K7 | Ask 1=A 已生效：AI **不可签印、不可持席**，点它签印须给机制原因（不静默） | `engine/core/apply-action.ts` 拒绝 AI 禁行动作；`certification.ts` 拒绝签印并排除 AI 活人席 | ✅ |
+| K7 | Ask 1=A 已生效：AI **不可签印、不可持席**，点它签印须给机制原因（不静默） | `engine/core/apply-action.ts` 拒绝 AI 禁行动作；`certification.ts` 拒绝签印并排除 AI 活人席；`web/main.ts::onSign` 把引擎 note 写入 UI 警示，E2E 覆盖 `程序座位没有签印权` | ✅ |
 | K8 | 招募表加两问（Probe 从没问过）：「最近三个月有没有被拉去凑过数？那一晚怎么收场的？」 | 招募环节（用户侧排期前置） | ☐ |
 
 ---

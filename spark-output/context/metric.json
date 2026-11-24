@@ -6,8 +6,9 @@
   "analytics_baseline": {
     "tool": "自建：State.log（引擎内建事件源）+ web/main.ts:175「导出」存档信封 + 独立实拍页的 PlaytestEventStore 与观察员面板。不引入任何第三方分析 SDK",
     "sdk_ban_reason": "离线单 HTML 双击即玩 + 发布包零增量 + sidecar loopback-only 三条既有红线，任何外部埋点 SDK 都会同时违反它们；数据合规上也不收集个人字段",
-    "existing_events_count": 16,
-    "existing_event_source_kinds": ["setup", "move", "ask", "card", "equip", "passive", "status", "duel", "gate", "trial", "barrier", "exhaustion", "heaven", "goal", "ai_action_committed", "ai_forfeit"],
+    "existing_events_count": 68,
+    "existing_event_source_kinds": ["add_to_deck", "ai_action_committed", "ai_forfeit", "ask", "barrier", "cancel_vote", "card", "certify", "certify_extra_round", "certify_extra_signer", "certify_forbid_challenge", "certify_free_pass", "clear_flag", "compare_cards", "create_card", "damage", "disarm", "discard_opponent", "discard_self", "double_next_vote", "draw_cards", "duel", "equip", "equip_card", "exempt_from_vote", "exhaust_card", "exhaustion", "extra_roll", "extra_signatures_required", "extra_vote", "gain_card", "gain_resource", "gate", "gate_fallback_pay", "goal", "heal", "heaven", "keep_die", "modify_judgement", "move", "move_backward", "move_by_dice", "move_forward", "move_relative_to", "move_to_tile", "passive", "peak", "peek_deck", "place_barrier", "random_from_deck", "remove_from_deck", "reroll", "roll_opponent", "set_die_result", "set_flag", "set_phase", "set_resource", "setup", "shield", "spend_resource", "spirit_wheel", "status", "swap_deck_top", "swap_position", "teleport", "transfer_resource", "trial", "vote_modifier"],
+    "existing_event_inventory_note": "按 engine/**/*.ts 的 State.log 写入点派生：withLog 第 3 参、LogEntry 对象 kind 字面量与 statuses.ts 的 LOG_KIND；共 68 个，含 certification.ts 的 certify。不是 16 个核心动作类别",
     "coverage_estimate": "partial",
     "coverage_detail": "B84 已补 seed 与座位控制权；B85 独立实拍页已具备 AI/人类墙钟、接管点击、同频、注视与局后自报采集及事件 JSON 导出。真人数据仍为 0，生产 AI 座位开关仍取决于 Ask 5",
     "review_cadence": "每局一次，当场结",
@@ -50,7 +51,7 @@
     "target": "≥ +1.0 次/局，且 A 组「想换回真人」人次 = 0",
     "timeframe": "3 周内跑 6 局（3A + 3B，同一批 5 位真人，≥2 个不同 seed）；若增益 ≤0，按判读规则修订追加 2 局 A′（共 8 局），A′ 为强制归因臂而非可选",
     "business_alignment": "对应 brief.business_goal[1]「单局产出 ≥3 次全桌名场面」与 brief.design_criteria.quantitative[0]「单局全桌注意力集中 ≥3 次」；同时正面回答 pitch.the_bet 的第二判据「没人要求把那把椅子换回真人」",
-    "why_this_one": "这一个减法直接判掉本方向唯一的生死问题：补位买到的到底是「6 人档的两格强度旋钮（签印门槛 3→4、seatWeight 16→20）」，还是「零代码按 5 人档开局就够了」。B 组就是 Pitch 第 4 备选（bench.takeaway-18），把它做成对照组而不是口头承认 —— 增益 ≤ 0 就等于免费方案胜出，本批次该关。比「AI 胜率」好，因为胜率不是价值交换；比「满意度分」好，因为它是行为计数不是态度；比「名场面绝对次数」好，因为绝对值无法区分「补位带来的」和「这批人本来玩得开的」"
+    "why_this_one": "这一个减法直接判掉本方向唯一的生死问题：补位买到的到底是「6 人档的两格强度旋钮（签印门槛 3→4、seatWeight 16→20）」，还是「零代码按 5 人档开局就够了」。B 组就是 Pitch 第 4 备选（bench.takeaway-18），把它做成对照组而不是口头承认 —— Ask 1=A 下增益 ≤0 不能直接归因于补位无效，必须先补跑 A′；A′ 仍 ≤0 才判免费方案胜出并关闭。比「AI 胜率」好，因为胜率不是价值交换；比「满意度分」好，因为它是行为计数不是态度；比「名场面绝对次数」好，因为绝对值无法区分「补位带来的」和「这批人本来玩得开的」"
   },
   "driver_metrics": [
     {
@@ -92,14 +93,14 @@
     {
       "name": "AI 非法动作率与降级深度分布",
       "relation_to_nsm": "非法动作是「塌」的字面含义；降级链走到第几级则揭示 AI 是否在真实局面里还能有招 —— 顶到底全靠兜底重抽的座位，桌上读作「它在乱玩」",
-      "formula": "count(ai_action_committed where legal==false) / count(ai_action_committed)；以及 degradeLevel 分布（1 主选 / 2 次选 / 3 兜底）",
+      "formula": "count(ai_forfeit where reason in {'illegal_choice','engine_rejected'}) / count(ai_turn_start)；以及 degradeLevel 分布（1 主选 / 2 次选 / 3 兜底）",
       "target": "非法率 = 0（硬底线，>0 即工程缺陷阻断发布）；degradeLevel=3 占比 ≤ 25%",
       "timeframe": "每次构建后（可并入 release:check）",
       "slice_dimensions": ["决策面", "极端局（全部目标已被占/已死）", "人数档"],
       "events_needed": ["ai_action_committed", "ai_forfeit"],
       "instrumentation_status": "exists",
       "related_strategy_dimension": "交互设计",
-      "note": "B84 applyAction/runSeatStep 已写 ai_action_committed 与 ai_forfeit 引擎日志；B85 实拍事件补齐 durationMs、degradeLevel、seatMode、legal 与 source（当前 heuristic）。B85 同步自动步无 120s timeout 分支，该分支对本切片为 N/A"
+      "note": "B84 applyAction/runSeatStep 已写 ai_action_committed 与 ai_forfeit 引擎日志；B85 实拍事件补齐 durationMs、degradeLevel、seatMode、legal 与 source（当前 heuristic）。ai_action_committed 只收 legal=true，不能作为非法动作分子；非法动作率从 ai_forfeit 的 illegal_choice/engine_rejected 统计，分母为全部 AI 尝试 ai_turn_start。B85 同步自动步无 120s timeout 分支，该分支对本切片为 N/A"
     },
     {
       "name": "组局兑现率（差一个人也开成了）",
@@ -132,10 +133,10 @@
     {
       "name": "AI 弃权率（防「不卡轮 = 不玩了」）",
       "what_to_prevent": "把超时兜底做成弃权来解决「卡轮」，结果座位隐形；bench.takeaway-6 明确警告过这个退化路径",
-      "formula": "count(ai_forfeit where reason=='timeout') / count(ai_turn_start)",
+      "formula": "count(ai_forfeit) / count(ai_turn_start)",
       "threshold": "≤ 15%，且连续两局 > 25% 即判该档位不可用",
       "events_needed": ["ai_forfeit", "ai_turn_start"],
-      "note": "B85 实拍页为同步自动步，不经过 120s timeout 等待；timeout 分子在 B85 为 N/A，只统计 blocked / illegal_choice / engine_rejected 等同步弃权原因"
+      "note": "B85 实拍页为同步自动步，不经过 120s timeout 等待；分子统计全部同步 ai_forfeit（blocked / illegal_choice / engine_rejected / wrong_turn 等），分母为全部 AI 尝试 ai_turn_start。timeout 对 B85 为 N/A，不得把弃权率结构性算成 0"
     },
     {
       "name": "真人新手上桌次数（防「堵死入坑」）",
@@ -193,7 +194,7 @@
     {
       "name": "非法动作率 = 0",
       "what_it_protects": "引擎契约的完整（performAction 拒绝时返回引用相等）",
-      "formula": "count(ai_action_committed where legal==false) / count(全部 AI 动作)",
+      "formula": "count(ai_forfeit where reason in {'illegal_choice','engine_rejected'}) / count(ai_turn_start)",
       "threshold": "0",
       "alert_when": "出现 1 次即按缺陷处理，不进体验讨论；门禁红而非回归阈值红"
     }
