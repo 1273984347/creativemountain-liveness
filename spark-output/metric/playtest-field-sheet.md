@@ -7,7 +7,7 @@
 1. **构建**：在仓库根运行 `npm run build`。
 2. **打开实拍 HTML**：`dist/创界山-活人认证-实拍.html`（不是生产页 `创界山-活人认证.html`）。
 3. **填 URL 参数**：在地址后追加 `?playtest=1&seed=<uint32>&aiSeat=<0..5>`，例如 `?playtest=1&seed=123456&aiSeat=2`；固定 6 人局，`aiSeat` 为程序座位。
-4. **跑 5 真人局**：5 位真人 + 1 AI；同频由观察员按「记一次同频」，看面板按「开始看面板 / 结束看面板」。
+4. **跑 5 真人局**：5 位真人 + 1 AI；同频由观察员按「记一次同频」（持续必须 ≥3 秒），看面板按「开始看面板 / 结束看面板」。Seed/人数锁定；新开、读档、导入会清空上一局事件并写新 `game_start`。
 5. **导出 JSON**：终局后收齐 5 份自报，点「导出实拍记录」，保存 `创界山-实拍-<seed>-<aiSeat>.json`。
 6. **按当场表录入**：JSON 归档到 `spark-output/playtest/`，再把局次、锚点、计数与 5 份自报转录到本表。
 
@@ -33,11 +33,11 @@
 | --- | --- | --- | --- |
 | K1 | `seed` 可在 UI 指定 + 进导出信封 | B84 `web/seed.ts` / `web/main.ts`；B85 URL 参数再次显式锁定 | ✅ |
 | K2 | `seat_control_assigned.controlledBy` 落地并进导出 | B84 `engine/core/state.ts` / `engine/core/setup.ts` | ✅ |
-| K3 | `human_takeover_click` 埋点（热座各动作路径） | B85 `web/playtest-controller.ts` + `web/main.ts` 点击捕获 | ✅ |
+| K3 | `human_takeover_click` 埋点（热座按钮/手牌/目标玩家行） | B85 `web/playtest-controller.ts` + `web/main.ts` 稳定控件标识与点击去重 | ✅ |
 | K4 | `ai_forfeit` 带 `seatMode`；120s timeout 对 B85 同步自动步 **N/A** | B84 `engine/core/seat-runner.ts` 写引擎日志；B85 `web/playtest-controller.ts` 写实拍事件。同步 `setTimeout(..., 0)` 无 120s 超时分支 | ✅ |
-| K5 | 墙钟计时 `ai_turn_duration_ms` / `human_turn_duration_ms` | B85 `web/playtest-controller.ts`；实拍事件表，不进 `State.log` | ✅ |
+| K5 | 墙钟计时 `ai_turn_duration_ms` / `human_turn_duration_ms` | B85 `web/playtest-controller.ts`；当前手番 turn-start→动作落账/点击（AI 含调度/渲染等待）；非当前手番流程不写 D1 样本；实拍事件表，不进 `State.log` | ✅ |
 | K6 | 观察员面板**折叠进侧栏**，「记一次同频」必须人按 | B85 `web/playtest-panel.ts`；支持显式注视计时与局后自报 | ✅ |
-| K7 | Ask 1=A 已生效：AI **不可签印、不可持席**，点它签印须给机制原因（不静默） | `engine/core/apply-action.ts` 拒绝 AI 禁行动作；`certification.ts` 拒绝签印并排除 AI 活人席；`web/main.ts::onSign` 把引擎 note 写入 UI 警示，E2E 覆盖 `程序座位没有签印权` | ✅ |
+| K7 | Ask 1=A 已生效：AI **不可签印、不可持席**，点它签印须给机制原因（不静默） | `engine/core/apply-action.ts` 拒绝 AI 禁行动作；`certification.ts` 拒绝签印并排除 AI 活人席；`web/main.ts::onSign` 把引擎 note 写入全局 UI 警示，E2E 覆盖普通/关隘/对峙分支的 `程序座位没有签印权` | ✅ |
 | K8 | 招募表加两问（Probe 从没问过）：「最近三个月有没有被拉去凑过数？那一晚怎么收场的？」 | 招募环节（用户侧排期前置） | ☐ |
 
 ---

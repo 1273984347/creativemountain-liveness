@@ -23,7 +23,7 @@
 | H1 | **测量工具进入被测量系统**：你选了实时面板，而面板本身是新的注视点 | NSM 的核心事件是"全桌朝向同一人"。屏幕上有计数器，"看屏幕"就会与"看答题者"混淆 —— 既能抬高也能压低计数 | 面板**只给观察员看**、折叠侧栏；「记一次同频」**必须人按，不得由面板事件自动计入**；导出 JSON 是唯一真值源。**做不到侧栏隔离就退回导出离线扫，不要实时面板** |
 | H2 | **观察员正在打牌** | "全桌注意力集中"要求你看向另外 5 个人，而你那一局在管自己的手牌和认证题面。漏记的方向还不可控：你越投入，漏得越多 | 把外部视角转成**内部自报 + 日志锚点**：机器从 log 给出锚点轮次，局后每人回答「刚才第 4 轮那次质疑，你是不是全桌都在看谁」。你只按一次键 + 收 5 份自报，不占任何座位 |
 | H3 | **历史默认 seed=42；多局复用同一 seed 仍会失去样本独立性** | B84 前 UI 无 seed 入口；现在 `web/main.ts` 已提供 seed 输入，B85 实拍 URL 也可显式指定。若实拍仍复用同一 seed，得到的只是同一分布的复现，跨局稳定性结论作废 | **B84 已补 seed UI/export；B85 实拍 URL 必须显式带 `seed` 并写入 `config.seed`**。A/B 至少 2 个不同 seed；未记录的局仍降级为"单局个案" |
-| H4 | **引擎 log 是逻辑时间，没有墙钟时间** | "不卡轮"是本方向的 KPI，但 `LogEntry` 只有 `round`/`turnIndex`，测不出桌上真正等了多久 —— 而这正是被替代者（新手人类）最被嫌弃的地方 | **B85 已在独立实拍页新增 `ai_turn_duration_ms` 与 `human_turn_duration_ms`**，随实拍 JSON 导出且不写回 `State.log`；没有这条，Driver 1 仍为空话 |
+| H4 | **引擎 log 是逻辑时间，没有墙钟时间** | "不卡轮"是本方向的 KPI，但 `LogEntry` 只有 `round`/`turnIndex`，测不出桌上真正等了多久 —— 而这正是被替代者（新手人类）最被嫌弃的地方 | **B85 已在独立实拍页新增 `ai_turn_duration_ms` 与 `human_turn_duration_ms`**：当前手番从 turn-start 到动作落账/点击，含调度与渲染等待；非当前手番流程候选不冒充 D1 样本。随实拍 JSON 导出且不写回 `State.log` |
 
 ---
 
@@ -49,7 +49,7 @@ mean(每局全桌同频时刻数 | A 组：5 真人 + 1 程序座位，按 6 人
 | --- | --- | --- | --- | --- | --- |
 | D1 | AI 手番墙钟耗时中位 | `median(ai_turn_duration_ms)` vs `median(human_turn_duration_ms)` | ≤ 人类同局中位 1.0×，绝对 ≤ 3000ms | `ai_turn_duration_ms`, `human_turn_duration_ms` | ✅ exists（B85 实拍页） |
 | D2 | 真人代操作次数 | `count(human_takeover_click)/局` | **= 0**（底线非优化项） | `human_takeover_click`, `seat_control_assigned` | ✅ exists（B84/B85） |
-| D3 | AI 参与的认证/质疑事件数 | `count(cert_event where actor/target == aiSeat)/局` | ≥ 1.0（低于 1 判"隐形座位"） | `cert_event` | ⚠️ partial（待验签印是否落 log） |
+| D3 | AI 参与的认证/质疑事件数 | `count(cert_event where actor/target == aiSeat)/局` | ≥ 1.0（低于 1 判"隐形座位"） | `cert_event` | ⚠️ partial（已有 certify/passive 零散日志，缺统一 cert_event） |
 | D4 | 非法动作率 + 降级深度 | `count(ai_forfeit.reason ∈ {illegal_choice, engine_rejected}) / count(ai_turn_start)`；`degradeLevel` 分布 | 非法率 **0**；兜底档占比 ≤ 25% | `ai_forfeit`, `ai_turn_start`, `ai_action_committed` | ✅ exists（`ai_action_committed` 只收合法动作；120s timeout 对 B85 同步自动步 N/A） |
 | D5 | 组局兑现率 | `因补位开成的局 / 原计划缺人的局` | ≥ 60%（3 周内 ≥2 场是真实缺人场景） | `game_start`, `new_player_introduced` | ⚠️ partial（`game_start` 已存在；局外分母仍缺） |
 
@@ -94,15 +94,15 @@ D5 特别说明：分母（谁本来要来、实际来了几个）**只能局外
 
 | 事件 | 触发时机 | 字段 | 频率 | 位置 / 待办 | 状态 |
 | --- | --- | --- | --- | --- | --- |
-| `game_start` | B85 实拍页 `newGame()` 与 AI 座位配置后 | seed/aiSeat；metadata 另含 themeId/players/mode | 每局 1 | `web/main.ts` 实拍初始化 + `web/playtest-events.ts`；B84 seed UI/export 已存在 | ✅ exists（实拍事件，不进 `State.log`） |
+| `game_start` | 每次新开/读档/导入/主题或模式切换完成 URL 配置归一后 | seed/aiSeat；metadata 另含 themeId/players/mode | 每局 1 | `web/main.ts` 实拍会话重置 + `web/playtest-events.ts`；旧事件与快照同时清空 | ✅ exists（实拍事件，不进 `State.log`） |
 | `seat_control_assigned` | 开局装配及实拍 aiSeat 配置 | seat/controlledBy（无 policyId） | 每局 N | `engine/core/state.ts` 的 `Player.controlledBy` + `web/main.ts::applyPlaytestAiSeat`；随 State/snapshot 导出，不是独立 LogEntry | ✅ exists |
 | `ai_action_committed` | AI 动作落账 | round/turnIndex/seat/actionKey/durationMs/**degradeLevel**/seatMode/legal/source | 每次 | `engine/core/seat-runner.ts` 经 `applyAction` 写引擎日志；`web/playtest-controller.ts` 写完整实拍事件（source 当前 heuristic） | ✅ exists |
 | `ai_forfeit` | 同步无合法动作或被拒绝；120s timeout 对 B85 同步自动步 **N/A** | round/turnIndex/seat/reason/durationMs/**seatMode** | 事件即报 | `engine/core/seat-runner.ts` 写含 seatMode 的引擎日志；`web/playtest-controller.ts` 写含 durationMs 的实拍事件 | ✅ exists（同步弃权；timeout N/A） |
-| `ai_turn_duration_ms` / `human_turn_duration_ms` | 轮到→产出动作 | round/seat/durationMs | 每手番 | `web/playtest-controller.ts` UI 侧墙钟；只进实拍事件表 | ✅ exists |
-| `human_takeover_click` | 真人替非自己控制的座位点按钮 | seat/control | 事件即报 | `web/playtest-controller.ts`；面板/工具栏内部点击不计入；只进 `PlaytestEventStore`，不进 `State.log` | ✅ exists |
-| `cert_event` | 质疑启动/签印落账/判定 | round/actor/target/signs_count/threshold/result/**ai_participated** | 事件即报 | `certification.ts` —— **先验签印计数是否已完整落 log**（当前仅见 `[被动:certify_free_pass]` 一处 `kind:'passive'`）；B85 不合成该事件 | ⚠️ 待验（不在 B85 范围） |
+| `ai_turn_duration_ms` / `human_turn_duration_ms` | 当前手番 turn-start→动作落账/点击 | round/turnIndex/seat/durationMs | 每手番 | `web/playtest-controller.ts` UI 侧墙钟；AI 含调度/渲染等待；非当前手番流程不写 D1 样本（动作事件 durationMs=0）；只进实拍事件表 | ✅ exists |
+| `human_takeover_click` | 真人替非自己控制的座位点按钮/手牌/可选玩家行 | seat/control（稳定 `card:*` / `target-seat:*` 或按钮文案） | 事件即报 | `web/playtest-controller.ts`；面板/工具栏内部点击不计入；一次点击只记一条；只进 `PlaytestEventStore`，不进 `State.log` | ✅ exists |
+| `cert_event` | 质疑启动/签印落账/判定 | round/actor/target/signs_count/threshold/result/**ai_participated** | 事件即报 | `certification.ts` 已有 `certify` 完成说明与 `certify_free_pass` 的 `passive` 零散日志，但缺统一 `cert_event`；B85 不合成该事件 | ⚠️ partial（不在 B85 范围） |
 | `table_attention_peak` | 观察员判定全桌朝向同一人 ≥3s | **anchorRound/anchorLogIndex**/focusSeat/durationSec | 事件即报 | 可折叠观察员侧栏「记一次同频」；锚点指回 `State.log` | ✅ exists |
-| `post_game_poll` | 局后 15 分钟内每位真人 3 题 | seat/wantHumanBack/wouldReplay/feltRobotic/recalledPeakCount/oneLineAnomaly | 每局×每人 | 实拍侧栏局后自报表；草稿跨重渲染保留 | ✅ exists |
+| `post_game_poll` | 局后 15 分钟内每位真人提交一次 | seat/wantHumanBack/wouldReplay/feltHuman(1=机器,5=人)/recalledPeakCount/oneLineAnomaly | 每局×每人 | 实拍侧栏局后自报表；草稿跨重渲染保留；已提交座位禁用，事件表拒绝重复 | ✅ exists |
 | `game_export_snapshot` | 点「导出实拍记录」 | schema/config/metadata/events/snapshot | 每局 1+ | `web/playtest-panel.ts` → `创界山-实拍-<seed>-<aiSeat>.json`；含实拍事件与序列化 State | ✅ exists |
 
 ### 🟠 Should
@@ -154,7 +154,7 @@ D5 特别说明：分母（谁本来要来、实际来了几个）**只能局外
 
 1. **✅ seed 可指定并进导出（B84）**；B85 实拍 URL 还必须显式带 `seed`，否则所有跨局结论作废（H3）。
 2. **✅ `seat_control_assigned.controlledBy` 与 `aiSeat` 可识别（B84）**；否则 A/B 无法分组，NSM 无法计算。
-3. **⚠️ 验清签印/认证事件是否完整落 log** —— 决定 D3 可不可测；这是一次读代码就能定的事，不要靠猜。
+3. **⚠️ D3 仍为 partial**：现有 `certify` 完成说明与 `certify_free_pass` 的 `passive` 日志只是零散证据，缺统一 `cert_event`，不能宣称认证参与数已可完整计算。
 4. **✅ 观察员面板已折叠进侧栏（B85）**；同频必须人按，注视面板必须显式开始/结束，实拍 JSON 是唯一真值源。
 5. **⚠️ Ask 4 = `ready_to_schedule`（ready to schedule once date, 5 participants, and recruitment questions are set）**：采集链路已就绪，仍缺确定日期、5 位真人参与者与 K8 两道招募问题；齐备后按 8 局排期。**Ask 5 生产开关仍未拍板、未实现，实拍页不是生产功能。**
 

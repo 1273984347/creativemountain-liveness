@@ -103,7 +103,7 @@ test('事件表：保留全部事件字段并补 seq 与 Date.now 时间戳', ()
       focusSeat: 1, durationSec: 4 },
     { type: 'gaze_panel', seat: 1, durationMs: 1200 },
     { type: 'post_game_poll', seat: 1, wantHumanBack: true, wouldReplay: 4,
-      feltRobotic: 2, recalledPeakCount: 3, oneLineAnomaly: '接管提示出现得稍晚' },
+      feltHuman: 2, recalledPeakCount: 3, oneLineAnomaly: '接管提示出现得稍晚' },
   ];
 
   const before = Date.now();
@@ -118,6 +118,42 @@ test('事件表：保留全部事件字段并补 seq 与 Date.now 时间戳', ()
   assert.deepEqual(data.events.map((event) => event.seq), events.map((_, index) => index));
   assert.deepEqual(data.events.map((event) => ({ ...event, seq: 0, ts: 0 })),
     events.map((event) => ({ ...event, seq: 0, ts: 0 })));
+});
+
+test('事件表：同频持续不足 3 秒时拒绝落账', () => {
+  const store = new PlaytestEventStore({ seed: 7, aiSeat: 2 });
+  for (const durationSec of [-1, 0, 2.9, Number.NaN, Number.POSITIVE_INFINITY]) {
+    assert.throws(() => store.record({
+      type: 'table_attention_peak', anchorRound: 1, anchorLogIndex: 0,
+      focusSeat: 1, durationSec,
+    }), /durationSec/);
+  }
+  assert.doesNotThrow(() => store.record({
+    type: 'table_attention_peak', anchorRound: 1, anchorLogIndex: 0,
+    focusSeat: 1, durationSec: 3,
+  }));
+  assert.equal((store.toJSON() as PlaytestExport).events.length, 1);
+});
+
+test('事件表：同一局每位真人只能提交一次局后自报，reset 后开始新局', () => {
+  const store = new PlaytestEventStore({ seed: 7, aiSeat: 2 });
+  const poll = {
+    type: 'post_game_poll' as const, seat: 1, wantHumanBack: false,
+    wouldReplay: 4, feltHuman: 2, recalledPeakCount: 3, oneLineAnomaly: '无',
+  };
+  store.record(poll);
+  assert.throws(() => store.record({ ...poll, wouldReplay: 5 }), /seat.*once|already/i);
+  store.record({ ...poll, seat: 3 });
+  assert.equal((store.toJSON() as PlaytestExport).events.length, 2);
+  store.reset();
+  assert.doesNotThrow(() => store.record(poll));
+});
+
+test('事件表：reset 清空旧快照，避免新局导出上一局终局', () => {
+  const store = new PlaytestEventStore({ seed: 7, aiSeat: 2 });
+  store.setSnapshot('{"state":{"round":9}}');
+  store.reset();
+  assert.equal((store.toJSON() as PlaytestExport).snapshot, null);
 });
 
 test('事件表：reset 清空事件与 seq，但保留配置', () => {

@@ -64,6 +64,7 @@ export class PlaytestController {
   private turnStartedAt = 0;
   private scheduled = false;
   private running = false;
+  private generation = 0;
   private readonly forfeitedSignatures = new Set<string>();
 
   constructor(options: PlaytestControllerOptions, store: PlaytestEventStore) {
@@ -74,6 +75,16 @@ export class PlaytestController {
 
   getSeat(): number {
     return this.options.getSeat();
+  }
+
+  /** 新局/读档/导入前调用：旧排队步骤不得跨局执行，旧时钟与弃权签名一并作废。 */
+  reset(): void {
+    this.generation += 1;
+    this.turnKey = null;
+    this.turnStartedAt = 0;
+    this.scheduled = false;
+    this.running = false;
+    this.forfeitedSignatures.clear();
   }
 
   afterRender(state: State): void {
@@ -92,7 +103,9 @@ export class PlaytestController {
     if (aiSeat === null || this.forfeitedSignatures.has(stateSignature(state))) { return; }
 
     this.scheduled = true;
+    const generation = this.generation;
     setTimeout(() => {
+      if (generation !== this.generation) { return; }
       this.scheduled = false;
       this.running = true;
       try {
@@ -142,10 +155,15 @@ export class PlaytestController {
     const round = state.round;
     const turnIndex = state.turnIndex;
     this.store.record({ type: 'ai_turn_start', round, turnIndex, seat });
-    const start = this.now();
     const result = runSeatStep(state, seat, heuristicPolicy, this.options.getMode());
-    const durationMs = Math.max(0, this.now() - start);
-    this.store.record({ type: 'ai_turn_duration_ms', round, turnIndex, seat, durationMs });
+    const turnKey = `${String(round)}:${String(turnIndex)}:${String(seat)}`;
+    // 当前手番度量的是玩家从轮转到 AI 动作落账的体验等待，包含调度/渲染延迟。
+    // 非当前手番的山议/认证流程候选没有对应手番起点：不写 D1 样本，动作事件 durationMs=0。
+    const currentTurn = this.turnKey === turnKey;
+    const durationMs = currentTurn ? Math.max(0, this.now() - this.turnStartedAt) : 0;
+    if (currentTurn) {
+      this.store.record({ type: 'ai_turn_duration_ms', round, turnIndex, seat, durationMs });
+    }
     if (result.accepted && result.action !== null) {
       this.store.record({
         type: 'ai_action_committed', round, turnIndex, seat,

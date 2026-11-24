@@ -20,7 +20,7 @@ interface PlaytestExport {
 interface PollDraft {
   seat: string;
   wouldReplay: string;
-  feltRobotic: string;
+  feltHuman: string;
   recalledPeakCount: string;
   wantHumanBack: boolean;
   oneLineAnomaly: string;
@@ -48,7 +48,7 @@ function defaultPollDraft(seat: number): PollDraft {
   return {
     seat: String(seat),
     wouldReplay: '3',
-    feltRobotic: '3',
+    feltHuman: '3',
     recalledPeakCount: '0',
     wantHumanBack: false,
     oneLineAnomaly: '',
@@ -60,6 +60,12 @@ export function setPlaytestPanelOperator(store: PlaytestEventStore, seat: number
   if (!Number.isInteger(seat) || seat < 0 || seat > 5) { return; }
   operatorSeats ??= new WeakMap<PlaytestEventStore, number>();
   operatorSeats.set(store, seat);
+}
+
+/** 新局/读档/导入时丢弃上一局的观察草稿与进行中的注视计时。 */
+export function resetPlaytestPanel(store: PlaytestEventStore): void {
+  runtimes?.delete(store);
+  operatorSeats?.delete(store);
 }
 
 function injectPanelStyle(): void {
@@ -200,7 +206,7 @@ export function renderPlaytestPanel(
   focusLabel.append(focusSeat);
   const durationLabel = el('label', { class: 'playtest-panel__field', text: '持续秒数' });
   const durationInput = el('input', {
-    class: 'sel playtest-panel__input', type: 'number', min: '0', step: '0.1', value: runtime.durationSec,
+    class: 'sel playtest-panel__input', type: 'number', min: '3', step: '0.1', value: runtime.durationSec,
     'aria-label': '持续秒数',
   });
   durationInput.addEventListener('input', () => { runtime.durationSec = durationInput.value; });
@@ -230,8 +236,8 @@ export function renderPlaytestPanel(
       const seat = Number(focusSeat.value);
       const durationSec = durationInput.valueAsNumber;
       if (!Number.isInteger(seat) || seat < 0 || seat > 5
-        || !Number.isFinite(durationSec) || durationSec < 0) {
-        status.textContent = '请填写合法焦点座位与非负持续秒数。';
+        || !Number.isFinite(durationSec) || durationSec < 3) {
+        status.textContent = '请填写合法焦点座位与不少于 3 秒的持续秒数。';
         return;
       }
       store.record({
@@ -260,16 +266,22 @@ export function renderPlaytestPanel(
   const seatLabel = el('label', { class: 'playtest-panel__field', text: '自报座位' });
   const pollSeat = seatOptions(Number(runtime.poll.seat), humanSeats);
   pollSeat.setAttribute('aria-label', '自报座位');
+  const submittedPollSeats = new Set(data.events
+    .filter((event) => event.type === 'post_game_poll')
+    .map((event) => event.seat));
+  for (const option of Array.from(pollSeat.options)) {
+    option.disabled = submittedPollSeats.has(Number(option.value));
+  }
   pollSeat.addEventListener('change', () => { runtime.poll.seat = pollSeat.value; });
   seatLabel.append(pollSeat);
   const replayLabel = el('label', { class: 'playtest-panel__field', text: '愿意再玩（1–5）' });
   const replay = ratingOptions('愿意再玩', Number(runtime.poll.wouldReplay));
   replay.addEventListener('change', () => { runtime.poll.wouldReplay = replay.value; });
   replayLabel.append(replay);
-  const roboticLabel = el('label', { class: 'playtest-panel__field', text: '感到机械（1–5）' });
-  const robotic = ratingOptions('感到机械', Number(runtime.poll.feltRobotic));
-  robotic.addEventListener('change', () => { runtime.poll.feltRobotic = robotic.value; });
-  roboticLabel.append(robotic);
+  const humanLabel = el('label', { class: 'playtest-panel__field', text: '像人程度（1=机器，5=人）' });
+  const humanRating = ratingOptions('像人程度（1=机器，5=人）', Number(runtime.poll.feltHuman));
+  humanRating.addEventListener('change', () => { runtime.poll.feltHuman = humanRating.value; });
+  humanLabel.append(humanRating);
   const peakLabel = el('label', { class: 'playtest-panel__field', text: '记得的同频次数' });
   const peakCount = el('input', {
     class: 'sel playtest-panel__input', type: 'number', min: '0', step: '1', value: runtime.poll.recalledPeakCount,
@@ -277,7 +289,7 @@ export function renderPlaytestPanel(
   });
   peakCount.addEventListener('input', () => { runtime.poll.recalledPeakCount = peakCount.value; });
   peakLabel.append(peakCount);
-  pollFields.append(seatLabel, replayLabel, roboticLabel, peakLabel);
+  pollFields.append(seatLabel, replayLabel, humanLabel, peakLabel);
   pollFieldset.append(pollFields);
 
   const wantHumanBackLabel = el('label', { class: 'playtest-panel__check' });
@@ -298,7 +310,7 @@ export function renderPlaytestPanel(
   const syncPollControls = (): void => {
     pollSeat.value = runtime.poll.seat;
     replay.value = runtime.poll.wouldReplay;
-    robotic.value = runtime.poll.feltRobotic;
+    humanRating.value = runtime.poll.feltHuman;
     peakCount.value = runtime.poll.recalledPeakCount;
     wantHumanBack.checked = runtime.poll.wantHumanBack;
     anomaly.value = runtime.poll.oneLineAnomaly;
@@ -309,20 +321,24 @@ export function renderPlaytestPanel(
       runtime.poll = {
         seat: pollSeat.value,
         wouldReplay: replay.value,
-        feltRobotic: robotic.value,
+        feltHuman: humanRating.value,
         recalledPeakCount: peakCount.value,
         wantHumanBack: wantHumanBack.checked,
         oneLineAnomaly: anomaly.value,
       };
       const seat = Number(runtime.poll.seat);
       const wouldReplay = Number(runtime.poll.wouldReplay);
-      const feltRobotic = Number(runtime.poll.feltRobotic);
+      const feltHuman = Number(runtime.poll.feltHuman);
       const recalledPeakCount = peakCount.valueAsNumber;
       if (!humanSeats.includes(seat)
         || !Number.isInteger(wouldReplay) || wouldReplay < 1 || wouldReplay > 5
-        || !Number.isInteger(feltRobotic) || feltRobotic < 1 || feltRobotic > 5
+        || !Number.isInteger(feltHuman) || feltHuman < 1 || feltHuman > 5
         || !Number.isInteger(recalledPeakCount) || recalledPeakCount < 0) {
         status.textContent = '请填写合法自报数值。';
+        return;
+      }
+      if (data.events.some((event) => event.type === 'post_game_poll' && event.seat === seat)) {
+        status.textContent = '座' + String(seat) + ' 在本局已提交过自报，不能重复提交。';
         return;
       }
       store.record({
@@ -330,11 +346,14 @@ export function renderPlaytestPanel(
         seat,
         wantHumanBack: runtime.poll.wantHumanBack,
         wouldReplay,
-        feltRobotic,
+        feltHuman,
         recalledPeakCount,
         oneLineAnomaly: runtime.poll.oneLineAnomaly.trim(),
       });
-      runtime.poll = defaultPollDraft(humanSeats[0] ?? 0);
+      const latestEvents = exportData(store).events;
+      const nextSeat = humanSeats.find((humanSeat) => !latestEvents.some((event) =>
+        event.type === 'post_game_poll' && event.seat === humanSeat)) ?? humanSeats[0] ?? 0;
+      runtime.poll = defaultPollDraft(nextSeat);
       syncPollControls();
       status.textContent = '已记录座' + String(seat) + ' 的局后自报。';
     }),

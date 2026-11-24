@@ -24,7 +24,7 @@ export type PlaytestEvent =
       readonly anchorLogIndex: number; readonly focusSeat: number; readonly durationSec: number }
   | { readonly type: 'gaze_panel'; readonly seat: number; readonly durationMs: number }
   | { readonly type: 'post_game_poll'; readonly seat: number; readonly wantHumanBack: boolean;
-      readonly wouldReplay: number; readonly feltRobotic: number; readonly recalledPeakCount: number;
+      readonly wouldReplay: number; readonly feltHuman: number; readonly recalledPeakCount: number;
       readonly oneLineAnomaly: string };
 
 interface PlaytestMetadata {
@@ -65,6 +65,18 @@ export class PlaytestEventStore {
   }
 
   record(event: PlaytestEvent): PlaytestEvent {
+    if (event.type === 'table_attention_peak'
+      && (!Number.isFinite(event.durationSec) || event.durationSec < 3)) {
+      throw new Error('Invalid attention durationSec: expected at least 3 seconds');
+    }
+    if (event.type === 'post_game_poll') {
+      if (this.events.some((recorded) => recorded.type === 'post_game_poll' && recorded.seat === event.seat)) {
+        throw new Error('Post-game poll already submitted for seat ' + String(event.seat) + ' in this game');
+      }
+      if (!Number.isInteger(event.feltHuman) || event.feltHuman < 1 || event.feltHuman > 5) {
+        throw new Error('Invalid poll feltHuman: expected integer in 1..5 (1=machine, 5=human)');
+      }
+    }
     const recorded: RecordedPlaytestEvent = {
       ...event,
       seq: this.events.length,
@@ -97,5 +109,6 @@ export class PlaytestEventStore {
 
   reset(): void {
     this.events = [];
+    this.snapshot = null;
   }
 }

@@ -42,7 +42,7 @@
     {
       "hazard": "引擎 log 是逻辑时间，没有墙钟时间",
       "why_it_matters": "「不卡轮」是这条方向的 KPI，但 LogEntry 只有 round/turnIndex，无法测出两次动作之间桌上真正等了多久 —— 而这正是被替代对象（新手人类）最被嫌弃的地方",
-      "mitigation": "B85 独立实拍页已在 UI 侧新增 `ai_turn_duration_ms`（从轮转到该座位产出动作的墙钟耗时）与 `human_turn_duration_ms`（同样口径的人类基线），并随实拍 JSON 导出；事件不进入 State.log"
+      "mitigation": "B85 独立实拍页已在 UI 侧新增 `ai_turn_duration_ms`（当前 AI 手番从 turn-start 到动作落账，含调度/渲染等待）与 `human_turn_duration_ms`（同一 turn-start 到点击口径）；非当前手番流程候选不冒充 D1 样本。事件不进入 State.log"
     }
   ],
   "north_star_metric": {
@@ -64,7 +64,7 @@
       "events_needed": ["ai_turn_duration_ms", "human_turn_duration_ms"],
       "instrumentation_status": "exists",
       "related_strategy_dimension": "交互设计（铺垫轻量、认证流程顺畅）",
-      "note": "B85 独立实拍页按 UI 墙钟采集 AI/人类手番耗时并随实拍 JSON 导出"
+      "note": "B85 独立实拍页按 UI 墙钟采集 AI/人类手番耗时并随实拍 JSON 导出；AI 当前手番从 turn-start 计到动作落账，包含调度/渲染延迟；非当前手番流程步骤不写 ai_turn_duration_ms，动作事件 durationMs=0，不计入 D1"
     },
     {
       "name": "真人代操作次数（热座接管率）",
@@ -88,7 +88,7 @@
       "events_needed": ["cert_event", "seat_control_assigned"],
       "instrumentation_status": "partial",
       "related_strategy_dimension": "情感化设计（让认证成为反复出现的高潮）",
-      "note": "certification.ts 仅扫到 `[被动:certify_free_pass]` 一处 kind:'passive'；质疑/签印计数是否完整落 log 待验，开工前必须先验这一条，否则本 Driver 不可测"
+      "note": "partial：State.log 已有 certify 完成说明与 certify_free_pass 的 passive 行，但缺统一 cert_event（actor/target/signs_count/threshold/result/ai_participated）；不能把现有零散日志当成完整认证参与计数"
     },
     {
       "name": "AI 非法动作率与降级深度分布",
@@ -97,7 +97,7 @@
       "target": "非法率 = 0（硬底线，>0 即工程缺陷阻断发布）；degradeLevel=3 占比 ≤ 25%",
       "timeframe": "每次构建后（可并入 release:check）",
       "slice_dimensions": ["决策面", "极端局（全部目标已被占/已死）", "人数档"],
-      "events_needed": ["ai_action_committed", "ai_forfeit"],
+      "events_needed": ["ai_turn_start", "ai_action_committed", "ai_forfeit"],
       "instrumentation_status": "exists",
       "related_strategy_dimension": "交互设计",
       "note": "B84 applyAction/runSeatStep 已写 ai_action_committed 与 ai_forfeit 引擎日志；B85 实拍事件补齐 durationMs、degradeLevel、seatMode、legal 与 source（当前 heuristic）。ai_action_committed 只收 legal=true，不能作为非法动作分子；非法动作率从 ai_forfeit 的 illegal_choice/engine_rejected 统计，分母为全部 AI 尝试 ai_turn_start。B85 同步自动步无 120s timeout 分支，该分支对本切片为 N/A"
@@ -200,15 +200,15 @@
     }
   ],
   "instrumentation_gaps": [
-    { "event": "game_start", "trigger": "B85 实拍页完成 newGame() 与 AI 座位配置后", "fields": "seed / aiSeat；metadata 另含 themeId / players / mode", "report_frequency": "每局 1 次", "where_to_add": "web/main.ts 的 PLAYTEST_MODE 初始化 + web/playtest-events.ts；B84 seed UI/export 已存在", "priority": "must", "related_metric": "NSM + 组局兑现率 + 新奇衰减 + 导出可测性", "status": "exists（实拍事件，不写入 State.log）" },
+    { "event": "game_start", "trigger": "B85 实拍页每次新开/读档/导入/主题或模式切换完成 URL 配置归一后", "fields": "seed / aiSeat；metadata 另含 themeId / players / mode", "report_frequency": "每局 1 次", "where_to_add": "web/main.ts 的 PLAYTEST_MODE 初始化 + web/playtest-events.ts；B84 seed UI/export 已存在", "priority": "must", "related_metric": "NSM + 组局兑现率 + 新奇衰减 + 导出可测性", "status": "exists（实拍事件，不写入 State.log）" },
     { "event": "seat_control_assigned", "trigger": "开局装配及 B85 aiSeat 配置时逐座位", "fields": "seat / controlledBy('human'|'ai')；无 policyId 字段", "report_frequency": "每局 players 个座位，随 State/snapshot 导出（不是独立 LogEntry）", "where_to_add": "engine/core/state.ts 的 Player.controlledBy；web/main.ts::applyPlaytestAiSeat 写入实拍 AI 座位", "priority": "must", "related_metric": "代操作次数 / 认证参与数 / NSM 分组", "status": "exists（State 字段与实拍 snapshot）" },
     { "event": "ai_action_committed", "trigger": "AI 座位动作真正落账时", "fields": "round / turnIndex / seat / actionKey / durationMs / degradeLevel(1|2|3) / seatMode / legal / source('heuristic'|'model')", "report_frequency": "每次 AI 动作", "where_to_add": "engine/core/seat-runner.ts 经 applyAction 写 State.log；web/playtest-controller.ts 写完整实拍事件（B85 source 当前为 heuristic）", "priority": "must", "related_metric": "非法率 / 降级深度 / 手番耗时", "status": "exists" },
     { "event": "ai_forfeit", "trigger": "B85 同步 runSeatStep 无合法动作或动作被拒绝时；120s timeout 分支对 B85 同步自动步为 N/A", "fields": "round / turnIndex / seat / reason / durationMs / seatMode('seat_filled_by_ai'|'seat_offline_temporary')；B85 实拍只产生 seat_filled_by_ai", "report_frequency": "事件即报", "where_to_add": "engine/core/seat-runner.ts 写含 seatMode 的 State.log；web/playtest-controller.ts 写含 durationMs 的实拍事件。seat_offline_temporary 与 120s 超时尚未实现，不阻塞 B85 同步实拍", "priority": "must", "related_metric": "弃权率 Counter + 非法率 + G3 两态区分", "status": "exists（同步弃权；120s timeout=N/A）" },
-    { "event": "ai_turn_duration_ms / human_turn_duration_ms", "trigger": "轮到该座位 → 该座位产出动作（AI 自动步骤 / 真人点击控件）", "fields": "round / seat / durationMs", "report_frequency": "每次手番", "where_to_add": "web/playtest-controller.ts 与 web/playtest-events.ts；墙钟事件只进入独立实拍事件表，不进入 State.log", "priority": "must", "related_metric": "Driver 1（不卡轮）+ 天凤 60s 兜底的可比口径", "status": "exists" },
-    { "event": "human_takeover_click", "trigger": "真人替非自己控制的座位点了任何按钮", "fields": "seat / control", "report_frequency": "事件即报", "where_to_add": "web/playtest-controller.ts 捕获实拍页控件点击；web/main.ts 接线，面板与工具栏内部点击不计入；只进入 PlaytestEventStore，不进入 State.log", "priority": "must", "related_metric": "代操作次数（底线 = 0）", "status": "exists" },
-    { "event": "cert_event", "trigger": "质疑启动、签印落账、认证判定", "fields": "round / actor / target / signs_count / threshold / result / ai_participated(bool)", "report_frequency": "事件即报", "where_to_add": "engine/core/certification.ts —— **先验签印计数是否已完整落 log**（当前仅见 `[被动:certify_free_pass]` 一处 kind:'passive'）；B85 不合成该事件", "priority": "must", "related_metric": "认证参与数（Driver 3）+ 名场面锚点（NSM 分母）", "status": "partial（待验；不在 B85 范围）" },
+    { "event": "ai_turn_duration_ms / human_turn_duration_ms", "trigger": "当前手番 turn-start → 动作落账（AI 自动步骤 / 真人点击控件）；非当前手番流程候选不写入可比 D1 样本", "fields": "round / seat / durationMs", "report_frequency": "每次手番", "where_to_add": "web/playtest-controller.ts 与 web/playtest-events.ts；墙钟事件只进入独立实拍事件表，不进入 State.log", "priority": "must", "related_metric": "Driver 1（不卡轮）+ 天凤 60s 兜底的可比口径", "status": "exists" },
+    { "event": "human_takeover_click", "trigger": "真人替非自己控制的座位点了任何可动作控件（按钮、手牌、可选玩家行）", "fields": "seat / control", "report_frequency": "事件即报", "where_to_add": "web/playtest-controller.ts 捕获实拍页控件点击；web/main.ts 接线，面板与工具栏内部点击不计入；只进入 PlaytestEventStore，不进入 State.log", "priority": "must", "related_metric": "代操作次数（底线 = 0）", "status": "exists" },
+    { "event": "cert_event", "trigger": "质疑启动、签印落账、认证判定", "fields": "round / actor / target / signs_count / threshold / result / ai_participated(bool)", "report_frequency": "事件即报", "where_to_add": "engine/core/certification.ts —— 现有 certify/passive 日志是零散证据，仍需统一 cert_event；B85 不合成该事件", "priority": "must", "related_metric": "认证参与数（Driver 3）+ 名场面锚点（NSM 分母）", "status": "partial（待验；不在 B85 范围）" },
     { "event": "table_attention_peak", "trigger": "观察员判定「全桌朝向同一人 ≥3 秒」并点击「记一次同频」", "fields": "anchorRound / anchorLogIndex / focusSeat / durationSec", "report_frequency": "事件即报", "where_to_add": "web/playtest-panel.ts 可折叠观察员侧栏；anchorLogIndex 指回 State.log，事件不进入 State.log", "priority": "must", "related_metric": "NSM 分子 + 单座位占比 Counter", "status": "exists" },
-    { "event": "post_game_poll", "trigger": "局后 15 分钟内每位真人提交一次自报", "fields": "seat / wantHumanBack / wouldReplay(1-5) / feltRobotic(1-5) / recalledPeakCount / oneLineAnomaly", "report_frequency": "每局 × 每位真人", "where_to_add": "web/playtest-panel.ts 局后自报表；重渲染保留草稿，提交后写入独立实拍事件表", "priority": "must", "related_metric": "NSM 第二判据 + 满意度层 + 新奇衰减", "status": "exists" },
+    { "event": "post_game_poll", "trigger": "局后 15 分钟内每位真人提交一次自报", "fields": "seat / wantHumanBack / wouldReplay(1-5) / feltHuman(1=机器,5=人) / recalledPeakCount / oneLineAnomaly", "report_frequency": "每局 × 每位真人", "where_to_add": "web/playtest-panel.ts 局后自报表；重渲染保留草稿，提交后写入独立实拍事件表；同一局每座位仅允许一次", "priority": "must", "related_metric": "NSM 第二判据 + 满意度层 + 新奇衰减", "status": "exists" },
     { "event": "gaze_panel", "trigger": "观察员显式点击「开始看面板」与「结束看面板」", "fields": "seat / durationMs", "report_frequency": "每次注视一段", "where_to_add": "web/playtest-panel.ts；只记录显式注视时长，不自动监听注意力，也不把面板展开时长当作注视时长", "priority": "should", "related_metric": "面板注意力窃取比 Counter", "status": "exists" },
     { "event": "new_player_introduced", "trigger": "局外一行表：该局是否带来一位此前没玩过的真人", "fields": "game_id / has_new_human(bool) / is_filler_seat_human(bool)", "report_frequency": "每局 1 次", "where_to_add": "当场一行表（非代码）", "priority": "should", "related_metric": "真人新手上桌 Counter + 组局兑现率分母", "status": "missing" },
     { "event": "game_export_snapshot", "trigger": "点击实拍页「导出实拍记录」", "fields": "schema=1；config(seed/aiSeat) + metadata(themeId/players/mode) + events(含 seq/ts) + snapshot(序列化 State，含 log)", "report_frequency": "每局 1 次（局后追加自报后可再次导出）", "where_to_add": "web/playtest-panel.ts 导出 `创界山-实拍-<seed>-<aiSeat>.json`；与生产页 `创界山-活人认证-存档.json` 是两种信封", "priority": "must", "related_metric": "所有机器侧指标与观察事件的唯一真值源", "status": "exists" }
@@ -246,7 +246,7 @@
   },
   "must_before_first_game": [
     "✅ seed 可指定且进导出（B84）；B85 实拍页再用 URL 参数显式锁定 seed，未记录 seed 的局仍作废",
-    "✅ seat_control_assigned.controlledBy 与 aiSeat 可识别（B84）；Ask 1=A 下 AI 不签印、不持活人席，认证在场证据取 ai_targeted",
+    "✅ seat_control_assigned.controlledBy 与 aiSeat 可识别（B84）；Ask 1=A 下 AI 不签印、不持活人席；D3 仍为 partial，认证在场只能取 State.log 的 certify/passive 与 snapshot.certification 作零散证据，不得宣称已有统一认证参与事件",
     "⚠️ 验清签印/认证事件是否完整落 log（决定 D3 可不可测；A 裁定后 D3 的定义要从「AI 参与签印」改为「AI 被真人牵入认证流程」）",
     "✅ B85 可折叠观察员面板已落地；同频必须人按，注视面板必须显式开始/结束，实拍 JSON 为唯一真值源",
     "✅ Ask 1 已裁（2026-11-23T04:05）= A ⇒ 不动 scales、不重基线；G3 已裁 = 拆两态（AI 兜底 120s / 离线代决开放 120s，两个独立旋钮），但 B85 同步自动步不实现 120s timeout，timeout 对本切片为 N/A",

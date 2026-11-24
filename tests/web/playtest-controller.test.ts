@@ -156,6 +156,8 @@ test('AI 的非当前手番流程候选可以自动执行', async () => {
   assert.equal(committed.seat, 2);
   assert.match(committed.actionKey, /^vote:/);
   assert.equal(state.council.votes[2] !== undefined, true);
+  assert.equal(events(store).some((event) => event.type === 'ai_turn_duration_ms'), false,
+    '非当前手番流程候选不得写成 D1 的 0ms 手番样本');
 });
 
 test('AI 的非当前手番关隘候选不会被调度', async () => {
@@ -189,20 +191,44 @@ test('排队期间手番已变化时使用最新局面，不提交过期的 AI �
   assert.equal(state.log.length, 0);
 });
 
-test('AI 单步墙钟记录 runSeatStep 的真实耗时', async () => {
+test('AI 当前手番耗时从回合开始计到动作落账，包含调度等待而非仅计算耗时', async () => {
   let state = aiState();
   state = { ...state, turnOrder: [2, 0, 1, 3, 4, 5], turnIndex: 0 };
-  const readings = [100, 125, 150];
+  // 100：回合开始；850：动作落账。体验等待应为 750，而非旧实现的 25ms 计算耗时。
+  const readings = [100, 850];
   const store = new PlaytestEventStore({ seed: 7, aiSeat: 2 });
   const c = new PlaytestController({
     getState: () => state, getSeat: () => currentPlayer(state), getMode: () => 'standard',
     setState: (s) => { state = s; }, requestRender: () => {},
-    now: () => readings.shift() ?? 150,
+    now: () => readings.shift() ?? 850,
   }, store);
   c.afterRender(state);
   await tick();
-  assert.equal(events(store).find((e) => e.type === 'ai_turn_duration_ms')?.durationMs, 25);
-  assert.equal(events(store).find((e) => e.type === 'ai_action_committed')?.durationMs, 25);
+  assert.equal(events(store).find((e) => e.type === 'ai_turn_duration_ms')?.durationMs, 750);
+  assert.equal(events(store).find((e) => e.type === 'ai_action_committed')?.durationMs, 750);
+});
+
+test('新局 reset 取消已排队 AI 步骤并清空旧手番时钟', async () => {
+  let state = aiState();
+  state = { ...state, turnOrder: [2, 0, 1, 3, 4, 5], turnIndex: 0 };
+  const store = new PlaytestEventStore({ seed: 7, aiSeat: 2 });
+  let t = 100;
+  const c = new PlaytestController({
+    getState: () => state, getSeat: () => currentPlayer(state), getMode: () => 'standard',
+    setState: (s) => { state = s; }, requestRender: () => {}, now: () => t,
+  }, store);
+  c.afterRender(state);
+  c.reset();
+  t = 500;
+  await tick();
+  assert.deepEqual(events(store), []);
+  assert.equal(state.turnIndex, 0);
+
+  state = { ...state, turnIndex: 1 };
+  c.afterRender(state);
+  t = 650;
+  c.captureHumanClick('问天', {} as HTMLElement);
+  assert.equal(events(store).find((e) => e.type === 'human_turn_duration_ms')?.durationMs, 150);
 });
 
 test('同步重渲染按 AI 行动后的真人手番记录墙钟', async () => {
@@ -252,4 +278,3 @@ test('同步重渲染无需额外渲染即可调度后续 AI 流程候选', asyn
   assert.equal(state.council.votes[2] !== undefined, true);
   assert.equal(state.council.votes[3] !== undefined, true);
 });
-

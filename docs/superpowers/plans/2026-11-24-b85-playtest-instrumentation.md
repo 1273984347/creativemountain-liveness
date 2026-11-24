@@ -100,7 +100,7 @@ export type PlaytestEvent =
       readonly anchorLogIndex: number; readonly focusSeat: number; readonly durationSec: number }
   | { readonly type: 'gaze_panel'; readonly seat: number; readonly durationMs: number }
   | { readonly type: 'post_game_poll'; readonly seat: number; readonly wantHumanBack: boolean;
-      readonly wouldReplay: number; readonly feltRobotic: number; readonly recalledPeakCount: number;
+      readonly wouldReplay: number; readonly feltHuman: number; readonly recalledPeakCount: number;
       readonly oneLineAnomaly: string };
 ```
 
@@ -216,7 +216,7 @@ Expected: FAIL，模块不存在。
 `PlaytestController` 职责：
 - `afterRender` 记录当前手番开始时间；若当前 `round/turnIndex/seat` 变化，重置 `turnStartedAt = now()`。
 - 若当前手番是 AI 座位，或任一 AI 座位存在合法流程候选（山议/认证/对峙），调度一个 `setTimeout(..., 0)`；`running` 防重入。非当前手番的行动面候选不会被调度。
-- 单步只处理一个 AI 座位：`start = now()` → `runSeatStep(state, seat, policy, getMode())` → `end = now()` → 写 `ai_turn_duration_ms` 与 `ai_action_committed` / `ai_forfeit` → `setState` → **先将 `running` 置 false，再 `requestRender()`**，确保同步重渲染能进入 `afterRender`、更新新回合计时并调度后续 AI 流程。
+- 单步只处理一个 AI 座位：`runSeatStep(state, seat, policy, getMode())` → 当前手番用 `now() - turnStartedAt` 写 `ai_turn_duration_ms` 与 `ai_action_committed` / `ai_forfeit`（含调度/渲染等待；非当前手番流程候选不冒充 D1 样本）→ `setState` → **先将 `running` 置 false，再 `requestRender()`**，确保同步重渲染能进入 `afterRender`、更新新回合计时并调度后续 AI 流程。
 - 用 `stateSignature(state)` 防重复：包含 `round/turnIndex/phase`、所有座位 `position/pendingCert/statuses`、`certification`、`council.votes`、`duel`、关隘/裂隙阻塞；forfeit 后签名不变则不重试。
 - `captureHumanClick(control, target)`：忽略 `.playtest-panel` 与 `.toolbar` 内的点击；若 `getSeat()` 是 AI 座位，写 `human_takeover_click`；否则用动作前记录的 `round/turnIndex` 写 `human_turn_duration_ms`。
 - 不把任何时间写进 `State.log`；每次 `setState` 后调用 `store.setSnapshot(stateToJson(state))`，保证导出含可回放终局。
@@ -259,9 +259,12 @@ if (PLAYTEST_MODE) {
       now: () => performance.now(),
     }, store);
     document.addEventListener('click', (e) => {
-      const target = e.target as HTMLElement | null;
-      const control = target?.closest('button')?.textContent?.trim();
-      if (target !== null && control !== undefined && control !== '') {
+      const target = e.target instanceof HTMLElement ? e.target : null;
+      if (target === null) { return; }
+      // 手牌/玩家行是 div；只取最近的可动作祖先，保证一次点击最多记一条。
+      const control = target.closest<HTMLElement>('[data-action-control]')?.dataset.actionControl
+        ?? target.closest('button')?.textContent?.trim();
+      if (control !== undefined && control !== '') {
         playtest?.captureHumanClick(control, target);
       }
     }, true);
@@ -347,7 +350,7 @@ Expected: FAIL，实拍 HTML 或面板不存在。
 - 「记一次同频」：读取焦点座位输入（默认当前 AI 座位）与持续秒数输入（默认 3），写 `table_attention_peak`，`anchorLogIndex = state.log.length - 1`。焦点/时长与局后自报草稿必须保存在按 store 隔离的运行时状态中，**不得因 AI 重渲染而重置**。
 - 「开始看面板 / 结束看面板」：显式计时；结束时才写 `gaze_panel`，座位取当前操作者。不得用面板展开时长冒充实际注视时长。
 - 「导出实拍记录」：`Blob` + `URL.createObjectURL` 下载 `创界山-实拍-<seed>-<aiSeat>.json`。
-- 局后 5 人自报表单：`wantHumanBack` 复选框、`wouldReplay` 1–5、`feltRobotic` 1–5、`recalledPeakCount` 数字、`oneLineAnomaly` 单行文本；每次提交写一条 `post_game_poll`。
+- 局后 5 人自报表单：`wantHumanBack` 复选框、`wouldReplay` 1–5、`feltHuman` 1–5、`recalledPeakCount` 数字、`oneLineAnomaly` 单行文本；每次提交写一条 `post_game_poll`。
 - 事件计数摘要：同频、接管、AI 动作、弃权。
 
 `web/main.ts` 在 `render()` 末尾的实拍分支加入：
