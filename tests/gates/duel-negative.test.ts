@@ -18,14 +18,14 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 
 const ROOT = process.cwd();
 
-/** 建立隔离副本（engine / themes / web / tests/sim / tests/e2e）。 */
+/** 建立隔离副本（engine / themes / web / tests/sim / tests/e2e + E2E 依赖的 fixtures）。 */
 function makeCopy(): string {
   const dir = mkdtempSync(resolve(tmpdir(), 'cm-neg-'));
   cpSync(resolve(ROOT, 'engine'), resolve(dir, 'engine'), { recursive: true });
@@ -33,6 +33,8 @@ function makeCopy(): string {
   cpSync(resolve(ROOT, 'web'), resolve(dir, 'web'), { recursive: true });
   cpSync(resolve(ROOT, 'tests', 'sim'), resolve(dir, 'tests', 'sim'), { recursive: true });
   cpSync(resolve(ROOT, 'tests', 'e2e'), resolve(dir, 'tests', 'e2e'), { recursive: true });
+  mkdirSync(resolve(dir, 'tests', 'engine'), { recursive: true });
+  cpSync(resolve(ROOT, 'tests', 'engine', 'fixtures.ts'), resolve(dir, 'tests', 'engine', 'fixtures.ts'));
   return dir;
 }
 

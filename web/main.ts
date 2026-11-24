@@ -27,6 +27,12 @@ import { renderCouncil } from './ui/council.ts';
 import { renderCertification } from './ui/cert.ts';
 import { runTutorial } from './tutorial.ts';
 import { DEFAULT_SEED, parseSeed } from './seed.ts';
+import { PlaytestController } from './playtest-controller.ts';
+import { PlaytestEventStore, parsePlaytestConfig } from './playtest-events.ts';
+import { renderPlaytestPanel, resetPlaytestPanel, setPlaytestPanelOperator } from './playtest-panel.ts';
+
+declare const PLAYTEST_MODE: boolean;
+let playtest: PlaytestController | null = null;
 
 /** UI 全局状态。 */
 interface Ui {
@@ -109,17 +115,71 @@ const ui: Ui = {
   notice: null,
 };
 
-function newGame(): void {
-  const theme = themeById(ui.themeId).theme;
-  ui.state = installTheme(
-    createInitialState({ players: ui.playerCount, seed: ui.seed, deckSize: theme.counts.deckTotal }),
-    theme,
-  );
+function applyPlaytestAiSeat(state: State): State {
+  if (!PLAYTEST_MODE) { return state; }
+  const config = parsePlaytestConfig(location.search);
+  if (config === null) { return state; }
+  return {
+    ...state,
+    players: state.players.map((player) => ({
+      ...player,
+      controlledBy: player.seat === config.aiSeat ? 'ai' as const : 'human' as const,
+    })),
+  };
+}
+
+/** 实拍局的 URL 配置高于存档：人数/seed 不匹配时按配置重开，否则保留同配置的进度。 */
+function normalizePlaytestState(state: State): State {
+  if (!PLAYTEST_MODE) { return state; }
+  const config = parsePlaytestConfig(location.search);
+  if (config === null) { return state; }
+  if (state.players.length !== 6 || state.seed !== config.seed
+    || state.players.some((player, index) => player.seat !== index)) {
+    const theme = themeById(ui.themeId).theme;
+    state = installTheme(
+      createInitialState({ players: 6, seed: config.seed, deckSize: theme.counts.deckTotal }),
+      theme,
+    );
+  }
+  return applyPlaytestAiSeat(state);
+}
+
+function resetUiForNewState(): void {
   ui.seat = 0;
   ui.pendingTargetCardId = null;
   ui.pendingAbility = false;
   ui.pendingCompareTarget = null;
+  ui.equipMode = false;
   ui.notice = null;
+}
+
+function resetPlaytestSession(): void {
+  if (!PLAYTEST_MODE || playtest === null) { return; }
+  const config = parsePlaytestConfig(location.search);
+  if (config === null) { return; }
+  playtest.reset();
+  playtest.store.reset();
+  resetPlaytestPanel(playtest.store);
+  playtest.store.setMetadata({ themeId: ui.themeId, players: 6, mode: ui.mode });
+  playtest.store.record({ type: 'game_start', seed: config.seed, aiSeat: config.aiSeat });
+}
+
+function newGame(): void {
+  const theme = themeById(ui.themeId).theme;
+  if (PLAYTEST_MODE) {
+    const config = parsePlaytestConfig(location.search);
+    if (config !== null) {
+      ui.playerCount = 6;
+      ui.seed = config.seed;
+    }
+  }
+  ui.state = installTheme(
+    createInitialState({ players: ui.playerCount, seed: ui.seed, deckSize: theme.counts.deckTotal }),
+    theme,
+  );
+  ui.state = applyPlaytestAiSeat(ui.state);
+  resetUiForNewState();
+  resetPlaytestSession();
   render();
 }
 
@@ -143,9 +203,17 @@ function loadGame(): void {
     if (themeId !== null) {
       ui.themeId = themeId;
     }
-    ui.state = state;
-    ui.seed = state.seed;
-    ui.playerCount = ui.state.players.length as Ui['playerCount'];
+    ui.state = normalizePlaytestState(state);
+    const config = PLAYTEST_MODE ? parsePlaytestConfig(location.search) : null;
+    if (config !== null) {
+      ui.playerCount = 6;
+      ui.seed = config.seed;
+    } else {
+      ui.seed = state.seed;
+      ui.playerCount = ui.state.players.length as Ui['playerCount'];
+    }
+    resetUiForNewState();
+    resetPlaytestSession();
     render();
   } catch (e) {
     alert('读档失败：' + (e instanceof Error ? e.message : String(e)));
@@ -175,9 +243,17 @@ function importSave(): void {
         if (themeId !== null) {
           ui.themeId = themeId;
         }
-        ui.state = state;
-        ui.seed = state.seed;
-        ui.playerCount = ui.state.players.length as Ui['playerCount'];
+        ui.state = normalizePlaytestState(state);
+        const config = PLAYTEST_MODE ? parsePlaytestConfig(location.search) : null;
+        if (config !== null) {
+          ui.playerCount = 6;
+          ui.seed = config.seed;
+        } else {
+          ui.seed = state.seed;
+          ui.playerCount = ui.state.players.length as Ui['playerCount'];
+        }
+        resetUiForNewState();
+        resetPlaytestSession();
         render();
       } catch (e) {
         alert('导入失败：' + (e instanceof Error ? e.message : String(e)));
@@ -199,6 +275,7 @@ function renderToolbar(): HTMLElement {
   }
   themeSel.addEventListener('change', () => {
     ui.themeId = themeSel.value;
+    if (PLAYTEST_MODE) { newGame(); return; }
     const theme = themeById(ui.themeId).theme;
     // 换主题 = 换一局：牌池 / 棋盘 / 天机 / 试炼 / 认证题整套装上
     ui.state = installTheme(ui.state, theme);
@@ -212,6 +289,7 @@ function renderToolbar(): HTMLElement {
     if (n === ui.playerCount) { opt.selected = true; }
     countSel.append(opt);
   }
+  if (PLAYTEST_MODE) { countSel.disabled = true; }
   countSel.addEventListener('change', () => {
     ui.playerCount = Number(countSel.value) as Ui['playerCount'];
     newGame();
@@ -226,6 +304,7 @@ function renderToolbar(): HTMLElement {
   }
   modeSel.addEventListener('change', () => {
     ui.mode = modeSel.value === 'standard' ? 'standard' : 'newbie';
+    if (PLAYTEST_MODE) { newGame(); return; }
     render();
   });
   bar.append(el('label', { class: 'lbl', text: '模式' }), modeSel);
@@ -239,7 +318,9 @@ function renderToolbar(): HTMLElement {
     value: String(ui.seed),
     'aria-label': 'Seed',
   });
+  if (PLAYTEST_MODE) { seedInput.disabled = true; }
   seedInput.addEventListener('input', () => {
+    if (PLAYTEST_MODE) { return; }
     const parsed = parseSeed(seedInput.value);
     if (parsed === null) {
       seedInput.setAttribute('aria-invalid', 'true');
@@ -628,9 +709,6 @@ function renderActions(): HTMLElement {
   } else if (ability.reason !== '') {
     body.push(el('div', { class: 'muted', text: '被动不可用：' + ability.reason }));
   }
-  if (ui.notice !== null) {
-    body.push(el('div', { class: 'warn', text: t(ui.notice ?? '') }));
-  }
   // ⚠️ B75：装备入口 —— 按钮**只在枚举真的发出装备候选时**出现（不自己判窗口，判据仍在 legal-gate），
   //   点击后进入「装备模式」，由手牌点击承担选牌；被闸挡下时给出拒因（门禁:拒绝不沉默）。
   if (ui.equipMode) {
@@ -798,7 +876,17 @@ function render(): void {
   // 认证面板
   if (needsCertificationAction(s) || s.certification.pending.length > 0) {
     panels.push(renderCertification(s, theme, ui.seat, {
-      onSign: (target) => commit(certifySign(s, ui.seat, target)),
+      onSign: (target) => {
+        // 认证面板可能由 UI 门禁放行、但引擎仍拒绝（例如程序座位没有签印权）。
+        // 不得走静默的通用 commit：保留原局并把引擎 note 显示给桌友。
+        const r = certifySign(s, ui.seat, target);
+        if (!r.ok) {
+          ui.notice = '签印未落账：' + (r.note ?? '引擎未给出原因');
+          render();
+          return;
+        }
+        commit(r);
+      },
       onChallenge: (target, questions) => {
         const ch = certifyChallenge(s, ui.seat, target);
         if (!ch.ok) { alert(t(ch.note ?? '无法发起质疑')); return; }
@@ -841,6 +929,10 @@ function render(): void {
     }));
   }
   panels.push(renderActions());
+  // 提示必须位于 renderActions 之外：关隘/对峙/出局/待认证分支会提前返回。
+  if (ui.notice !== null) {
+    panels.push(el('div', { class: 'warn', text: t(ui.notice ?? '') }));
+  }
   panels.push(section('日志', renderLog(s, 40, themeById(ui.themeId).theme.terms, nameOf)));
 
   root.innerHTML = '';
@@ -849,6 +941,38 @@ function render(): void {
   for (const p2 of panels) {
     root.append(typeof p2 === 'string' ? document.createTextNode(p2) : p2);
   }
+  if (PLAYTEST_MODE && playtest !== null) {
+    setPlaytestPanelOperator(playtest.store, playtest.getSeat());
+    root.append(renderPlaytestPanel(playtest.store, ui.state, () => performance.now()));
+    playtest.afterRender(ui.state);
+  }
 }
 
+if (PLAYTEST_MODE) {
+  const config = parsePlaytestConfig(location.search);
+  if (config !== null) {
+    ui.playerCount = 6;
+    ui.seed = config.seed;
+    const store = new PlaytestEventStore(config);
+    playtest = new PlaytestController({
+      getState: () => ui.state,
+      getSeat: () => ui.seat,
+      getMode: () => ui.mode,
+      setState: (s) => { ui.state = s; },
+      requestRender: render,
+      now: () => performance.now(),
+    }, store);
+    newGame();
+    document.addEventListener('click', (e) => {
+      const target = e.target instanceof HTMLElement ? e.target : null;
+      if (target === null) { return; }
+      // 手牌/玩家行是 div；只取最近的可动作祖先，保证一次点击最多记一条。
+      const control = target.closest<HTMLElement>('[data-action-control]')?.dataset.actionControl
+        ?? target.closest('button')?.textContent?.trim();
+      if (control !== undefined && control !== '') {
+        playtest?.captureHumanClick(control, target);
+      }
+    }, true);
+  }
+}
 render();

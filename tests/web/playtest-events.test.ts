@@ -1,0 +1,173 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  PlaytestEventStore,
+  parsePlaytestConfig,
+} from '../../web/playtest-events.ts';
+import type { PlaytestConfig, PlaytestEvent } from '../../web/playtest-events.ts';
+
+type StoredEvent = PlaytestEvent & { readonly seq: number; readonly ts: number };
+interface PlaytestExport {
+  schema: number;
+  config: PlaytestConfig;
+  metadata: { themeId: string; players: number; mode: string } | null;
+  events: StoredEvent[];
+  snapshot: string | null;
+}
+
+test('实拍配置：必须显式 playtest=1 + 合法 seed + 0..5 的 aiSeat', () => {
+  assert.deepEqual(parsePlaytestConfig('playtest=1&seed=123456&aiSeat=2'),
+    { seed: 123456, aiSeat: 2 });
+  assert.deepEqual(parsePlaytestConfig('?playtest=1&seed=0&aiSeat=0'),
+    { seed: 0, aiSeat: 0 });
+  assert.deepEqual(parsePlaytestConfig('playtest=1&seed=4294967295&aiSeat=5'),
+    { seed: 4294967295, aiSeat: 5 });
+
+  for (const q of [
+    '', '?', 'seed=1&aiSeat=2', 'playtest=0&seed=1&aiSeat=2',
+    'playtest=true&seed=1&aiSeat=2', 'playtest=01&seed=1&aiSeat=2',
+    'playtest=1&aiSeat=2', 'playtest=1&seed=1',
+    'playtest=1&seed=-1&aiSeat=2', 'playtest=1&seed=1.5&aiSeat=2',
+    'playtest=1&seed=1e3&aiSeat=2', 'playtest=1&seed=0x10&aiSeat=2',
+    'playtest=1&seed=4294967296&aiSeat=2', 'playtest=1&seed=&aiSeat=2',
+    'playtest=1&seed=abc&aiSeat=2', 'playtest=1&seed=1&aiSeat=-1',
+    'playtest=1&seed=1&aiSeat=6', 'playtest=1&seed=1&aiSeat=1.5',
+    'playtest=1&seed=1&aiSeat=1e0', 'playtest=1&seed=1&aiSeat=0x2',
+    'playtest=1&seed=1&aiSeat=x', 'playtest=1&seed=1&aiSeat=',
+  ]) {
+    assert.equal(parsePlaytestConfig(q), null, q);
+  }
+});
+
+test('事件表：构造时拒绝非法 seed 与 aiSeat 配置', () => {
+  for (const seed of [-1, 1.5, 4294967296, Number.NaN, Number.POSITIVE_INFINITY]) {
+    assert.throws(() => new PlaytestEventStore({ seed, aiSeat: 2 }), /seed/);
+  }
+  for (const aiSeat of [-1, 6, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+    assert.throws(() => new PlaytestEventStore({ seed: 7, aiSeat }), /aiSeat/);
+  }
+
+  for (const config of [
+    { seed: 0, aiSeat: 0 },
+    { seed: 4294967295, aiSeat: 5 },
+  ]) {
+    const data = new PlaytestEventStore(config).toJSON() as PlaytestExport;
+    assert.deepEqual(data.config, config);
+  }
+});
+
+test('事件表：导出包含 schema、配置、元数据与快照，更新后取最新值', () => {
+  const config = { seed: 7, aiSeat: 2 };
+  const store = new PlaytestEventStore(config);
+  assert.deepEqual(store.toJSON(), {
+    schema: 1, config, metadata: null, events: [], snapshot: null,
+  });
+
+  store.setMetadata({ themeId: 'default', players: 6, mode: 'standard' });
+  store.setSnapshot('{"round":1}');
+  store.setMetadata({ themeId: 'mountain', players: 6, mode: 'quick' });
+  store.setSnapshot('{"round":2}');
+
+  const data = store.toJSON() as PlaytestExport;
+  assert.equal(data.schema, 1);
+  assert.deepEqual(data.config, config);
+  assert.deepEqual(data.metadata, { themeId: 'mountain', players: 6, mode: 'quick' });
+  assert.equal(data.snapshot, '{"round":2}');
+});
+
+test('事件表：setMetadata 拒绝非 6 人配置', () => {
+  const store = new PlaytestEventStore({ seed: 7, aiSeat: 2 });
+  for (const players of [0, 5, 7, 6.5, Number.NaN]) {
+    assert.throws(
+      () => store.setMetadata({ themeId: 'default', players, mode: 'standard' }),
+      /players/,
+    );
+  }
+  assert.equal((store.toJSON() as PlaytestExport).metadata, null);
+});
+
+test('事件表：保留全部事件字段并补 seq 与 Date.now 时间戳', () => {
+  const store = new PlaytestEventStore({ seed: 7, aiSeat: 2 });
+  const events: PlaytestEvent[] = [
+    { type: 'game_start', seed: 7, aiSeat: 2 },
+    { type: 'ai_turn_start', round: 1, turnIndex: 0, seat: 2 },
+    { type: 'ai_action_committed', round: 1, turnIndex: 0, seat: 2,
+      actionKey: 'play:card-1', durationMs: 25, degradeLevel: 1,
+      seatMode: 'seat_filled_by_ai', legal: true, source: 'heuristic' },
+    { type: 'ai_turn_duration_ms', round: 1, turnIndex: 0, seat: 2, durationMs: 25 },
+    { type: 'ai_forfeit', round: 2, turnIndex: 1, seat: 2, reason: 'no_legal_action',
+      durationMs: 10, seatMode: 'seat_filled_by_ai' },
+    { type: 'human_turn_duration_ms', round: 2, turnIndex: 2, seat: 0, durationMs: 800 },
+    { type: 'human_takeover_click', seat: 2, control: '行棋' },
+    { type: 'table_attention_peak', anchorRound: 3, anchorLogIndex: 9,
+      focusSeat: 1, durationSec: 4 },
+    { type: 'gaze_panel', seat: 1, durationMs: 1200 },
+    { type: 'post_game_poll', seat: 1, wantHumanBack: true, wouldReplay: 4,
+      feltHuman: 2, recalledPeakCount: 3, oneLineAnomaly: '接管提示出现得稍晚' },
+  ];
+
+  const before = Date.now();
+  const returned = store.record(events[0]!) as StoredEvent;
+  const after = Date.now();
+  assert.equal(returned.seq, 0);
+  assert.ok(Number.isInteger(returned.ts));
+  assert.ok(returned.ts >= before && returned.ts <= after);
+  for (const event of events.slice(1)) store.record(event);
+
+  const data = store.toJSON() as PlaytestExport;
+  assert.deepEqual(data.events.map((event) => event.seq), events.map((_, index) => index));
+  assert.deepEqual(data.events.map((event) => ({ ...event, seq: 0, ts: 0 })),
+    events.map((event) => ({ ...event, seq: 0, ts: 0 })));
+});
+
+test('事件表：同频持续不足 3 秒时拒绝落账', () => {
+  const store = new PlaytestEventStore({ seed: 7, aiSeat: 2 });
+  for (const durationSec of [-1, 0, 2.9, Number.NaN, Number.POSITIVE_INFINITY]) {
+    assert.throws(() => store.record({
+      type: 'table_attention_peak', anchorRound: 1, anchorLogIndex: 0,
+      focusSeat: 1, durationSec,
+    }), /durationSec/);
+  }
+  assert.doesNotThrow(() => store.record({
+    type: 'table_attention_peak', anchorRound: 1, anchorLogIndex: 0,
+    focusSeat: 1, durationSec: 3,
+  }));
+  assert.equal((store.toJSON() as PlaytestExport).events.length, 1);
+});
+
+test('事件表：同一局每位真人只能提交一次局后自报，reset 后开始新局', () => {
+  const store = new PlaytestEventStore({ seed: 7, aiSeat: 2 });
+  const poll = {
+    type: 'post_game_poll' as const, seat: 1, wantHumanBack: false,
+    wouldReplay: 4, feltHuman: 2, recalledPeakCount: 3, oneLineAnomaly: '无',
+  };
+  store.record(poll);
+  assert.throws(() => store.record({ ...poll, wouldReplay: 5 }), /seat.*once|already/i);
+  store.record({ ...poll, seat: 3 });
+  assert.equal((store.toJSON() as PlaytestExport).events.length, 2);
+  store.reset();
+  assert.doesNotThrow(() => store.record(poll));
+});
+
+test('事件表：reset 清空旧快照，避免新局导出上一局终局', () => {
+  const store = new PlaytestEventStore({ seed: 7, aiSeat: 2 });
+  store.setSnapshot('{"state":{"round":9}}');
+  store.reset();
+  assert.equal((store.toJSON() as PlaytestExport).snapshot, null);
+});
+
+test('事件表：reset 清空事件与 seq，但保留配置', () => {
+  const config = { seed: 7, aiSeat: 2 };
+  const store = new PlaytestEventStore(config);
+  store.record({ type: 'human_takeover_click', seat: 2, control: '行棋' });
+  store.record({ type: 'table_attention_peak', anchorRound: 3, anchorLogIndex: 9,
+    focusSeat: 1, durationSec: 4 });
+
+  store.reset();
+  const data = store.toJSON() as PlaytestExport;
+  assert.deepEqual(data.config, config);
+  assert.deepEqual(data.events, []);
+
+  const next = store.record({ type: 'gaze_panel', seat: 1, durationMs: 50 }) as StoredEvent;
+  assert.equal(next.seq, 0);
+});

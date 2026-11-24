@@ -21,7 +21,11 @@ export function renderHand(
     return wrap;
   }
   for (const card of player.hand) {
-    const node = el('div', { class: 'card ' + card.color + (card.id === pendingCardId ? ' pending' : ''), title: card.text });
+    const node = el('div', {
+      class: 'card ' + card.color + (card.id === pendingCardId ? ' pending' : ''),
+      title: card.text,
+      'data-action-control': 'card:' + card.id,
+    });
     node.append(el('div', { class: 'card-cost', text: theme.meta.resourceName + ' ' + card.cost }));
     node.append(el('div', { class: 'card-name', text: card.name }));
     node.append(el('div', { class: 'card-text', text: card.text }));
@@ -78,6 +82,7 @@ export function renderPlayers(
       row.append(el('span', { class: 'badge st', text: st.map(([k, v]) => k + String(v ?? 0)).join(' ') }));
     }
     if (onPick !== undefined) {
+      if (pickable) { row.setAttribute('data-action-control', 'target-seat:' + String(p.seat)); }
       row.addEventListener('click', () => { onPick(p.seat); });
     }
     list.append(row);

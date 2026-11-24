@@ -22,6 +22,13 @@ if (!existsSync(html)) {
 }
 cpSync(html, resolve(OUT, '数字轨', '创界山-活人认证.html'));
 
+// B85 Task 4：实拍 HTML 只留在 dist/ 根目录，不得进入发布包。
+const packagedPlaytest = resolve(OUT, '数字轨', '创界山-活人认证-实拍.html');
+if (existsSync(packagedPlaytest)) {
+  console.error('FAIL  实拍 HTML 不得进入发布包');
+  process.exit(1);
+}
+
 // 2) 实体件：每套主题的规则书 PDF + 实体件 PDF + 可编辑 SVG
 const themeIds = readdirSync(resolve(ROOT, 'themes'), { withFileTypes: true })
   .filter((e) => e.isDirectory())
