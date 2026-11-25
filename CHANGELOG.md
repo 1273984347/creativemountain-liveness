@@ -6,7 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Nothing yet.
+### Security
+
+- Upgraded the build chain's `esbuild` from 0.24.2 to 0.28.2, fixing GHSA-67mh-4wv8-2f99.
+  The single-file build output is byte-identical (SHA256 `80E5DA2E…`, 212,032 bytes).
+- Pinned the host prototype's transitive `katex`, `i18next` and `diff` above their
+  vulnerable ranges with npm `overrides`, fixing GHSA-238p-pmpm-9mq7, GHSA-6jcc-5g8w-32mx
+  and GHSA-73rr-hh4g-fpgx. Their upstream provider (`sparkdesign@0.4.11`) has not released
+  a fixed dependency range, so the overrides are the only available path.
 
 ## [0.1.0] - 2026-11-25
 

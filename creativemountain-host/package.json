@@ -18,6 +18,11 @@
     "sparkdesign": "^0.4.11",
     "tslib": "^2.9.1"
   },
+  "overrides": {
+    "diff": "^8.0.3",
+    "i18next": "^26.3.4",
+    "katex": "^0.18.2"
+  },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.5",
     "@types/react": "^19.3.0",
