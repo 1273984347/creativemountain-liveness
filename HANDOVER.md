@@ -7,7 +7,7 @@
 
 | 项 | 值 |
 | --- | --- |
-| `main` | `b7ac750`（B89 已推送；B90 修复待推） |
+| `main` | `0ba0403`（B90 修复 + 项目台账已推送） |
 | 门禁 | **14 道**，全绿 |
 | 批次档案 | **83** 份（`docs/批次/`） |
 | 沉淀条目 | **E1–E151**（五类；E 行数 ≡ 分类声明之和） |
@@ -21,6 +21,12 @@
 - **做了什么**：修掉 `dependabot-auto-merge.yml` 把 major 当 patch/minor 合并的判定缺陷。判定改为**解析标题里的 `from A to B` 版本跨度**（主版本号不同即 major ⇒ 人工审），`deps-major` 标记仍命中，**分组 PR（解析不出 from/to）一律保守人工审**；配置侧给三个更新目录补 `deps-major` 分组；新增常驻守卫 `tests/gates/dep-update-classify.test.ts`（**直接执行 yml 里那段分类代码**，不另写复刻）。
 - **核实读数**：守卫 **5/5 绿**；注入旧判定 ⇒ **当场判红**（点名「标题分类错：build(deps-dev): bump typescript from 5.9.3 to 7.0.2」）；按**原字节**还原（字节一致 = true）⇒ 复跑 5/5 绿；`npx tsc --noEmit` **exit 0**；导航复算 **83/83/83/83**；`doc-sync` **10/10**。
 - **止血读数**：两个 auto-merge run 终态 **cancelled**；4 个 major PR 全部 `OPEN`、`mergedAt: null`、**零 `@dependabot merge` 评论**；`main` 仍是 `b7ac750`（**未被污染**）。
+- **推送与止血读数**：提交 `d3aecf0`（修复）+ `0ba0403`（台账）**已 push** ⇒ 远端 `main` = `0ba0403`；4 个 major PR（#3 / #4 / #5 / #6）**全部 CLOSED**、`mergedAt: null`、零 `@dependabot merge` 评论（可逆：reopen 即恢复）。
+- **平台侧验证新判定生效**：手动 dispatch auto-merge 处理 PR #6 ⇒ run `45667296931` 日志输出「**major 版本变更 ⇒ 保持人工审：build(deps-dev): bump typescript from 5.9.3 to 7.0.2**」⇒ 在**判定阶段**直接退出，**未评论、未合并**。
+- **拦下 major 真的救了 main（红证）**：PR #3（@types/node 22→26）的 CI **判红**（run `45665156289`）—— 红因是类型检查失败：`tests/engine/exhaustion.test.ts(173,44) TS2769`、`tests/engine/legal-probe.test.ts(365,13) TS7022` ⇒ 若当初被自动合并，main 会直接红。
+- **CI 终态**：run `45667268412`（headSha `0ba0403`）⇒ **success**（门禁链 job success）；push 后 Dependabot 重跑的 3 个 Updates 任务（`45667278777` github_actions / `45667277376` **host npm** / `45667277331` 根 npm）⇒ **全部 success** ⇒ host 目录那个**此前每周固定失败**的任务**转为成功**（依赖树现在能被正常解析）。
+- **新判定的三分行为（平台侧实测）**：PR **#8 / #10**（`deps-major` 分组）⇒ 日志「major 版本变更 ⇒ 保持人工审」⇒ **零 `@dependabot merge` 评论、未合并**；PR **#9**（playwright 1.60→1.65，npm-patch 组）⇒ 日志「已评论 @dependabot merge（PR #9）」⇒ **patch/minor 自动合并链正常工作**（设计意图，且 CI 全绿才会真合并）。⇒ **Dependabot 重分组后，major PR 标题自带 `deps-major` 标记 ⇒ 配置侧与判定侧真正接上了**。
+- **告警复核**：REST `state=open` = **0** / `state=closed` = **4**（与先前 UI 侧读数一致）。
 - **证据位置**：`docs/批次/B90-自动合并major判定修复-执行记录.md`
 
 ### B89 · 依赖安全告警清收（根仓 esbuild + host 三条 overrides）
