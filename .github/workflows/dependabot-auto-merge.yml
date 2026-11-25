@@ -45,7 +45,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.inputs.pr_number || github.event.pull_request.number }}
-          PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
           set -euo pipefail
 
@@ -55,7 +54,7 @@ jobs:
           fi
 
           # ① 版本语义分类：Dependabot 对 major 会把分组名写成 deps-major ⇒ 人工审。
-          #    ⚠️ 标题通过 env 传入（不内插进脚本），避免 PR 标题里的 shell 元字符。
+          #    ⚠️ 标题通过 gh 现取（不内插进脚本），避免 PR 标题里的 shell 元字符。
           TITLE=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json title --jq .title)
           case "$TITLE" in
             *deps-major*)
@@ -64,10 +63,21 @@ jobs:
               ;;
           esac
 
+          # ② 预发布依赖闸：diff 里若**新增**带 -beta / -alpha / -rc 的版本号 ⇒ 保持人工审。
+          #    起因（B87 观察）：Dependabot 把「patch 组」命名得很乐观，但组里混进的**传递依赖**
+          #    可能是 beta（如 @emnapi/core 2.0.0-beta.2）⇒ 只看分组名会漏。
+          #    ⚠️ 只看**新增行**（以 + 开头）⇒ lock 里原本就有的 beta 不受影响。
+          PRE_RELEASE_RE='^\+.*"version": "[^"]*-(beta|alpha|rc|pre|next)[.0-9]*"'
+          if gh pr diff "$PR_NUMBER" --repo "$REPO" | grep -E "$PRE_RELEASE_RE" >/dev/null; then
+            echo "PR 新增了预发布版本依赖（beta/alpha/rc）⇒ 保持人工审"
+            gh pr diff "$PR_NUMBER" --repo "$REPO" | grep -E "$PRE_RELEASE_RE" | head -5
+            exit 0
+          fi
+
           SHA=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefOid --jq .headRefOid)
           echo "PR #$PR_NUMBER  head=$SHA  标题=$TITLE"
 
-          # ② 等 CI：轮询该 head sha 的 check-runs，最多 20 次 × 45s（约 15 分钟）。
+          # ③ 等 CI：轮询该 head sha 的 check-runs，最多 20 次 × 45s（约 15 分钟）。
           green=0
           for i in $(seq 1 20); do
             pending=$(gh api "repos/$REPO/commits/$SHA/check-runs" --jq '[.check_runs[] | select(.status != "completed")] | length')
@@ -90,12 +100,12 @@ jobs:
             exit 0
           fi
 
-          # ③ 幂等：已有该评论就不重复。
+          # ④ 幂等：已有该评论就不重复。
           if gh api "repos/$REPO/issues/$PR_NUMBER/comments" --jq '.[].body' | grep -qx '@dependabot merge'; then
             echo "已有 @dependabot merge 评论 ⇒ 跳过"
             exit 0
           fi
 
-          # ④ 下合并指令。
+          # ⑤ 下合并指令。
           gh api "repos/$REPO/issues/$PR_NUMBER/comments" -f body='@dependabot merge' >/dev/null
           echo "已评论 @dependabot merge（PR #$PR_NUMBER）"
