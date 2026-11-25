@@ -253,6 +253,11 @@ export async function htmlToPdf(htmlPath: string, pdfPath: string): Promise<bool
     await page.goto(url, { waitUntil: 'load' });
     await page.pdf({
       path: pdfPath,
+      // ⚠️ B92：**必须让 CSS 的 `@page` 生效** —— `PRINT_CSS` 里 `@page board { size: A3 landscape }`
+      //   规定棋盘页用 A3 横向、其余 A4 纵向；但 `format:'A4'` 会**覆盖** CSS 的 @page 尺寸
+      //   （Playwright 的 format 优先），且不设 `preferCSSPageSize` 时 @page 被忽略
+      //   ⇒ 实测棋盘页曾被打成 A4 横向（尺寸与标称不符）。设 preferCSSPageSize 后由 CSS 决定。
+      preferCSSPageSize: true,
       format: 'A4',
       printBackground: true,
       margin: { top: '12mm', bottom: '12mm', left: '12mm', right: '12mm' },

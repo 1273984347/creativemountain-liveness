@@ -8,6 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed two ways the physical board could mislead players: degraded gates (gates
+  beyond a player-count tier's gate budget) still printed the "过路 N" toll the
+  engine does not recognise, and the board PDF was forced to A4 although the
+  stylesheet asks for A3 landscape. The board page is now A3 landscape and the
+  rest A4 portrait. Gate ⑦ gained a fifth level comparing the entity boards
+  against the scale table, with resident negative samples.
+- The README's "known limitations" section no longer hand-copies balance readings
+  that had silently gone stale; a resident guard now fails if any
+  `number + pp/%` reading is pasted back in.
+- The simulation harness can now be given a `FacePolicy` module through
+  `--policy-module` (default off). With it off the simulation output is
+  byte-identical to before; a resident guard covers the default / fallback /
+  throwing / actually-applied states.
+
 - Fixed the Dependabot auto-merge workflow mis-classifying **major** updates as
   patch/minor. The check only looked for a `deps-major` group name in the pull
   request title, and Dependabot never writes that name for ungrouped major updates

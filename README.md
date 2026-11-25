@@ -63,9 +63,9 @@ npm run gate           # 十四道门禁全跑
 | ④ | 构建 | esbuild 单文件 HTML |
 | ⑤ | 主题包校验 | 四套主题的结构、引用完整性、**参数取值域**、**试炼题面==判定**（B77：`terms` 逐叶必填 + `fallback` 数钉 0）；**B78：试炼牌 name 判据**（必填/≤6字/合并禁字表/套内不撞名）+ `terms.statuses` 三叶 ⇒ `terms` 共 **15 叶**（B79 §3.1 补 `path`/`peak`：句子层 `{path}` `{peak}` 的取词地基）；**B80 §2.1 补 `rift`/`hazard`/`player` ⇒ 18 叶**；**B79：`terms`↔`glossary` 判等**（B80 由五键扩到**八对**：`HP`/`resource`/`gate`/`path`/`peak`/`rift`/`hazard`/`player` 逐键等值、`deck` 豁免并写明理由「牌库名 ≠ 单张牌名」）⇒ 句子层与印刷层不许说两个词（B79 §3.3 销掉 B78 留的空守卫 E136；B80 r1.3 因这把闸判红而裁定 hybrid 的 `glossary` 三键同步换词） |
 | ⑥ | IR 契约 | 四套主题的 ir.json ↔ IR 类型契约；**B78**：`trials[].name` 与 `board.tiles[].{name,gateFee,branchTo}` 逐字可追溯、顶层键**覆盖差集元守卫**（未认领的键即红）、指令表 20 条 ∧ 升序 ∧ ≡ 快照 |
-| ⑦ | 双轨一致性 | IR/SVG 精确比对 + 数值溯源 + PDF 粗检（4 套 × 4 级） |
+| ⑦ | 双轨一致性 | IR/SVG 精确比对 + 数值溯源 + PDF 粗检 + **实体件棋盘 ↔ 规模表**（4 套 × **5 级**） |
 | ⑧ | 主题差异化 | 规格 §10.1 两张清单的机械判定 + **跨主题术语串戏** + **句子层叶跨套两两不同**（`checkThemesMutuallyDistinct`，B79 R8 立时是**五叶** `resource`/`gate`/`path`/`peak`/`hp`；B80 §2.1 扩到**八叶** `+ rift`/`hazard`/`player`——只判「与基准不同」会放过融合套撞科幻套那一类）。⚠️ 串戏判据的入参是**三套非基准主题**（基准套不参与），所以"某套正文残留基准词"这类只有把基准也纳入才看得见——B80 实测过这条边界，见其记录 §2.6 |
-| ⑨ | 规模与平衡 | 30 局冒烟：零异常 + 兜底触发率 < 15% |
+| ⑨ | 规模与平衡 | 30 局冒烟：零异常 + 无人封顶兜底率 < 25%（判定见 `tests/sim/run.mjs`；规格 §9.2 只要求「过高须记录并讨论」，未给数字） |
 | ⑩ | 对峙端到端 | Playwright 真浏览器：触发对峙 → 回合锁定 → 选牌 → 揭晓 → 解锁 |
 | ⑪ | 试炼通过率平衡 | 12 张试炼牌实测通过率 vs 目标区间（单色≈95% / 单类型≈55% / 类型+颜色≈20%） |
 | ⑫ | 位次极差回归锁 | 固定 seed + 固定局数 ⇒ 确定性：最大极差 ≤ 14pp 且 RMS 偏离 ≤ 6.5pp（B65 重校准） |
@@ -109,16 +109,16 @@ ROADMAP.md 路线图：已发布 / 在途 / 未决遗留
 
 ## 已知限制（如实登记）
 
-- **数字轨棋盘按人数自适应**（规格 §8 的 boardLength 24–36），**实体件棋盘是 4 人局 28 格版**；
-  换人数时需自行裁剪/扩展实体棋盘。
+- **数字轨棋盘按人数自适应**（规格 §8 的 boardLength 24–36）；**实体件棋盘同样按人数出多版**
+  （4 版：24 格 / 28 格 / 32 格 / 36 格，由 `engine/scales.ts` 的 `boardLength` 派生，见 `engine/core/board-fit.ts`）。
 - 出牌目标由玩家**点选**（攻击类牌需再点一名对手；点自己或再次点该牌取消）；
   引擎侧「需要目标却未选目标则不出牌」，不会误伤主题包里的占位座位。
 - 身份与阵营**开局随机分配**、**行动顺序开局随机决定**（B10，固定 seed 可复现）
-  ⇒ 结构性**座位**偏差已消除：8 人局座位胜率极差 20.7pp → **1.3pp**（无趋势）。
+  ⇒ 结构性**座位**偏差已消除（**读数以 `docs/balance-report.md` 的「按行动顺序位次」节为准**）。
 - **先手优势已消除**（B11 活人席计分制）：认证通过**不再直接终局** —— 改为「获得 1 席 → 回到山道起点 → 可再取席」，
   终局按**得分 = 席位数 × 活人席权重 − 距峰顶格数**排名（一个活人席抵得上爬半座山）。
-  位次胜率极差 **13.0pp → 1.1–2.8pp**（3–8 人局）；「首个登顶者直接获胜」从 77.6% 降到 **17–35%**
-  ⇒ 登顶不再等于赢。读数见 `docs/balance-report.md` 的「按行动顺序位次」与「先手优势的传导路径」两节。
+  ⇒ 登顶不再等于赢。**读数以 `docs/balance-report.md` 的「按行动顺序位次」与「先手优势的传导路径」两节为准**
+  （本节**不手抄数值** —— 数值只由该报告承载，避免报告重标定后此处悄悄过期）。
 - 8 个身份的被动**已全部接入触发点**（B12）：开拓者「每回合首次移动 +1 格」· 匠师「每场 1 次免费造物」·
   观星者「每回合看牌堆顶 1 张」· 仲裁者「山议 2 票 + 每局 1 次否决放逐（只可救他人，不可自救）」· 守夜人「回合末 1 点护盾」·
   窃火者「每回合偷 1 枚灵枢」· 织梦者「每回合 1 次改自己的险径判定」· 山主「首次被质疑自动视为签印」。
@@ -130,16 +130,15 @@ ROADMAP.md 路线图：已发布 / 在途 / 未决遗留
   力竭仍按 round 末倒数。玩家侧措辞：封口 = 立刻弃**最左边 1 张**手牌 + N 个手番不能出牌与发动被动（行棋/问天/装备照做）；
   停手番 = 只能按「结束手番」，但收入与地形结算照常；免疫 = **预防不是解药**（不清已有层数）。
   「N 个手番」= 接下来 **N 个完整手番**（B77 r5）：在自己手番内中招时，当前剩余也被封但不占额度。
-  24000 局生效侧读数（`docs/balance-report.md` 总览六行）：中毒扣血 21214 · 减速生效 2747 · 封口拦截 4595 ·
-  封口弃牌 4924 · 停手番 13552 · 被免疫拦截 54。
+  生效侧读数见 `docs/balance-report.md` 总览六行（**本节不手抄数值**）。
 - **对峙已落地**（B13）：同格相遇 ⇒ 双方各自选 1 张牌、选完同时揭晓（红 > 黑 → 同色比点数 → 平局各弃 1 张 →
   败者后退 1 格并抽 1 张牌）；此前引擎里只有一个无人调用的半成品算子，对峙**完全不可达**。
   触发统计见 `docs/balance-report.md` 的「对峙统计」。
 - **三决策面模型评估已完成、模型未接入生产**（B70；certify 面经 B74 扩样复验）：sim 决策层抽成 `tests/sim/policy.mjs`
   单一真相源，`playOne` 支持默认关闭的 `FacePolicy` 注入（失败必回落）；评估器 `npm run eval:faces` 不进门禁、无服务即 SKIP。
   主表每面 400 局/臂（4 主题 × 100 seed，模型座 0，配对 McNemar 临界 3.841；play 面只接管「选哪张牌 + 打谁」）：
-  **play / council 未检出改善**（χ²=0.355 / 0.028；座0 胜率 31.0%→29.0% / →30.3%）⇒ 保持贪心；
-  **certify 面经 B74 两组独立扩样（各 1900 局/臂）均显著改善**（χ²=3.926 / 7.834；29.2%→31.1% / 24.2%→26.9%）
+  **play / council 未检出改善**（χ² 与胜率见预研文档）⇒ 保持贪心；
+  **certify 面经 B74 两组独立扩样均显著改善**（χ² 与胜率见预研文档与 B74 记录）
   ⇒ 判定「该面值得接入，**另立批次**做门 ⑨ 重校准」，**本批仍不接入**（`policy` 缺省 undefined）。
   读数见 `docs/预研/2026-11-09-b70-face-evaluation.md`；生成物 `docs/预研/data/b70-face-readings.md`、
   扩样 `docs/预研/data/b70-face-arms-certify-475*.json`。
@@ -191,13 +190,13 @@ ROADMAP.md 路线图：已发布 / 在途 / 未决遗留
 |---|---|---|
 | G-a | ~~**出牌费用无权威语义**：规格 §3.1 未写支付、引擎 `performAction` 的 `act` 分支**既不校验也不扣**、UI 手牌区只显示不拦、仅模拟器把 `cost <= resource` 当资格线 ⇒ 数字轨可**免费出牌**~~ ⇒ **已修**（B65 裁定为**出牌付费**：打出卡牌须支付该牌 `cost`（规格 §3.1「行事」/§4.3 已补）⇒ **灵枢不足即引擎拒绝**（不扣、不出牌）；UI `uiBlockNotice` 同款拒因并点名「灵枢不足」；枚举层由**引擎自己拒**、试跑如实反映（不另写 `cost` 镜像判据）。⚠️ 连带后果已处置：付费使资源成为真约束 ⇒ 8 人档出现**真实**位次偏差 ⇒ 门 ⑫ 与统计口径阈值已按跨 10 组独立样本**重校准**（规格 §5.8/§9.2 有 B65 补记）） | `engine/core/turn-runner.ts`（`act` 分支）；`engine/core/balance.ts`（阈值单一事实源）；`web/legal-gate.ts`；`tests/engine/card-cost.test.ts`；`docs/superpowers/specs/2026-11-07-creative-mountain-liveness-design.md` |
 | G-b | ~~**待认证锁定只在调用方生效**：引擎 `act` 分支**不查** `pendingCert`（`move` 分支查）⇒ 锁定者可用位移牌绕过 §5.1 锁定；枚举层按 UI 规则排除，但引擎本身未加固~~ ⇒ **已修**（B66 引擎层加固：规格 §5.1 早已写明「待认证者**不能使用移动类卡牌或位移能力**」⇒ 本批只补**实现**、规格零改动。`act` 分支查 `pendingCert` ⇒ 锁定者打**含位移**的牌被引擎拒绝（引用相等 = 探针认得的拒绝信号）；⚠️ **只拦位移类**（攻击 / 防御 / 资源牌照打 —— 规格只禁位移，不禁一切行动）；⚠️ 位移判据按 **op 语义**、**不只看 `card.type === 'motion'`**（主题包有一张 utility 类型的位移牌）） | `engine/core/turn-runner.ts`（`act` 分支）；`engine/core/targeting.ts`（`cardHasMovement`）；`tests/engine/pending-cert-lock.test.ts` |
-| G-c | ~~**`gatesPassed` 无生产写入方**：四套主题各有一个身份目标是 `pass_gates`，而计数器只被**读取**（`engine/goals/registry.ts`）⇒ **4 个身份目标在数字轨永不可达**（B18 关隘接线后仍缺写入）~~ ⇒ **已修**（B60 补齐三环：计数写入 `markGatePassed` + 判定调用 `goals/settle.ts` + 达成即发【印记】；实测 `pass_gates` 达成 **498 次 / 24000 局** ⇒ 目标真实可达） | `engine/core/gate.ts`；`engine/goals/settle.ts`；`tests/engine/goals.test.ts` |
+| G-c | ~~**`gatesPassed` 无生产写入方**：四套主题各有一个身份目标是 `pass_gates`，而计数器只被**读取**（`engine/goals/registry.ts`）⇒ **4 个身份目标在数字轨永不可达**（B18 关隘接线后仍缺写入）~~ ⇒ **已修**（B60 补齐三环：计数写入 `markGatePassed` + 判定调用 `goals/settle.ts` + 达成即发【印记】；实测 `pass_gates` 达成 达成次数见 `docs/balance-report.md`（B74 报告恒 0） ⇒ 目标真实可达） | `engine/core/gate.ts`；`engine/goals/settle.ts`；`tests/engine/goals.test.ts` |
 | G-d | ~~**双人互验未接线**：`certifyMutualSign`（§5.5）**仅测试调用** ⇒ 双人互验在数字轨与模拟器均不可达~~ ⇒ **已修**（B67 端到端接线：① **新增 Action 成员** `CERTIFY_MUTUAL_SIGN`（待认证者本人给另一位待认证者签印 —— 与 `CERTIFY_SIGN` 语义不同、不可复用）；② 引擎 `certifyMutualSign` 守卫收紧（双方都在待认证 ∧ 非自己 ∧ **本轮未用过机会**）；③ 枚举层 + 面板层 + UI 按钮 + 模拟器策略**四层齐备** ⇒ 机制真正可达；④ 双方互签即各自达标 ⇒ **不产生死锁**（规格 §5.5）。⚠️ 平衡影响：平均席位 1.71 → **2.10**（双人局不再卡死）） | `engine/core/action.ts`；`engine/core/certification.ts`；`engine/core/legal.ts`；`web/legal-gate.ts`；`web/ui/cert.ts`；`tests/engine/mutual-sign.test.ts` |
 | G-e | ~~README 门禁表缺第 ⑩ 道（浏览器 E2E）~~ ⇒ **已修**（B51 补全，现为十四道门） | `README.md` 门禁表、`tools/gate.mjs` |
 | G-f | ~~**对峙选牌没有 `Action` 成员**：对峙未决时行动面整体关闭 ⇒ `candidatesOf` 对**所有座位**为空 ⇒ 真人必须选暗牌的时刻，AI/sidecar 拿到空动作表~~ ⇒ **已修**（B68 端到端接线：① **新增 Action 成员** `DUEL_SUBMIT_CARD {actor, cardId}`；② 引擎枚举层在**对峙面**发候选（**取代**行动面）⇒ 对峙参与者拿到「锁定自己手牌里的一张」的候选；③ **可见性边界**（预研红线 3）：候选**只发给对峙参与者**且**只含自己手牌** ⇒ 拿不到对方手牌 id ⇒ 无法看到对方将出什么牌；④ 探针补该动作的一句话语义 ⇒ 影子决策不再在峙面崩） | `engine/core/action.ts`；`engine/core/legal.ts`；`engine/core/probe.ts`；`web/legal-gate.ts`；`tools/laya-probe/state-text.mjs`；`tests/engine/duel-action.test.ts` |
 | G-g | ~~**复议裁定无人调用**：`resolveAppeals` 在 `engine/**` 与 `web/**` **零调用方**（只有 `tests/sim/run.mjs`）⇒ 新增的复议票写入一个没人关闭的窗口~~ ⇒ **已修**（B63 接线：轮末结算 `advanceCertificationRound` 对每个已申请复议的待认证者调 `resolveAppeals` ⇒ **投票窗口必关闭**；且 `applyAppealOutcome` 裁定后清 `appealed` ⇒ 不会重复裁定。⚠️ 实测：修复前生产路径下待认证者**申请复议即永远不被结算**（卡在峰顶）。**B64 补 T2**：面板显示复议窗口状态（第三方人数 / 已投 / **未投点名谁** / 窗口**轮末**关闭）⇒ 玩家不再只能干等；且「独立第三方」口径收敛为引擎单一事实源（`appealThirdParties`）⇒ UI / 探针 / 裁定三处同源） | `engine/core/certification.ts`（`advanceCertificationRound` / `applyAppealOutcome` / `appealThirdParties`）；`web/ui/cert.ts`；`tests/engine/goals.test.ts`；`tests/engine/appeal-window.test.ts` |
-| G-h | **少发牌是静默的**：`createInitialState` 默认 `deckSize=40`，而 `dealInitialHands` 需要 `players × handStart`（8 人 = 56）⇒ 高人数下座位手牌偏少 | `engine/core/state.ts:251`；`engine/core/hand.ts` |
-| G-i | **身份目标可达性（B61 登记 · B75 收敛两类 · B75.1 收口强度）**，根因**分两类**：① ~~**机制缺失**：`equip_count`（无「装备」动作入口）、`veto_success`（**仲裁者否决放逐未实现**）⇒ 事件永不发生，补计数器只会造出「永远为 0 的**假可达**」~~ ⇒ **已修（B75）**：新增 `EQUIP_CARD`（`performAction(…, "equip")`：手牌→装备区、免费、不占手牌上限、关隘/裂隙暂停中不可用）与 `COUNCIL_VETO`（`useCouncilVeto`：每局 1 次，硬前置是**所有存活玩家都已投票**；只有**真的阻止了一次放逐**才写 `vetoCount` 并即时结算目标）⇒ 实测 `veto_success` 达成 3512 人次、`equip_count` 1040 人次（B74 报告恒 0）；⚠️ **B75.1 追加「只可救他人、不可自救」**（R7 方案 3）：自救等于每局一次的放逐免疫，曾把仲裁者胜率抬到 24–28%（身份极差 18.6pp）；禁掉自救后回落到 **11.9–13.4%**、身份极差 **4.3–4.6pp** ⇒ 身份锁收回原值 12pp、位次锁保留 5.5pp（实测已贴近上沿）；② ~~**阈值/策略未达标**~~ ⇒ **B75.2 收口（根因更正）**：真正根因是 **B1 契约回合末清零从未接线**（`clearTurnStates` 零调用方 ⇒「每回合 1 次」类被动实际每局 1 次，阈值 5/3 策略层面不可达）；`endRound` 接线 + `moveBonus` 改用后清零 + AI 追goal分支（goalPursuit，全程 p=0.2 占位概率）⇒ 实测 `reroll_count` 达成 **9763** / `steal_count` **3275** 人次（24000 局）；连带 **R8**：清零接线让开拓者「每回合首移 +1」首次真正生效（12.6% → ~22%），身份锁 12 → 15pp（用户裁定），开拓者削弱归专门批次 | `engine/core/action.ts`；`engine/core/turn-runner.ts`；`engine/core/council.ts`；`engine/core/legal.ts`；`engine/goals/settle.ts`；`tests/engine/goals-reachability.test.ts`；`docs/balance-report.md` |
+| G-h | **少发牌是静默的**（**现查订正**）：**生产路径不少发** —— `web/` 的 4 个入口全部经 `installTheme`，牌堆取 `scales.deckTotal`（8 人 = 80）并清空手牌重发 ⇒ 实测 8 人各满 `handStart` 张；**裸骨架路径**（`createInitialState` 直接返回即开局 ⇒ 仅测试/夹具层）仍**静默少发**（`deckSize` 默认 40 是 **B1 骨架的测试占位**，牌空即 `break` ⇒ 不报错）⇒ **已装主题的正式对局不受影响** | `engine/core/state.ts:281`（`deckSize ?? 40` 的真值行）；`engine/core/setup.ts`（`installTheme`）；`engine/core/hand.ts` |
+| G-i | **身份目标可达性（B61 登记 · B75 收敛两类 · B75.1 收口强度）**，根因**分两类**：① ~~**机制缺失**：`equip_count`（无「装备」动作入口）、`veto_success`（**仲裁者否决放逐未实现**）⇒ 事件永不发生，补计数器只会造出「永远为 0 的**假可达**」~~ ⇒ **已修（B75）**：新增 `EQUIP_CARD`（`performAction(…, "equip")`：手牌→装备区、免费、不占手牌上限、关隘/裂隙暂停中不可用）与 `COUNCIL_VETO`（`useCouncilVeto`：每局 1 次，硬前置是**所有存活玩家都已投票**；只有**真的阻止了一次放逐**才写 `vetoCount` 并即时结算目标）⇒ 实测 `veto_success` / `equip_count` 达成次数见 `docs/balance-report.md`（B74 报告恒 0）；⚠️ **B75.1 追加「只可救他人、不可自救」**（R7 方案 3）：自救等于每局一次的放逐免疫，曾把仲裁者胜率显著抬高；禁掉自救后回落到身份锁口径内（读数见报告）⇒ 身份锁收回原值、位次锁保留（实测已贴近上沿）；② ~~**阈值/策略未达标**~~ ⇒ **B75.2 收口（根因更正）**：真正根因是 **B1 契约回合末清零从未接线**（`clearTurnStates` 零调用方 ⇒「每回合 1 次」类被动实际每局 1 次，阈值 5/3 策略层面不可达）；`endRound` 接线 + `moveBonus` 改用后清零 + AI 追goal分支（goalPursuit，全程 p=0.2 占位概率）⇒ 实测 `reroll_count` / `steal_count` 达成次数见 `docs/balance-report.md`；连带 **R8**：清零接线让开拓者「每回合首移 +1」首次真正生效（胜率读数见报告），身份锁经用户裁定收紧，开拓者削弱归专门批次 | `engine/core/action.ts`；`engine/core/turn-runner.ts`；`engine/core/council.ts`；`engine/core/legal.ts`；`engine/goals/settle.ts`；`tests/engine/goals-reachability.test.ts`；`docs/balance-report.md` |
 
 > ⚠️ **粗筛故意窄于引擎的五条**（`pendingCert` / 对峙未决 / `phase` / `isRoundEnd` / 死亡座位）是**登记过的口径**，
 > 不是待修的 bug —— 枚举层刻意比引擎严，免得给模型一条玩家点不到的选项；逐条取证见

@@ -107,6 +107,12 @@ export const COVERAGE_BOUNDARIES = [
     reason: '走查逐页只访问每个 flow 的**首屏**；更深屏需交互进入，已单独走查的只有 flow1 屏 2（钻取席位）与 flow3 屏 2（排名公示）（B88）',
     fallback: 'flow1 屏 2 与 flow3 屏 2 已单独走查并有断言（屏号属性口径 + 表格无横向滚动宿主 + 页面级溢出）；其余次级屏留待后续批次',
   },
+  {
+    id: 'print-board-gate-fee',
+    notCovered: '实体件棋盘 SVG 与数字轨 board 的**逐格内容**（格名、地形配色、支路目标等）',
+    reason: '门 ⑦ 新增的棋盘件比对只覆盖**两个可机械判定的量**（过路费行数、文件名格数）；逐格内容要求先把 SVG 的格位结构与 IR 的 board 做逐项语义映射，而 IR 的 board 至今不参与 parity 比对（ir-validate 里明文写着「parity 完全不碰 board」）⇒ 现在扩到逐格，等于把同一处尚未闭合的映射再复制一份',
+    fallback: '棋盘件目前只做「过路费行数 == 该档关隘数」与「文件名格数 == 规模表 boardLength」两条判据（判据实现在 tools/board-parity.mjs，负样本在 tests/gates/board-parity.test.ts）；逐格一致性仍靠数字轨走查与人工核对',
+  },
 ];
 
 /**

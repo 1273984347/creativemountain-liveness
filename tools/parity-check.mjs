@@ -1,10 +1,11 @@
-// 双轨一致性门禁（规格 §9.3）：ir.json 主比对 + SVG 辅比对 + 数值溯源 + PDF 粗检。
+// 双轨一致性门禁（规格 §9.3）：ir.json 主比对 + SVG 辅比对 + 数值溯源 + PDF 粗检 + 棋盘件比对。
 //
-// 四级各自独立、任一红即 exit 1：
+// 五级各自独立、任一红即 exit 1：
 //   ① **主比对**：ir.json ↔ theme.json 逐字段（结构化数据，最可靠）
 //   ② **辅比对**：实体件 SVG 的文本节点 ↔ ir.json（防止「IR 对但没渲染」）
 //   ③ **数值溯源**：规则书 HTML 的 `data-src` 单元格 → engine/scales.ts（值级）
 //   ④ **PDF 粗检**：可打开 / 页数 / 字体嵌入（**不逐字比对**——中文 PDF 文本层不稳）
+//   ⑤ **棋盘件比对**：实体件棋盘 SVG ↔ 规模表派生的棋盘版本（过路费行数 / 文件名格数）
 
 import { pathToFileURL } from 'node:url';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
@@ -13,6 +14,11 @@ import { resolve } from 'node:path';
 import { loadScalesFromSource } from './scales-parse.mjs';
 
 import { countPdfPages, hasEmbeddedFont, isOpenablePdf } from './pdf-inspect.mjs';
+
+// ⚠️ 棋盘版本与关隘数**从引擎真值派生**（board-fit.ts 由 engine/scales.ts 派生）——
+//   禁止在本文件里手抄格数/关隘数（抄一份 = 第二事实源，改了规模表这里不会跟着动）。
+import { BOARD_VERSIONS, gateCountFor } from '../engine/core/board-fit.ts';
+import { BOARD_FILE_PATTERN, checkBoardSvg } from './board-parity.mjs';
 
 export function checkIrVsTheme(ir, theme) {
   const errors = [];
@@ -221,6 +227,66 @@ export function checkPdfBasic(buffer, label) {
   }
   return errors;
 }
+
+/**
+ * ⑤ 棋盘件比对：实体件棋盘 SVG ↔ 规模表派生的棋盘版本。
+ *
+ * 两条判据（实现在 tools/board-parity.mjs，与负样本共用同一份实现）：
+ *   ① 过路费行数 == 该档关隘数（降级格不得带过路费 —— 引擎不认）；
+ *   ② 文件名里的格数 == 期望格数（错命名 / 错版本即红）。
+ *
+ * ⚠️ 期望值全部来自 BOARD_VERSIONS / gateCountFor（由 engine/scales.ts 派生）——
+ *   本函数**不手抄任何格数或关隘数**。
+ *
+ * @param {string} cwd 仓库根目录。
+ * @param {string} themeId 主题 id。
+ * @returns {string[]} 问题清单；空数组 = 通过。
+ */
+export function checkBoardArtifacts(cwd, themeId) {
+  const errors = [];
+  const svgDir = resolve(cwd, 'print', themeId, 'svg');
+  const expectedNames = BOARD_VERSIONS.map((v) => ({
+    version: v,
+    fileName: '棋盘-A2-' + String(v.length) + '格-' + v.players.join('人') + '.svg',
+  }));
+  const actualNames = existsSync(svgDir)
+    ? readdirSync(svgDir).filter((f) => f.startsWith('棋盘-A2-') && f.endsWith('.svg'))
+    : [];
+
+  // 逐个实体棋盘文件比对：**先按人数档认出期望版本**（人数档唯一），再看格数有没有错位。
+  for (const f of actualNames) {
+    const suffixMatch = f.match(/^棋盘-A2-\d+格-(.+)\.svg$/);
+    const suffix = suffixMatch === null ? null : suffixMatch[1];
+    const bySuffix = suffix === null
+      ? undefined
+      : BOARD_VERSIONS.find((v) => v.players.join('人') === suffix);
+    const numMatch = f.match(BOARD_FILE_PATTERN);
+    const declared = numMatch === null || numMatch[1] === undefined ? null : Number(numMatch[1]);
+    const byLength = declared === null ? undefined : BOARD_VERSIONS.find((v) => v.length === declared);
+    const expected = bySuffix ?? byLength;
+    if (expected === undefined) {
+      errors.push('棋盘文件 ' + f + '：文件名既不匹配任何人数档也不匹配任何棋盘格数（期望格数 '
+        + BOARD_VERSIONS.map((v) => String(v.length)).join('/') + '）');
+      continue;
+    }
+    errors.push(...checkBoardSvg({
+      svgText: readFileSync(resolve(svgDir, f), 'utf8'),
+      fileName: f,
+      length: expected.length,
+      gateCount: gateCountFor(expected.length),
+    }));
+  }
+
+  // 反向：规模表里的**每个棋盘版本**都必须有对应实体件（缺文件 = 实体件没跟上）。
+  for (const { version, fileName } of expectedNames) {
+    if (!existsSync(resolve(svgDir, fileName))) {
+      errors.push('棋盘 ' + String(version.length) + '格-' + version.players.join('人')
+        + '：实体件棋盘缺失（' + fileName + '）——先跑 npm run build:print');
+    }
+  }
+  return errors;
+}
+
 // ---------- CLI ----------
 function loadScales() {
   // ⚠️ B11：改为**从源码派生**的共享解析器 —— 此前此处手抄一份字段正则，
@@ -236,7 +302,7 @@ function scaleFieldNames() {
   return [...seg.matchAll(/'([a-zA-Z_0-9]+)'/g)].map((m) => m[1]);
 }
 
-/** 校验单套主题的四级一致性。 */
+/** 校验单套主题的五级一致性。 */
 function checkOne(cwd, themeId) {
   const dir = resolve(cwd, 'print', themeId);
   const ir = JSON.parse(readFileSync(resolve(dir, 'ir.json'), 'utf8'));
@@ -280,6 +346,10 @@ function checkOne(cwd, themeId) {
   levels.push({ name: 'PDF 粗检', passed: e4.length === 0 });
   allErrors.push(...e4.map((e) => '[PDF] ' + e));
 
+  // ⑤ 棋盘件比对：实体件棋盘 SVG ↔ 规模表派生的棋盘版本
+  const e5 = checkBoardArtifacts(cwd, themeId);
+  levels.push({ name: '棋盘比对 棋盘SVG↔规模表', passed: e5.length === 0 });
+  allErrors.push(...e5.map((e) => '[棋盘] ' + e));
   return { levels, allErrors };
 }
 
@@ -331,6 +401,11 @@ function main() {
     levels.push({ name: 'PDF 粗检', passed: e4.length === 0 });
     allErrors.push(...e4.map((e) => '[PDF] ' + e));
 
+  // ⑤ 棋盘件比对：实体件棋盘 SVG ↔ 规模表派生的棋盘版本
+  const e5 = checkBoardArtifacts(cwd, themeId);
+  levels.push({ name: '棋盘比对 棋盘SVG↔规模表', passed: e5.length === 0 });
+  allErrors.push(...e5.map((e) => '[棋盘] ' + e));
+
     for (const l of levels) {
       console.log((l.passed ? 'PASS  ' : 'FAIL  ') + l.name);
     }
@@ -343,7 +418,7 @@ function main() {
     console.error('\nparity-check: ' + failed + ' 项不一致');
     process.exit(1);
   }
-  console.log('\nparity-check: 4 级全绿（双轨零漂移）× ' + themeIds.length + ' 套主题');
+  console.log('\nparity-check: 5 级全绿（双轨零漂移）× ' + themeIds.length + ' 套主题');
 }const isMain = process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
 
 if (isMain) { main(); }

@@ -16,6 +16,7 @@
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import { createInitialState } from '../../engine/core/state.ts';
 import { installTheme } from '../../engine/core/setup.ts';
@@ -48,7 +49,7 @@ const THEME_IDS = ['xianxia2026', 'scifi-ai', 'hybrid', 'urban-psych'];
 
 /** 解析命令行参数。 */
 function parseArgs(argv) {
-  const out = { games: 1000, check: false, out: null, themes: THEME_IDS, players: SCALES.map((s) => s.players), trialRate: false, trialTimes: 400, seedBase: 1000, positionSpread: false, gateReserve: undefined, scanReserves: [], scanSeeds: [], scanJson: null, record: null };
+  const out = { games: 1000, check: false, out: null, themes: THEME_IDS, players: SCALES.map((s) => s.players), trialRate: false, trialTimes: 400, seedBase: 1000, positionSpread: false, gateReserve: undefined, scanReserves: [], scanSeeds: [], scanJson: null, record: null, policyModule: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--games') { out.games = Number(argv[++i]); }
@@ -72,6 +73,9 @@ function parseArgs(argv) {
     else if (a === '--scan-json') { out.scanJson = argv[++i]; }
     // ⚠️ B56：**决策点记录器**（默认关闭 ⇒ 不带此开关时零开销、零产物）
     else if (a === '--record-decisions') { out.record = argv[++i]; }
+    // ⚠️ B92：**FacePolicy 接线**（默认关闭）—— 指向一个导出 `createPolicy(ctx)` 的模块；
+    //   不带此开关 ⇒ `playOne` 的第 5 参恒为 undefined ⇒ 行为与接线前**逐字节相同**（守卫钉住）。
+    else if (a === '--policy-module') { out.policyModule = argv[++i]; }
   }
   return out;
 }
@@ -103,12 +107,15 @@ const STATUS_ROW_NAMES = [
  * ⚠️ seed **必须含主题 id**：否则四套主题共用同一条随机轨迹 ⇒ 统计上是
  *   「同一条轨迹的 4 份拷贝」，不是 4 个独立样本（实测四套主题数据完全相同）。
  */
-async function runCell(theme, players, games, seedBase, gateReserve) {
+async function runCell(theme, players, games, seedBase, gateReserve, policyFactory) {
   const results = [];
   const themeSeed = [...theme.meta.id].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) % 100000, 0);
+  // ⚠️ B92：策略**按主题 × 人数档构造一次**（FacePolicy 无跨局状态 ⇒ 可复用同一实例）。
+  //   `policyFactory === undefined` ⇒ 恒传 undefined ⇒ 与接线前逐字节相同。
+  const policy = policyFactory === undefined ? undefined : policyFactory({ themeId: theme.meta.id, players });
   for (let g = 0; g < games; g++) {
     const seed = seedBase + g * 97 + players * 13 + themeSeed;
-    results.push(await playOne(theme, players, seed, gateReserve));
+    results.push(await playOne(theme, players, seed, gateReserve, policy));
   }
   return results;
 }
@@ -442,7 +449,7 @@ async function runPositionSpread(args) {
   for (const themeId of args.themes) {
     const theme = loadTheme(themeId);
     for (const players of args.players) {
-      perCell.set(themeId + ':' + players, await runCell(theme, players, args.games, args.seedBase, args.gateReserve));
+      perCell.set(themeId + ':' + players, await runCell(theme, players, args.games, args.seedBase, args.gateReserve, policyFactory));
     }
   }
   const rows = [];
@@ -511,7 +518,7 @@ async function runGateReserveScan(args) {
       for (const themeId of args.themes) {
         const theme = loadTheme(themeId);
         for (const players of args.players) {
-          cells.push(...await runCell(theme, players, args.games, seedBase, reserve));
+          cells.push(...await runCell(theme, players, args.games, seedBase, reserve, policyFactory));
         }
       }
       const st = summarize(cells);
@@ -612,6 +619,21 @@ async function runGateReserveScan(args) {
 
 // ---------- 主流程 ----------
 const args = parseArgs(process.argv.slice(2));
+// ⚠️ B92：**FacePolicy 接线（默认关闭）** —— `--policy-module=<path>` 指向一个导出
+//   `createPolicy(ctx)` 的模块（ctx = { themeId, players }），返回 `FacePolicy` 或 undefined。
+//   ⚠️ 不带此开关 ⇒ `policyFactory === undefined` ⇒ `playOne` 第 5 参恒 undefined ⇒
+//   **行为与接线前逐字节相同**（门禁守卫 `tests/gates/face-policy-wiring.test.ts` 钉住）。
+//   ⚠️ 模块必须真的导出函数 ⇒ 否则**明确失败**（exit 2），绝不静默忽略。
+let policyFactory;
+if (args.policyModule !== null) {
+  const mod = await import(pathToFileURL(resolve(ROOT, args.policyModule)).href);
+  if (typeof mod.createPolicy !== 'function') {
+    console.error('policy 模块未导出 createPolicy：' + String(args.policyModule));
+    process.exit(2);
+  }
+  policyFactory = (ctx) => mod.createPolicy(ctx);
+  console.log('策略注入已启用：' + String(args.policyModule) + '（⚠ 本次读数不代表默认策略）');
+}
 // ⚠️ B56：**默认关闭** ⇒ 只有显式给了 `--record-decisions` 才启用记录器。
 if (args.record !== null) { setRecorder([]); }
 // ⚠️ B23：定向长跑模式（通过率专项平衡）—— 独立于全量模拟，提前分流。
@@ -647,7 +669,7 @@ for (const themeId of args.themes) {
   }
   const themeCells = [];
   for (const players of args.players) {
-    const rs = await runCell(theme, players, args.games, args.seedBase, args.gateReserve);
+    const rs = await runCell(theme, players, args.games, args.seedBase, args.gateReserve, policyFactory);
     perCell.set(themeId + ':' + players, rs);
     themeCells.push(...rs);
     cells.push(...rs);
@@ -672,11 +694,31 @@ console.log('无人封顶兜底率 ' + (summary.noSeatFallbackRate * 100).toFixe
 console.log('异常 ' + summary.anomalies + ' 条');
 for (const s of summary.anomalySamples) { console.log('  ! ' + s); }
 
+// ⚠️ B92：**注入统计**（仅在 `--policy-module` 启用时打印）—— 守卫据此区分三态：
+//   回落（calls>0 但 fallbacks 递增、行为不变）/ 生效（calls>0 且行为改变）。
+if (policyFactory !== undefined) {
+  const inj = cells.reduce((a, c) => {
+    const i = c.injection;
+    if (i === undefined) { return a; }
+    return {
+      calls: a.calls + (i.calls ?? 0),
+      fallbacks: a.fallbacks + (i.fallbacks ?? 0),
+      emptyCandidates: a.emptyCandidates + (i.emptyCandidates ?? 0)
+    };
+  }, { calls: 0, fallbacks: 0, emptyCandidates: 0 });
+  console.log('策略注入统计：calls=' + String(inj.calls) + ' fallbacks=' + String(inj.fallbacks)
+    + ' emptyCandidates=' + String(inj.emptyCandidates));
+}
+
 if (args.out !== null) {
   const lines = [];
   lines.push('# 平衡报告（自动生成）');
   lines.push('');
-  lines.push('> 由 `node tests/sim/run.mjs` 生成；规格 §9.2 验收口径：兜底触发率 < 15%，胜率偏离 > 15pp 的项须记录在案。');
+  // ⚠️ B92：**修正一处手抄阈值** —— 旧文本写「兜底触发率 < 15%」，但 15% **没有任何出处**：
+  //   规格 §9.2 只要求「兜底触发率过高须记录并讨论」，从未给数字；代码判定是
+  //   `summary.noSeatFallbackRate >= 0.25`（下方同文件的 `--check` 分支）⇒ 真值是 **25%**。
+  //   ⚠️ 「胜率偏离 > 15pp」是**另一个口径**（规格 §9.2 有），别与兜底率门槛混为一谈。
+  lines.push('> 由 `node tests/sim/run.mjs` 生成；规格 §9.2 验收口径：**无人封顶兜底率**门槛 25%（判定见本文件 `--check` 分支；规格只要求「过高须记录并讨论」，未给数字），**胜率偏离 > 15pp** 的项须记录在案（另一口径）。');
   lines.push('');
   lines.push('## 总览');
   lines.push('');

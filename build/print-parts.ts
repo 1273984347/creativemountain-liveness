@@ -109,7 +109,10 @@ export function boardSvg(board: IrBoard, ir: IrDocument): string {
     nameLines.forEach((l, k) => {
       parts.push(`<text x="${x + 3}" y="${y + 16 + k * 5}" font-size="3.6" fill="#1a1613" font-weight="600">${esc(l)}</text>`);
     });
-    if (tile.gateFee !== undefined) {
+    // ⚠️ B92：**过路费只印在真正的关隘格上** —— 判据必须与引擎同看 `kind`（`engine/core/gate.ts` 判
+    //   `tile.kind !== 'gate'` ⇒ 不是关隘），不能只看 `gateFee` 是否存在：降级格（`fitBoard` 把超出本档
+    //   关隘数的关隘降为 `kind:'plain'`）仍保留 `gateFee` ⇒ 旧判据会让实体棋盘印出引擎不认的过路费。
+    if (tile.kind === 'gate' && tile.gateFee !== undefined) {
       parts.push(`<text x="${x + 3}" y="${y + cell - 4}" font-size="3.2" fill="#8a6420">过路 ${tile.gateFee} ${term(ir.glossary, 'resource', '资源')}</text>`);
     }
     if (tile.branchTo !== undefined) {
