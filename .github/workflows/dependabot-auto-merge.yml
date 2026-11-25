@@ -1,0 +1,101 @@
+name: Dependabot auto-merge (patch / minor)
+
+# 让 Dependabot 的 **patch / minor** 更新在 CI 全绿后自动合并；**major 保持人工审**。
+#
+# ⚠️ 为什么不用仓库设置里的 "Allow auto-merge"：那个开关只对人类/其他 bot 开的 PR 生效，
+#   **Dependabot 自己开的 PR 不会自动合并**（GitHub 的既定行为，防止 bot 互相合并）。
+#   Dependabot 接受 PR 评论 `@dependabot merge` 作为合并指令 ⇒ 本工作流负责下这条评论。
+#   （仓库级开关本身已开启：allow_auto_merge = true，见 docs/releases/v0.1.0.md）
+#
+# ⚠️ 为什么用 `pull_request_target`：普通 `pull_request` 事件的 GITHUB_TOKEN 对外部分支只读，
+#   **发不出评论**。本工作流**不 checkout 仓库代码、不使用任何 secret**，且只处理
+#   `dependabot[bot]` 的 PR ⇒ 公开仓库上不构成 fork 提权风险。
+#
+# ⚠️ 第三方 Action 一个都不用（只用 runner 自带的 gh CLI）⇒ 没有 Action 标签被劫持面。
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: '手动触发时处理的 PR 号（留空则用触发事件的 PR）'
+        required: false
+        type: string
+
+permissions:
+  pull-requests: write
+  contents: read
+
+concurrency:
+  group: dependabot-auto-merge-${{ github.event.inputs.pr_number || github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  auto-merge:
+    name: comment @dependabot merge once CI is green
+    # ⚠️ 自动触发时只处理 Dependabot 自己的 PR ⇒ 人工 PR 永远不会被本工作流碰；
+    #    手动触发（workflow_dispatch）时由操作者指定 PR。
+    if: github.event_name == 'workflow_dispatch' || github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: classify, wait for green CI, then ask Dependabot to merge
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.inputs.pr_number || github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${PR_NUMBER:-}" ]; then
+            echo "没有 PR 号可处理 ⇒ 退出"
+            exit 0
+          fi
+
+          # ① 版本语义分类：Dependabot 对 major 会把分组名写成 deps-major ⇒ 人工审。
+          #    ⚠️ 标题通过 env 传入（不内插进脚本），避免 PR 标题里的 shell 元字符。
+          TITLE=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json title --jq .title)
+          case "$TITLE" in
+            *deps-major*)
+              echo "major 版本变更 ⇒ 保持人工审：$TITLE"
+              exit 0
+              ;;
+          esac
+
+          SHA=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefOid --jq .headRefOid)
+          echo "PR #$PR_NUMBER  head=$SHA  标题=$TITLE"
+
+          # ② 等 CI：轮询该 head sha 的 check-runs，最多 20 次 × 45s（约 15 分钟）。
+          green=0
+          for i in $(seq 1 20); do
+            pending=$(gh api "repos/$REPO/commits/$SHA/check-runs" --jq '[.check_runs[] | select(.status != "completed")] | length')
+            bad=$(gh api "repos/$REPO/commits/$SHA/check-runs" --jq '[.check_runs[] | select(.status == "completed" and .conclusion != "success")] | length')
+            if [ "$bad" -gt 0 ]; then
+              echo "CI 存在失败项（$bad）⇒ 不合并"
+              exit 0
+            fi
+            if [ "$pending" -eq 0 ]; then
+              green=1
+              echo "CI 全绿"
+              break
+            fi
+            echo "等待 CI：未完成 $pending 项（第 $i 次）"
+            sleep 45
+          done
+
+          if [ "$green" -ne 1 ]; then
+            echo "未确认 CI 全绿 ⇒ 本次不合并（下次 synchronize 会重试）"
+            exit 0
+          fi
+
+          # ③ 幂等：已有该评论就不重复。
+          if gh api "repos/$REPO/issues/$PR_NUMBER/comments" --jq '.[].body' | grep -qx '@dependabot merge'; then
+            echo "已有 @dependabot merge 评论 ⇒ 跳过"
+            exit 0
+          fi
+
+          # ④ 下合并指令。
+          gh api "repos/$REPO/issues/$PR_NUMBER/comments" -f body='@dependabot merge' >/dev/null
+          echo "已评论 @dependabot merge（PR #$PR_NUMBER）"
