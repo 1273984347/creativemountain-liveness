@@ -27,6 +27,8 @@
 - **CI 终态**：run `45667268412`（headSha `0ba0403`）⇒ **success**（门禁链 job success）；push 后 Dependabot 重跑的 3 个 Updates 任务（`45667278777` github_actions / `45667277376` **host npm** / `45667277331` 根 npm）⇒ **全部 success** ⇒ host 目录那个**此前每周固定失败**的任务**转为成功**（依赖树现在能被正常解析）。
 - **新判定的三分行为（平台侧实测）**：PR **#8 / #10**（`deps-major` 分组）⇒ 日志「major 版本变更 ⇒ 保持人工审」⇒ **零 `@dependabot merge` 评论、未合并**；PR **#9**（playwright 1.60→1.65，npm-patch 组）⇒ 日志「已评论 @dependabot merge（PR #9）」⇒ **patch/minor 自动合并链正常工作**（设计意图，且 CI 全绿才会真合并）。⇒ **Dependabot 重分组后，major PR 标题自带 `deps-major` 标记 ⇒ 配置侧与判定侧真正接上了**。
 - **告警复核**：REST `state=open` = **0** / `state=closed` = **4**（与先前 UI 侧读数一致）。
+- **新一轮 CI**：headSha `140724d` 的 run `45668506997` ⇒ **success**。
+- **PR #9 的状态观察**：`@dependabot merge` 已发出、其 CI 已全绿，但 Dependabot **尚未执行合并**（PR 分支基于 `b7ac750`，而 `main` 已前进两次 ⇒ 推测需等下次检查时先 rebase）⇒ 属**挂起**而非误合并；观察项 T11。
 - **证据位置**：`docs/批次/B90-自动合并major判定修复-执行记录.md`
 
 ### B89 · 依赖安全告警清收（根仓 esbuild + host 三条 overrides）

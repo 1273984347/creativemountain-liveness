@@ -16,7 +16,7 @@
 | **T8** | L-B89-3：katex 0.18 的嵌套 `commander` 15.1.0 要求 node ≥ 22.12 ⇒ 本仓 `engines` 为 `>=22.18`、CI Node 24 ⇒ 相容；但**若下调 engines 下限**需复查 | engines 下限变更时复查该依赖 | 待触发 |
 | **T9** | L-B90-3：Dependabot 的 **security** job 是否停止失败 | 下一次 weekly 周期后 `Dependabot Updates` runs 无 failure | **已提前证实大半**：push 后 3 个 Updates 任务全部 success（含此前必失败的 host 目录）⇒ 依赖树可正常解析；security job 本身仍待 weekly 周期 |
 | **T10** | 下一批取号（B91）与主题 | 批次导航加一行 + `batch-nav-count.mjs` 复算互洽 | 待开批 |
-| **T11** | 观察 PR **#9**（playwright 1.60→1.65）—— **patch/minor 自动合并链的首个真实样本** | 合并后 `main` 的 14 门仍绿，且产物与基线不漂移 | 观察中（已发出 `@dependabot merge`，等 CI 全绿后合并） |
+| **T11** | 观察 PR **#9**（playwright 1.60→1.65）—— **patch/minor 自动合并链的首个真实样本** | 合并后 `main` 的 14 门仍绿，且产物与基线不漂移 | 观察中：`@dependabot merge` 已发出、CI 已全绿，但 Dependabot **尚未执行合并**（PR 分支基于 `b7ac750`、`main` 已前进两次 ⇒ 推测等下次检查时 rebase 后再合）⇒ 挂起而非误合并 |
 | **T12** | B90 台账收尾提交（本次）push 到 `origin/main` | 远端 `refs/heads/main` = 本地 HEAD | 待授权（按逐次授权口径） |
 
 ## 长期约定（不随批次清空）
