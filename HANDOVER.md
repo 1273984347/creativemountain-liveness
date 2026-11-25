@@ -38,6 +38,7 @@
 - **核实读数**：全量门禁 **14 门全绿**（CI run `45670557208`，headSha `509d7e7` ⇒ success）；入口守卫 **5/5 绿**；**注入「指针空转」⇒ 当场判红**、**按原字节还原**（字节一致 = true）⇒ 复跑 5/5 绿；`doc-sync` **10/10**；`tsc` **exit 0**；导航复算 **84/84/84/84**；沉淀 **E 行 152 ≡ 分类声明之和 152**。
 - **远端可见性**：四个新文件经 GitHub contents API 实测可见 —— `AGENTS.md` 5687 B、`CLAUDE.md` 1067 B、`ROADMAP.md` 2258 B、`tests/gates/entry-docs.test.ts` 3461 B。
 - **刻意未建**：`SUPPORT.md`（内容已被 CONTRIBUTING / README 覆盖，单开会分叉）、`GOVERNANCE.md`（单人维护无治理对象）。
+- **连续三次 push 的 CI 全绿**：`140724d`（run `45668506997`）· `509d7e7`（run `45670557208`）· `7941fe8`（run `45671822237`）⇒ 全部 success ⇒ 本轮三批（B89 / B90 / B91）**每次 push 都有 CI 背书**。
 - **证据位置**：`docs/批次/B91-开源文档入口补齐-执行记录.md`
 
 ### B89 · 依赖安全告警清收（根仓 esbuild + host 三条 overrides）

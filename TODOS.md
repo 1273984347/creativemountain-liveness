@@ -16,7 +16,7 @@
 | **T8** | L-B89-3：katex 0.18 的嵌套 `commander` 15.1.0 要求 node ≥ 22.12 ⇒ 本仓 `engines` 为 `>=22.18`、CI Node 24 ⇒ 相容；但**若下调 engines 下限**需复查 | engines 下限变更时复查该依赖 | 待触发 |
 | **T9** | L-B90-3：Dependabot 的 **security** job 是否停止失败 | 下一次 weekly 周期后 `Dependabot Updates` runs 无 failure | **已提前证实大半**：push 后 3 个 Updates 任务全部 success（含此前必失败的 host 目录）⇒ 依赖树可正常解析；security job 本身仍待 weekly 周期 |
 | **T10** | 下一批取号（**B92**）与主题 | 批次导航加一行 + `batch-nav-count.mjs` 复算互洽 | 待开批 |
-| **T11** | 观察 PR **#9**（playwright 1.60→1.65）—— **patch/minor 自动合并链的首个真实样本** | 合并后 `main` 的 14 门仍绿，且产物与基线不漂移 | 观察中：`@dependabot merge` 已发出、CI 已全绿，但 Dependabot **尚未执行合并**（PR 分支基于 `b7ac750`、`main` 已前进三次 ⇒ 推测等下次检查时 rebase 后再合）⇒ 挂起而非误合并 |
+| **T11** | 观察 PR **#9**（playwright 1.60→1.65）—— **patch/minor 自动合并链的首个真实样本** | 合并后 `main` 的 14 门仍绿，且产物与基线不漂移 | 观察中：`@dependabot merge` 已发出、CI 已全绿，但 Dependabot **尚未执行合并**（PR 分支基于 `b7ac750`、`main` 已前进到 `7941fe8` ⇒ 推测等下次检查时 rebase 后再合）⇒ 挂起而非误合并 |
 | **T13** | **L-B91-1**：`AGENTS.md` / `CLAUDE.md` 里的「E1–E152」**条数会随新沉淀漂移**（入口守卫只校验文件存在与含小节，不校验条数） | 每批加 E 条目时同步这两个文件里的条数 | 待每批同步（回填类并入在途批） |
 
 ## 长期约定（不随批次清空）
