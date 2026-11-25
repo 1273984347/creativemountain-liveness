@@ -25,7 +25,7 @@ jobs:
         env:
           TAG: ${{ github.ref_name }}
         run: |
-          version=\"${TAG#v}\"
+          version="${TAG#v}"
           if ! grep -qE "^## \\[${version}\\]" CHANGELOG.md; then
             echo "::error::CHANGELOG.md has no section for ${version} (expected '## [${version}]')"
             exit 1
