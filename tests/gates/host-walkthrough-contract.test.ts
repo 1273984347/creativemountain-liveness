@@ -41,6 +41,10 @@ const EXPECTED_TESTIDS: Record<string, string> = {
   'control:/flow4': 'flow4-generate',
   'flow1:board': 'flow1-board',
   'flow1:screen:drill': 'flow1-drill-screen',
+  'flow1:screen:indicator': 'flow1-screen-indicator',
+  'flow2:screen:indicator': 'flow2-screen-indicator',
+  'flow3:screen:indicator': 'flow3-screen-indicator',
+  'flow4:screen:indicator': 'flow4-screen-indicator',
   'flow1:header:prev': 'flow1-prev',
   'flow1:header:next': 'flow1-next',
   'flow2:header:prev': 'flow2-prev',
@@ -64,6 +68,7 @@ const MIN_THRESHOLDS: { name: string; floor: number }[] = [
   { name: 'MIN_NARROW_MAIN_WIDTH', floor: 320 },
   { name: 'MIN_HEADER_BUTTON_WIDTH', floor: 44 },
   { name: 'MIN_DESKTOP_SIDEBAR_WIDTH', floor: 224 },
+  { name: 'MIN_HEADER_BUTTON_HEIGHT', floor: 20 },
 ];
 
 function readScript(): string {
@@ -122,10 +127,40 @@ test('TESTIDS 真被断言代码使用（防「死常量」假绿复发）', () 
   assert.match(src, /TESTIDS\['control:' \+ exp\.route\]/, '关键控件断言必须从 TESTIDS 取值');
 });
 
+test('TESTIDS **逐键**有牙（动态键必须对应真实遍历的路由，静态键必须有字面引用）', () => {
+  const src = readScript();
+  // 真实被遍历的路由集合（来自驱动遍历的那个常量）
+  const block = /const ROUTE_EXPECTATIONS = \[([\s\S]*?)\n\];/.exec(src);
+  assert.ok(block !== null, '找不到 const ROUTE_EXPECTATIONS = [...] 定义');
+  const routeSet = new Set([...(block[1] ?? '').matchAll(/route:\s*'([^']+)'/g)].map((m) => m[1] ?? ''));
+  for (const key of Object.keys(EXPECTED_TESTIDS)) {
+    if (key.startsWith('control:')) {
+      const route = key.slice('control:'.length);
+      assert.ok(routeSet.has(route), 'control 键 ' + key + ' 对应的路由不在 ROUTE_EXPECTATIONS 里（该断言根本不会被执行）');
+    } else if (key.startsWith('/')) {
+      assert.ok(routeSet.has(key), '路由键 ' + key + ' 不在 ROUTE_EXPECTATIONS 里（该断言根本不会被执行）');
+    } else {
+      // 静态锚点键必须被**字面引用**（不是变量拼 key）⇒ 死键当场暴露
+      assert.ok(src.includes("'" + key + "'"), '静态锚点键 ' + key + ' 在脚本里没有字面引用（死键）');
+    }
+  }
+});
+
 test('host 走查不得再用中文文案做判红依据（改 UI 文案不得打断走查）', () => {
   const src = readScript();
   // ⚠️ L-B86-1 的核心：marker / control 这类**中文文案**不得参与判红
   //   （旧实现按「Flow 1 · 实时状态看板」「钻取席位」找元素 ⇒ 改一次文案就红）。
+  assert.doesNotMatch(src, /exp\.marker/, '判红路径不得依赖 exp.marker（中文文案）');
+  assert.doesNotMatch(src, /exp\.control/, '判红路径不得依赖 exp.control（中文文案）');
+});
+
+test('判红/定位路径不得含中文正则（防「改文案即打断走查」）', () => {
+  const src = readScript();
+  // ⚠️ 先剥注释（注释里的中文是留痕，不算判红依据）
+  const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+  // 中文正则字面量（定位/判红用）⇒ 一律不允许
+  const cnRegex = /\/[^\/\n]*[\u4e00-\u9fa5][^\/\n]*\/[gimsuy]*/g;
+  assert.equal(cnRegex.test(code), false, '判红/定位路径里不得出现中文正则（改 UI 文案会打断走查）');
   assert.doesNotMatch(src, /exp\.marker/, '判红路径不得依赖 exp.marker（中文文案）');
   assert.doesNotMatch(src, /exp\.control/, '判红路径不得依赖 exp.control（中文文案）');
 });

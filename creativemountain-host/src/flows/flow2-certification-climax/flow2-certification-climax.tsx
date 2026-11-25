@@ -272,7 +272,7 @@ export default function Flow2CertificationClimax() {
       <div className="flex flex-col gap-2 border-b border-border-tertiary bg-bg-layout px-4 py-2 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-3">
           <span className="whitespace-nowrap font-medium text-text">Flow 2 · 认证高潮聚焦</span>
-          <span className="whitespace-nowrap text-sm text-text-secondary">屏 {screen}/4</span>
+          <span data-testid="flow2-screen-indicator" data-screen={String(screen)} className="whitespace-nowrap text-sm text-text-secondary">屏 {screen}/4</span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button data-testid="flow2-prev" className="shrink-0 whitespace-nowrap" variant="secondary" size="sm" disabled={screen === 1} onClick={() => go(Math.max(1, screen - 1))}>← 上一步</Button>

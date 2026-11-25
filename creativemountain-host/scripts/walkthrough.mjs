@@ -73,6 +73,11 @@ const TESTIDS = {
   // flow1 内部锚点
   'flow1:board': 'flow1-board',
   'flow1:screen:drill': 'flow1-drill-screen',
+  // 各 flow 的**屏号指示器**（B87：屏号以机器可读属性 data-screen 承载 ⇒ 走查不靠中文正文）
+  'flow1:screen:indicator': 'flow1-screen-indicator',
+  'flow2:screen:indicator': 'flow2-screen-indicator',
+  'flow3:screen:indicator': 'flow3-screen-indicator',
+  'flow4:screen:indicator': 'flow4-screen-indicator',
   // 各 flow 页头翻页按钮 testid（窄屏页头压扁的观测点）
   'flow1:header:prev': 'flow1-prev',
   'flow1:header:next': 'flow1-next',
@@ -104,6 +109,10 @@ const MIN_NARROW_MAIN_WIDTH = 320;
 const MIN_DESKTOP_SIDEBAR_WIDTH = 224;
 // 页头翻页按钮最小宽度（窄屏下按钮不得被压到装不下自身文字；同时满足触控友好）。
 const MIN_HEADER_BUTTON_WIDTH = 44;
+// 页头按钮的**高度**下限（px）—— 防「被压成细条」。
+// ⚠️ 44px 的触控口径针对**宽度**（本页头按钮实测 66×26px）；高度按设计系统的 sm 尺寸取现实下限，
+//   若把高度也钉到 44，断言会**恒红** ⇒ 那不是守卫，是误判。
+const MIN_HEADER_BUTTON_HEIGHT = 20;
 // 已知无害的 console 噪声（单列，不吞掉）。
 // ⚠️ **不得**豁免通用 404：那会连带吞掉真实的资源/chunk 缺失（B86 独立盲审抓出）⇒ 只豁免 favicon。
 const KNOWN_ERROR_PATTERNS = [/favicon/i];
@@ -356,22 +365,31 @@ try {
 
         // ---- 页头翻页按钮宽度断言（窄屏页头曾被压扁 ⇒ 按钮宽度不足）----
         const flowKey = exp.route === '/' ? 'flow1' : exp.route.slice(1);
-        // ⚠️ **逐键静态引用**（不用变量拼 key）⇒ 每个 header testid 键在代码里都看得见，
-        //   杜绝"键在表里但没人引用"的死常量形状。
+        // ⚠️ 键的取用方式（**与实现一致，勿再写反**）：页头锚点键在本函数里**逐字引用**
+        //   （如 TESTIDS['flow1:header:prev']）；路由键与 control 键则经变量拼接访问
+        //   （TESTIDS[exp.route] / TESTIDS['control:' + exp.route]）。
+        //   ⇒「键在表里却没人用」的死常量形状由**根仓静态守卫逐键核对**钉住
+        //   （tests/gates/host-walkthrough-contract.test.ts），不靠本文件的注释背书。
         const headerButtons = headerButtonSpecs(flowKey);
         for (const hb of headerButtons) {
           const box = await assertTestidVisible(page, exp.route, vp.width, hb.testid, '页头翻页按钮(' + hb.role + ')');
           const width = box ? Math.round(box.width) : 0;
+          const height = box ? Math.round(box.height) : 0;
           headerButtonWidths.push({
             route: exp.route,
             viewport: vp.width,
             role: hb.role,
             testid: hb.testid,
             width,
+            height,
           });
           if (vp.width < 768 && box !== null && width < MIN_HEADER_BUTTON_WIDTH) {
             fail('[' + exp.route + '@' + String(vp.width) + '] 窄屏页头翻页按钮 data-testid="' + hb.testid
               + '" 宽度 ' + width + 'px < ' + MIN_HEADER_BUTTON_WIDTH + 'px（页头被压扁，按钮容不下自身文字）');
+          }
+          if (vp.width < 768 && box !== null && height < MIN_HEADER_BUTTON_HEIGHT) {
+            fail('[' + exp.route + '@' + String(vp.width) + '] 窄屏页头翻页按钮 data-testid="' + hb.testid
+              + '" 高度 ' + height + 'px < ' + MIN_HEADER_BUTTON_HEIGHT + 'px（按钮被压成细条）');
           }
         }
 
@@ -475,19 +493,25 @@ try {
     try {
       await page.goto(baseUrl + '/flow1', { waitUntil: 'load', timeout: 30000 });
       await page.waitForTimeout(400);
-      const before = await page.locator('main').innerText();
       const drillTestid = TESTIDS['control:/flow1'];
       const drillScreenTestid = TESTIDS['flow1:screen:drill'];
+      // ⚠️ 屏号读**机器可读属性**（data-screen），不从中文正文里正则提取 ——
+      //   中文正则是**残余的文案依赖**：改一次 UI 文案就会打断走查（B87 独立盲审抓出）。
+      const screenTestid = TESTIDS['flow1:screen:indicator'];
+      const screenLocator = page.locator('[data-testid="' + screenTestid + '"]').first();
       const btn = page.locator('[data-testid="' + drillTestid + '"]').first();
       interaction.element = drillTestid;
-      interaction.before = (before.match(/屏\s*\d\/\d/) || [])[0] ?? '';
+      interaction.before = (await screenLocator.count()) > 0
+        ? (await screenLocator.getAttribute('data-screen')) ?? ''
+        : '';
       if ((await btn.count()) === 0) {
         fail('[interaction] 未找到 data-testid="' + drillTestid + '"（flow1 钻取按钮）');
       }
       await btn.click();
       await page.waitForTimeout(300);
-      const after = await page.locator('main').innerText();
-      interaction.after = (after.match(/屏\s*\d\/\d/) || [])[0] ?? '';
+      interaction.after = (await screenLocator.count()) > 0
+        ? (await screenLocator.getAttribute('data-screen')) ?? ''
+        : '';
       interaction.url = page.url();
       interaction.clicked = true;
       // 变化判定（testid 口径）：钻取屏 testid 变为可见 + 主区文案确实变了
