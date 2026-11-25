@@ -1,5 +1,9 @@
 # 创界山·活人认证（2026 重制版）
 
+[![CI](https://github.com/1273984347/creativemountain-liveness/actions/workflows/ci.yml/badge.svg)](https://github.com/1273984347/creativemountain-liveness/actions/workflows/ci.yml)
+
+> **English** version: [README.en.md](README.en.md).
+
 《爱情公寓 3》中陆展博桌游《创界山》的 2026 重制版：**实体 + 数字双轨**。
 3–8 人，桌游策略 + 社交博弈；核心命题是——**登顶不是胜利**。
 
@@ -51,14 +55,14 @@ npm run gate           # 十四道门禁全跑
 | ⑨ | 规模与平衡 | 30 局冒烟：零异常 + 兜底触发率 < 15% |
 | ⑩ | 对峙端到端 | Playwright 真浏览器：触发对峙 → 回合锁定 → 选牌 → 揭晓 → 解锁 |
 | ⑪ | 试炼通过率平衡 | 12 张试炼牌实测通过率 vs 目标区间（单色≈95% / 单类型≈55% / 类型+颜色≈20%） |
-| ⑫ | 位次极差回归锁 | 固定 seed + 固定局数 ⇒ 确定性：最大极差 ≤ 11pp 且 RMS 偏离 ≤ 4.5pp |
+| ⑫ | 位次极差回归锁 | 固定 seed + 固定局数 ⇒ 确定性：最大极差 ≤ 14pp 且 RMS 偏离 ≤ 6.5pp（B65 重校准） |
 | ⑬ | 余量判定离线回归 | 用已发布的多 seed 数据重算 Welch t 与精确临界值 ⇒ 判定不漂移 |
 | ⑭ | 浏览器走查 | Playwright 真浏览器（**file://** 单文件）：四套主题 UI 契约（玩家行数 / 棋盘格数 == `scales[players].boardLength` / 面板标题取 `terms.path` / 零占位符残留 / 面板非空）+ 几何与响应式（无横向溢出、棋盘格盒子非零、手牌不越界、窄屏 390 无横向滚动）+ 非法 seed 的可见错误信号（`aria-invalid`）+ 行棋后日志增加 + **console/page 零错误**（B86） |
 
 ## 目录
 
 ```
-engine/     引擎：状态、回合机、57 算子、15 谓词、认证与山议
+engine/     引擎：状态、回合机、58 算子、16 谓词、认证与山议
 web/        数字轨 UI（单文件 HTML 入口）
 themes/     四套主题包（数据）
 build/      构建脚本：主题生成器、实体件管线、发布包
@@ -189,3 +193,18 @@ docs/图示/   技术图集：8 张图 × 2 档（文档档 / 投屏档），自
 - 实施计划：`docs/superpowers/plans/2026-11-07-creative-mountain-liveness-implementation.md`
 - 平衡报告：`docs/balance-report.md`（24000 局模拟，自动生成）
 - 批次执行记录：`docs/批次/`
+
+## 许可证
+
+本项目采用 **GNU General Public License v3.0（GPL-3.0）**，完整文本见 [LICENSE](LICENSE)。
+
+> ⚠️ GPL-3.0 是**传染性**许可：分发本项目的**衍生作品**必须同样以 GPL-3.0 开源。
+> 第三方依赖保留各自许可（例如可选的 Laya sidecar 为 Apache-2.0、host 原型的 `sparkdesign` 为 MIT）。
+
+## 参与贡献
+
+欢迎 Issue 与 PR。请先读 [CONTRIBUTING.md](CONTRIBUTING.md)（含**门禁纪律**与**负样本规范**）、
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)；安全问题见 [SECURITY.md](SECURITY.md)。
+
+- 改动清单见 [CHANGELOG.md](CHANGELOG.md)；
+- 门禁口径与职责见 [docs/沉淀/门禁清单.md](docs/沉淀/门禁清单.md)（**十四道门**）。

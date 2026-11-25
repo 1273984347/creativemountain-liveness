@@ -1,0 +1,3 @@
+# Issue forms configuration — maintained by the project maintainers.
+# Templates: bug_report.md, feature_request.md
+blank_issues_enabled: true

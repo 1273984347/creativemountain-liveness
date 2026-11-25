@@ -1,0 +1,51 @@
+name: CI
+
+# The gate chain is the project's contract: any failure must fail the build.
+# ⚠️ The authoritative baseline is Windows (that is where the fourteen gates are
+#   verified end-to-end, including the browser gates). Linux is not verified yet.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: Fourteen gates
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium
+
+      - name: Run the gate chain
+        run: npm run gate
+
+      - name: Upload the single-file build (for manual smoke testing)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: digital-track-html
+          path: dist/*.html
+          if-no-files-found: ignore
+          retention-days: 7

@@ -4,6 +4,9 @@
   "private": true,
   "description": "《创界山·活人认证》2026 重制版 — 桌面多人策略游戏，实体+数字双轨",
   "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "node --test \"tests/**/*.test.ts\"",
