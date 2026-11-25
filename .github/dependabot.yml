@@ -1,0 +1,37 @@
+version: 2
+updates:
+  # The digital track is a single-file bundle: a patched dependency is safe to
+  # take automatically, a minor bump may change behaviour, a major bump is a
+  # migration. Patch updates are grouped so one PR covers the whole train.
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      npm-patch:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
+    ignore:
+      - dependency-name: "@radix-ui/*"
+        update-types:
+          - version-update:semver-major
+
+  - package-ecosystem: npm
+    directory: "/creativemountain-host"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      host-npm-patch:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly

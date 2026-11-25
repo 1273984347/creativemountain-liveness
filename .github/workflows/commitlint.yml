@@ -1,0 +1,35 @@
+name: commitlint
+
+# Enforce Conventional Commits on pull requests, so the CHANGELOG and the
+# semantic version can be generated from history instead of written by hand.
+#
+# ⚠️ The checker is installed with --no-save: the tool is a *policy gate*, not a
+#   dependency of the game itself, so it must not appear in package.json.
+
+on:
+  pull_request:
+
+permissions: {}
+
+jobs:
+  commit-messages:
+    name: commit messages follow conventional commits
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+
+      - name: install commitlint (not saved into the project manifest)
+        run: npm install --no-save @commitlint/cli @commitlint/config-conventional
+
+      - name: lint commit messages of this pull request
+        run: npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }} --verbose

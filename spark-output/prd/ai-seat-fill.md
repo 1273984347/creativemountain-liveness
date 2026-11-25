@@ -15,7 +15,7 @@
 > **B85 实拍采集已就绪（2026-11-24）**：`npm run build` 生成 `dist/创界山-活人认证-实拍.html`，打开后追加 `?playtest=1&seed=<uint32>&aiSeat=<0..5>`。实拍页具备 AI/人类墙钟、接管点击、可折叠观察员面板、同频/注视/局后自报与 JSON 导出；墙钟、接管与观察事件只进入 `PlaytestEventStore`，不进入 `State.log`（B84 的 `ai_action_committed` / `ai_forfeit` 仍写引擎日志），实拍页不进入发布包。**Ask 4 = `ready_to_schedule`（ready to schedule once date, 5 participants, and recruitment questions are set）**：仍缺确定日期、5 位真人参与者与 K8 两道招募问题。**独立实拍页不是生产功能；Ask 5 的生产 AI 座位选择器 / 可 ban 开关仍未实现。**
 
 > **✅ 2026-11-23T04:05 状态更新（签字人=用户本人）**：**G1 / G2 / G3 / G5 已裁**；**Ask 3 已于同日落地**（规格 **v2.2**：§7 改写 + 新增 §7.5 + 四处范围条款同步；`brief.out_of_scope` 采限定语）。当时剩余前置只有 **G4（seed 可指定并进导出）**；该工程项已于 **2026-11-24** 随 S1 核心完成。
-> 同批次还落了一项**门禁工具修复**（提交 `d153af9`）：行尾负样本不再依赖源文件 EOL，并补上 `doc-sync-c8-negative` 缺失的 prove-injection（原为静默假绿），另加 `.gitattributes`；发现登记为 **L-B80-4**。验证 = `npm run gate` 13 门全绿。
+> 同批次还落了一项**门禁工具修复**（提交 `2ad271e`）：行尾负样本不再依赖源文件 EOL，并补上 `doc-sync-c8-negative` 缺失的 prove-injection（原为静默假绿），另加 `.gitattributes`；发现登记为 **L-B80-4**。验证 = `npm run gate` 13 门全绿。
 > - **G1 = A**（AI 无签印权、不持活人席）⇒ **不动 `engine/scales.ts`、不重基线**；S3 塌为分支 A。**副作用必读**：A 让 A−B 之差混入第二个变量（那两格强度在 A 下对真人不可用），故"增益 ≤0"不可直接判方向失败——必须先补跑 A′ 臂（详见 §4 判读规则与 `gates-decision-sheet.md`）。
 > - **G2 = yes**（v1 只做稳座）⇒ sidecar 三条红线一条不掀，补位可独立于 B82 立项。恩怨地基改走**零契约变更**路径（`vetoBy`/`stolenTotal`/`successfulChallenges` + `State.log` 离线回放），**不新增 `counters.ts` 字段**——我先前"加一项即可、不动门禁"的说法已作废，证据见 `tests/engine/state-contract.test.ts:132` 与 B61 批次先例。
 > - **G3 = 拆两态**，AI 兜底超时 120s、离线代决开放 120s（两个独立旋钮，暂取同值）⇒ **S1 解锁**；前置条件是 `seat_control_assigned.controlledBy` 先落地，否则 D2 读数不可信。B85 实拍 AI 为同步自动步，不实现 120s timeout 分支，对该切片为 N/A。

@@ -68,7 +68,7 @@
       "G3 ✅ 已裁：拆两态 seat_offline_temporary / seat_filled_by_ai；AI 兜底超时 120s，离线代决开放 120s（两个独立旋钮，暂取同值）⇒ S1 施工解锁；B85 同步自动步无 120s timeout 分支，对本切片为 N/A",
       "G4 ✅ 已做（B84）：seed 可指定并进导出；B85 实拍页通过 URL 参数显式锁定 seed 与 aiSeat",
       "G5 ✅ 已定：落地端 = web 单文件端（热座、真引擎、离线包），不落 Host（creativemountain-host/src/flows/shared/mock-data.ts:1 不接引擎；flow-web 已把引擎接线与 host↔phone 同步列为 out_of_scope_this_run）",
-      "Ask 3 ✅ 已办（2026-11-23，提交 d153af9 之后的规格 v2.2 落地）：§7 范围裁定改写 + 新增 §7.5 补位稳座 + 四处范围条款同步修正（概览 / §7 HeuristicPolicy 句 / §13.2 范围表 / §13.3 延后表）+ 修订记录 v2.2；因 Ask 1=A，数值口径未动 ⇒ 无重基线。brief.out_of_scope 第 4 条按 (b) 加限定语澄清、不放宽",
+      "Ask 3 ✅ 已办（2026-11-23，提交 2ad271e 之后的规格 v2.2 落地）：§7 范围裁定改写 + 新增 §7.5 补位稳座 + 四处范围条款同步修正（概览 / §7 HeuristicPolicy 句 / §13.2 范围表 / §13.3 延后表）+ 修订记录 v2.2；因 Ask 1=A，数值口径未动 ⇒ 无重基线。brief.out_of_scope 第 4 条按 (b) 加限定语澄清、不放宽",
       "判读规则修订（选 A 的隐性成本，务必看）：若 A 组 NSM 增益 ≤ 0，不得直接关批次——必须先补跑一臂 A′（=B 选项，可被签印但不计入 N，同样不改 scales、不违反主题）。A′ 仍 ≤0 才判零代码方案够用；A′ >0 则判「A 太弱而非补位没用」并升级为 B。实拍局因此从 6 局增至 8 局"
     ]
   },

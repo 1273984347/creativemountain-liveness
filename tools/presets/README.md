@@ -30,7 +30,7 @@
 1. **不收进「更干净」的实现**。每个脚本的行过滤/分类规则就是当年量出记录里那些数的**同一把尺**；
    合并成一份通用实现 = 换尺 = 历史数字立刻不可复算。`common.mjs` 因此只共用遍历与 git。
 2. **不依赖 CWD**，从任何目录 `node tools/presets/<name>.mjs` 都能跑；涉及历史的都锚在
-   `common.mjs` 导出的 `BATCH_BASE`（B79 开工基线 `7ab2995`）上，换锚点必须同步改记录。
+   `common.mjs` 导出的 `BATCH_BASE`（B79 开工基线 `879ddce`）上，换锚点必须同步改记录。
 3. **产物仍写 `.tmp/`**（未跟踪、门② 的 `SKIP_DIRS` 已跳过）：例如 `b79-smoke-before.txt` /
    `b79-smoke-after.txt`（门⑨ 逐字节基线，正文已逐字抄进记录 §2.1，可随时重生成）、
    `b79-e136-probe*.txt`（E136 改前/改后对拍留档）、`b79-base/`（`b79-t21-ruler.mjs` 自取的基线树）。

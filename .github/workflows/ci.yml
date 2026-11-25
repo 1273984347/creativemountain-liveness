@@ -1,8 +1,12 @@
 name: CI
 
-# The gate chain is the project's contract: any failure must fail the build.
-# ⚠️ The authoritative baseline is Windows (that is where the fourteen gates are
-#   verified end-to-end, including the browser gates). Linux is not verified yet.
+# The gate chain is this project's contract: any failure must fail the build.
+#
+# ⚠️ The **authoritative** verified combination is Windows (windows-latest) × Node 22 × Chromium.
+#   Linux / macOS are **not verified** — see README「验证状态与非目标」.
+#
+# ⚠️ Every third-party Action is pinned to a full 40-char commit SHA (a mutable tag like
+#   `@v4` could be repointed). The comment after each SHA is the human-readable version.
 
 on:
   push:
@@ -10,40 +14,42 @@ on:
   pull_request:
   workflow_dispatch:
 
-permissions:
-  contents: read
+# Least privilege: deny everything at the top level, then grant per job.
+permissions: {}
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  gate:
-    name: Fourteen gates
+  gate-chain:
+    name: gate chain (14 gates) — windows / node 22 / chromium
     runs-on: windows-latest
     timeout-minutes: 45
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: npm
 
-      - name: Install dependencies
+      - name: install dependencies (lockfile-exact, npm ci)
         run: npm ci
 
-      - name: Install Playwright Chromium
+      - name: install chromium (for gates 10 & 14 — browser e2e and UI walkthrough)
         run: npx playwright install chromium
 
-      - name: Run the gate chain
+      - name: gate chain — types / tests / doc-drift / build / theme+IR / parity / balance / browser
         run: npm run gate
 
-      - name: Upload the single-file build (for manual smoke testing)
+      - name: upload single-file build (artifact for manual smoke test)
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: digital-track-html
           path: dist/*.html

@@ -20,7 +20,7 @@
 ## 0. 冷启动协议（新会话第一次进来时按顺序做）
 
 1. 读工作目录与分支：`cd "D:/<repo>" && git status --short && git log --oneline -1`
-   期望 HEAD = `323e768`（或其后继，若 Task 9 已开始）。
+   期望 HEAD = `faef65d`（或其后继，若 Task 9 已开始）。
 2. 读台账：`.superpowers/sdd/2026-11-08-creativemountain-laya-sidecar/progress.md`。
    台账首行必须是 `# SDD ledger — plan: docs/superpowers/plans/2026-11-08-creativemountain-laya-sidecar.md`；若首行是别的计划名，说明是别人的进度，**原地保留**，本计划另建自己的台账。
    台账里出现 `Task <N>: complete` 的任务 = 已完成，**不得重派**；出现 `fix round <R>/5` 而无 complete 的任务 = 停在修复循环中，从下一轮续。
@@ -50,13 +50,13 @@
 
 | Task | 提交 | 交付 | 验收证据（可复算） |
 |---|---|---|---|
-| 1 | `817a001` | `ActionType` = 13 项（+`CERTIFY_APPEAL_VOTE`，−`CERTIFY_VALIDATE_QUESTION`）；`CERTIFY_ANSWER{actor,target,passed}`；`legal.ts` 删除孤儿枚举 | `node --test tests/engine/action-contract.test.ts` 3/3 |
-| 2 | `4ee3a9c` + `fd3503c` | `engine/core/action-key.ts`：`actionKey`/`actionFromKey`/`withActor`；`PLAY_CARD` 补可选 `target`；反解**只认规范形**（空段/缺段/多余尾段一律抛错） | `node --test tests/engine/action-key.test.ts` 5/5 |
-| 3 | `24c5099` + `71c5f5f` | `engine/core/probe.ts` 的 `isolatedState`；`tests/engine/fixtures.ts` 六个引擎构造局面 + 后置断言；`mk` 的 `deckSize` 按人数取 `scales.deckTotal` | 常驻「rng 隔离」测试双向可失败 |
-| 4 | `a1d4e3a` + `c78371d` | `probeAction` 适配三种拒绝表达；`PASS` 判据补「结算时立起对峙＝已接受但挂起」 | focused legal-probe 当时 9/9，含 3 条 PASS 真拒路径 |
-| 5+6 | `0009643` + `23865ef` + `8b4fb9d` | `legal.ts` 五面试跑式枚举；`activeAbilityId` 唯一被动标识；`LEGAL_ACTION_CAP=64`；`getLegalActionStats{candidates,enumerated,truncated,dropped}`；补齐两处「粗筛窄于引擎」的漏发；「故意窄」契约成文 | focused 30/30；`npm run gate` 10/10 |
-| 7 | `71d76a7` + `b8bf07b` | `web/legal-gate.ts`（`actionWindow`/`uiBlockNotice`/`uiAllows`/`uiHasLegalTarget`/`uiCandidates`/`uiAllowedSet`）；`main.ts`/`cert.ts` 消费；三层漂移守卫；**补上数字轨缺失的复议票入口** | focused 38/38；gate 10/10 且门 ⑩ E2E `ok:true`、`consoleErrors: []` |
-| 8 | `693c37f` + `323e768` | `tools/laya-probe/state-text.mjs`（`describeState`/`describeAction`/`buildChoice`）+ `.d.mts`；禁止集靠**不写字段访问**达成；封闭词表分词判据；题面补齐 §4.5 | focused 47/47；13 项变异取证；gate 10/10 |
+| 1 | `b426722` | `ActionType` = 13 项（+`CERTIFY_APPEAL_VOTE`，−`CERTIFY_VALIDATE_QUESTION`）；`CERTIFY_ANSWER{actor,target,passed}`；`legal.ts` 删除孤儿枚举 | `node --test tests/engine/action-contract.test.ts` 3/3 |
+| 2 | `f93e8f8` + `d84f694` | `engine/core/action-key.ts`：`actionKey`/`actionFromKey`/`withActor`；`PLAY_CARD` 补可选 `target`；反解**只认规范形**（空段/缺段/多余尾段一律抛错） | `node --test tests/engine/action-key.test.ts` 5/5 |
+| 3 | `29f9afa` + `c7de0e5` | `engine/core/probe.ts` 的 `isolatedState`；`tests/engine/fixtures.ts` 六个引擎构造局面 + 后置断言；`mk` 的 `deckSize` 按人数取 `scales.deckTotal` | 常驻「rng 隔离」测试双向可失败 |
+| 4 | `0fb5113` + `7e486ea` | `probeAction` 适配三种拒绝表达；`PASS` 判据补「结算时立起对峙＝已接受但挂起」 | focused legal-probe 当时 9/9，含 3 条 PASS 真拒路径 |
+| 5+6 | `7b9bcba` + `e9bacf4` + `7015c0d` | `legal.ts` 五面试跑式枚举；`activeAbilityId` 唯一被动标识；`LEGAL_ACTION_CAP=64`；`getLegalActionStats{candidates,enumerated,truncated,dropped}`；补齐两处「粗筛窄于引擎」的漏发；「故意窄」契约成文 | focused 30/30；`npm run gate` 10/10 |
+| 7 | `ad8edd2` + `62767f3` | `web/legal-gate.ts`（`actionWindow`/`uiBlockNotice`/`uiAllows`/`uiHasLegalTarget`/`uiCandidates`/`uiAllowedSet`）；`main.ts`/`cert.ts` 消费；三层漂移守卫；**补上数字轨缺失的复议票入口** | focused 38/38；gate 10/10 且门 ⑩ E2E `ok:true`、`consoleErrors: []` |
+| 8 | `a94eae6` + `faef65d` | `tools/laya-probe/state-text.mjs`（`describeState`/`describeAction`/`buildChoice`）+ `.d.mts`；禁止集靠**不写字段访问**达成；封闭词表分词判据；题面补齐 §4.5 | focused 47/47；13 项变异取证；gate 10/10 |
 
 ---
 

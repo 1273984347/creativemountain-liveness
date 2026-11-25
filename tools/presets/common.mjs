@@ -77,4 +77,4 @@ export function gitNumstat(revRange, paths) {
 }
 
 /** B79 开工基线提交（台账与所有 `git show` 都锚在它上面）。 */
-export const BATCH_BASE = '7ab2995';
+export const BATCH_BASE = '879ddce';

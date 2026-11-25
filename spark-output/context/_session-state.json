@@ -19,7 +19,7 @@
     "metric",
     "prd"
   ],
-  "current_phase": "AI 补位方向：Ask1=A / Ask2=yes / Ask3 已落地 / G3 拆两态120s / G5 web端 已裁；G4 seed + S1 核心（B84 f470d06）与 B85 实拍采集（main 1f7fa48）已合并；仍待办：Ask4 实拍局(8局)、Ask5 可ban开关、S3 质疑/作答/复议、seat_offline_temporary 120s 计时器",
+  "current_phase": "AI 补位方向：Ask1=A / Ask2=yes / Ask3 已落地 / G3 拆两态120s / G5 web端 已裁；G4 seed + S1 核心（B84 1c6062c）与 B85 实拍采集（main 84676e6）已合并；仍待办：Ask4 实拍局(8局)、Ask5 可ban开关、S3 质疑/作答/复议、seat_offline_temporary 120s 计时器",
   "next_hint": "extract / flow-mobile / scope",
   "updated_at": "2026-11-24T15:56:09.000Z"
 }

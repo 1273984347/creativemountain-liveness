@@ -12,6 +12,24 @@ remake: a strategy / social-deduction game where the summit only hands out an
 *admission ticket* — the real victory belongs to whoever survives the
 **living-certification** (`活人认证`).
 
+## Verified environment and explicit non-goals
+
+**What CI actually verifies**: Windows (`windows-latest`) × Node.js 22 × Chromium
+(Playwright) — all **fourteen gates** of `npm run gate` pass in that combination.
+The CI workflow runs that one combination.
+
+**Explicit non-goals**:
+
+- Linux / macOS are **not verified** — CI runs Windows only;
+- the Python sidecar (Laya) is an **optional experiment** (it evaluates AI decision
+  policies); it is **not** part of CI and is **not** required to play;
+- there is **no** online service, account system or multiplayer server — the digital
+  track is a **pure offline single file**;
+- balance numbers are relative to the **baselines shipped in this repo** and do not
+  apply to other implementations;
+- the physical pieces are **generated artifacts** (`print/` and `dist/` are not
+  tracked); run `npm run build:print` locally to produce them.
+
 ## Highlights
 
 - **One engine, two tracks.** The digital track is a single offline HTML file you

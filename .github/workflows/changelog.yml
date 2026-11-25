@@ -1,0 +1,33 @@
+name: changelog
+
+# A release must have a CHANGELOG entry: the tag's version has to appear as a
+# section heading in CHANGELOG.md. Keeps the changelog a verifiable contract
+# instead of a promise.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions: {}
+
+jobs:
+  changelog-entry:
+    name: CHANGELOG has an entry for this tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: CHANGELOG.md must contain a section for the tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version=\"${TAG#v}\"
+          if ! grep -qE "^## \\[${version}\\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no section for ${version} (expected '## [${version}]')"
+            exit 1
+          fi
+          echo "CHANGELOG.md covers ${version}"
