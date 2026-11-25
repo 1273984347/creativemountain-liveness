@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed the Dependabot auto-merge workflow mis-classifying **major** updates as
+  patch/minor. The check only looked for a `deps-major` group name in the pull
+  request title, and Dependabot never writes that name for ungrouped major updates
+  — four real major pull requests had reached the merge queue. The classifier now
+  compares the major version numbers in the pull request's `from … to …` range and
+  treats grouped pull requests conservatively (manual review).
+- Added `deps-major` groups to every update target in `.github/dependabot.yml` so
+  Dependabot labels major updates itself, plus a resident guard
+  (`tests/gates/dep-update-classify.test.ts`) that runs the workflow's own classifier
+  against the real pull request titles seen in this repository.
+
 ### Security
 
 - Upgraded the build chain's `esbuild` from 0.24.2 to 0.28.2, fixing GHSA-67mh-4wv8-2f99.

@@ -53,12 +53,33 @@ jobs:
             exit 0
           fi
 
-          # ① 版本语义分类：Dependabot 对 major 会把分组名写成 deps-major ⇒ 人工审。
+          # ① 版本语义分类：major ⇒ 保持人工审。
           #    ⚠️ 标题通过 gh 现取（不内插进脚本），避免 PR 标题里的 shell 元字符。
           TITLE=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json title --jq .title)
-          case "$TITLE" in
-            *deps-major*)
+          # >>> DEP-CLASSIFY-BEGIN
+          # 分类规则（守卫测试会抽出下面这段 JS **直接执行**，见
+          # tests/gates/dep-update-classify.test.ts ⇒ 测的就是本文件里这段，不是复刻）：
+          #   a. 标题含 deps-major                 ⇒ major（人工审）
+          #   b. 能解析 "from A to B" 且主版本号不同 ⇒ major（人工审）
+          #   c. 解析不出 from/to（**分组 PR**）   ⇒ unknown ⇒ 保守人工审
+          #   d. 能解析且主版本号相同               ⇒ safe（可自动合并）
+          CLASS=$(node -e '
+            const title = process.argv[1];
+            if (title.includes("deps-major")) { console.log("major"); }
+            else {
+              const m = title.match(/from\s+v?(\d+)(?:\.\d+)*\s+to\s+v?(\d+)(?:\.\d+)*/);
+              if (!m) { console.log("unknown"); }
+              else { console.log(m[1] === m[2] ? "safe" : "major"); }
+            }
+          ' "$TITLE")
+          # <<< DEP-CLASSIFY-END
+          case "$CLASS" in
+            major)
               echo "major 版本变更 ⇒ 保持人工审：$TITLE"
+              exit 0
+              ;;
+            unknown)
+              echo "无法判定版本跨度（分组 PR？）⇒ 保守保持人工审：$TITLE"
               exit 0
               ;;
           esac
