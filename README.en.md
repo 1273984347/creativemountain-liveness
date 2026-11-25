@@ -96,12 +96,18 @@ tools/      the fourteen gates, theme/IR validators, parity check
 tests/      unit tests, resident negative samples, balance simulator
 print/      generated physical pieces (git-ignored, regenerated on demand)
 docs/       specification, batch records, gate catalogue, lesson index (Chinese)
+AGENTS.md   entry point for agents: rule index and where-to-look
+CLAUDE.md   thin pointer to AGENTS.md for Claude-based tooling
+ROADMAP.md  roadmap: released / in flight / open follow-ups
 ```
 
 ## Documentation
 
 The authoritative design document, the gate catalogue and the batch records live
 in `docs/` and are written in **Chinese**; this file is the English entry point.
+
+Start with `AGENTS.md` for the working rules (gate chain, batch protocol, where
+everything lives) and `ROADMAP.md` for what is released and what is still open.
 
 ## License
 

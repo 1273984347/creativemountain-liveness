@@ -19,6 +19,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`tests/gates/dep-update-classify.test.ts`) that runs the workflow's own classifier
   against the real pull request titles seen in this repository.
 
+### Added
+
+- `AGENTS.md` — the entry point for agents and collaborators: the non-negotiable
+  rules, where each rule's detail lives, the batch protocol, and the authorisation
+  boundary for externally visible actions.
+- `CLAUDE.md` — a thin pointer to `AGENTS.md` (no duplicated rules).
+- `ROADMAP.md` — released / in-flight / open follow-ups, derived from the repo's
+  own records rather than from a separate plan.
+- A resident guard (`tests/gates/entry-docs.test.ts`) that fails when a documented
+  pointer points at a file that does not exist.
+
 ### Security
 
 - Upgraded the build chain's `esbuild` from 0.24.2 to 0.28.2, fixing GHSA-67mh-4wv8-2f99.

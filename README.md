@@ -84,6 +84,9 @@ tests/      单元与门禁负样本；tests/sim/ 是规模与平衡模拟器
 docs/       规格、实施计划、批次执行记录、平衡报告
 print/      实体轨产物（按主题分目录）+ 规则书叙述模板
 docs/图示/   技术图集：8 张图 × 2 档（文档档 / 投屏档），自包含 HTML
+AGENTS.md  Agent / 协作者入口：纪律清单与「去哪看」索引
+CLAUDE.md  Claude 系工具入口（指向 AGENTS.md）
+ROADMAP.md 路线图：已发布 / 在途 / 未决遗留
 ```
 
 ## 图集（技术图）
@@ -206,6 +209,8 @@ docs/图示/   技术图集：8 张图 × 2 档（文档档 / 投屏档），自
 - 实施计划：`docs/superpowers/plans/2026-11-07-creative-mountain-liveness-implementation.md`
 - 平衡报告：`docs/balance-report.md`（24000 局模拟，自动生成）
 - 批次执行记录：`docs/批次/`
+- 协作者入口：`AGENTS.md`（纪律与索引）· `CLAUDE.md` · `HANDOVER.md`（交接）· `TODOS.md`（在办清单）
+- 路线图：`ROADMAP.md`（已发布 / 在途 / 未决遗留）
 
 ## 许可证
 
