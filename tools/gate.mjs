@@ -38,6 +38,16 @@ const GATES = [
   //   **精确** t 临界值 ⇒ 断言「余量 0 vs 2」的判定仍与 B31 基线一致（显著）。
   //   ⚠️ 直接 spawn node 脚本（不经 shell、不接管道 —— 纪律 A4）。
   { name: '余量判定离线回归（docs/沉淀/verify-trial-reserve-critical.mjs）', cmd: process.execPath, args: [resolve('docs', '沉淀', 'verify-trial-reserve-critical.mjs')] },
+  // ⚠️ 第 14 道门（B86）：数字轨**浏览器走查与可观测断言**。
+  //   真浏览器 + **file://** 单文件（验证「双击即玩」这个产品承诺，不得改成 http 预览），
+  //   覆盖：四套主题 UI 契约（玩家行数 / 棋盘格数 == scales[players].boardLength /
+  //   面板标题取 terms.path / 占位符零残留 / 面板非空）+ 几何（无横向溢出、棋盘格盒子非零、
+  //   手牌不越界）+ 窄屏 390 无横向滚动 + 非法 seed 的**可见错误信号**（aria-invalid）+
+  //   行棋后日志增加 + console/page 零错误。
+  //   **依赖门 4 的 dist/** ⇒ 必须排在 esbuild 之后。
+  //   负样本锚点：tests/gates/ui-walkthrough-negative.test.ts
+  //   （占位符不展开 / 棋盘超宽 / 改坏断言容差 —— 三条各必红，且副本自建 bundle 不依赖仓库 dist）。
+  { name: '浏览器走查与可观测断言（tests/e2e/ui-walkthrough.mjs）', cmd: process.execPath, args: [resolve('tests', 'e2e', 'ui-walkthrough.mjs')] },
 ];
 
 /**

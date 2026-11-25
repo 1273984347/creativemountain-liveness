@@ -165,8 +165,10 @@ test('C8：规格为 CRLF 行尾时解析结果必须与 LF 一致（行尾稳�
   assertCrlfInjected(lf, crlf);
   const parsedLf = parseSpecCoverageRows(lf);
   const parsed = parseSpecCoverageRows(crlf);
-  assert.equal(parsedLf.ids.length, 12, 'LF 基线本身必须解析出 12 条（否则基线就是坏的）');
-  assert.equal(parsed.ids.length, 12, 'CRLF 下必须仍解析出 12 条（不得吃进后续章节的表格行）');
+  // ⚠️ 条数**派生**自机器清单（不再写死）：新增一条覆盖边界时不必改这里
+  //   （B86 加第 13 条时，这条写死 12 的断言当场变红 —— 写死的数字会随事实漂移）。
+  assert.equal(parsedLf.ids.length, CODE_IDS.length, 'LF 基线本身必须解析出与机器清单同样多的条目（否则基线就是坏的）');
+  assert.equal(parsed.ids.length, CODE_IDS.length, 'CRLF 下必须仍解析出同样多的条目（不得吃进后续章节的表格行）');
   assert.deepEqual(parsed.ids, parsedLf.ids, 'CRLF 与 LF 的解析结果必须逐字一致');
   assert.deepEqual(parsed.ids, CODE_IDS, 'CRLF 下的 id 序列必须与机器清单完全一致');
   const r = check(crlf);

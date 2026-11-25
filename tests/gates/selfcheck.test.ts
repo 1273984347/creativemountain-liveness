@@ -7,7 +7,8 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 
 import { runTscIn, runNodeTest } from './harness.ts';
@@ -42,7 +43,13 @@ test('负样本：类型门禁对类型错误判红，恢复后判绿', { concur
   // 理由：`{ concurrency: false }` 只保证**同文件内**串行，
   // 其他测试文件仍会并发执行——若本负样本在工程目录里留探针，
   // 并发跑的 tsc 会扫到它 ⇒ 「恢复后判绿」断言假红。
-  const isolated = resolve(process.cwd(), 'tests', 'gates', '__isolated_tsc');
+  // ⚠️ **隔离目录必须在工作树之外**（B86 修）：原实现落在 `tests/gates/__isolated_tsc`，
+  //   而 `tests/` 在 tsc 的 include 范围里 ⇒ 任何**并发**跑 tsc 的进程（另一会话的 CI、
+  //   并行门禁）都会扫到这份**故意写错的探针** ⇒ 门 ① 假红（本批实测撞到过一次）。
+  //   本文件头的注释本就写着「绝不使用工程主 tsconfig、也不在工程目录里放探针文件」
+  //   ⇒ 这次是把**实现拉回注释的意图**，不是新增约定。
+  const tmpRoot = mkdtempSync(resolve(tmpdir(), 'cm-tsc-'));
+  const isolated = resolve(tmpRoot, 'isolated');
   const srcDir = resolve(isolated, 'src');
   mkdirSync(srcDir, { recursive: true });
   try {
@@ -78,7 +85,7 @@ test('负样本：类型门禁对类型错误判红，恢复后判绿', { concur
     const restored = runTscIn(resolve(isolated, 'tsconfig.json'));
     assert.equal(restored.code, 0, '移除探针后类型门禁必须判绿');
   } finally {
-    rmSync(isolated, { recursive: true, force: true });
+    rmSync(tmpRoot, { recursive: true, force: true });
   }
 });
 

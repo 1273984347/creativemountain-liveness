@@ -89,6 +89,12 @@ export const COVERAGE_BOUNDARIES = [
     reason: '二进制/大文件的字节流里做标识匹配无意义，且会拖慢门禁',
     fallback: '断言「无已入库文件超过体积上限」⇒ 跳过集合不随时间静默扩大（B51）',
   },
+  {
+    id: 'host-walkthrough-outside-root-gate',
+    notCovered: '**React host 的真浏览器走查**不在根仓门禁的执行路径内（根仓门禁只跑数字轨走查 + host 走查脚本的静态契约守卫）',
+    reason: 'host 依赖（node_modules）不入库 ⇒ 根仓门禁在干净副本里起不了 vite；把它硬塞进根仓门禁会让干净副本必然判红，违反「门禁必须可跑」的纪律（B45–B52）',
+    fallback: 'host 走查脚本入库并在 host 子项目内跑（npm run test:walkthrough）；根仓用 tests/gates/host-walkthrough-contract.test.ts 静态守卫防脚本被删/被掏空/少走路由（B86）',
+  },
 ];
 
 /**
