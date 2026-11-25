@@ -23,7 +23,7 @@ concurrency:
 
 jobs:
   gate-chain:
-    name: gate chain (14 gates) — windows / node 22 / chromium
+    name: gate chain (14 gates) — windows / node 24 / chromium
     runs-on: windows-latest
     timeout-minutes: 45
     permissions:
@@ -35,7 +35,7 @@ jobs:
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - name: install dependencies (lockfile-exact, npm ci)
