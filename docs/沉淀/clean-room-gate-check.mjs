@@ -44,7 +44,7 @@ try {
   // ⚠️ 副本**刻意不带 dist / print 产物** ⇒ 验证门禁能在「全新 clone」状态下自举全绿。
   symlinkSync(resolve(ROOT, 'node_modules'), resolve(dir, 'node_modules'), 'junction');
 
-  // ⚠️ B88（L-B87-4）：副本里**建一个最小 git 仓库**（只索引，不提交）。
+  // ⚠️ B88（L-B87-4）：副本里**建一个最小 git 仓库**（索引 + 一个基线提交）。
   //   起因：`tools/repo-copy.mjs` 的 `repoFiles()` 用 `git ls-files` 取「已入库文件清单」，
   //   而副本刻意不带 `.git` ⇒ 依赖 git 元数据的用例（如 `tests/gates/mutation-samples.test.ts`
   //   的隔离副本）必红 ⇒ 门 ② 在副本里永远红，且**红因与被验机制无关**。
@@ -79,6 +79,17 @@ try {
       if (idx.status !== 0) {
         console.error('[clean-room] 建立副本索引失败：' + String(idx.stderr ?? ''));
         process.exitCode = 1;
+      } else {
+        // ⚠️ 副本里**再补一个 HEAD**（B88 独立盲审）：只有索引没有提交 ⇒ `git rev-parse HEAD` /
+        //   `git log` / `git show` 仍会失败 ⇒ 与「副本无 git 元数据」同型的假红风险。
+        //   提交身份用一次性参数（不写全局 git config）。
+        const commit = spawnSync('git',
+          ['-c', 'user.email=clean-room@local', '-c', 'user.name=clean-room', 'commit', '-q', '-m', 'clean-room baseline'],
+          { cwd: dir, encoding: 'utf8', shell: false });
+        if (commit.status !== 0) {
+          console.error('[clean-room] 建立副本 HEAD 失败：' + String(commit.stderr ?? ''));
+          process.exitCode = 1;
+        }
       }
     }
   }

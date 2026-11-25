@@ -147,8 +147,15 @@ test('TESTIDS **逐键**有牙（动态键必须对应真实遍历的路由，�
       assert.ok(routeSet.has(key), '路由键 ' + key + ' 不在 ROUTE_EXPECTATIONS 里（该断言根本不会被执行）');
     } else {
       // 静态锚点键必须被**字面引用**（不是变量拼 key）⇒ 死键当场暴露。
-      // ⚠️ 且字面引用必须出现在 **TESTIDS 定义之外** ⇒ 只写在定义表里不算「被用上」。
-      const outside = src.replace(/const TESTIDS = \{[\s\S]*?\n\};/, '');
+      // ⚠️ 三层严格（B88 独立盲审实测可绕过，已修）：
+      //   ① 先剥注释 ⇒ 注释里写个键名不算「被用上」；
+      //   ② 再剥 TESTIDS 定义块 ⇒ 只写在定义表里不算；
+      //   ③ 定义块**匹配失败就判红**（例如把结尾改成 `} as const;`）⇒ 格式漂移必须同步守卫，
+      //     不许静默当作「没剥离」。
+      const codeOnly = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+      const block = /const TESTIDS = \{[\s\S]*?\n\};/.exec(codeOnly);
+      assert.ok(block !== null, '找不到 const TESTIDS = {...} 定义块（格式漂移 ⇒ 守卫必须同步）');
+      const outside = codeOnly.replace(block[0], '');
       assert.ok(outside.includes("'" + key + "'"), '静态锚点键 ' + key + ' 在脚本里没有字面引用（死键）');
     }
   }

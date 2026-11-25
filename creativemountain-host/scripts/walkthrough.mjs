@@ -607,6 +607,15 @@ try {
         await rankBtn.click();
         await page.waitForTimeout(300);
         const tableTestid = TESTIDS['flow3:rank:table'];
+        // ⚠️ 页面级溢出也要判（屏 2 不在主循环的 documentElement 判定覆盖范围内）
+        const rootOverflow = await page.evaluate(() => ({
+          scrollWidth: document.documentElement.scrollWidth,
+          clientWidth: document.documentElement.clientWidth,
+        }));
+        if (rootOverflow.scrollWidth > rootOverflow.clientWidth + 1) {
+          fail('[flow3@390] 排名公示屏**页面级**横向溢出：scrollWidth=' + String(rootOverflow.scrollWidth)
+            + ' > clientWidth=' + String(rootOverflow.clientWidth));
+        }
         const scrollers = await page.evaluate((testid) => {
           const root = document.querySelector('[data-testid="' + testid + '"]');
           if (!root) { return ['<table-missing>']; }

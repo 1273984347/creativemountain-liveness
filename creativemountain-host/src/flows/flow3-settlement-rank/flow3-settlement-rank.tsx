@@ -91,10 +91,18 @@ function Screen2_RankBoard({ state, onDetail, onBack }: { state: GameState; onDe
       key: 'identity',
       header: '身份',
       cell: (r: RankRow) => (
-        <span className="flex items-center gap-1 font-medium text-text">
+        // ⚠️ 窄屏只保留三列（座/身份/明细）⇒ 综合分与距峰顶**不作为独立列**，
+        //   但它们是排名公示的核心信息 ⇒ 窄屏下**内联到身份列**（行内第二行），不丢失。
+        //   宽屏（md+）保持原来的横排。
+        <span className="flex flex-col items-start gap-0.5 font-medium text-text md:flex-row md:items-center md:gap-1">
           <span className="block max-w-28 truncate" title={r.identityName}>{r.identityName}</span>
           {r.isWinner && <Tag color="primary">胜者</Tag>}
           {r.isHighlightMoment && <Tag color="warning">名场面</Tag>}
+          {narrow && (
+            <span className="block text-xs font-normal text-text-secondary">
+              综合分 {r.composite} · 距峰 {r.distToPeak}
+            </span>
+          )}
         </span>
       ),
     },

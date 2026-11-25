@@ -95,6 +95,18 @@ export const COVERAGE_BOUNDARIES = [
     reason: 'host 依赖（node_modules）不入库 ⇒ 根仓门禁在干净副本里起不了 vite；把它硬塞进根仓门禁会让干净副本必然判红，违反「门禁必须可跑」的纪律（B45–B52）',
     fallback: 'host 走查脚本入库并在 host 子项目内跑（npm run test:walkthrough）；根仓用 tests/gates/host-walkthrough-contract.test.ts 静态守卫防脚本被删/被掏空/少走路由（B86）',
   },
+  {
+    id: 'host-narrow-columns',
+    notCovered: 'host **窄屏**（<768px）下排名公示不把「名次」「活人席」作为独立列呈现',
+    reason: '窄屏列裁剪是响应式取舍：列数与容器宽度冲突时优先保留可操作列（座 / 身份 / 明细）⇒ 「名次」可由行序读出、「活人席」在窄屏属次要信息 ⇒ 机器判定「这两列在窄屏缺席」不属于数据漂移（B88）',
+    fallback: '**综合分与距峰顶并未丢失** —— 窄屏下内联显示在身份列内；宽屏仍是七列齐全',
+  },
+  {
+    id: 'host-secondary-screens',
+    notCovered: 'host 各 flow 的**次级屏**（flow2 屏 2/3、flow3 屏 3、flow4 屏 2/3）未被走查覆盖',
+    reason: '走查逐页只访问每个 flow 的**首屏**；更深屏需交互进入，已单独走查的只有 flow1 屏 2（钻取席位）与 flow3 屏 2（排名公示）（B88）',
+    fallback: 'flow1 屏 2 与 flow3 屏 2 已单独走查并有断言（屏号属性口径 + 表格无横向滚动宿主 + 页面级溢出）；其余次级屏留待后续批次',
+  },
 ];
 
 /**
