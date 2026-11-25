@@ -43,6 +43,45 @@ try {
   // node_modules 用**链接**而非复制（几百 MB，且内容只读）
   // ⚠️ 副本**刻意不带 dist / print 产物** ⇒ 验证门禁能在「全新 clone」状态下自举全绿。
   symlinkSync(resolve(ROOT, 'node_modules'), resolve(dir, 'node_modules'), 'junction');
+
+  // ⚠️ B88（L-B87-4）：副本里**建一个最小 git 仓库**（只索引，不提交）。
+  //   起因：`tools/repo-copy.mjs` 的 `repoFiles()` 用 `git ls-files` 取「已入库文件清单」，
+  //   而副本刻意不带 `.git` ⇒ 依赖 git 元数据的用例（如 `tests/gates/mutation-samples.test.ts`
+  //   的隔离副本）必红 ⇒ 门 ② 在副本里永远红，且**红因与被验机制无关**。
+  //   为什么这样修而不是改 `repoFiles()`：后者是复制语义的核心（同时服务门 ② 的隔离副本），
+  //   改动风险高；这里只给副本补一个**索引**，不动生产复制逻辑。
+  //   `git add -A` 遵守副本内的 `.gitignore` ⇒ 被忽略的生成物（dist/ print/ node_modules）不会进索引。
+  const init = spawnSync('git', ['init', '-q'], { cwd: dir, encoding: 'utf8', shell: false });
+  if (init.status !== 0) {
+    console.error('[clean-room] git init 失败：' + (init.stderr ?? ''));
+    process.exitCode = 1;
+  } else {
+    // ⚠️ 索引必须**镜像真实仓的跟踪状态**：只把**真实仓里已跟踪**的文件喂进副本的索引。
+    //   为什么不能用 `git add -A`：它会把副本里「未跟踪但未忽略」的文件（如 .qoder/）也变成「已跟踪」
+    //   ⇒ `repo-selftest-scope` 守卫（跳过目录里不得有已入库文件）当场判红 —— 守卫是对的，是索引错了。
+    //   为什么不用 pathspec 排除写法 `:!node_modules`：git 会对「ignored」直接报错退出。
+    const tracked = spawnSync('git', ['-c', 'core.quotePath=false', 'ls-files', '--cached', '-z'],
+      { cwd: ROOT, encoding: 'buffer', shell: false });
+    if (tracked.status !== 0) {
+      console.error('[clean-room] 读真实仓跟踪清单失败：' + String(tracked.stderr ?? ''));
+      process.exitCode = 1;
+    } else {
+      // ⚠️ 副本里**没有**被 EXCLUDE 的文件 ⇒ 索引清单必须同步剔除（否则 update-index 报
+      //   「does not exist and --remove not passed」⇒ 索引建立失败 ⇒ 副本无 git 元数据）。
+      const excluded = new Set(EXCLUDE);
+      const kept = Buffer.concat(
+        tracked.stdout.toString('utf8').split('\0').filter(Boolean)
+          .filter((p) => !excluded.has(p))
+          .map((p) => Buffer.from(p + '\0', 'utf8')),
+      );
+      const idx = spawnSync('git', ['update-index', '-z', '--add', '--stdin'],
+        { cwd: dir, input: kept, encoding: 'buffer', shell: false });
+      if (idx.status !== 0) {
+        console.error('[clean-room] 建立副本索引失败：' + String(idx.stderr ?? ''));
+        process.exitCode = 1;
+      }
+    }
+  }
   const r = spawnSync(process.execPath, [resolve(dir, 'tools', 'gate.mjs')], {
     cwd: dir, encoding: 'utf8', shell: false, maxBuffer: 64 * 1024 * 1024,
   });

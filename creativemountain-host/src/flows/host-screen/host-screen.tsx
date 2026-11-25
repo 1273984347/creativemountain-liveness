@@ -69,7 +69,7 @@ export function CreativemountainHostApp() {
                 data-testid={'host-nav-' + item.id}
                 aria-label={item.label}
                 aria-current={activeId === item.id ? 'page' : undefined}
-                className={'flex items-center gap-1 rounded px-2 py-1 text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary '
+                className={'flex min-w-[44px] items-center justify-center gap-1 rounded px-2 py-1 text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary '
                   + (activeId === item.id ? 'bg-primary text-text-on-primary' : 'text-text-secondary hover:bg-bg-elevated')}
                 onClick={() => navigate(NAV_ROUTES[item.id])}
               >
@@ -81,7 +81,7 @@ export function CreativemountainHostApp() {
               type="button"
               data-testid="host-theme-toggle-narrow"
               aria-label={appearance === 'light' ? '切换到暗色模式' : '切换到亮色模式'}
-              className="ml-auto rounded px-2 py-1 text-xs text-text-secondary hover:bg-bg-elevated focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              className="ml-auto min-w-[44px] rounded px-2 py-1 text-xs text-text-secondary hover:bg-bg-elevated focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
               onClick={() => setAppearance((a) => (a === 'light' ? 'dark' : 'light'))}
             >
               {appearance === 'light' ? '暗色' : '亮色'}

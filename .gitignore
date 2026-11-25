@@ -1,5 +1,13 @@
 node_modules/
 .worktrees/
+
+# 本地工地与复核材料（B88）：探针输出 / 报告备份 / 渲染截图 —— 不入库。
+# ⚠️ 同时让 clean-room 副本清单瘦身：`copyTracked` 会带上「未跟踪但未忽略」的文件，
+#   未忽略的 .tmp/ 会把数千个历史工件整包带进副本（实测 2274 文件 / 57.5 MB）⇒ 门禁慢到不可用。
+.tmp/
+
+# 本地 IDE/工具的仓库知识库产物（Qoder repowiki）——不入库
+.qoder/
 build/.build-print.mjs
 dist/
 print/*

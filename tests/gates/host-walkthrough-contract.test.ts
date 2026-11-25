@@ -41,6 +41,7 @@ const EXPECTED_TESTIDS: Record<string, string> = {
   'control:/flow4': 'flow4-generate',
   'flow1:board': 'flow1-board',
   'flow1:screen:drill': 'flow1-drill-screen',
+  'flow3:rank:table': 'flow3-rank-table',
   'flow1:screen:indicator': 'flow1-screen-indicator',
   'flow2:screen:indicator': 'flow2-screen-indicator',
   'flow3:screen:indicator': 'flow3-screen-indicator',
@@ -52,6 +53,10 @@ const EXPECTED_TESTIDS: Record<string, string> = {
   'flow3:header:prev': 'flow3-prev',
   'flow3:header:next': 'flow3-next',
   'flow4:header:prev': 'flow4-prev',
+  'host:nav:flow1': 'host-nav-flow1',
+  'host:nav:flow2': 'host-nav-flow2',
+  'host:nav:flow3': 'host-nav-flow3',
+  'host:nav:flow4': 'host-nav-flow4',
   'shell:main': 'host-main',
   'shell:sidebar': 'host-sidebar',
   'shell:nav': 'host-nav',
@@ -69,6 +74,7 @@ const MIN_THRESHOLDS: { name: string; floor: number }[] = [
   { name: 'MIN_HEADER_BUTTON_WIDTH', floor: 44 },
   { name: 'MIN_DESKTOP_SIDEBAR_WIDTH', floor: 224 },
   { name: 'MIN_HEADER_BUTTON_HEIGHT', floor: 20 },
+  { name: 'MIN_NAV_ITEM_WIDTH', floor: 44 },
 ];
 
 function readScript(): string {
@@ -83,7 +89,7 @@ test('host 走查脚本存在且不是空壳（防「删掉断言还留着文件
 
 test('host 走查脚本保留了静态守卫锚点', () => {
   const src = readScript();
-  for (const anchor of ["page.on('console'", 'pageerror', 'scrollWidth', 'clientWidth', 'chromium.launch']) {
+  for (const anchor of ["page.on('console'", 'pageerror', 'scrollWidth', 'clientWidth', 'browserType.launch', 'BROWSER_NAME']) {
     assert.ok(src.includes(anchor), 'host 走查脚本缺少锚点：' + anchor);
   }
 });
@@ -140,8 +146,10 @@ test('TESTIDS **逐键**有牙（动态键必须对应真实遍历的路由，�
     } else if (key.startsWith('/')) {
       assert.ok(routeSet.has(key), '路由键 ' + key + ' 不在 ROUTE_EXPECTATIONS 里（该断言根本不会被执行）');
     } else {
-      // 静态锚点键必须被**字面引用**（不是变量拼 key）⇒ 死键当场暴露
-      assert.ok(src.includes("'" + key + "'"), '静态锚点键 ' + key + ' 在脚本里没有字面引用（死键）');
+      // 静态锚点键必须被**字面引用**（不是变量拼 key）⇒ 死键当场暴露。
+      // ⚠️ 且字面引用必须出现在 **TESTIDS 定义之外** ⇒ 只写在定义表里不算「被用上」。
+      const outside = src.replace(/const TESTIDS = \{[\s\S]*?\n\};/, '');
+      assert.ok(outside.includes("'" + key + "'"), '静态锚点键 ' + key + ' 在脚本里没有字面引用（死键）');
     }
   }
 });

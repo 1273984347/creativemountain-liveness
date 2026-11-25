@@ -5,7 +5,7 @@
 // sitemap 页: /#settle · /#settle/rank
 // =============================================
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Alert, AlertDescription, AlertTitle,
   Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator,
@@ -65,6 +65,17 @@ function Screen1_SettleEnter({ state, onRank }: { state: GameState; onRank: () =
    ================================================ */
 function Screen2_RankBoard({ state, onDetail, onBack }: { state: GameState; onDetail: (seat: number) => void; onBack: () => void }) {
   const [loading, setLoading] = useState(false)
+  // ⚠️ 窄屏（<768px）下排名表**只保留「座 / 身份 / 明细」三列**。
+  //   起因（B88 · L-B87-2）：七列全显时表格约 470px、容器仅约 306px ⇒ 只能靠**表格内横向滚动**承载
+  //   ⇒ 窄屏下「排名公示」几乎读不了。窄屏改用精简列 ⇒ 不再需要横向滚动（明细入口保留）。
+  const [narrow, setNarrow] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)')
+    const apply = () => setNarrow(mq.matches)
+    apply()
+    mq.addEventListener('change', apply)
+    return () => mq.removeEventListener('change', apply)
+  }, [])
   if (loading) {
     return (
       <div className="flex flex-col gap-4 p-4">
@@ -116,7 +127,16 @@ function Screen2_RankBoard({ state, onDetail, onBack }: { state: GameState; onDe
               <EmptyHeader><EmptyTitle>本局尚未结算</EmptyTitle><EmptyDescription>对局结束后，这里显示席位权重与距峰顶的综合排名。</EmptyDescription></EmptyHeader>
               <EmptyContent><Button variant="secondary" onClick={onBack}>返回结算</Button></EmptyContent>
             </Empty>
-          ) : <DataTable columns={cols} data={state.ranks} />}
+          ) : (
+            <div data-testid="flow3-rank-table" className="min-w-0">
+              <DataTable
+                columns={narrow
+                  ? cols.filter((c) => c.key === 'seat' || c.key === 'identity' || c.key === 'detail')
+                  : cols}
+                data={state.ranks}
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

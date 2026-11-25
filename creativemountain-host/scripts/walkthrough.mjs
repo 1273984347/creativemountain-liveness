@@ -34,7 +34,15 @@ const HOST_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 // ⚠️ host 子项目内没有 playwright 依赖 ⇒ 从**仓根**的 node_modules 解析（createRequire）。
 const ROOT = resolve(process.env.CM_REPO_ROOT ?? resolve(HOST_DIR, '..'));
 const require = createRequire(resolve(ROOT, 'package.json'));
-const { chromium } = require('playwright');
+const pw = require('playwright');
+// ⚠️ **浏览器可选**（B88 · L-B87-1）：HOST_WALKTHROUGH_BROWSER=chromium|firefox|webkit，默认 chromium。
+//   目的：断点行为（md:）在别的引擎上是否一致，必须**实测**而不是假定。
+const BROWSER_NAME = process.env.HOST_WALKTHROUGH_BROWSER ?? 'chromium';
+const browserType = pw[BROWSER_NAME];
+if (typeof browserType?.launch !== 'function') {
+  console.error('未知浏览器：' + BROWSER_NAME + '（可选 chromium / firefox / webkit）');
+  process.exit(1);
+}
 
 // ---- 路由清单 = **真正驱动走查的那个常量** --------------------------------
 // ⚠️ 早先这里另有一个**从未被使用的** `const ROUTES = [...]` 字面量，而根仓静态守卫比对的正是它
@@ -73,6 +81,7 @@ const TESTIDS = {
   // flow1 内部锚点
   'flow1:board': 'flow1-board',
   'flow1:screen:drill': 'flow1-drill-screen',
+  'flow3:rank:table': 'flow3-rank-table',
   // 各 flow 的**屏号指示器**（B87：屏号以机器可读属性 data-screen 承载 ⇒ 走查不靠中文正文）
   'flow1:screen:indicator': 'flow1-screen-indicator',
   'flow2:screen:indicator': 'flow2-screen-indicator',
@@ -87,6 +96,11 @@ const TESTIDS = {
   'flow3:header:next': 'flow3-next',
   'flow4:header:prev': 'flow4-prev',
   // host 外壳锚点（host-screen.tsx）
+  // 窄屏顶部导航条的四个流程入口 + 主题切换（B87-3：触控目标宽度下限的观测点）
+  'host:nav:flow1': 'host-nav-flow1',
+  'host:nav:flow2': 'host-nav-flow2',
+  'host:nav:flow3': 'host-nav-flow3',
+  'host:nav:flow4': 'host-nav-flow4',
   'shell:main': 'host-main',
   'shell:sidebar': 'host-sidebar',
   'shell:nav': 'host-nav',
@@ -113,6 +127,9 @@ const MIN_HEADER_BUTTON_WIDTH = 44;
 // ⚠️ 44px 的触控口径针对**宽度**（本页头按钮实测 66×26px）；高度按设计系统的 sm 尺寸取现实下限，
 //   若把高度也钉到 44，断言会**恒红** ⇒ 那不是守卫，是误判。
 const MIN_HEADER_BUTTON_HEIGHT = 20;
+// 窄屏导航条**触控目标**宽度下限（px）：B87-3 实测「暗色」切换按钮仅 40px（偏窄）。
+// ⚠️ 只卡**宽度**（横向触控目标）；高度维持紧凑，避免导航条在窄屏过高。
+const MIN_NAV_ITEM_WIDTH = 44;
 // 已知无害的 console 噪声（单列，不吞掉）。
 // ⚠️ **不得**豁免通用 404：那会连带吞掉真实的资源/chunk 缺失（B86 独立盲审抓出）⇒ 只豁免 favicon。
 const KNOWN_ERROR_PATTERNS = [/favicon/i];
@@ -261,10 +278,11 @@ let browser = null;
 try {
   server = await startServer();
   const baseUrl = server.baseUrl;
-  browser = await chromium.launch({ headless: true });
+  browser = await browserType.launch({ headless: true });
 
   const pages = [];
   const viewports = [];
+  const rankTableCheck = [];
   const testids = [];
   const headerButtonWidths = [];
   const responsive = [];
@@ -361,6 +379,38 @@ try {
         // ---- flow1 山道棋盘容器（flow1 专属锚点）----
         if (exp.route === '/' || exp.route === '/flow1') {
           await assertTestidVisible(page, exp.route, vp.width, TESTIDS['flow1:board'], '山道棋盘容器');
+        }
+
+        // ---- 各 flow 的**屏号指示器**（机器可读属性 data-screen）----
+        // ⚠️ 逐字引用（不用变量拼 key）⇒ 死键会被根仓守卫抓到。
+        const screenIndicatorSpecs = {
+          flow1: TESTIDS['flow1:screen:indicator'],
+          flow2: TESTIDS['flow2:screen:indicator'],
+          flow3: TESTIDS['flow3:screen:indicator'],
+          flow4: TESTIDS['flow4:screen:indicator'],
+        };
+        const screenIndicator = screenIndicatorSpecs[exp.route === '/' ? 'flow1' : exp.route.slice(1)];
+        if (screenIndicator !== undefined) {
+          await assertTestidVisible(page, exp.route, vp.width, screenIndicator, '屏号指示器');
+        }
+
+        // ---- 窄屏顶部导航条：**触控目标宽度下限**（B87-3）----
+        if (vp.width < 768) {
+          const navItems = [
+            { role: 'flow1', testid: TESTIDS['host:nav:flow1'] },
+            { role: 'flow2', testid: TESTIDS['host:nav:flow2'] },
+            { role: 'flow3', testid: TESTIDS['host:nav:flow3'] },
+            { role: 'flow4', testid: TESTIDS['host:nav:flow4'] },
+            { role: 'theme', testid: TESTIDS['shell:theme:narrow'] },
+          ];
+          for (const ni of navItems) {
+            const nb = await assertTestidVisible(page, exp.route, vp.width, ni.testid, '窄屏导航入口(' + ni.role + ')');
+            const nw = nb ? Math.round(nb.width) : 0;
+            if (nb !== null && nw < MIN_NAV_ITEM_WIDTH) {
+              fail('[' + exp.route + '@' + String(vp.width) + '] 窄屏导航入口 data-testid="' + ni.testid
+                + '" 宽度 ' + nw + 'px < ' + MIN_NAV_ITEM_WIDTH + 'px（触控目标过窄）');
+            }
+          }
         }
 
         // ---- 页头翻页按钮宽度断言（窄屏页头曾被压扁 ⇒ 按钮宽度不足）----
@@ -539,12 +589,65 @@ try {
     }
   }
 
+  // ---- flow3 屏 2：排名公示的窄屏表格**不得需要横向滚动**（B88 · L-B87-2）----
+  // ⚠️ 判据不是「表格没溢出卡片」，而是「表格内部**不存在**横向滚动元素」
+  //   （DataTable 自带 overflow 容器时，只看外层会假绿）。
+  {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    const tableConsoleErrors = [];
+    page.on('console', (m) => { if (m.type() === 'error') { tableConsoleErrors.push(m.text()); } });
+    page.on('pageerror', (e) => { tableConsoleErrors.push('pageerror: ' + e.message); });
+    try {
+      await page.goto(baseUrl + '/flow3', { waitUntil: 'load', timeout: 30000 });
+      await page.waitForTimeout(300);
+      const rankBtn = page.locator('[data-testid="' + TESTIDS['control:/flow3'] + '"]').first();
+      if ((await rankBtn.count()) === 0) {
+        fail('[flow3@390] 未找到 data-testid="' + TESTIDS['control:/flow3'] + '"（查看排名公示按钮）');
+      } else {
+        await rankBtn.click();
+        await page.waitForTimeout(300);
+        const tableTestid = TESTIDS['flow3:rank:table'];
+        const scrollers = await page.evaluate((testid) => {
+          const root = document.querySelector('[data-testid="' + testid + '"]');
+          if (!root) { return ['<table-missing>']; }
+          const out = [];
+          for (const el of [root, ...root.querySelectorAll('*')]) {
+            // ⚠️ 只判「**滚动宿主**溢出」（overflow-x 为 auto/scroll 且内容更宽）⇒ 即「真的出现横向滚动条」。
+            //   不能只看 scrollWidth > clientWidth：那会把**子元素内容溢出被裁剪**（在 firefox 上
+            //   表格单元格 span 就会命中）误判成「需要滚动」（B88 实测 ⇒ 判据过严会假红）。
+            const ox = getComputedStyle(el).overflowX;
+            if ((ox === 'auto' || ox === 'scroll') && el.scrollWidth > el.clientWidth + 1) {
+              out.push(el.tagName + ':' + String(el.className).slice(0, 30));
+            }
+          }
+          return out;
+        }, tableTestid);
+        rankTableCheck.push({ viewport: 390, scrollers });
+        if (scrollers.length > 0) {
+          fail('[flow3@390] 排名公示表格内仍存在横向滚动元素：' + JSON.stringify(scrollers.slice(0, 3)));
+        }
+      }
+      for (const msg of tableConsoleErrors) {
+        if (isKnownError(msg)) {
+          knownErrors.push({ route: 'flow3-screen2', message: msg });
+        } else {
+          fail('[flow3@390] 排名公示屏 console 错误：' + msg);
+        }
+      }
+    } catch (err) {
+      fail('[flow3@390] 排名公示屏走查异常：' + (err && err.message ? err.message : String(err)));
+    } finally {
+      await page.close();
+    }
+  }
+
   const out = {
     ok: failures.length === 0,
     pages,
     viewports,
     testids,
     headerButtonWidths,
+    rankTableCheck,
     responsive,
     interaction,
     knownErrors,
