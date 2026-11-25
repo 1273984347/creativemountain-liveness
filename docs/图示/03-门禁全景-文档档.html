@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>十三道门禁全景 · 创界山·活人认证</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper: #f5f5f5;
+      --color-ink: #2d3142;
+      --color-muted: #4f5d75;
+      --color-accent: #eb6c36;
+      --font-sans: 'Geist', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+      --font-serif: 'Instrument Serif', 'Noto Serif SC', 'Songti SC', serif;
+      --font-mono: 'Geist Mono', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2.5rem 2rem;
+    }
+    .frame { max-width: 1200px; width: 100%; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.2vw + 0.75rem, 2rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+      color: var(--color-ink);
+      margin-bottom: 0.6rem;
+    }
+    .tagline {
+      font-size: 0.95rem;
+      color: var(--color-muted);
+      max-width: 62ch;
+      margin-bottom: 1.5rem;
+      line-height: 1.6;
+    }
+    svg { width: 100%; min-width: 960px; display: block; }
+    footer {
+      margin-top: 1.5rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid rgba(45,49,66,0.12);
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      letter-spacing: 0.08em;
+      color: var(--color-muted);
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">机制 · 十三道门禁 · 创界山·活人认证</p>
+    <h1>十三道门禁全景</h1>
+    <p class="tagline">上游红，下游不必再跑：十三道门按 GATES 数组顺序执行，只有标注前置的门（门 6/门 7 需 print/ 产物、门 10 需门 4 的 dist/）才依赖上游。</p>
+
+    <svg viewBox="0 0 960 600" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="gate-panorama-doc-inline-title gate-panorama-doc-inline-desc">
+      <title id="gate-panorama-doc-inline-title">十三道门禁全景</title>
+      <desc id="gate-panorama-doc-inline-desc">层级依赖图：四层门禁自上而下按 GATES 数组顺序执行 —— 基础层（门 1–4）、契约层（门 5–6）、一致性层（门 7–8）、平衡层（门 9–13）；右侧两处前置产物分别是门 6、门 7 与门 10 的依赖项。</desc>
+    <defs>
+      <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+      <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker>
+      <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+    </defs>
+
+      <rect width="100%" height="100%" fill="#f5f5f5"/>
+
+    <rect x="40" y="40" width="432" height="80" rx="6" fill="#f5f5f5"/>
+    <rect x="40" y="40" width="432" height="80" rx="6" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
+    <rect x="48" y="46" width="28" height="12" rx="2" fill="transparent" stroke="#eb6c36" stroke-opacity="0.40" stroke-width="0.8"/>
+    <text x="62" y="55" fill="#eb6c36" fill-opacity="0.8" font-size="8" font-family="'Geist Mono', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace" text-anchor="middle" letter-spacing="0.08em">L1</text>
+    <text x="256" y="77.5" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif" text-anchor="middle">基础层：类型 · 测试 · 文档 · 构建</text>
+    <text x="256" y="91.5" fill="#4f5d75" font-size="9" font-family="'Geist Mono', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace" text-anchor="middle">门 1 类型 · 门 2 测试 · 门 3 文档口径 · 门 4 构建</text>
+    <rect x="40" y="148" width="432" height="80" rx="6" fill="#f5f5f5"/>
+    <rect x="40" y="148" width="432" height="80" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+    <rect x="48" y="154" width="28" height="12" rx="2" fill="transparent" stroke="#2d3142" stroke-opacity="0.40" stroke-width="0.8"/>
+    <text x="62" y="163" fill="#2d3142" fill-opacity="0.8" font-size="8" font-family="'Geist Mono', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace" text-anchor="middle" letter-spacing="0.08em">L2</text>
+    <text x="256" y="185.5" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif" text-anchor="middle">契约层：主题包校验 · IR 契约</text>
+    <text x="256" y="199.5" fill="#4f5d75" font-size="9" font-family="'Geist Mono', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace" text-anchor="middle">门 5 主题包校验 · 门 6 IR 契约</text>
+    <rect x="40" y="256" width="432" height="80" rx="6" fill="#f5f5f5"/>
+    <rect x="40" y="256" width="432" height="80" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+    <rect x="48" y="262" width="28" height="12" rx="2" fill="transparent" stroke="#2d3142" stroke-opacity="0.40" stroke-width="0.8"/>
+    <text x="62" y="271" fill="#2d3142" fill-opacity="0.8" font-size="8" font-family="'Geist Mono', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace" text-anchor="middle" letter-spacing="0.08em">L3</text>
+    <text x="256" y="293.5" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif" text-anchor="middle">一致性层：双轨一致性 · 主题差异化</text>
+    <text x="256" y="307.5" fill="#4f5d75" font-size="9" font-family="'Geist Mono', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace" text-anchor="middle">门 7 双轨一致性 · 门 8 主题差异化</text>
+    <rect x="40" y="364" width="432" height="80" rx="6" fill="#f5f5f5"/>
+    <rect x="40" y="364" width="432" height="80" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+    <rect x="48" y="370" width="28" height="12" rx="2" fill="transparent" stroke="#2d3142" stroke-opacity="0.40" stroke-width="0.8"/>
+    <text x="62" y="379" fill="#2d3142" fill-opacity="0.8" font-size="8" font-family="'Geist Mono', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace" text-anchor="middle" letter-spacing="0.08em">L4</text>
+    <text x="256" y="396" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif" text-anchor="middle">平衡层：规模 · 端到端 · 通过率 · 极差 · 余量</text>
+    <text x="256" y="410" fill="#4f5d75" font-size="9" font-family="'Geist Mono', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace" text-anchor="middle">门 9 规模与平衡 · 门 10 对峙端到端 · 门 11 试炼通过率平衡 · 门 12 位次胜率回归锁 ·</text>
+    <text x="256" y="421" fill="#4f5d75" font-size="9" font-family="'Geist Mono', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace" text-anchor="middle">门 13 余量判定离线回归</text>
+    <rect x="620" y="40" width="300" height="160" rx="6" fill="#f5f5f5"/>
+    <rect x="620" y="40" width="300" height="160" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+    <text x="770" y="106.5" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif" text-anchor="middle">print/ 产物</text>
+    <text x="770" y="120.5" fill="#4f5d75" font-size="9" font-family="'Geist Mono', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace" text-anchor="middle">print/&lt;theme&gt;/ir.json · 规则书.html · *.pdf ⇒ 被门</text>
+    <text x="770" y="131.5" fill="#4f5d75" font-size="9" font-family="'Geist Mono', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace" text-anchor="middle">6/门 7 依赖 · 缺失才生成（ensurePrintArtifacts →</text>
+    <text x="770" y="142.5" fill="#4f5d75" font-size="9" font-family="'Geist Mono', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace" text-anchor="middle">build/build-print-all.mjs）</text>
+    <rect x="620" y="300" width="300" height="160" rx="6" fill="#f5f5f5"/>
+    <rect x="620" y="300" width="300" height="160" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+    <text x="770" y="372" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif" text-anchor="middle">dist/ 产物</text>
+    <text x="770" y="386" fill="#4f5d75" font-size="9" font-family="'Geist Mono', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace" text-anchor="middle">门 4 的 esbuild 单文件 HTML（dist/）⇒ 被门 10</text>
+    <text x="770" y="397" fill="#4f5d75" font-size="9" font-family="'Geist Mono', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace" text-anchor="middle">依赖（对峙浏览器端到端需先 npm run build）</text>
+    <path d="M 100 120 L 100 148" fill="none" stroke="#4f5d75" stroke-width="1" marker-end="url(#arrow)"/>
+    <path d="M 100 228 L 100 256" fill="none" stroke="#4f5d75" stroke-width="1" marker-end="url(#arrow)"/>
+    <path d="M 100 336 L 100 364" fill="none" stroke="#4f5d75" stroke-width="1" marker-end="url(#arrow)"/>
+    <path d="M 472 172 L 540 172 A 8 8 0 0 0 548 164 L 548 80 A 8 8 0 0 1 556 72 L 620 72" fill="none" stroke="#4f5d75" stroke-width="1" marker-end="url(#arrow)"/>
+    <rect x="568" y="52" width="36" height="14" rx="2" fill="#f5f5f5"/>
+    <text x="586" y="60" fill="#7a8399" font-size="8" font-family="'Geist Mono', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace" text-anchor="middle" letter-spacing="0.06em">门 6</text>
+    <path d="M 472 292 L 540 292 A 8 8 0 0 0 548 284 L 548 188 A 8 8 0 0 1 556 180 L 620 180" fill="none" stroke="#4f5d75" stroke-width="1" marker-end="url(#arrow)"/>
+    <rect x="568" y="160" width="36" height="14" rx="2" fill="#f5f5f5"/>
+    <text x="586" y="168" fill="#7a8399" font-size="8" font-family="'Geist Mono', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace" text-anchor="middle" letter-spacing="0.06em">门 7</text>
+    <path d="M 472 404 L 540 404 A 8 8 0 0 0 548 396 L 548 348 A 8 8 0 0 1 556 340 L 620 340" fill="none" stroke="#4f5d75" stroke-width="1" marker-end="url(#arrow)"/>
+    <rect x="564" y="320" width="40" height="14" rx="2" fill="#f5f5f5"/>
+    <text x="584" y="328" fill="#7a8399" font-size="8" font-family="'Geist Mono', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace" text-anchor="middle" letter-spacing="0.06em">门 10</text>
+    <text x="40" y="472" fill="#4f5d75" font-size="14" font-style="italic" font-family="'Instrument Serif', 'Noto Serif SC', 'Songti SC', serif" text-anchor="start">上游红，下游不必再跑：按 GATES 数组顺序执行，只有标注前置的门依赖上游。</text>
+
+    <line x1="40" y1="520" x2="920" y2="520" stroke="rgba(45,49,66,0.12)" stroke-width="0.8"/>
+    <text x="40" y="536" fill="#4f5d75" font-size="8" font-family="'Geist Mono', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace" letter-spacing="0.14em">LEGEND</text>
+    <rect x="112" y="528" width="16" height="10" rx="2" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
+    <text x="136" y="536" fill="#4f5d75" font-size="8" font-family="'Geist Mono', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace" letter-spacing="0.06em">最上游层（红在此 ⇒ 下游不必跑）</text>
+    <rect x="300" y="528" width="16" height="10" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+    <text x="324" y="536" fill="#4f5d75" font-size="8" font-family="'Geist Mono', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace" letter-spacing="0.06em">门禁层</text>
+    <rect x="384" y="528" width="16" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+    <text x="408" y="536" fill="#4f5d75" font-size="8" font-family="'Geist Mono', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace" letter-spacing="0.06em">前置产物（print/ · dist/）</text>
+    </svg>
+
+    <footer>
+      <span>创界山·活人认证 · 图集 03/8 · 层级依赖图</span>
+      <span>doc-inline · 960×600 · 节点 12px · diagram-design v2.6</span>
+    </footer>
+  </div>
+</body>
+</html>

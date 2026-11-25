@@ -18,6 +18,9 @@ tests/gates/__isolated_tsc/
 # 门禁自检的探针与隔离目录（B51：移出 tests/ ⇒ 不被门禁②的 glob 扫到 ⇒ 并行假红）
 .probe/
 
+# 图集的渲染截图（复核材料，node docs/图示/build/shoot.mjs 可随时重新生成）
+docs/图示/assets/
+
 # Laya sidecar 预研（B16 · Task 11）：本仓自建 venv / Python 缓存 / 预研临时产物
 .laya-venv/
 tools/laya-sidecar/__pycache__/

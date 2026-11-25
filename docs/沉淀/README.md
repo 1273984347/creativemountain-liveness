@@ -51,6 +51,7 @@
 - [从源码派生避免第二事实源.md](从源码派生避免第二事实源.md) —— 手抄清单的替代做法与已知反例
 - [经验教训索引.md](经验教训索引.md) —— B8–B80 实证 + 收口后复查的坑与通用化结论（E1–E138，五类分组）
 - [批次导航.md](批次导航.md) —— 69 份批次过程记录的主题分类索引
+- [../图示/README.md](../图示/README.md) —— **技术图集**：8 张图 × 2 档（文档档 / 投屏档），自包含 HTML，离线可开
 - [clean-room-gate-check.mjs](clean-room-gate-check.mjs) —— 干净副本门禁自检脚本（`node docs/沉淀/clean-room-gate-check.mjs`）
 - [balance-extract.mjs](balance-extract.mjs) —— 从平衡报告抽**位次胜率极差**（§9.2 口径；默认报告模式，`--strict` 才判红）
 - [verify-trial-reserve-critical.mjs](verify-trial-reserve-critical.mjs) —— 用已发布扫描数据**离线复核**判定（Welch t + 精确 t 临界值；门 ⑬ 直接引用此路径）

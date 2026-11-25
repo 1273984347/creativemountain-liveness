@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>句子层占位符管线 · 创界山·活人认证</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper: #f5f5f5;
+      --color-ink: #2d3142;
+      --color-muted: #4f5d75;
+      --color-accent: #eb6c36;
+      --font-sans: 'Geist', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+      --font-serif: 'Instrument Serif', 'Noto Serif SC', 'Songti SC', serif;
+      --font-mono: 'Geist Mono', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2.5rem 2rem;
+    }
+    .frame { max-width: 1520px; width: 100%; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.2vw + 0.75rem, 2.6rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+      color: var(--color-ink);
+      margin-bottom: 0.6rem;
+    }
+    .tagline {
+      font-size: 0.95rem;
+      color: var(--color-muted);
+      max-width: 62ch;
+      margin-bottom: 1.5rem;
+      line-height: 1.6;
+    }
+    svg { width: 100%; min-width: 1280px; display: block; }
+    footer {
+      margin-top: 1.5rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid rgba(45,49,66,0.12);
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      letter-spacing: 0.08em;
+      color: var(--color-muted);
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">机制 · 句子层主题词 · 创界山·活人认证</p>
+    <h1>句子层占位符管线</h1>
+    <p class="tagline">引擎与界面只写八叶占位符，唯一替换实现把它变成玩家看到的词 —— 缺叶直接抛错，不留静默回落。</p>
+
+    <svg viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="token-pipeline-slide-16x9-title token-pipeline-slide-16x9-desc">
+      <title id="token-pipeline-slide-16x9-title">句子层占位符管线</title>
+      <desc id="token-pipeline-slide-16x9-desc">数据流图：引擎规则句、界面文案与八叶占位符词表汇入 engine/core/theme-text.ts 的 expandThemeWords 唯一实现，再从日志、notice、alert 与面板按钮四个显示出口送出。</desc>
+    <defs>
+      <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+      <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker>
+      <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+    </defs>
+
+      <rect width="100%" height="100%" fill="#f5f5f5"/>
+
+    <rect x="52" y="64" width="268" height="84" rx="6" fill="#f5f5f5"/>
+    <rect x="52" y="64" width="268" height="84" rx="6" fill="rgba(79,93,117,0.10)" stroke="#7a8399" stroke-width="1"/>
+    <text x="186" y="104" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif" text-anchor="middle">引擎规则句</text>
+    <text x="186" y="122" fill="#4f5d75" font-size="12" font-family="'Geist Mono', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace" text-anchor="middle">engine/**</text>
+    <rect x="52" y="204" width="268" height="84" rx="6" fill="#f5f5f5"/>
+    <rect x="52" y="204" width="268" height="84" rx="6" fill="rgba(79,93,117,0.10)" stroke="#7a8399" stroke-width="1"/>
+    <text x="186" y="244" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif" text-anchor="middle">界面文案</text>
+    <text x="186" y="262" fill="#4f5d75" font-size="12" font-family="'Geist Mono', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace" text-anchor="middle">web/**</text>
+    <rect x="52" y="340" width="268" height="148" rx="6" fill="#f5f5f5"/>
+    <rect x="52" y="340" width="268" height="148" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+    <text x="186" y="405" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif" text-anchor="middle">八叶占位符</text>
+    <text x="186" y="423" fill="#4f5d75" font-size="12" font-family="'Geist Mono', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace" text-anchor="middle">{resource} {gate} {path} {peak}</text>
+    <text x="186" y="437" fill="#4f5d75" font-size="12" font-family="'Geist Mono', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace" text-anchor="middle">{hp} {rift} {hazard} {player}</text>
+    <rect x="372" y="64" width="372" height="428" rx="6" fill="#f5f5f5"/>
+    <rect x="372" y="64" width="372" height="428" rx="6" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
+    <text x="558" y="269" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif" text-anchor="middle">expandThemeWords</text>
+    <text x="558" y="287" fill="#4f5d75" font-size="12" font-family="'Geist Mono', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace" text-anchor="middle">engine/core/theme-text.ts ·</text>
+    <text x="558" y="301" fill="#4f5d75" font-size="12" font-family="'Geist Mono', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace" text-anchor="middle">缺叶即抛错，不留静默回落</text>
+    <rect x="800" y="116" width="372" height="64" rx="6" fill="#f5f5f5"/>
+    <rect x="800" y="116" width="372" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+    <text x="986" y="146" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif" text-anchor="middle">日志</text>
+    <text x="986" y="164" fill="#4f5d75" font-size="12" font-family="'Geist Mono', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace" text-anchor="middle">web/ui/log.ts · logLineText</text>
+    <rect x="800" y="204" width="372" height="64" rx="6" fill="#f5f5f5"/>
+    <rect x="800" y="204" width="372" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+    <text x="986" y="234" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif" text-anchor="middle">notice</text>
+    <text x="986" y="252" fill="#4f5d75" font-size="12" font-family="'Geist Mono', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace" text-anchor="middle">web/ui/dom.ts</text>
+    <rect x="800" y="288" width="372" height="64" rx="6" fill="#f5f5f5"/>
+    <rect x="800" y="288" width="372" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+    <text x="986" y="318" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif" text-anchor="middle">alert()</text>
+    <text x="986" y="336" fill="#4f5d75" font-size="12" font-family="'Geist Mono', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace" text-anchor="middle">web/ui/dom.ts</text>
+    <rect x="800" y="372" width="372" height="64" rx="6" fill="#f5f5f5"/>
+    <rect x="800" y="372" width="372" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+    <text x="986" y="402" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif" text-anchor="middle">面板与按钮</text>
+    <text x="986" y="420" fill="#4f5d75" font-size="12" font-family="'Geist Mono', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace" text-anchor="middle">web/ui/terms.ts · termExpander</text>
+    <path d="M 320 108 L 340 108 A 8 8 0 0 1 348 116 L 348 164 A 8 8 0 0 0 356 172 L 372 172" fill="none" stroke="#4f5d75" stroke-width="1" marker-end="url(#arrow)"/>
+    <path d="M 320 244 L 340 244 A 8 8 0 0 1 348 252 L 348 268 A 8 8 0 0 0 356 276 L 372 276" fill="none" stroke="#4f5d75" stroke-width="1" marker-end="url(#arrow)"/>
+    <path d="M 320 416 L 340 416 A 8 8 0 0 0 348 408 L 348 392 A 8 8 0 0 1 356 384 L 372 384" fill="none" stroke="#4f5d75" stroke-width="1" marker-end="url(#arrow)"/>
+    <path d="M 748 148 L 800 148" fill="none" stroke="#4f5d75" stroke-width="1" marker-end="url(#arrow)"/>
+    <path d="M 748 236 L 800 236" fill="none" stroke="#4f5d75" stroke-width="1" marker-end="url(#arrow)"/>
+    <path d="M 748 320 L 800 320" fill="none" stroke="#4f5d75" stroke-width="1" marker-end="url(#arrow)"/>
+    <path d="M 748 404 L 800 404" fill="none" stroke="#4f5d75" stroke-width="1" marker-end="url(#arrow)"/>
+    <text x="52" y="540" fill="#4f5d75" font-size="14" font-style="italic" font-family="'Instrument Serif', 'Noto Serif SC', 'Songti SC', serif" text-anchor="start">反向守卫 R1：engine/** 与 web/**</text>
+    <text x="52" y="560" fill="#4f5d75" font-size="14" font-style="italic" font-family="'Instrument Serif', 'Noto Serif SC', 'Songti SC', serif" text-anchor="start">的非注释行出现任何一套主题词字面量即判红 —— 禁字表由四套</text>
+    <text x="52" y="580" fill="#4f5d75" font-size="14" font-style="italic" font-family="'Instrument Serif', 'Noto Serif SC', 'Songti SC', serif" text-anchor="start">theme.json 派生，加第五套自动纳入。</text>
+
+    <line x1="40" y1="640" x2="1240" y2="640" stroke="rgba(45,49,66,0.12)" stroke-width="0.8"/>
+    <text x="40" y="656" fill="#4f5d75" font-size="8" font-family="'Geist Mono', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace" letter-spacing="0.14em">LEGEND</text>
+    <rect x="136" y="648" width="16" height="10" rx="2" fill="rgba(79,93,117,0.10)" stroke="#7a8399" stroke-width="1"/>
+    <text x="160" y="656" fill="#4f5d75" font-size="8" font-family="'Geist Mono', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace" letter-spacing="0.06em">来源</text>
+    <rect x="212" y="648" width="16" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+    <text x="236" y="656" fill="#4f5d75" font-size="8" font-family="'Geist Mono', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace" letter-spacing="0.06em">占位符词表</text>
+    <rect x="312" y="648" width="16" height="10" rx="2" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
+    <text x="336" y="656" fill="#4f5d75" font-size="8" font-family="'Geist Mono', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace" letter-spacing="0.06em">唯一替换实现</text>
+    <rect x="420" y="648" width="16" height="10" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+    <text x="444" y="656" fill="#4f5d75" font-size="8" font-family="'Geist Mono', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace" letter-spacing="0.06em">显示出口</text>
+    </svg>
+
+    <footer>
+      <span>创界山·活人认证 · 图集 05/8 · 数据流图</span>
+      <span>slide-16x9 · 1280×720 · 节点 16px · diagram-design v2.6</span>
+    </footer>
+  </div>
+</body>
+</html>
