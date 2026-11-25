@@ -25,7 +25,7 @@ test('B45：生产的 release:check 不带 --selftest ⇒ 结构上无法绕过�
 test('B46：生产脚本已彻底移除自检/跳过参数 ⇒ 传入即拒绝（非零）', () => {
   for (const flag of ['--selftest', '--skip-gate', '--skip-rescan']) {
     const res = spawnSync(process.execPath, [
-      RELEASE_CHECK, flag, '--scan=docs/trial-reserve-scan.json',
+      RELEASE_CHECK, flag, '--scan=docs/baselines/trial-reserve-scan-B77.json',
     ], { encoding: 'utf8', shell: false, cwd: ROOT, env: { ...process.env, CM_SELFTEST: '1' } });
     assert.notEqual(res.status, 0, flag + ' 必须被拒绝（生产不得有绕过入口）');
     const out = (res.stdout ?? '') + (res.stderr ?? '');

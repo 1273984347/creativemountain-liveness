@@ -30,7 +30,7 @@ test('B42：基线缺 groups（结构字段）⇒ 发布检查非零，并点名
     delete data.groups;
     const bad = join(dir, 'no-groups.json');
     writeFileSync(bad, JSON.stringify(data, null, 2), 'utf8');
-    const r = check(bad, resolve(ROOT, 'docs', 'trial-reserve-scan.json'));
+    const r = check(bad, BASELINE);
     assert.notEqual(r.status, 0, '基线缺 groups 必须返回非零');
     assert.match(r.out, /结构字段缺失或类型错误：groups/, '应明确指出 groups 缺失');
   } finally {
@@ -45,7 +45,7 @@ test('B42：基线某组缺 seedBase ⇒ 发布检查非零，并点名结构字
     delete data.groups[0].seedBase;
     const bad = join(dir, 'no-seedbase.json');
     writeFileSync(bad, JSON.stringify(data, null, 2), 'utf8');
-    const r = check(bad, resolve(ROOT, 'docs', 'trial-reserve-scan.json'));
+    const r = check(bad, BASELINE);
     assert.notEqual(r.status, 0, '基线缺 seedBase 必须返回非零');
     assert.match(r.out, /结构字段缺失或非数值/, '应明确指出结构字段缺失');
     assert.match(r.out, /seedBase/, '应点名具体字段');

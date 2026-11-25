@@ -54,7 +54,7 @@ function Screen1_Setup({ state, onJoin }: { state: GameState; onJoin: () => void
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><Settings size={16} /> 牌局配置</CardTitle>
           <CardDescription>主机操作者设置本局；多端下手机凭房间码各自绑定座位</CardDescription>
-          <CardAction><Button variant={readOnly ? 'secondary' : 'ghost'} onClick={() => setReadOnly((r) => !r)}>{readOnly ? '切回主持人' : '以观众预览（只读）'}</Button></CardAction>
+          <CardAction><Button className="shrink-0 whitespace-nowrap" variant={readOnly ? 'secondary' : 'ghost'} onClick={() => setReadOnly((r) => !r)}>{readOnly ? '切回主持人' : '以观众预览（只读）'}</Button></CardAction>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           {readOnly && (
@@ -94,18 +94,19 @@ function Screen1_Setup({ state, onJoin }: { state: GameState; onJoin: () => void
             </div>
           </div>
         </CardContent>
-        <CardFooter className="flex items-center justify-between">
+        {/* 窄屏（<768px）：页脚纵向堆叠且按钮不压扁；桌面（≥768px）保持横向布局 */}
+        <CardFooter className="flex flex-col items-stretch gap-2 md:flex-row md:items-center md:justify-between">
           <div className="flex flex-col gap-1.5">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-text-secondary">房间码</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="whitespace-nowrap text-sm text-text-secondary">房间码</span>
               <Tag color={cfgErr ? 'error' : 'primary'}>{state.roomCode}</Tag>
               {mode === 'newbie' && <Tag color="info">新手模式：推迟放逐</Tag>}
             </div>
-            {import.meta.env.DEV && (<Button variant="ghost" size="sm" disabled={readOnly} onClick={() => setCfgErr('房间码已被占用，请重新生成或稍后再试')}>模拟房间码冲突</Button>)}
+            {import.meta.env.DEV && (<Button className="shrink-0 whitespace-nowrap" variant="ghost" size="sm" disabled={readOnly} onClick={() => setCfgErr('房间码已被占用，请重新生成或稍后再试')}>模拟房间码冲突</Button>)}
           </div>
-          <div className="flex items-center gap-2">
-            {cfgErr && <Button variant="secondary" onClick={() => setCfgErr(null)}>清除</Button>}
-            <Button variant="primary" prefixIcon={<Users size={14} />} loading={submitting} disabled={readOnly || cfgErr !== null} onClick={generate}>生成会话并等待加入</Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {cfgErr && <Button className="shrink-0 whitespace-nowrap" variant="secondary" onClick={() => setCfgErr(null)}>清除</Button>}
+            <Button data-testid="flow4-generate" className="shrink-0 whitespace-nowrap" variant="primary" prefixIcon={<Users size={14} />} loading={submitting} disabled={readOnly || cfgErr !== null} onClick={generate}>生成会话并等待加入</Button>
           </div>
         </CardFooter>
       </Card>
@@ -250,13 +251,16 @@ export default function Flow4SetupTutorial() {
   const state = mockSetupState
   const go = (n: number) => setScreen(n)
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b border-border-tertiary bg-bg-layout px-4 py-2">
+    <div data-testid="flow4-root" className="flex h-full flex-col">
+      {/* 窄屏（<768px）页头纵向堆叠：标题一行 / 按钮一行（按钮 wrap + shrink-0 不被压扁）；桌面（≥768px）保持横向布局 */}
+      <div className="flex flex-col gap-2 border-b border-border-tertiary bg-bg-layout px-4 py-2 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-3">
-          <span className="font-medium text-text">Flow 4 · 开局配置 + 首局教学</span>
-          <span className="text-sm text-text-secondary">屏 {screen}/3</span>
+          <span className="whitespace-nowrap font-medium text-text">Flow 4 · 开局配置 + 首局教学</span>
+          <span className="whitespace-nowrap text-sm text-text-secondary">屏 {screen}/3</span>
         </div>
-        <Button variant="secondary" size="sm" disabled={screen === 1} onClick={() => go(Math.max(1, screen - 1))}>← 上一步</Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button data-testid="flow4-prev" className="shrink-0 whitespace-nowrap" variant="secondary" size="sm" disabled={screen === 1} onClick={() => go(Math.max(1, screen - 1))}>← 上一步</Button>
+        </div>
       </div>
       <div className="flex-1 overflow-auto">
         {screen === 1 && <Screen1_Setup state={state} onJoin={() => go(2)} />}

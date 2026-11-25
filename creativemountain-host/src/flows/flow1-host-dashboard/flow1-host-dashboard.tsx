@@ -31,7 +31,7 @@ const TILE_STYLE: Record<BoardTile['kind'], string> = {
 function MountainBoard({ state }: { state: GameState }) {
   const playerBySeat = (seat: number) => state.players.find((p) => p.seat === seat)
   return (
-    <Card className="bg-bg-container border-border-secondary">
+    <Card data-testid="flow1-board" className="bg-bg-container border-border-secondary">
       <CardHeader>
         <CardTitle className="flex items-center gap-2"><MapIcon size={16} /> 山道版图</CardTitle>
         <CardDescription>峰顶在第 {state.peakIndex} 格 · 登顶只是拿到认证入场券</CardDescription>
@@ -188,7 +188,7 @@ function Screen1_Overview({
           <CardTitle className="flex items-center gap-2"><Users size={16} /> 席位计分</CardTitle>
           <CardDescription>身份 / 阵营 / 体力 / 灵力 / 位置 / 活人席 · 点席位进入钻取</CardDescription>
           <CardAction>
-            <Button variant="primary" prefixIcon={<Eye size={14} />} onClick={() => onDrilldown(state.currentPlayer)}>钻取席位</Button>
+            <Button data-testid="flow1-drill" variant="primary" prefixIcon={<Eye size={14} />} onClick={() => onDrilldown(state.currentPlayer)}>钻取席位</Button>
           </CardAction>
         </CardHeader>
         <CardContent>
@@ -243,7 +243,7 @@ function Screen2_PlayerDrill({ state, seat, onBack }: { state: GameState; seat: 
   const dist = state.peakIndex - p.position
   const history = state.log.filter((e) => e.seat === p.seat)
   return (
-    <div className="flex flex-col gap-4 p-4">
+    <div data-testid="flow1-drill-screen" className="flex flex-col gap-4 p-4">
       <Breadcrumb>
         <BreadcrumbList>
           <BreadcrumbItem><BreadcrumbLink href="#/flow1" onClick={(e) => { e.preventDefault(); onBack() }}>对局总览</BreadcrumbLink></BreadcrumbItem>
@@ -402,18 +402,19 @@ export default function Flow1HostDashboard() {
   const go = (n: number) => setScreen(n)
 
   return (
-    <div className="flex h-full flex-col">
+    <div data-testid="flow1-root" className="flex h-full flex-col">
       {/* Flow 局部工具栏：屏幕步进 + 状态演示 */}
-      <div className="flex items-center justify-between border-b border-border-tertiary bg-bg-layout px-4 py-2">
+      {/* 窄屏（<768px）页头纵向堆叠：标题一行 / 按钮一行（按钮 wrap + shrink-0 不被压扁）；桌面（≥768px）保持横向布局 */}
+      <div className="flex flex-col gap-2 border-b border-border-tertiary bg-bg-layout px-4 py-2 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-3">
-          <span className="font-medium text-text">Flow 1 · 实时状态看板</span>
-          <span className="text-sm text-text-secondary">屏 {screen}/4</span>
+          <span className="whitespace-nowrap font-medium text-text">Flow 1 · 实时状态看板</span>
+          <span className="whitespace-nowrap text-sm text-text-secondary">屏 {screen}/4</span>
         </div>
-        <div className="flex items-center gap-2">
-          {import.meta.env.DEV && (<Button variant="ghost" size="sm" onClick={() => setLoading(true)}>模拟同步滞后</Button>)}
-          {import.meta.env.DEV && (<Button variant="ghost" size="sm" onClick={() => setError(true)}>模拟同步失败</Button>)}
-          <Button variant="secondary" size="sm" disabled={screen === 1} onClick={() => go(Math.max(1, screen - 1))}>← 上一步</Button>
-          <Button variant="primary" size="sm" disabled={screen === 4} onClick={() => go(Math.min(4, screen + 1))}>下一步 →</Button>
+        <div className="flex flex-wrap items-center gap-2">
+          {import.meta.env.DEV && (<Button className="shrink-0 whitespace-nowrap" variant="ghost" size="sm" onClick={() => setLoading(true)}>模拟同步滞后</Button>)}
+          {import.meta.env.DEV && (<Button className="shrink-0 whitespace-nowrap" variant="ghost" size="sm" onClick={() => setError(true)}>模拟同步失败</Button>)}
+          <Button data-testid="flow1-prev" className="shrink-0 whitespace-nowrap" variant="secondary" size="sm" disabled={screen === 1} onClick={() => go(Math.max(1, screen - 1))}>← 上一步</Button>
+          <Button data-testid="flow1-next" className="shrink-0 whitespace-nowrap" variant="primary" size="sm" disabled={screen === 4} onClick={() => go(Math.min(4, screen + 1))}>下一步 →</Button>
         </div>
       </div>
       <div className="flex-1 overflow-auto">

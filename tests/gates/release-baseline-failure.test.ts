@@ -16,8 +16,10 @@ const RELEASE_CHECK = resolve(ROOT, 'tests', 'gates', 'release-check-selftest.mj
 /** 跑一次发布检查（跳过门禁与重扫 ⇒ 只走比对这一步）。
  *  ⚠️ B74：`scanPath` 可注入 —— 「组数不匹配」用例必须用**自造且数值一致**的扫描产物，
  *    不能依赖仓库里按需生成的 `docs/trial-reserve-scan.json`（它的数值随引擎行为变化）。
+ *  ⚠️ B87：默认值改为**入库基线**（`BASELINE`）—— 原默认值指向那份 **gitignore 的生成物**，
+ *    ⇒ 干净副本（刻意不带生成物）里会停在「扫描产物缺失」，到不了本用例要验的层次 ⇒ 门 ② 假红。
  */
-function check(baselinePath: string, scanPath = 'docs/trial-reserve-scan.json'): { status: number | null; out: string } {
+function check(baselinePath: string, scanPath = BASELINE): { status: number | null; out: string } {
   const res = spawnSync(process.execPath, [
     RELEASE_CHECK, '--skip-gate', '--skip-rescan', '--scan=' + scanPath, '--baseline=' + baselinePath,
   ], { encoding: 'utf8', shell: false, cwd: ROOT });

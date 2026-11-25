@@ -21,10 +21,10 @@ const NAV_ROUTES: Record<string, string> = {
 }
 
 const NAV_ITEMS = [
-  { id: 'flow1', label: '实时状态看板', icon: <Users size={16} /> },
-  { id: 'flow2', label: '认证高潮聚焦', icon: <BadgeCheck size={16} /> },
-  { id: 'flow3', label: '终局结算 · 排名', icon: <Trophy size={16} /> },
-  { id: 'flow4', label: '开局配置 · 教学', icon: <Settings size={16} /> },
+  { id: 'flow1', label: '实时状态看板', short: '看板', icon: <Users size={16} /> },
+  { id: 'flow2', label: '认证高潮聚焦', short: '聚焦', icon: <BadgeCheck size={16} /> },
+  { id: 'flow3', label: '终局结算 · 排名', short: '结算', icon: <Trophy size={16} /> },
+  { id: 'flow4', label: '开局配置 · 教学', short: '配置', icon: <Settings size={16} /> },
 ]
 
 class ErrorBoundary extends Component<{ children: React.ReactNode }, { hasError: boolean; error: Error | null }> {
@@ -55,13 +55,49 @@ export function CreativemountainHostApp() {
     <ThemeStyleProvider appearance={appearance} theme="parchment" style="compact">
       <ErrorBoundary>
         <Toaster />
-        <div className="flex h-screen bg-bg-base">
-          {/* Focus Rail（主机视图聚焦） */}
-          <aside className="flex w-56 shrink-0 flex-col border-r border-border-tertiary bg-bg-layout">
+        <div className="flex h-screen flex-col bg-bg-base md:flex-row">
+          {/* 窄屏（<768px）顶部导航条：四个流程入口 + 亮/暗色切换（替代侧栏） */}
+          <nav
+            data-testid="host-nav"
+            className="flex flex-none flex-wrap items-center gap-1 border-b border-border-tertiary bg-bg-layout px-2 py-2 md:hidden"
+          >
+            <span className="mr-1 text-xs font-semibold text-text">创界山 · 主屏</span>
+            {NAV_ITEMS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                data-testid={'host-nav-' + item.id}
+                aria-label={item.label}
+                aria-current={activeId === item.id ? 'page' : undefined}
+                className={'flex items-center gap-1 rounded px-2 py-1 text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary '
+                  + (activeId === item.id ? 'bg-primary text-text-on-primary' : 'text-text-secondary hover:bg-bg-elevated')}
+                onClick={() => navigate(NAV_ROUTES[item.id])}
+              >
+                {item.icon}
+                <span>{item.short}</span>
+              </button>
+            ))}
+            <button
+              type="button"
+              data-testid="host-theme-toggle-narrow"
+              aria-label={appearance === 'light' ? '切换到暗色模式' : '切换到亮色模式'}
+              className="ml-auto rounded px-2 py-1 text-xs text-text-secondary hover:bg-bg-elevated focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              onClick={() => setAppearance((a) => (a === 'light' ? 'dark' : 'light'))}
+            >
+              {appearance === 'light' ? '暗色' : '亮色'}
+            </button>
+          </nav>
+
+          {/* Focus Rail（主机视图聚焦）· 仅桌面（≥768px）显示，窄屏由顶部导航条承担 */}
+          <aside
+            data-testid="host-sidebar"
+            className="hidden w-56 shrink-0 flex-col border-r border-border-tertiary bg-bg-layout md:flex"
+          >
             <div className="flex items-center justify-between px-4 py-3">
               <span className="text-sm font-semibold text-text">创界山 · 主屏</span>
               <button
                 type="button"
+                data-testid="host-theme-toggle-desktop"
                 aria-label={appearance === 'light' ? '切换到暗色模式' : '切换到亮色模式'}
                 className="rounded px-2 py-1 text-xs text-text-secondary hover:bg-bg-elevated focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                 onClick={() => setAppearance((a) => (a === 'light' ? 'dark' : 'light'))}
@@ -79,7 +115,7 @@ export function CreativemountainHostApp() {
           </aside>
 
           {/* 主内容区 */}
-          <main className="min-w-0 flex-1 overflow-auto">
+          <main data-testid="host-main" className="min-h-0 min-w-0 flex-1 overflow-auto">
             <div className="mx-auto h-full max-w-7xl">
               <Routes>
                 <Route path="/" element={<Navigate to="/flow1" replace />} />

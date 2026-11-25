@@ -22,6 +22,50 @@ const PKG = resolve(ROOT, 'creativemountain-host', 'package.json');
 /** host 侧必须走查的路由（与脚本内的 ROUTES 字面量逐条比对）。 */
 const EXPECTED_ROUTES = ['/', '/flow1', '/flow2', '/flow3', '/flow4'];
 
+/**
+ * host 侧 **data-testid 事实源**（B87 · L-B86-1）的期望值。
+ * ⚠️ 逐字对应走查脚本里的 `const TESTIDS = {...}`（唯一事实源）——
+ *   键是「路由 / 角色」，值是 DOM 上的 data-testid。
+ * ⚠️ 这里是**刻意的口径钉住**：脚本侧增删 testid 时，这张表必须同步改 ⇒ 门 ② 立刻红。
+ */
+const EXPECTED_TESTIDS: Record<string, string> = {
+  '/': 'flow1-root',
+  '/flow1': 'flow1-root',
+  '/flow2': 'flow2-root',
+  '/flow3': 'flow3-root',
+  '/flow4': 'flow4-root',
+  'control:/': 'flow1-drill',
+  'control:/flow1': 'flow1-drill',
+  'control:/flow2': 'flow2-enter',
+  'control:/flow3': 'flow3-rank',
+  'control:/flow4': 'flow4-generate',
+  'flow1:board': 'flow1-board',
+  'flow1:screen:drill': 'flow1-drill-screen',
+  'flow1:header:prev': 'flow1-prev',
+  'flow1:header:next': 'flow1-next',
+  'flow2:header:prev': 'flow2-prev',
+  'flow2:header:next': 'flow2-next',
+  'flow3:header:prev': 'flow3-prev',
+  'flow3:header:next': 'flow3-next',
+  'flow4:header:prev': 'flow4-prev',
+  'shell:main': 'host-main',
+  'shell:sidebar': 'host-sidebar',
+  'shell:nav': 'host-nav',
+  'shell:theme:narrow': 'host-theme-toggle-narrow',
+  'shell:theme:desktop': 'host-theme-toggle-desktop',
+};
+
+/**
+ * 布局阈值的**下限口径**（B87 · L-B86-2）。
+ * ⚠️ 守卫卡的是「**不得低于**」而非「等于」⇒ 允许上调收紧，**禁止下调保绿**
+ *   （把阈值调到比实际渲染还小 ⇒ 门禁变绿而版面照坏 —— 这类"改尺保绿"必须被门禁看见）。
+ */
+const MIN_THRESHOLDS: { name: string; floor: number }[] = [
+  { name: 'MIN_NARROW_MAIN_WIDTH', floor: 320 },
+  { name: 'MIN_HEADER_BUTTON_WIDTH', floor: 44 },
+  { name: 'MIN_DESKTOP_SIDEBAR_WIDTH', floor: 224 },
+];
+
 function readScript(): string {
   assert.ok(existsSync(SCRIPT), 'host 走查脚本缺失：' + SCRIPT);
   return readFileSync(SCRIPT, 'utf8');
@@ -54,6 +98,46 @@ test('host 走查真正遍历的路由清单与守卫期望值逐条一致（防
   // 防「死常量」复发：不得再有第二份独立的路由字面量。
   // ⚠️ 用**行首匹配**（多行模式）⇒ 只判代码，不命中注释里为留痕写的 `const ROUTES = [...]` 文字。
   assert.equal(/^\s*const ROUTES = \[/m.test(src), false, '脚本里不得再有独立的 ROUTES 字面量（路由清单只能有一份事实源）');
+});
+
+
+test('host 走查的 data-testid 事实源（TESTIDS）与守卫期望值逐条一致（防「少一个锚点」）', () => {
+  const src = readScript();
+  // ⚠️ 比对**唯一事实源** TESTIDS（断言代码真在用，见下一条）。
+  const block = /const TESTIDS = \{([\s\S]*?)\n\};/.exec(src);
+  assert.ok(block !== null, 'host 走查脚本里找不到 const TESTIDS = {...} 定义');
+  const inner = block[1] ?? '';
+  const entries = [...inner.matchAll(/'([^']+)'\s*:\s*'([^']+)'/g)]
+    .map((m) => [m[1] ?? '', m[2] ?? ''] as [string, string])
+    .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+  const expected = Object.entries(EXPECTED_TESTIDS).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+  assert.deepEqual(entries, expected, 'host 走查的 testid 清单与守卫期望值不一致（脚本增删 testid 时这里必须同步）');
+});
+
+test('TESTIDS 真被断言代码使用（防「死常量」假绿复发）', () => {
+  const src = readScript();
+  const uses = (src.match(/TESTIDS\[/g) ?? []).length;
+  assert.ok(uses >= 8, 'TESTIDS 只被引用 ' + String(uses) + ' 次 ⇒ 疑似退化成死常量（应处处取值）');
+  assert.match(src, /TESTIDS\['shell:main'\]/, '窄屏主区断言必须从 TESTIDS 取 main 的 testid');
+  assert.match(src, /TESTIDS\['control:' \+ exp\.route\]/, '关键控件断言必须从 TESTIDS 取值');
+});
+
+test('host 走查不得再用中文文案做判红依据（改 UI 文案不得打断走查）', () => {
+  const src = readScript();
+  // ⚠️ L-B86-1 的核心：marker / control 这类**中文文案**不得参与判红
+  //   （旧实现按「Flow 1 · 实时状态看板」「钻取席位」找元素 ⇒ 改一次文案就红）。
+  assert.doesNotMatch(src, /exp\.marker/, '判红路径不得依赖 exp.marker（中文文案）');
+  assert.doesNotMatch(src, /exp\.control/, '判红路径不得依赖 exp.control（中文文案）');
+});
+
+test('布局阈值不得被下调（防「改尺保绿」）', () => {
+  const src = readScript();
+  for (const t of MIN_THRESHOLDS) {
+    const m = new RegExp('const ' + t.name + ' = (\\d+)').exec(src);
+    assert.ok(m !== null, 'host 走查脚本缺少阈值常量：' + t.name);
+    const value = Number(m[1]);
+    assert.ok(value >= t.floor, t.name + ' = ' + String(value) + ' 低于口径下限 ' + String(t.floor) + '（下调阈值保绿必须被拦）');
+  }
 });
 
 test('host 子项目暴露了走查入口（npm run test:walkthrough）', () => {

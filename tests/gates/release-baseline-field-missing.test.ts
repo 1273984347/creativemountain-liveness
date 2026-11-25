@@ -32,7 +32,7 @@ test('B41：基线缺字段 ⇒ 发布检查非零，并点名「字段缺失或
     delete data.groups[0].fallback;
     const bad = join(dir, 'missing-field-baseline.json');
     writeFileSync(bad, JSON.stringify(data, null, 2), 'utf8');
-    const r = check(bad, resolve(ROOT, 'docs', 'trial-reserve-scan.json'));
+    const r = check(bad, BASELINE);
     assert.notEqual(r.status, 0, '基线缺字段必须返回非零');
     assert.match(r.out, /字段缺失或非数值/, '应明确点名字段缺失');
     assert.match(r.out, /发布前检查失败/, '应指明失败环节');

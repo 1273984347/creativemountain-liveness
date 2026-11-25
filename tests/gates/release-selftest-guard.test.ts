@@ -27,7 +27,7 @@ test('B44：基线 groups 为空数组 ⇒ 发布检查非零，并明确说「�
     // ⚠️ 本用例验的是**比对层**（基线空数组）⇒ 经 tests/ 包装器进入自检模式。
     const res = spawnSync(process.execPath, [
       resolve(ROOT, 'tests', 'gates', 'release-check-selftest.mjs'),
-      '--skip-gate', '--skip-rescan', '--scan=docs/trial-reserve-scan.json', '--baseline=' + bad,
+      '--skip-gate', '--skip-rescan', '--scan=docs/baselines/trial-reserve-scan-B77.json', '--baseline=' + bad,
     ], { encoding: 'utf8', shell: false, cwd: ROOT });
     assert.notEqual(res.status, 0, '空基线必须返回非零');
     const out = (res.stdout ?? '') + (res.stderr ?? '');
@@ -39,7 +39,7 @@ test('B44：基线 groups 为空数组 ⇒ 发布检查非零，并明确说「�
 
 test('B47：自检/绕过参数一律被拒绝（与任何环境变量无关）', () => {
   const res = spawnSync(process.execPath, [
-    RELEASE_CHECK, '--skip-gate', '--skip-rescan', '--scan=docs/trial-reserve-scan.json', '--baseline=' + BASELINE,
+    RELEASE_CHECK, '--skip-gate', '--skip-rescan', '--scan=docs/baselines/trial-reserve-scan-B77.json', '--baseline=' + BASELINE,
   ], { encoding: 'utf8', shell: false, cwd: ROOT });
   assert.notEqual(res.status, 0, '绕过开关必须被拒绝');
   const out = (res.stdout ?? '') + (res.stderr ?? '');

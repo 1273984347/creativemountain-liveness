@@ -41,9 +41,10 @@ function Screen1_SettleEnter({ state, onRank }: { state: GameState; onRank: () =
           <Tag color="slate">{winner.liveSeats} 活人席</Tag>
           <Tag color="info">综合分 {winner.composite}</Tag>
         </CardContent>
-        <CardFooter className="justify-between">
+        {/* 窄屏（<768px）：页脚纵向堆叠且按钮不压扁；桌面（≥768px）保持横向布局 */}
+        <CardFooter className="flex flex-col items-stretch gap-2 md:flex-row md:items-center md:justify-between">
           <p className="text-sm text-text-secondary">贡献最精彩名场面的人站上赢家位置——「名场面即胜利」。</p>
-          <Button variant="primary" suffixIcon={<ChevronRight size={14} />} onClick={onRank}>查看排名公示</Button>
+          <Button data-testid="flow3-rank" className="shrink-0 whitespace-nowrap" variant="primary" suffixIcon={<ChevronRight size={14} />} onClick={onRank}>查看排名公示</Button>
         </CardFooter>
       </Card>
 
@@ -185,15 +186,16 @@ export default function Flow3SettlementRank() {
   const state = mockSettleState
   const go = (n: number) => setScreen(n)
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b border-border-tertiary bg-bg-layout px-4 py-2">
+    <div data-testid="flow3-root" className="flex h-full flex-col">
+      {/* 窄屏（<768px）页头纵向堆叠：标题一行 / 按钮一行（按钮 wrap + shrink-0 不被压扁）；桌面（≥768px）保持横向布局 */}
+      <div className="flex flex-col gap-2 border-b border-border-tertiary bg-bg-layout px-4 py-2 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-3">
-          <span className="font-medium text-text">Flow 3 · 终局结算 + 排名公示</span>
-          <span className="text-sm text-text-secondary">屏 {screen}/3</span>
+          <span className="whitespace-nowrap font-medium text-text">Flow 3 · 终局结算 + 排名公示</span>
+          <span className="whitespace-nowrap text-sm text-text-secondary">屏 {screen}/3</span>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="secondary" size="sm" disabled={screen === 1} onClick={() => go(Math.max(1, screen - 1))}>← 上一步</Button>
-          <Button variant="primary" size="sm" disabled={screen === 3} onClick={() => go(Math.min(3, screen + 1))}>下一步 →</Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button data-testid="flow3-prev" className="shrink-0 whitespace-nowrap" variant="secondary" size="sm" disabled={screen === 1} onClick={() => go(Math.max(1, screen - 1))}>← 上一步</Button>
+          <Button data-testid="flow3-next" className="shrink-0 whitespace-nowrap" variant="primary" size="sm" disabled={screen === 3} onClick={() => go(Math.min(3, screen + 1))}>下一步 →</Button>
         </div>
       </div>
       <div className="flex-1 overflow-auto">

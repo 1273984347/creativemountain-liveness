@@ -71,7 +71,7 @@ function Screen1_CertPrompt({ state, onEnter }: { state: GameState; onEnter: () 
             </Alert>
             <p className="text-sm text-text-secondary">主屏将切入「认证聚焦」，全桌视线集中到答题者。出题/签印在手机私密进行。</p>
           </CardContent>
-          <CardFooter><Button variant="primary" prefixIcon={<BadgeCheck size={14} />} onClick={onEnter}>进入认证聚焦</Button></CardFooter>
+          <CardFooter><Button data-testid="flow2-enter" variant="primary" prefixIcon={<BadgeCheck size={14} />} onClick={onEnter}>进入认证聚焦</Button></CardFooter>
         </Card>
       )}
     </div>
@@ -267,15 +267,16 @@ export default function Flow2CertificationClimax() {
   const state = mockCertState
   const go = (n: number) => setScreen(n)
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b border-border-tertiary bg-bg-layout px-4 py-2">
+    <div data-testid="flow2-root" className="flex h-full flex-col">
+      {/* 窄屏（<768px）页头纵向堆叠：标题一行 / 按钮一行（按钮 wrap + shrink-0 不被压扁）；桌面（≥768px）保持横向布局 */}
+      <div className="flex flex-col gap-2 border-b border-border-tertiary bg-bg-layout px-4 py-2 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-3">
-          <span className="font-medium text-text">Flow 2 · 认证高潮聚焦</span>
-          <span className="text-sm text-text-secondary">屏 {screen}/4</span>
+          <span className="whitespace-nowrap font-medium text-text">Flow 2 · 认证高潮聚焦</span>
+          <span className="whitespace-nowrap text-sm text-text-secondary">屏 {screen}/4</span>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="secondary" size="sm" disabled={screen === 1} onClick={() => go(Math.max(1, screen - 1))}>← 上一步</Button>
-          <Button variant="primary" size="sm" disabled={screen === 4} onClick={() => go(Math.min(4, screen + 1))}>下一步 →</Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button data-testid="flow2-prev" className="shrink-0 whitespace-nowrap" variant="secondary" size="sm" disabled={screen === 1} onClick={() => go(Math.max(1, screen - 1))}>← 上一步</Button>
+          <Button data-testid="flow2-next" className="shrink-0 whitespace-nowrap" variant="primary" size="sm" disabled={screen === 4} onClick={() => go(Math.min(4, screen + 1))}>下一步 →</Button>
         </div>
       </div>
       <div className="flex-1 overflow-auto">

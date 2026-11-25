@@ -24,7 +24,7 @@ test('B47：生产脚本源码不含 CM_SELFTEST / SELFTEST 识别（自检能�
 test('B47：拒绝与任何环境变量无关（env=1 / env=0 / 不设 都拒绝）', () => {
   for (const extra of [{ CM_SELFTEST: '1' }, { CM_SELFTEST: '0' }, {}]) {
     const res = spawnSync(process.execPath, [
-      RELEASE_CHECK, '--skip-gate', '--scan=docs/trial-reserve-scan.json',
+      RELEASE_CHECK, '--skip-gate', '--scan=docs/baselines/trial-reserve-scan-B77.json',
     ], { encoding: 'utf8', shell: false, cwd: ROOT, env: { ...process.env, ...extra } });
     assert.notEqual(res.status, 0, '任何环境变量下都必须拒绝绕过');
     assert.match((res.stdout ?? '') + (res.stderr ?? ''), /不支持这些参数/, '应明确拒绝不支持的参数');
