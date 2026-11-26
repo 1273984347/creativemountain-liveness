@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Re-measured the "exhaustion rarity" balance leftover instead of assuming it
+  was still open. Three independent seed bases (24,000 games each) give
+  162 / 136 / 137 exhaustion triggers per 240,000 games
+  (0.68 / 0.57 / 0.57 per hundred games) — a relative spread of 8.5 %, so the
+  three samples agree. That is **exactly the reading recorded when the
+  leftover was filed (B77: 162 per 24,000 games)**, i.e. the rarity has not
+  improved and the earlier judgement "still rare" stands. The leftover is
+  therefore **registered as a dedicated balance batch** (not closed, and no
+  engine change in this batch). Also verified: all three recovery paths occur
+  (rescue is the most common at 43.6 %); every player-count tier can trigger
+  exhaustion, though the tiers differ sharply (0.10–0.22 per hundred games for
+  3–6 players vs 1.32–2.08 for 7–8) — traced to the number of player actions
+  per game (36 vs 136), not to a mechanism that only exists in some tiers.
+
 ### Added
 
 - The balance report now has a gate watching it. `docs/balance-report.md` was a

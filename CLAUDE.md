@@ -11,7 +11,7 @@
 | 改代码前先读 | `docs/superpowers/specs/2026-11-07-creative-mountain-liveness-design.md`（规格真值） |
 | 看现在在办什么 | `TODOS.md`（在办清单，每项带验收口径） |
 | 看上次做到哪 | `HANDOVER.md`（已完成项的核实确认与读数） |
-| 查踩过的坑 | `docs/沉淀/经验教训索引.md`（E1–E157，五类） |
+| 查踩过的坑 | `docs/沉淀/经验教训索引.md`（E1–E159，五类） |
 | 查每批的过程 | `docs/批次/` ｜索引 `docs/沉淀/批次导航.md` |
 | 提交 / push | 显式 pathspec；push、合并、开 PR、关 PR 需**用户当轮点名授权** |
 
