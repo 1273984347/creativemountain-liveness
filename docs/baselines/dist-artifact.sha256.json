@@ -1,5 +1,5 @@
 {
-  "note": "dist 产物字节基线（门 ⑯ 的**期望值**）—— 人工维护；产物字节变化须经评审后刷新（node tools/dist-artifact-baseline.mjs）⇒ 门 ⑯ 会据此判红。",
+  "note": "dist 产物字节基线（门 ⑯ 的**期望值**）—— 人工维护；产物字节变化须经评审后刷新（node tools/dist-artifact-baseline.mjs --write；**默认只预览 diff**，写入须显式加 --write）⇒ 门 ⑯ 会据此判红。",
   "artifacts": {
     "创界山-活人认证-实拍.html": {
       "sha256": "094ca56a475cff087954e69775cf4066628f35ab97487a18d1ea87466c22a3b4",
