@@ -14,6 +14,11 @@ entry point is [README.en.md](README.en.md).
 - **Node.js ≥ 22** (`engines.node` in `package.json`; CI uses Node 22, the
   maintainers work on 22 and 24) and npm; install with `npm ci`.
 - **Playwright Chromium is required for gates ⑩ and ⑭**: `npx playwright install chromium`.
+  - **If the download appears to hang**: Playwright **1.65+** fetches *Chrome for Testing* from
+    `builds/cft/<browserVersion>/win64/…`, and the official `cdn.playwright.dev` can be
+    very slow (measured ~170 KB/s ⇒ a 207 MiB build stalls for hours). Use the mirror:
+    `PLAYWRIGHT_DOWNLOAD_HOST=https://registry.npmmirror.com/-/binary/playwright npx playwright install chromium`
+    (measured ~6.35 MB/s). The mirror keeps the same `builds/cft/…` layout.
 - **Python is optional** — only for the experimental *Laya sidecar*
   (`npm run env:laya`, `npm run sidecar:laya`, `npm run probe:laya`,
   `npm run eval:faces`), which evaluates candidate AI decision policies. No gate
