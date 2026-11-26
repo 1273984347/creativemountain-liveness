@@ -10,7 +10,7 @@
 ## 验证状态与非目标
 
 **CI 当前验证的环境组合**：Windows（`windows-latest`）× Node.js 22 × Chromium（Playwright）——
-`npm run gate` 的**十五道门**在这套组合下全绿。CI 工作流只跑这一套组合。
+`npm run gate` 的**十六道门**在这套组合下全绿。CI 工作流只跑这一套组合。
 
 **明确的非目标**：
 
@@ -50,7 +50,7 @@ npm run build:print    # 四套主题的 IR → SVG → HTML → PDF
 npm run build:package  # 打包 dist/发布包/
 npm run release:check  # 发布前检查：门禁 + 全量重扫 + 逐组比对（漂移即失败，约 10 分钟）
 npm run release        # release:check + build + build:print + build:package
-npm run gate           # 十五道门禁全跑
+npm run gate           # 十六道门禁全跑
 ```
 
 ## 门禁（`node tools/gate.mjs`）
@@ -72,6 +72,7 @@ npm run gate           # 十五道门禁全跑
 | ⑬ | 余量判定离线回归 | 用已发布的多 seed 数据重算 Welch t 与精确临界值 ⇒ 判定不漂移 |
 | ⑭ | 浏览器走查 | Playwright 真浏览器（**file://** 单文件）：四套主题 UI 契约（玩家行数 / 棋盘格数 == `scales[players].boardLength` / 面板标题取 `terms.path` / 零占位符残留 / 面板非空）+ 几何与响应式（无横向溢出、棋盘格盒子非零、手牌不越界、窄屏 390 无横向滚动）+ 非法 seed 的可见错误信号（`aria-invalid`）+ 行棋后日志增加 + **console/page 零错误**（B86） |
 | ⑮ | 平衡报告入库一致性 | 按报告的生成口径（4 主题 × 6 人数档 × 1000 局 = 24000 局）**重跑一份新的到 `.tmp/`**，与**入库版** `docs/balance-report.md` **逐字节比对**（容差 0，仅行尾归一化）⇒ 引擎演进后未重生成报告 ⇒ **必红并逐行点名差异**（B94） |
+| ⑯ | dist 产物字节基线一致性 | **独立重建**一份单文件产物到 `.tmp/`（不复用门 ④ 的 `dist/`、不就地覆盖 ⇒ 非同义反复），算 **SHA256 + 字节数**，与**入库基线** `docs/baselines/dist-artifact.sha256.json` **逐字节比对**（**容差 0** —— 实测三次独立构建 SHA 全等）⇒ 产物字节变了没人知道、手抄基线自己漂了也没人知道的老毛病（E153 同族）被机器堵住；**集合层**也判（本次产出集合必须 == 基线登记集合）；**失败关闭**（基线缺失 / 不可解析 / 构建失败 ⇒ 一律判红）（B98） |
 
 ## 目录
 
@@ -80,7 +81,7 @@ engine/     引擎：状态、回合机、58 算子、16 谓词、认证与山�
 web/        数字轨 UI（单文件 HTML 入口）
 themes/     四套主题包（数据）
 build/      构建脚本：主题生成器、实体件管线、发布包
-tools/      十五道门禁的实现
+tools/      十六道门禁的实现
 tests/      单元与门禁负样本；tests/sim/ 是规模与平衡模拟器
 docs/       规格、实施计划、批次执行记录、平衡报告
 print/      实体轨产物（按主题分目录）+ 规则书叙述模板
@@ -99,7 +100,7 @@ ROADMAP.md 路线图：已发布 / 在途 / 未决遗留
 | --- | --- | --- |
 | 01 | 回合流程 | 一次回合怎么跑：出牌 → 结算 → 骰子指令表 → 对峙 → 解锁 |
 | 02 | 玩家状态机 | 正常 / 待认证 / 认证通过 / 力竭 / 放逐 + 负面状态五件套 |
-| 03 | 门禁全景 | 十五道门禁的分层与执行先后 |
+| 03 | 门禁全景 | 十六道门禁的分层与执行先后 |
 | 04 | 双轨构建管线 | 主题包 → IR → 数字轨 / 实体轨 → 发布包 |
 | 05 | 句子层占位符管线 | 八叶占位符如何变成玩家看到的词 |
 | 06 | 引擎依赖图 | engine/core 的真实 import 关系与枢纽 |
@@ -225,4 +226,4 @@ ROADMAP.md 路线图：已发布 / 在途 / 未决遗留
 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)；安全问题见 [SECURITY.md](SECURITY.md)。
 
 - 改动清单见 [CHANGELOG.md](CHANGELOG.md)；
-- 门禁口径与职责见 [docs/沉淀/门禁清单.md](docs/沉淀/门禁清单.md)（**十五道门**）。
+- 门禁口径与职责见 [docs/沉淀/门禁清单.md](docs/沉淀/门禁清单.md)（**十六道门**）。

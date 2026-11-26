@@ -6,6 +6,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Gate ⑯ — dist artifact byte-baseline consistency.** The `dist/` byte
+  baseline existed only as prose inside a batch record ("A0A85EE5…, 212,032
+  bytes"), so nothing watched it: a changed artifact went unnoticed, and the
+  hand-copied baseline itself could silently go stale (the E153 family). The
+  gate now rebuilds the single-file artifacts **independently** into a
+  temporary directory — never reusing gate ④'s `dist/`, never overwriting
+  it in place, since "regenerate and compare with itself" would always be
+  green — computes SHA256 + byte length, and compares them **byte for byte**
+  (tolerance 0; measured: three independent builds of the same checkout gave
+  identical hashes and sizes) against the committed baseline
+  `docs/baselines/dist-artifact.sha256.json`. Drift turns the gate red and
+  names each artifact with expected vs. measured SHA256 and size; a **set
+  layer** also runs, so a new build output that was never registered in the
+  baseline cannot slip through unnoticed. The gate **fails closed**: a
+  missing, unparsable or empty baseline is red, never "no drift". Refreshing
+  the baseline is a **separate script** that is not part of the gate path and
+  has no flag on the gate CLI, so no switch can make the gate vacuously
+  green. New coverage boundary `dist-artifact-byte-only` records that the
+  gate checks byte drift only — the artifact's functional correctness stays
+  with gates ⑭ / ⑩. Gate count 15 → 16.
+
 ### Changed
 
 - Raised the visibility of exhaustion by strengthening the **poison cards**

@@ -37,18 +37,19 @@ All of these exist in `package.json`:
 | `npm run build` / `build:only` | Typecheck + esbuild single-file HTML / esbuild only |
 | `npm run build:ir` / `build:print` / `print` | IR only / physical track (IR → SVG → HTML → PDF) / IR + print |
 | `npm run build:package` | Assemble `dist/发布包/` |
-| `npm run gate` | **The one entry point**: all fifteen gates, any failure ⇒ exit 1 |
+| `npm run gate` | **The one entry point**: all sixteen gates, any failure ⇒ exit 1 |
 | `npm run release:check` / `release` | Gate + full re-scan + per-group baseline comparison (~10 min) / plus all builds |
 | `npm run doc-sync` | Specification ↔ code drift check (C1–C10) |
 | `npm run probe:laya` / `probe:laya:browser` / `probe:laya:skip` / `eval:faces` | Optional AI-decision probes and evaluation (not gated) |
 
 ## 3. Gate discipline
 
-`npm run gate` (`node tools/gate.mjs`) is the **only** gate entry point: fifteen
+`npm run gate` (`node tools/gate.mjs`) is the **only** gate entry point: sixteen
 gates in a fixed order (types, unit tests, document parity, build, theme packs,
 IR contract, digital/physical parity, theme distinctness, balance smoke, duel
 end-to-end, trial pass rate, position-spread lock, reserve threshold, browser
-walkthrough, balance-report drift lock), exiting 1 as soon as one fails. The catalogue with each gate's
+walkthrough, balance-report drift lock, dist artifact byte lock),
+exiting 1 as soon as one fails. The catalogue with each gate's
 responsibility, dependencies and troubleshooting is
 `docs/沉淀/门禁清单.md`; the root `README.md` carries the one-line table.
 

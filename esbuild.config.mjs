@@ -20,7 +20,16 @@ const root = process.env.CM_BUILD_ROOT !== undefined
   ? resolve(process.env.CM_BUILD_ROOT)
   : here;
 
-await mkdir(resolve(root, 'dist'), { recursive: true });
+// ⚠️ **输出根**（B98 · 门 ⑯ 专用）：不设时写 `root/dist`（默认行为一字未改）。
+//   门 ⑯ 需要「把产物构建到**独立临时目录**」⇒ 才能枚举出「本次构建产出了哪些文件」
+//   （集合层判据：产出集合必须 == 基线登记集合）。
+//   ⇒ 与 `CM_BUILD_ROOT` 配对使用：源根与输出根分离（源在副本、产物在副本的 .tmp/）。
+//   ⚠️ 相对路径按 **root** 解析（不是 cwd）⇒ 与 `CM_BUILD_ROOT` 的语义一致。
+const outRoot = process.env.CM_BUILD_OUT !== undefined
+  ? resolve(root, process.env.CM_BUILD_OUT)
+  : resolve(root, 'dist');
+
+await mkdir(outRoot, { recursive: true });
 
 // 样式外置到 web/styles.css，构建时内联进单文件。
 const css = await readFile(resolve(root, 'web/styles.css'), 'utf8');
@@ -56,7 +65,7 @@ ${js}
 </script>
 </body>
 </html>`;
-  const outPath = resolve(root, 'dist', outName);
+  const outPath = resolve(outRoot, outName);
   await writeFile(outPath, html, 'utf8');
   console.log(`built → ${outPath} (${(html.length / 1024).toFixed(1)} KB)`);
   return outPath;

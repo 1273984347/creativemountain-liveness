@@ -15,7 +15,7 @@ remake: a strategy / social-deduction game where the summit only hands out an
 ## Verified environment and explicit non-goals
 
 **What CI actually verifies**: Windows (`windows-latest`) × Node.js 22 × Chromium
-(Playwright) — all **fifteen gates** of `npm run gate` pass in that combination.
+(Playwright) — all **sixteen gates** of `npm run gate` pass in that combination.
 The CI workflow runs that one combination.
 
 **Explicit non-goals**:
@@ -43,7 +43,7 @@ The CI workflow runs that one combination.
   whose exile floor of 3 keeps the table alive.
 - **No theme words in the rules.** All player-visible text resolves terms from an
   18-leaf contract, so a fifth theme can be added without touching sentences.
-- **Quality you can run.** `npm run gate` executes fifteen gates (types, tests,
+- **Quality you can run.** `npm run gate` executes sixteen gates (types, tests,
   doc drift, build, theme/IR contracts, parity, balance simulations, browser
   end-to-end, browser UI walkthrough) and exits non-zero on any failure.
 - **Measured balance.** Deterministic multi-seed simulations with published
@@ -81,7 +81,7 @@ npm run build:package   # assemble dist/发布包/
 | `npm run build` | Typecheck + esbuild single-file HTML |
 | `npm run build:print` | Regenerate the printable physical track (IR → SVG → HTML → PDF) |
 | `npm run build:package` | Assemble `dist/发布包/` |
-| `npm run gate` | **The one entry point**: all fifteen gates, any failure ⇒ exit 1 |
+| `npm run gate` | **The one entry point**: all sixteen gates, any failure ⇒ exit 1 |
 | `npm run release:check` | Gate + full re-scan + per-group baseline comparison (~10 min) |
 | `npm run doc-sync` | Specification ↔ code drift check (C1–C10) |
 
@@ -92,7 +92,7 @@ engine/     rules engine: state, turn machine, operators, certification, council
 web/        digital track UI (no framework, bundled into one HTML file)
 themes/     four theme packs (JSON)
 build/      theme → IR → SVG/HTML/PDF pipeline and release packaging
-tools/      the fifteen gates, theme/IR validators, parity check
+tools/      the sixteen gates, theme/IR validators, parity check
 tests/      unit tests, resident negative samples, balance simulator
 print/      generated physical pieces (git-ignored, regenerated on demand)
 docs/       specification, batch records, gate catalogue, lesson index (Chinese)

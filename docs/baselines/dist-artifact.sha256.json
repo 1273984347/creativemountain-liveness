@@ -1,0 +1,13 @@
+{
+  "note": "dist 产物字节基线（门 ⑯ 的**期望值**）—— 人工维护；产物字节变化须经评审后刷新（node tools/dist-artifact-baseline.mjs）⇒ 门 ⑯ 会据此判红。",
+  "artifacts": {
+    "创界山-活人认证-实拍.html": {
+      "sha256": "094ca56a475cff087954e69775cf4066628f35ab97487a18d1ea87466c22a3b4",
+      "bytes": 239955
+    },
+    "创界山-活人认证.html": {
+      "sha256": "a0a85ee5615c3249f794c44f6f625979b2f5f3da3fc5672462d2a910f922cbf4",
+      "bytes": 212032
+    }
+  }
+}

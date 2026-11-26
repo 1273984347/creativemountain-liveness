@@ -57,6 +57,21 @@ const GATES = [
   //   **追加在末尾**（第 ⑮ 道）⇒ ⑨/⑫/⑬ 的编号不变，L-B92-1 重标定可直接引用。
   //   负样本锚点：tests/gates/balance-report-lock.test.ts（注入漂移 ⇒ 必红；恢复 ⇒ 必绿）。
   { name: '平衡报告入库一致性（tools/balance-report-lock-cli.mjs）', cmd: process.execPath, args: [resolve('tools', 'balance-report-lock-cli.mjs')] },
+  // ⚠️ 第 16 道门（B98）：dist 产物**字节基线一致性** —— 让 `dist/` 的单文件产物进入门禁的比对面。
+  //   起因（E153 同族）：产物字节基线此前**只以文字形式**记在批次文档里（B97 记录
+  //   「A0A85EE5… / 212,032 bytes」）⇒ **没有任何机器守卫** ⇒ ① 产物字节变了没人知道；
+  //   ② 那条**手抄**基线自己漂了也没人知道。
+  //   做法：**独立重建**一份产物到临时目录（**不复用**门 4 的 dist/、**不就地覆盖**
+  //   ⇒ 不是「自己重生成出来的自己」那种同义反复），算 **SHA256 + 字节数**，
+  //   与**入库基线** `docs/baselines/dist-artifact.sha256.json` **逐字节比对**
+  //   （**容差 0** —— 依据**实测**：同一 checkout 连续三次独立构建，两个产物 SHA 与字节数全等）
+  //   ⇒ 漂移即红并**逐条点名**；**集合层**也判（本次产出集合必须 == 基线登记集合
+  //   ⇒ 构建入口新增输出格式却忘登记基线 ⇒ 不会静默成盲区）；**失败关闭**
+  //   （基线缺失 / 不可解析 / 构建失败 / 零产出 ⇒ 一律判红，绝不静默通过）。
+  //   **追加在末尾**（第 ⑯ 道）⇒ 既有编号（⑨/⑫/⑬/⑮）不变。
+  //   负样本锚点：tests/gates/dist-artifact-lock.test.ts（判据级）
+  //   + tests/gates/dist-artifact-lock-e2e.test.ts（端到端：隔离副本改源码 ⇒ 必红；按原字节恢复 ⇒ 必绿）。
+  { name: 'dist 产物字节基线一致性（tools/dist-artifact-lock-cli.mjs）', cmd: process.execPath, args: [resolve('tools', 'dist-artifact-lock-cli.mjs')] },
 ];
 
 /**
@@ -109,10 +124,10 @@ function ensurePrintArtifacts() {
  * ⚠️ **为什么必须写字面量**（B94 盲审发现）：原写法 `const TOTAL_GATES = GATES.length;`
  *   再拿它跟 `GATES.length` 比 ⇒ **恒真**（同义反复）⇒ 门数漂移了也**发现不了**，
  *   文档里那句「门数声明 == 实跑门数（自断言）」就成了**空话**。
- *   ⇒ 现在写成字面量 **15** ⇒ 增删门禁而忘了改这里 ⇒ **当场判红**。
+ *   ⇒ 现在写成字面量 **16** ⇒ 增删门禁而忘了改这里 ⇒ **当场判红**。
  *   ⚠️ 改门数时**必须**同时改这里、门禁清单、README（含 README.en.md）等各处表述。
  */
-const TOTAL_GATES = 15;
+const TOTAL_GATES = 16;
 
 console.log('== 创界山·活人认证 一键门卫 ==');
 
