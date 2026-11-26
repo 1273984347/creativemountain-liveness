@@ -73,6 +73,13 @@
 - **CI 读数三连（如实留档）**：`3d065c5` **failure**（门 ② 红 —— 本批自己打断的）→ `bcf9eed` **cancelled**（并发组 cancel-in-progress 被顶掉）→ `8a00de4a` 手 dispatch **success**（含 `bcf9eed` ⇒ 锚定修复有效）→ `90771f2` push CI **success**（含 B96）。
 - **新 PR 自动保持人工审**：合并后 Dependabot 另开 `@types/node` / `typescript` 更新 PR，auto-merge run `45832812731` 判 major ⇒ 保持人工审（**B90 的判定在真实样本上复验通过**）。
 
+### 2026-11-26 22:5x · 本地浏览器环境补齐 ⇒ 本地 15 门全绿（与 CI 互为旁证）
+
+- **装上了什么**：playwright 1.65.1 需要的 **chromium revision 1255**（= Chromium 159.0.8154.6）+ ffmpeg 1013。
+- **真因**：playwright 1.65 起改用 **Chrome-for-Testing** 下载路径（`builds/cft/159.0.8154.6/win64/…`），旧的 `builds/chromium/<rev>/…` 路径已不存在；官方 `cdn.playwright.dev` 实测仅 **170 KB/s** ⇒ 下载卡死在 57.7 MB 零增长 17 分钟（此前 B96 会话那次下载被并发抢 `__dirlock` 中断，两次同因）。
+- **解法**：走 **npmmirror 镜像**（`PLAYWRIGHT_DOWNLOAD_HOST=https://registry.npmmirror.com/-/binary/playwright`，实测 **6.35 MB/s**，快 37 倍）⇒ **29 s 装完**；目录 `chromium-1255`（451.9 MB）/ `chromium_headless_shell-1255`（286.7 MB）/ `ffmpeg-1013`（3.8 MB），`INSTALLATION_COMPLETE` 标记齐全。
+- **读数**：**本地全量门禁 15 道全绿 exit 0**（门 ⑩ 浏览器端到端 5.7 s、门 ⑭ 浏览器走查 1.4 s、门 ⑮ 145.6 s）⇒ 此前登记的「本地 6 个 e2e 败例 = chromium 1255 缺失」**环境缺口已消解** ⇒ **CI（run `45837644721` success）与本地双读数皆绿**。
+
 ## 已完成（核实确认）
 
 ### B90 · 自动合并的 major 误判修复
