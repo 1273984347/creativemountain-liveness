@@ -10,7 +10,7 @@
 ## 验证状态与非目标
 
 **CI 当前验证的环境组合**：Windows（`windows-latest`）× Node.js 22 × Chromium（Playwright）——
-`npm run gate` 的**十四道门**在这套组合下全绿。CI 工作流只跑这一套组合。
+`npm run gate` 的**十五道门**在这套组合下全绿。CI 工作流只跑这一套组合。
 
 **明确的非目标**：
 
@@ -50,7 +50,7 @@ npm run build:print    # 四套主题的 IR → SVG → HTML → PDF
 npm run build:package  # 打包 dist/发布包/
 npm run release:check  # 发布前检查：门禁 + 全量重扫 + 逐组比对（漂移即失败，约 10 分钟）
 npm run release        # release:check + build + build:print + build:package
-npm run gate           # 十四道门禁全跑
+npm run gate           # 十五道门禁全跑
 ```
 
 ## 门禁（`node tools/gate.mjs`）
@@ -71,6 +71,7 @@ npm run gate           # 十四道门禁全跑
 | ⑫ | 位次极差回归锁 | 固定 seed + 固定局数 ⇒ 确定性：最大极差 ≤ 14pp 且 RMS 偏离 ≤ 6.5pp（B65 重校准） |
 | ⑬ | 余量判定离线回归 | 用已发布的多 seed 数据重算 Welch t 与精确临界值 ⇒ 判定不漂移 |
 | ⑭ | 浏览器走查 | Playwright 真浏览器（**file://** 单文件）：四套主题 UI 契约（玩家行数 / 棋盘格数 == `scales[players].boardLength` / 面板标题取 `terms.path` / 零占位符残留 / 面板非空）+ 几何与响应式（无横向溢出、棋盘格盒子非零、手牌不越界、窄屏 390 无横向滚动）+ 非法 seed 的可见错误信号（`aria-invalid`）+ 行棋后日志增加 + **console/page 零错误**（B86） |
+| ⑮ | 平衡报告入库一致性 | 按报告的生成口径（4 主题 × 6 人数档 × 1000 局 = 24000 局）**重跑一份新的到 `.tmp/`**，与**入库版** `docs/balance-report.md` **逐字节比对**（容差 0，仅行尾归一化）⇒ 引擎演进后未重生成报告 ⇒ **必红并逐行点名差异**（B94） |
 
 ## 目录
 
@@ -79,7 +80,7 @@ engine/     引擎：状态、回合机、58 算子、16 谓词、认证与山�
 web/        数字轨 UI（单文件 HTML 入口）
 themes/     四套主题包（数据）
 build/      构建脚本：主题生成器、实体件管线、发布包
-tools/      十四道门禁的实现
+tools/      十五道门禁的实现
 tests/      单元与门禁负样本；tests/sim/ 是规模与平衡模拟器
 docs/       规格、实施计划、批次执行记录、平衡报告
 print/      实体轨产物（按主题分目录）+ 规则书叙述模板
@@ -98,7 +99,7 @@ ROADMAP.md 路线图：已发布 / 在途 / 未决遗留
 | --- | --- | --- |
 | 01 | 回合流程 | 一次回合怎么跑：出牌 → 结算 → 骰子指令表 → 对峙 → 解锁 |
 | 02 | 玩家状态机 | 正常 / 待认证 / 认证通过 / 力竭 / 放逐 + 负面状态五件套 |
-| 03 | 门禁全景 | 十四道门禁的分层与执行先后 |
+| 03 | 门禁全景 | 十五道门禁的分层与执行先后 |
 | 04 | 双轨构建管线 | 主题包 → IR → 数字轨 / 实体轨 → 发布包 |
 | 05 | 句子层占位符管线 | 八叶占位符如何变成玩家看到的词 |
 | 06 | 引擎依赖图 | engine/core 的真实 import 关系与枢纽 |
@@ -192,7 +193,7 @@ ROADMAP.md 路线图：已发布 / 在途 / 未决遗留
 | G-b | ~~**待认证锁定只在调用方生效**：引擎 `act` 分支**不查** `pendingCert`（`move` 分支查）⇒ 锁定者可用位移牌绕过 §5.1 锁定；枚举层按 UI 规则排除，但引擎本身未加固~~ ⇒ **已修**（B66 引擎层加固：规格 §5.1 早已写明「待认证者**不能使用移动类卡牌或位移能力**」⇒ 本批只补**实现**、规格零改动。`act` 分支查 `pendingCert` ⇒ 锁定者打**含位移**的牌被引擎拒绝（引用相等 = 探针认得的拒绝信号）；⚠️ **只拦位移类**（攻击 / 防御 / 资源牌照打 —— 规格只禁位移，不禁一切行动）；⚠️ 位移判据按 **op 语义**、**不只看 `card.type === 'motion'`**（主题包有一张 utility 类型的位移牌）） | `engine/core/turn-runner.ts`（`act` 分支）；`engine/core/targeting.ts`（`cardHasMovement`）；`tests/engine/pending-cert-lock.test.ts` |
 | G-c | ~~**`gatesPassed` 无生产写入方**：四套主题各有一个身份目标是 `pass_gates`，而计数器只被**读取**（`engine/goals/registry.ts`）⇒ **4 个身份目标在数字轨永不可达**（B18 关隘接线后仍缺写入）~~ ⇒ **已修**（B60 补齐三环：计数写入 `markGatePassed` + 判定调用 `goals/settle.ts` + 达成即发【印记】；实测 `pass_gates` 达成 达成次数见 `docs/balance-report.md`（B74 报告恒 0） ⇒ 目标真实可达） | `engine/core/gate.ts`；`engine/goals/settle.ts`；`tests/engine/goals.test.ts` |
 | G-d | ~~**双人互验未接线**：`certifyMutualSign`（§5.5）**仅测试调用** ⇒ 双人互验在数字轨与模拟器均不可达~~ ⇒ **已修**（B67 端到端接线：① **新增 Action 成员** `CERTIFY_MUTUAL_SIGN`（待认证者本人给另一位待认证者签印 —— 与 `CERTIFY_SIGN` 语义不同、不可复用）；② 引擎 `certifyMutualSign` 守卫收紧（双方都在待认证 ∧ 非自己 ∧ **本轮未用过机会**）；③ 枚举层 + 面板层 + UI 按钮 + 模拟器策略**四层齐备** ⇒ 机制真正可达；④ 双方互签即各自达标 ⇒ **不产生死锁**（规格 §5.5）。⚠️ 平衡影响：平均席位 1.71 → **2.10**（双人局不再卡死）） | `engine/core/action.ts`；`engine/core/certification.ts`；`engine/core/legal.ts`；`web/legal-gate.ts`；`web/ui/cert.ts`；`tests/engine/mutual-sign.test.ts` |
-| G-e | ~~README 门禁表缺第 ⑩ 道（浏览器 E2E）~~ ⇒ **已修**（B51 补全，现为十四道门） | `README.md` 门禁表、`tools/gate.mjs` |
+| G-e | ~~README 门禁表缺第 ⑩ 道（浏览器 E2E）~~ ⇒ **已修**（B51 补全，现为十五道门） | `README.md` 门禁表、`tools/gate.mjs` |
 | G-f | ~~**对峙选牌没有 `Action` 成员**：对峙未决时行动面整体关闭 ⇒ `candidatesOf` 对**所有座位**为空 ⇒ 真人必须选暗牌的时刻，AI/sidecar 拿到空动作表~~ ⇒ **已修**（B68 端到端接线：① **新增 Action 成员** `DUEL_SUBMIT_CARD {actor, cardId}`；② 引擎枚举层在**对峙面**发候选（**取代**行动面）⇒ 对峙参与者拿到「锁定自己手牌里的一张」的候选；③ **可见性边界**（预研红线 3）：候选**只发给对峙参与者**且**只含自己手牌** ⇒ 拿不到对方手牌 id ⇒ 无法看到对方将出什么牌；④ 探针补该动作的一句话语义 ⇒ 影子决策不再在峙面崩） | `engine/core/action.ts`；`engine/core/legal.ts`；`engine/core/probe.ts`；`web/legal-gate.ts`；`tools/laya-probe/state-text.mjs`；`tests/engine/duel-action.test.ts` |
 | G-g | ~~**复议裁定无人调用**：`resolveAppeals` 在 `engine/**` 与 `web/**` **零调用方**（只有 `tests/sim/run.mjs`）⇒ 新增的复议票写入一个没人关闭的窗口~~ ⇒ **已修**（B63 接线：轮末结算 `advanceCertificationRound` 对每个已申请复议的待认证者调 `resolveAppeals` ⇒ **投票窗口必关闭**；且 `applyAppealOutcome` 裁定后清 `appealed` ⇒ 不会重复裁定。⚠️ 实测：修复前生产路径下待认证者**申请复议即永远不被结算**（卡在峰顶）。**B64 补 T2**：面板显示复议窗口状态（第三方人数 / 已投 / **未投点名谁** / 窗口**轮末**关闭）⇒ 玩家不再只能干等；且「独立第三方」口径收敛为引擎单一事实源（`appealThirdParties`）⇒ UI / 探针 / 裁定三处同源） | `engine/core/certification.ts`（`advanceCertificationRound` / `applyAppealOutcome` / `appealThirdParties`）；`web/ui/cert.ts`；`tests/engine/goals.test.ts`；`tests/engine/appeal-window.test.ts` |
 | G-h | **少发牌是静默的**（**现查订正**）：**生产路径不少发** —— `web/` 的 4 个入口全部经 `installTheme`，牌堆取 `scales.deckTotal`（8 人 = 80）并清空手牌重发 ⇒ 实测 8 人各满 `handStart` 张；**裸骨架路径**（`createInitialState` 直接返回即开局 ⇒ 仅测试/夹具层）仍**静默少发**（`deckSize` 默认 40 是 **B1 骨架的测试占位**，牌空即 `break` ⇒ 不报错）⇒ **已装主题的正式对局不受影响** | `engine/core/state.ts:281`（`deckSize ?? 40` 的真值行）；`engine/core/setup.ts`（`installTheme`）；`engine/core/hand.ts` |
@@ -224,4 +225,4 @@ ROADMAP.md 路线图：已发布 / 在途 / 未决遗留
 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)；安全问题见 [SECURITY.md](SECURITY.md)。
 
 - 改动清单见 [CHANGELOG.md](CHANGELOG.md)；
-- 门禁口径与职责见 [docs/沉淀/门禁清单.md](docs/沉淀/门禁清单.md)（**十四道门**）。
+- 门禁口径与职责见 [docs/沉淀/门禁清单.md](docs/沉淀/门禁清单.md)（**十五道门**）。

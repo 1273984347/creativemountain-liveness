@@ -17,7 +17,14 @@ import {
 } from '../../tools/coverage-boundaries.mjs';
 
 /** 门禁脚本清单（A4 的检查对象）。 */
-const GATE_SCRIPTS = ['tools/gate.mjs', 'tools/doc-sync.mjs', 'tools/pdf-normalize.mjs'];
+const GATE_SCRIPTS = [
+  'tools/gate.mjs',
+  'tools/doc-sync.mjs',
+  'tools/pdf-normalize.mjs',
+  // ⚠️ B94：门 ⑮ 的执行器也是**门禁脚本**（它决定门 ⑮ 判红判绿）⇒ 须受 A4 约束，
+  //   否则将来有人给它加 `shell: true` 或接管道，**没有任何门会报**。
+  'tools/balance-report-lock-cli.mjs',
+];
 
 /** 读一份源码，剥掉注释与字符串（避免注释里的示例被误判）。 */
 function codeOnly(path: string): string {

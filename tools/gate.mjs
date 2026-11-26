@@ -48,6 +48,15 @@ const GATES = [
   //   负样本锚点：tests/gates/ui-walkthrough-negative.test.ts
   //   （占位符不展开 / 棋盘超宽 / 改坏断言容差 —— 三条各必红，且副本自建 bundle 不依赖仓库 dist）。
   { name: '浏览器走查与可观测断言（tests/e2e/ui-walkthrough.mjs）', cmd: process.execPath, args: [resolve('tests', 'e2e', 'ui-walkthrough.mjs')] },
+  // ⚠️ 第 15 道门（B94）：平衡报告**入库一致性** —— 让 docs/balance-report.md 进入门禁的比对面。
+  //   起因（B92 遗留 L-B92-4）：报告是**入库生成物**却**不被任何门读取** ⇒ 引擎演进后
+  //   它会悄悄过期，而引用它的文档会一起过期，且**没有任何门会报**（E153）。
+  //   做法：按报告的生成口径（默认参数 = 4 主题 × 6 人数档 × 1000 局 = 24000 局）
+  //   **重跑一份新的到 .tmp/**（**绝不覆盖入库版** —— 就地重生成 ⇒ 必然相等 ⇒ 门禁永绿），
+  //   再与**入库版逐字节比对**（容差 0，仅行尾归一化；口径依据见 tools/balance-report-lock.mjs）。
+  //   **追加在末尾**（第 ⑮ 道）⇒ ⑨/⑫/⑬ 的编号不变，L-B92-1 重标定可直接引用。
+  //   负样本锚点：tests/gates/balance-report-lock.test.ts（注入漂移 ⇒ 必红；恢复 ⇒ 必绿）。
+  { name: '平衡报告入库一致性（tools/balance-report-lock-cli.mjs）', cmd: process.execPath, args: [resolve('tools', 'balance-report-lock-cli.mjs')] },
 ];
 
 /**
@@ -94,8 +103,16 @@ function ensurePrintArtifacts() {
   console.log('[自举] print 产物已就绪');
 }
 
-/** 声明的门数（与实跑门数必须一致，否则自断言失败）。 */
-const TOTAL_GATES = GATES.length;
+/**
+ * 声明的门数（**字面量**，不是 `GATES.length`）。
+ *
+ * ⚠️ **为什么必须写字面量**（B94 盲审发现）：原写法 `const TOTAL_GATES = GATES.length;`
+ *   再拿它跟 `GATES.length` 比 ⇒ **恒真**（同义反复）⇒ 门数漂移了也**发现不了**，
+ *   文档里那句「门数声明 == 实跑门数（自断言）」就成了**空话**。
+ *   ⇒ 现在写成字面量 **15** ⇒ 增删门禁而忘了改这里 ⇒ **当场判红**。
+ *   ⚠️ 改门数时**必须**同时改这里、门禁清单、README（含 README.en.md）等各处表述。
+ */
+const TOTAL_GATES = 15;
 
 console.log('== 创界山·活人认证 一键门卫 ==');
 

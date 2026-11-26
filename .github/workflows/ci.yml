@@ -23,7 +23,7 @@ concurrency:
 
 jobs:
   gate-chain:
-    name: gate chain (14 gates) — windows / node 24 / chromium
+    name: gate chain (15 gates) — windows / node 24 / chromium
     runs-on: windows-latest
     timeout-minutes: 45
     permissions:

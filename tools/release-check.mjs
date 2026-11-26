@@ -72,7 +72,7 @@ function run(label, args) {
   }
 }
 
-run('门禁（十四道）', [resolve(ROOT, GATE_PATH)]);
+run('门禁（十五道）', [resolve(ROOT, GATE_PATH)]);
 run('全量重扫（100 组 × 3000 局）', [resolve(ROOT, SIM_PATH), ...SCAN_ARGS]);
 run('逐组比对（漂移即失败）', [
   resolve(ROOT, 'docs', '沉淀', 'compare-scan-baseline.mjs'),

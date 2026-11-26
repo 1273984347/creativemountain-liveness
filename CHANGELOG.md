@@ -6,6 +6,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The balance report now has a gate watching it. `docs/balance-report.md` was a
+  committed generated artefact that **no gate ever read**, so it could silently
+  go stale after an engine change — and any document quoting it would go stale
+  with it, with nothing reporting either. The new gate ⑮ re-runs the report's
+  own generation recipe (4 themes × 6 player tiers × 1000 games = 24,000 games)
+  into a **temporary file** and compares it byte-for-byte against the committed
+  report (tolerance 0, line endings normalised). Any drift is red and names the
+  differing lines. The comparison surface is deliberately a *separate* run:
+  regenerating the committed report in place would always compare equal and make
+  the gate permanently green. The tolerance was not guessed — three independent
+  runs (twice regenerated plus the committed copy) produced identical SHA256
+  digests, which is what makes a zero tolerance defensible. Resident negative
+  samples cover both the comparison logic and the whole gate end-to-end
+  (isolated copy: change one line of engine → gate exits 1 → restore → exits 0).
+  The gate also checks the **sample scope** against two independent
+  authorities: the sample size stated in the specification (§9.2: 4 themes ×
+  6 tiers × 1000 games = 24,000 games, with the theme count taken from the
+  actual theme packs and the tier count from the scale table), and the game
+  count the simulator actually reported on stdout. Comparing the two reports
+  against each other would have been a tautology: changing the simulator's
+  defaults *and* regenerating the report would shrink the sample silently
+  while both sides still compared equal. The stdout count matters on its own
+  because the scope lines inside the report are written by the report
+  generator and can be hard-coded to any value — the actual count cannot.
+- The gate count is now a **literal** (`15`) asserted against the gate list,
+  instead of being derived from the list itself — the previous form compared
+  a value with itself and could never fail.
+
 ### Fixed
 
 - Closed the R8 balance follow-up after re-measuring it. The opening-bonus identity

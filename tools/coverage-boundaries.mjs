@@ -113,6 +113,12 @@ export const COVERAGE_BOUNDARIES = [
     reason: '门 ⑦ 新增的棋盘件比对只覆盖**两个可机械判定的量**（过路费行数、文件名格数）；逐格内容要求先把 SVG 的格位结构与 IR 的 board 做逐项语义映射，而 IR 的 board 至今不参与 parity 比对（ir-validate 里明文写着「parity 完全不碰 board」）⇒ 现在扩到逐格，等于把同一处尚未闭合的映射再复制一份',
     fallback: '棋盘件目前只做「过路费行数 == 该档关隘数」与「文件名格数 == 规模表 boardLength」两条判据（判据实现在 tools/board-parity.mjs，负样本在 tests/gates/board-parity.test.ts）；逐格一致性仍靠数字轨走查与人工核对',
   },
+  {
+    id: 'balance-report-value-judgement',
+    notCovered: '平衡报告里的**数值是否「平衡合理」**（身份胜率偏离是否超 15pp 记录线、力竭触发是否过稀等）',
+    reason: '门 ⑮ 只判「入库报告是否**仍由当前引擎产生**」（逐字节相等）⇒ 它能抓住「引擎变了、报告没重生成」这类**漂移**，但**不判**读数本身是否符合平衡意图；15pp 记录线是规格 §9.2 的人工判据，`engine/core/balance.ts` 里**没有身份相关常量** ⇒ 没有可派生的机器阈值（这也是 L-B93-3 登记的遗留）',
+    fallback: '「引擎演进 ⇒ 必须重生成报告」由门 ⑮ 强制（漂移必红）；「重生成后的读数是否失衡」仍靠批次现查 + 人工判读（≥2 组独立 seed 基、三样本同向 + 合并 95%CI，见 E155）；L-B93-3 若落地机器实现，须同序更新本条',
+  },
 ];
 
 /**
