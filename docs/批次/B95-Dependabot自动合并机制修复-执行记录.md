@@ -100,3 +100,12 @@ auto-merge 由 GitHub **服务端**执行 ⇒ 合并后照常触发 CI；
 - 告警：open 0 / closed 4（esbuild→0.25.0、i18next→26.3.4、katex→0.18.2、diff→8.0.3）。
 - 精确口径：**修复后未观测到 host 的 security-update 运行**（当前无待修漏洞 ⇒ 不会触发），
   不能说该 job「已通过」。
+## 7. 提交、门禁与台账回填
+
+- **门禁（提交前实跑）**：`node tools/gate.mjs` ⇒ **15 门全绿，exit 0**（门 ⑮ 平衡报告入库一致性 142.1 s；门 ② `node --test` 136.3 s 含新增守卫 14 条；整链 ≈ 5 min）。门数 **15 未增**（新增守卫由门 ② 的 `tests/**/*.test.ts` 自动纳入）。
+- **本地提交**：主体 `9bdbc19`（`fix(deps): 修 Dependabot 自动合并机制——CI 判据改 run 口径 + 走 gh pr merge --auto`；3 文件 / +328 −30）；本批台账笔为第二个提交（显式 pathspec）。
+- **与 B94 的叠放**：B94 由并行会话 `mvs_57ecedf8` 提交为 `4e938fe`（28 文件，显式 pathspec，零 B95 文件）⇒ 本地并列两批，**一次 push 带齐**（用户口径「一次 push 带齐全部内容」⇒ 1 轮 CI）。
+- **台账回填**：沉淀 **E157**（归「一、机制可达性」⇒ 分类计数 25/26/17/71/18 = **157 ≡ 157**，`b79-t21-verify.mjs` exit 0）；批次导航加 B95 行（87 → **88/88/88/88**，`batch-nav-count.mjs` exit 0）；`AGENTS.md`(2 处) / `CLAUDE.md`(1 处) / `docs/沉淀/README.md`(5 处) / `HANDOVER.md` 的 E 区间与份数同步到 E1–E157 / 88 份；**订正 `TODOS.md` 的 T11 行**（原写「等 weekly 周期」，实为「合并指令不被受理」⇒ 活文档可改写）；`ROADMAP.md` 登记 B95 并把未决遗留的「14 门」订正为 **15 门**（B94 加门 ⑮ 时漏改的活文档读数）。
+- **未验证（如实登记）**：新机制在 GitHub runner 上的真实行为 ⇒ 待 push 后 dispatch 实测；合并后 main 的 15 门与产物是否漂移 ⇒ 待 #9 合并后核验；Dependabot weekly 周期（仓库 11-25 创建，首次最早下周一 11-30）。
+- **待回填（并入下一批，不单独成笔）**：push 后的远端提交哈希、CI run 读数、PR #9 的 auto-merge 实际结果 ⇒ 追加到 `HANDOVER.md`「平台侧处置记录」。
+

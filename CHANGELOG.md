@@ -68,6 +68,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Dependabot labels major updates itself, plus a resident guard
   (`tests/gates/dep-update-classify.test.ts`) that runs the workflow's own classifier
   against the real pull request titles seen in this repository.
+- Fixed the Dependabot auto-merge workflow in three ways that made its own
+  safety rails inert. The "wait for green CI" step polled **check-runs**, so a
+  pull request whose CI check-run had not been created yet produced an empty
+  list — pending = 0, therefore "green" — and the merge instruction went out
+  while CI was still running (run `45667433870`: "CI green" at 17:41:45, merge
+  comment at 17:41:46, gate chain finished at 17:46:43). A red CI could
+  therefore have been merged. The step now polls **workflow runs** for the pull
+  request's head SHA (excluding the auto-merge workflow itself) and treats
+  "no CI run yet" as *not ready* rather than *ready*. Second, the merge
+  instruction was a `@dependabot merge` comment posted with `GITHUB_TOKEN`; that
+  identity has no write access to the repository, so the instruction was never
+  acted on — the pull request's `auto_merge` field stayed `null` for 19 hours.
+  The workflow now uses GitHub's documented path, `gh pr merge --auto --squash`
+  with `permissions: contents: write`, so the merge is executed by the GitHub
+  service and still triggers CI (merging with the token directly would not).
+  Third, `| head -5` truncated a pipe under `set -euo pipefail`, making the step
+  exit non-zero (red run) and skip the branch that was meant to keep the update
+  for manual review; it now uses `grep -m 5`. Because the workflow now holds
+  write permission, a manual dispatch must also verify that the pull request was
+  opened by `dependabot[bot]` and is not a draft.
 
 ### Added
 
