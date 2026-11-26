@@ -2,7 +2,8 @@ name: CI
 
 # The gate chain is this project's contract: any failure must fail the build.
 #
-# ⚠️ The **authoritative** verified combination is Windows (windows-latest) × Node 22 × Chromium.
+# ⚠️ The **authoritative** verified combination is Windows (windows-latest) × Node 24 × Chromium.
+#   ⚠️ B98 订正：此处原写 Node 22，而 setup-node 实际取的是 24 ⇒ 对外验证声明与实际档位不符。
 #   Linux / macOS are **not verified** — see README「验证状态与非目标」.
 #
 # ⚠️ Every third-party Action is pinned to a full 40-char commit SHA (a mutable tag like
