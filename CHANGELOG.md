@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Closed the R8 balance follow-up after re-measuring it. The opening-bonus identity
+  sits only +5.1 to +7.3pp above uniform across three independent seed bases
+  (18,000 games per identity), below the 15pp record line, so no rebalancing is
+  applied. The measurably weaker family is now the resource-stealing one
+  (-3.5 to -3.9pp), registered as an observation instead.
+
 - Fixed two ways the physical board could mislead players: degraded gates (gates
   beyond a player-count tier's gate budget) still printed the "过路 N" toll the
   engine does not recognise, and the board PDF was forced to A4 although the
