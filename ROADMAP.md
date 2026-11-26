@@ -18,7 +18,7 @@
 | B91 | 开源文档入口补齐：`AGENTS.md` / `CLAUDE.md` / `ROADMAP.md` | 已推送 |
 | B90 | 自动合并的 major 误判修复（判据 + 守卫 + 配置分组） | 已推送 |
 | B89 | 依赖安全告警清收（esbuild + host 三条 overrides） | 已推送（4 条告警全部转 closed） |
-| **B95** | Dependabot 自动合并机制修复（D1/D2/D3 + D4'：CI 判据改 workflow run 口径 + 走 `gh pr merge --auto` + 作者白名单两种形式 / head 仓库同源防 fork） | 待推送（补修后一并推） |
+| **B95** | Dependabot 自动合并机制修复（D1/D2/D3 + D4'：CI 判据改 workflow run 口径 + 走 `gh pr merge --auto` + 作者白名单两种形式 / head 仓库同源防 fork） | **已推送**（PR #9 已由该机制合并；合并后 main 的 15 门绿 + 产物与基线逐字节相同） |
 
 ## 未决遗留（逐条登记在批次记录里）
 
@@ -27,7 +27,6 @@
 | host 三条 overrides 是「未经上游测试的组合」⇒ 随 `sparkdesign` 上游跟进 | 待上游 |
 | katex 0.18 的嵌套 commander 要求 node >= 22.12 ⇒ 若下调 `engines` 下限需复查 | 待触发 |
 | Dependabot 的 security job 是否在 weekly 周期彻底停止失败 | 待观察 |
-| PR #9（playwright 1.60→1.65）自动合并后 15 门是否仍绿 | 待观察 |
 | 窃火者族 / 织梦者族稳定偏弱（三样本同向）⇒ 未触发身份记录线 | 观察中（若要调平衡，方向是**增强**这一族） |
 
 ## 已知约束（影响发版与自动化）

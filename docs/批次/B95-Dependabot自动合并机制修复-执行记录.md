@@ -116,6 +116,17 @@ auto-merge 由 GitHub **服务端**执行 ⇒ 合并后照常触发 CI；
 - **补修的自证**：守卫 **17 条**全绿；**八路注入 ⇒ 判红 ⇒ 按原字节还原 ⇒ 判绿**（新增 D4a「只认 `dependabot[bot]`」与 D4b「去掉 head 仓库校验」两路），还原后文件 SHA256 与注入前**逐字节一致**（`47f6c39f…` / 11925 bytes）。
 - **教训归位**：这正是 **E150**「判据依赖数据源的命名约定 ⇒ 必须拿真实样本验证」的**第二次现身** ⇒ 并入 **E157**（不新增编号 ⇒ 不与 B96 的 E158 撞号）。
 - **待办**：补修后再次 dispatch 实测；合并后 main 的 15 门与产物不漂移核验。
+## 10. 平台侧读数与最终验收
+
+- **PR #9 合并**：dispatch run `45832374173`（workflow_dispatch，pr_number=9）输出「PR #9 head=5a216496… 标题=build(deps-dev): bump playwright from 1.60.0 to 1.65.1 in the npm-patch group → **CI 全绿（第 1 次判定）** → **已为 PR #9 启用 auto-merge（squash）**」⇒ **PR #9 merged_at = 2026-11-26T13:46:27Z、state=closed**（挂起 20 h 后落地）⇒ **D1 / D2 / D4' 三处修法全部被真实样本验证**。
+- **合并后的 commit**：`8a00de4`（`build(deps-dev): bump playwright (#9)`），改动面**只有** `package.json` + `package-lock.json`（playwright 1.60.0 → 1.65.1）。
+- **合并后 main 的 15 门绿**：⚠️ 该 commit 的 push CI **不会触发**（GitHub 既定行为：Dependabot 身份推送的 commit 不触发 workflow）⇒ 改用 `gh workflow run ci.yml --ref main` **手动 dispatch**（run `45832937291`，head `8a00de4a`）⇒ **success** ✔。
+- **产物与基线不漂移**：在临时 worktree（`8a00de4a`）上构建 ⇒ `dist/创界山-活人认证.html` = **212,032 bytes / SHA256 `80E5DA2EF72D188EFE51B8EDC2A2CBBABB2418B47DE0894F09C642BF9FDD6C78`** ⇒ **与 B89 基线逐字节相同**（playwright 只作 e2e 的 devDependency ⇒ 不进产物）⇒ T11 的验收口径达成。
+- **CI 读数三连（如实留档，不掩盖）**：`3d065c5` = **failure**（门 ② 红 —— 本批自己打断的）→ `bcf9eed` = **cancelled**（并发组 cancel-in-progress，被后续 CI 顶掉）→ `8a00de4a` 手 dispatch = **success**（含 `bcf9eed` ⇒ 锚定修复有效）→ `90771f2` 的 push CI（run `45834151555`）= **success**（含 B96 全部改动 + playwright 1.65.1 的门 ⑩/⑭ 浏览器环节重验）。
+- **销账**：**T11 关闭**（PR #9 已合并 + 合并后 15 门绿 + 产物逐字节相同）⇒ 从 `TODOS.md` 删除，核实确认写入 `HANDOVER.md`。
+- **最终推送**：一次 push 带齐 B95 + B94 + B96 共十笔（远端 `90771f276c1dcae6d6de073c2785436df779a045`，逐笔 `git merge-base --is-ancestor` 全部 ANCESTOR）+ 本笔台账回填。- **本地门禁的环境缺口（如实登记，不谎称本地全绿）**：本地 `node --test tests/gates/*.test.ts tests/engine/*.test.ts` = **992 例 / 985 过 / 6 败**，6 个败例**全部**是 e2e 相关（`Executable doesn't exist … chromium_headless_shell-1255…`）⇒ playwright 1.65.1 需要 chromium 1255、本机只有 1208/1223/1243 ⇒ **纯环境缺口，非代码/文档缺陷**（CI 每次自跑 `npx playwright install chromium`）⇒ 权威读数取 CI run `45834151555` = **success**。同轮局部判据：doc-sync **10/10**；E 行数 **159 ≡ 159**；导航 **89/89/89/89**。
+
+
 ## 9. 补修之二：连带打断 B90 守卫（抽取靠位置约定 ⇒ 治本改锚定）
 
 - **现象**：D4' 补修提交（`3d065c5`）后，**门 ② 判红**：`tests/gates/dep-update-classify.test.ts` 报 `[eval]:9 # <<< DEP-AUTHOR-OK-END Expected '>', got '-'`（SyntaxError）。

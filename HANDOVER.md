@@ -7,7 +7,7 @@
 
 | 项 | 值 |
 | --- | --- |
-| `main` | `c863f91`（远端基线）⇒ 本地 ahead 3 待推：`9bdbc19`（B95 主体）+ `4e938fe`（B94）+ 本批台账笔 |
+| `main` | `90771f2`（远端基线；本地已对齐同一 commit 对象）⇒ 本笔为 B95 收官台账回填，推送后远端再前进一格 |
 | 门禁 | **15 道**，全绿（B95 未增门；新增守卫由门 ② `node --test tests/**/*.test.ts` 自动纳入） |
 | 批次档案 | **89** 份（`docs/批次/`） |
 | 沉淀条目 | **E1–E159**（五类；E 行数 ≡ 分类声明之和） |
@@ -37,6 +37,7 @@
 - **dispatch 实测与 D4'（本批自己引入的缺陷，已补修）**：push 后 `gh workflow run dependabot-auto-merge.yml -f pr_number=9` ⇒ run `45828664828` **success** 但**秒级 exit 0**（若进 CI 轮询会 sleep 45 s×20 ⇒ 排除）、PR #9 仍 `OPEN`、`auto_merge` 仍 `null` ⇒ 命中「作者不是 dependabot[bot] ⇒ 不处理」分支。根因：`gh pr view --json author --jq .author.login` 对 Dependabot PR 返回 **`app/dependabot`** ⇒ 等值比较**假阴性** ⇒ **防 fork 校验把 Dependabot 自己的 PR 全挡在门外**（正是 E150「判据依赖命名约定」的第二次现身）。补修：作者**白名单两种形式** + 防 fork 改用 **head 仓库同源**（bot 命名会变、仓库归属不会），判据同样抽成可执行块由守卫直接执行；守卫 17 条 + **D4a/D4b 两路注入自证**（只认 `dependabot[bot]` ⇒ 判红；去掉 head 仓库校验 ⇒ 判红）。
 - **未验证**：补修后新机制在 GitHub runner 上的真实行为（首测即 D4' 误伤，见上 ⇒ 待再次 dispatch 实测）；合并后 main 的 15 门与产物是否漂移；Dependabot weekly 周期（仓库 11-25 创建，首次最早下周一 11-30）。
 - **证据位置**：`docs/批次/B95-Dependabot自动合并机制修复-执行记录.md`
+- **最终验收（2026-11-26 22:0x，销账 T11）**：dispatch run `45832374173` 输出「PR #9 head=5a216496… → **CI 全绿（第 1 次判定）** → **已为 PR #9 启用 auto-merge（squash）**」⇒ **PR #9 merged_at = 2026-11-26T13:46:27Z、state=closed**（挂起 20 h 后落地）⇒ D1 / D2 / D4' 三处修法**被真实样本验证**；合并 commit `8a00de4`（`build(deps-dev): bump playwright (#9)`）改动面**只有** `package.json` + `package-lock.json`；⚠️ 该 commit 的 push CI **不会触发**（Dependabot 身份推送不触发 workflow）⇒ 改用 `gh workflow run ci.yml --ref main` 手动 dispatch（run `45832937291`）⇒ **success**；产物在 worktree 上按 `8a00de4a` 构建 = **212,032 bytes / SHA256 `80E5DA2E…D6C78`** ⇒ **与 B89 基线逐字节相同** ⇒ **T11 关闭**（从 `TODOS.md` 删除）。CI 读数三连留档：`3d065c5` = failure（门 ② 红）→ `bcf9eed` = cancelled（并发组被顶掉）→ `8a00de4a` 手 dispatch = success（⇒ 锚定修复有效）→ `90771f2` 的 push CI（run `45834151555`）= success（含 B96 全部改动 + playwright 1.65.1 的门 ⑩/⑭ 重验）。
 
 ## 平台侧处置记录
 
@@ -62,6 +63,15 @@
 - **✅ 遗留已消解（2026-11-26 18:2x）**：SSH 备用通道**已启用**
 - **✅ 作用域已收窄（2026-11-26 19:1x）**：原写法 `Host github.com` + `HostName ssh.github.com:443` 会对**本机所有 SSH 客户端**的 github.com 访问生效 ⇒ 已改为 GitHub 官方转发写法：`Host 127.0.0.1`（HostName ssh.github.com / Port 443 / IdentityFile 指向本仓库专用 key / IdentitiesOnly yes），remote 改为 `ssh://git@127.0.0.1:443/1273984347/creativemountain-liveness.git` ⇒ **本机其它 github.com 的 SSH 行为完全恢复原状**，这把 key 只对本仓库生效。实测：本仓库 ssh -T 认证成功、git ls-remote exit 0、git push exit 0；普通 git@github.com 的 Offering key 列表里**已不含**本仓库专用 key。⚠️ 已知折中：该 key **无口令**（Windows 的 ssh-agent 服务为 Disabled ⇒ 带口令 key 需管理员启用 agent 才能免交互使用）⇒ 以「作用域严格限定到单仓库」替代「口令保护」。 —— 公钥已加入账号（key id 171192097；初版 171191754 因生成时误带口令已删除），~/.ssh/config 固定「github.com → HostName ssh.github.com / Port 443 + IdentityFile 自定义私钥 + IdentitiesOnly」，remote 已切为 git@github.com:… 。**实测**：ssh -T git@github.com ⇒ 「Hi 1273984347! You have successfully authenticated」；git ls-remote origin ⇒ exit 0（读到 d0035b0）；git push origin main ⇒ exit 0（Everything up-to-date）⇒ **SSH 通道可用且已实测**，此后 push/fetch 不再受 github.com:443 阻断影响。
 - ⚠️ 过程留痕：初版私钥因 PowerShell 把 -N 传成**两个字面引号**（等于设了口令）⇒ BatchMode 认证被拒；已改为**参数数组直传**（-N 的值是真正的空串）重新生成，并以 ssh-keygen -y 可无口令导出、且与 .pub 一致作校验。
+
+### 2026-11-26 22:0x · B95 机制修复上线并让 PR #9 真正合并
+
+- **远端**：`main` = `90771f276c1dcae6d6de073c2785436df779a045`；一次 push 带齐 B95 + B94 + B96 共十笔 ⇒ 逐笔 `git merge-base --is-ancestor` 全部 ANCESTOR（`9bdbc19` / `4e938fe` / `010aca7` / `3d065c5` / `bcf9eed` / `8a00de4a` / `9013a2c` / `e6ae90f` / `87d70bf` / `90771f2`）⇒ 本地与远端同一 commit 对象。
+- **PR #9**：merged_at `2026-11-26T13:46:27Z`、state `closed` ⇒ 挂起 **20 h** 后由**新机制自己合并**（旧机制挂起 20 h 零动作）。
+- **合并后的 CI**：Dependabot 身份推送不触发 workflow ⇒ 合并 commit `8a00de4a` 的 push CI **不存在**（不是失败）；改 `gh workflow run ci.yml --ref main` 手动 dispatch（run `45832937291`）⇒ **success**（15 门全绿）。
+- **产物**：worktree（`8a00de4a`）构建 ⇒ `dist/创界山-活人认证.html` **212,032 bytes / SHA256 `80E5DA2EF72D188EFE51B8EDC2A2CBBABB2418B47DE0894F09C642BF9FDD6C78`** ⇒ 与 B89 基线**逐字节相同** ⇒ playwright 升级**不进产物**（只作 e2e 的 devDependency）。
+- **CI 读数三连（如实留档）**：`3d065c5` **failure**（门 ② 红 —— 本批自己打断的）→ `bcf9eed` **cancelled**（并发组 cancel-in-progress 被顶掉）→ `8a00de4a` 手 dispatch **success**（含 `bcf9eed` ⇒ 锚定修复有效）→ `90771f2` push CI **success**（含 B96）。
+- **新 PR 自动保持人工审**：合并后 Dependabot 另开 `@types/node` / `typescript` 更新 PR，auto-merge run `45832812731` 判 major ⇒ 保持人工审（**B90 的判定在真实样本上复验通过**）。
 
 ## 已完成（核实确认）
 
