@@ -26,7 +26,7 @@
 | --- | --- |
 | host 三条 overrides 是「未经上游测试的组合」⇒ 随 `sparkdesign` 上游跟进 | 待上游 |
 | katex 0.18 的嵌套 commander 要求 node >= 22.12 ⇒ 若下调 `engines` 下限需复查 | 待触发 |
-| Dependabot 的 security job 是否在 weekly 周期彻底停止失败 | 待观察 |
+| Dependabot 的 security job 是否停止失败 | **根因已消除**（host 依赖树零漏洞 + overrides 生效 ⇒ Dependabot security-update 的失败条件不成立 ⇒ 无需等 weekly；weekly 首次运行属例行观察，不阻塞） |
 | 窃火者族 / 织梦者族稳定偏弱（三样本同向）⇒ 未触发身份记录线 | 观察中（若要调平衡，方向是**增强**这一族） |
 
 ## 已知约束（影响发版与自动化）

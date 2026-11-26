@@ -10,7 +10,7 @@
 | `main` | `90771f2`（远端基线；本地已对齐同一 commit 对象）⇒ 本笔为 B95 收官台账回填，推送后远端再前进一格 |
 | 门禁 | **15 道**，全绿（B95 未增门；新增守卫由门 ② `node --test tests/**/*.test.ts` 自动纳入） |
 | 批次档案 | **89** 份（`docs/批次/`） |
-| 沉淀条目 | **E1–E160**（五类；E 行数 ≡ 分类声明之和） |
+| 沉淀条目 | **E1–E161**（五类；E 行数 ≡ 分类声明之和） |
 | 导航互洽 | 总览 / 小节标题 / 实际行数 / 目录文件数 = **89/89/89/89** |
 | 未修复告警 | **0**（Security 页 Open 0 / Closed 4） |
 
@@ -81,6 +81,15 @@
 - **读数**：**本地全量门禁 15 道全绿 exit 0**（门 ⑩ 浏览器端到端 5.7 s、门 ⑭ 浏览器走查 1.4 s、门 ⑮ 145.6 s）⇒ 此前登记的「本地 6 个 e2e 败例 = chromium 1255 缺失」**环境缺口已消解** ⇒ **CI（run `45837644721` success）与本地双读数皆绿**。
 
 ## 已完成（核实确认）
+
+### L-B90-3 / T9 · Dependabot security job 的**根因消除**（不等 weekly）
+
+- **销账理由**：原验收口径是「下一次 weekly 周期后 `Dependabot Updates` runs 无 failure」—— 但 **weekly 由平台调度，本地无法加速，定时提醒也等不来** ⇒ 改为当场证明「**失败条件已不成立**」：Dependabot 的 security-update 当年之所以失败，是因为「**有 advisory + 依赖树里没有修复版本 + 无法自动升级**」（它当年的提示原文就是「Add an override/resolution to pin katex to a non-vulnerable version」）⇒ 现在这三条**都不成立**。
+- **当场取证（2026-11-26 23:4x）**：host 目录 `npm audit --json` ⇒ `vulnerabilities: {}`，**info/low/moderate/high/critical 全 0**；`npm ls katex i18next diff --all` ⇒ **当初失败的那几条传递边**（`sparkdesign@0.4.11 → mermaid / rehype-katex / micromark-extension-math → katex`）现已解析为 **katex 0.18.10**（修复版 ≥ 0.18.2）· **i18next 26.7.2**（≥ 26.3.4）· **diff 8.0.4**（≥ 8.0.3），与 `package-lock.json` 逐项一致 ⇒ **overrides 生效**；且 Dependabot 能正常解析 host 依赖树（11-25 17:40:44 的 host 版本更新 run = success ⇒ overrides 没让解析炸）。
+- **结论**：**当前依赖树零已知漏洞 + 三条历史失败路径的包都已是修复版 ⇒ Dependabot security-update 的失败条件不成立 ⇒ 该 job 不会因这三条再失败** ⇒ **T9 销账**，weekly 首次运行**降级为例行观察**（不再占用待办与提醒）。
+- **配套留档**：① 11-25 16:47–16:49 那 7 条 failure 是 **overrides 落地前**的历史（根因 = `sparkdesign` 经 mermaid / rehype-katex / micromark-extension-math 钉住 katex / i18next / diff 旧版）；② 11-25 17:40 之后 host 目录**零新的 security update 运行、零失败**（告警已 open 0 / closed 4 ⇒ 无待修项 ⇒ 不会触发）；③ weekly **至今未观测到**（最近两次 Dependabot 活动 = 11-25 17:40 push 带来的版本更新、11-26 13:47 PR #9 合并触发的依赖检查 ⇒ **都不是周期运行**；仓库 11-25 创建 ⇒ 首次 weekly 应在 11-30 周一）—— **此项不影响销账**。
+- **证据位置**：本段 + `docs/沉淀/经验教训索引.md` E161
+
 
 ### B90 · 自动合并的 major 误判修复
 
