@@ -7,12 +7,23 @@
 
 | 项 | 值 |
 | --- | --- |
-| `main` | `bf125e6`（B92 已推送；本地与远端一致） |
+| `main` | `227a88b`（远端；**本地已 reset 对齐到同一 commit 对象**） |
 | 门禁 | **14 道**，全绿 |
 | 批次档案 | **85** 份（`docs/批次/`） |
 | 沉淀条目 | **E1–E153**（五类；E 行数 ≡ 分类声明之和） |
 | 导航互洽 | 总览 / 小节标题 / 实际行数 / 目录文件数 = **85/85/85/85** |
 | 未修复告警 | **0**（Security 页 Open 0 / Closed 4） |
+
+## 平台侧处置记录
+
+### 2026-11-26 · github.com:443 临时阻断 ⇒ 改用 Git REST 数据接口完成 push
+
+- **现象**：`git push` 报 `Failed to connect to github.com:443`；而 `api.github.com:443` / `github.com:80` / `github.com:22` / `ssh.github.com:443` **全通**，hosts 干净、DNS 正常 ⇒ 该链路 443 的**临时阻断**（约 30 分钟后自行恢复）。
+- **处置**：走 `POST /git/blobs` → `/git/trees`（base_tree）→ `/git/commits` → `PATCH /git/refs` 逐个重建 3 个台账提交。
+- **正确性取证**：每个提交的 **blob sha 与 tree sha 与本地逐字节一致**；远端 main 的 tree 与本地 tree 相同 ⇒ **整个仓库内容逐字节一致**（远端 TODOS.md / HANDOVER.md 的 blob sha = 本地工作树 sha = 本地 HEAD blob sha，三者全等）。
+- **副作用与消解**：REST 生成的 commit 对象与本地 git 的**不是同一个**（GitHub 规范化日期偏移与 message 尾换行，差异项不可枚举）⇒ 远端 hash 与本地不同 ⇒ 本地 ahead 3、下次 push 会 non-fast-forward。通道恢复后 `git fetch origin && git reset --hard origin/main` ⇒ 本地**对齐到平台那个 commit 对象**（工作树内容 sha 不变）⇒ 两边**同一 hash**、历史完整（`227a88b` / `88de023` / `5eca4dc`）。
+- **沉淀**：**E154**。
+- **遗留**：备用 SSH key 已生成（`~/.ssh/id_ed25519_gh_creativemountain`）但**未加入 GitHub 账号 ⇒ 未生效** ⇒ 若 443 再被阻断，需你点名授权把公钥加到账号（账号权限变更），之后 push/fetch 走 SSH 即免疫该阻断。
 
 ## 已完成（核实确认）
 
