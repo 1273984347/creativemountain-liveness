@@ -27,7 +27,11 @@ const DEP = resolve(ROOT, '.github', 'dependabot.yml');
 /** 从工作流里抽出分类用的那段 JS（**唯一事实源 = 工作流文件本身**）。 */
 function extractClassifier(): string {
   const src = readFileSync(WF, 'utf8');
-  const m = src.match(/node -e '\r?\n([\s\S]*?)\r?\n\s*'\s+"\$TITLE"/);
+  // ⚠️ B95 踩坑后加固：原来靠「**第一个** `node -e `」的位置约定抽取 ⇒ 只要工作流里
+  //   **前面**再插入任何 node 块（本批的作者/仓库判据块就在 ⓪ 段），抽取就会越过块边界、
+  //   连 yml 注释一起喂给 node ⇒ SyntaxError（B90 守卫被 B95 打断，门 ② 判红）。
+  //   ⇒ 改为**显式标记锚定**（DEP-CLASSIFY-BEGIN）：块边界由标记决定，与插入顺序无关。
+  const m = src.match(/DEP-CLASSIFY-BEGIN[\s\S]*?node -e '\r?\n([\s\S]*?)\r?\n\s*'\s+"\$TITLE"/);
   if (m === null || m[1] === undefined) {
     assert.fail('未能从工作流里抽出 DEP-CLASSIFY 代码块（标记或结构被改了？）');
   }
@@ -60,6 +64,11 @@ const CASES: ReadonlyArray<readonly [string, string]> = [
   ['build(deps): bump actions/checkout from v4.4.0 to v7.0.1', 'major'],
   ['build(deps): bump actions/checkout from v4.4.0 to v4.5.0', 'safe']
 ];
+
+
+test('抽取块不得混入工作流的注释行（锚点缺失 ⇒ 块边界会被后续插入挤掉）', () => {
+  assert.ok(!CLASSIFIER.includes('#'), '抽出的代码里含注释行 ⇒ 抽取正则越过了块边界');
+});
 
 test('版本跨度分类：真实 PR 标题逐条判定（含 4 个曾被误判的 major）', () => {
   for (const [title, expected] of CASES) {
