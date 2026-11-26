@@ -62,6 +62,8 @@
 - **CI 终态**：run `45679560620`（headSha `bf125e6`）⇒ **success**（门禁链 job success）⇒ 本轮**四批（B89 / B90 / B91 / B92）连续四次 push 的 CI 全绿**。
 - **PR #9 观察**：推送后仍 `OPEN` 未合并（评论数 1 = 那条 `@dependabot merge`）⇒ 继续挂起等 Dependabot 下次检查时 rebase；**未发生任何自动合并**。
 - **观察窗口复核（2026-11-26 17:41）**：距 B92 推送 **13.6 小时**仓库完全静止 —— `main` 仍是 `bf125e6`、未修复告警 **0**、PR **#8 / #10**（`deps-major`）仍 `OPEN` 且**零 `@dependabot merge` 评论**、PR **#9** 已 **rebase**（head `5044397` → `5a21649`，已含 B89–B92）但仍**未合并** ⇒ 判定 Dependabot 在等**它自己的下一次检查周期**（weekly）⇒ 机制无异常、**无误合并**。Dependabot 的 **weekly 周期尚未触发**（最后一批是 17:40 push 带来的 version update）⇒ T9 的 security job 结论仍待该周期。
+- **SSH 通道下的 CI 也绿**：run `45800687863`（head `8899be5`，**经 SSH 通道推送**）⇒ **success** ⇒ 本轮**连续五次 push 的 CI 全绿**；顺带实证 SSH 通道推送链路在 CI 侧也正常。
+- **观察窗口延长（2026-11-26 18:31）**：PR #9 仍 `OPEN`、head `5a21649` 自 11-25 17:41 起**未变**；Dependabot 的 **weekly 周期仍未触发**（最近 20 条运行里只有 11-25 17:40 的 github_actions 一条）⇒ 判定为**等它自己的周期**，机制无异常、无误合并；T9 的 security job 结论同样待该周期。
 - **证据位置**：`docs/批次/B92-双轨一致性收口与策略接线-执行记录.md`
 
 ### B89 · 依赖安全告警清收（根仓 esbuild + host 三条 overrides）
