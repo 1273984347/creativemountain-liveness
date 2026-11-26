@@ -4,12 +4,23 @@ name: Dependabot auto-merge (patch / minor)
 #
 # ⚠️ 为什么不用仓库设置里的 "Allow auto-merge"：那个开关只对人类/其他 bot 开的 PR 生效，
 #   **Dependabot 自己开的 PR 不会自动合并**（GitHub 的既定行为，防止 bot 互相合并）。
-#   Dependabot 接受 PR 评论 `@dependabot merge` 作为合并指令 ⇒ 本工作流负责下这条评论。
-#   （仓库级开关本身已开启：allow_auto_merge = true，见 docs/releases/v0.1.0.md）
+#   所以要由本工作流主动把 PR 放进 GitHub 的自动合并队列。
 #
-# ⚠️ 为什么用 `pull_request_target`：普通 `pull_request` 事件的 GITHUB_TOKEN 对外部分支只读，
-#   **发不出评论**。本工作流**不 checkout 仓库代码、不使用任何 secret**，且只处理
-#   `dependabot[bot]` 的 PR ⇒ 公开仓库上不构成 fork 提权风险。
+# ⚠️ B95 修掉的两个真缺陷（都是 PR #9 挂起 26 小时逼出来的）：
+#   D1「等 CI 全绿」曾经**从未生效**：判据查的是 check-runs，而 CI workflow 的 check-run
+#     还没创建时 pending=0 ⇒ 直接判绿。实测 run 45667433870 日志：17:41:45 就打印「CI 全绿」，
+#     而 gate chain 17:46:43 才完成 ⇒ **CI 红了也会照发合并指令**。
+#     现在改成看 **workflow run**（按 head_sha 查 actions/runs），且**排除本工作流自己**：
+#     该 head 上**一条 CI 运行都还没有 ⇒ 判 wait（继续等）**，不是判绿。
+#   D2 合并指令以前是发 `@dependabot merge` 评论，发评论的是 GITHUB_TOKEN
+#     （github-actions[bot]）—— 它**没有仓库写权限** ⇒ Dependabot 侧不受理：
+#     实测 PR #9 收到评论后挂起 26 小时，`auto_merge` 字段始终为 null，从未进队列。
+#     现在改用 GitHub 官方文档给出的做法：`gh pr merge --auto` + `permissions: contents: write`。
+#     auto-merge 由 GitHub **服务端**执行 ⇒ 合并后照常触发 CI（用 GITHUB_TOKEN 直接 merge 不会触发 CI）。
+#
+# ⚠️ 为什么用 `pull_request_target`：普通 `pull_request` 事件的 GITHUB_TOKEN 对外部分支只读。
+#   本工作流**不 checkout 仓库代码、不使用任何 secret**，且**只处理 dependabot[bot] 开的 PR**
+#   （自动触发与手动触发都校验 PR 作者）⇒ 公开仓库上不构成 fork 提权风险。
 #
 # ⚠️ 第三方 Action 一个都不用（只用 runner 自带的 gh CLI）⇒ 没有 Action 标签被劫持面。
 
@@ -25,7 +36,7 @@ on:
 
 permissions:
   pull-requests: write
-  contents: read
+  contents: write
 
 concurrency:
   group: dependabot-auto-merge-${{ github.event.inputs.pr_number || github.event.pull_request.number }}
@@ -33,14 +44,14 @@ concurrency:
 
 jobs:
   auto-merge:
-    name: comment @dependabot merge once CI is green
+    name: enable auto-merge once CI is green
     # ⚠️ 自动触发时只处理 Dependabot 自己的 PR ⇒ 人工 PR 永远不会被本工作流碰；
-    #    手动触发（workflow_dispatch）时由操作者指定 PR。
+    #    手动触发（workflow_dispatch）时由操作者指定 PR，且**仍会校验 PR 作者**。
     if: github.event_name == 'workflow_dispatch' || github.actor == 'dependabot[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - name: classify, wait for green CI, then ask Dependabot to merge
+      - name: classify, wait for green CI, then enable auto-merge
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -50,6 +61,19 @@ jobs:
 
           if [ -z "${PR_NUMBER:-}" ]; then
             echo "没有 PR 号可处理 ⇒ 退出"
+            exit 0
+          fi
+
+          # ⓪ 只碰 Dependabot 自己的 PR（**手动触发也校验**）。
+          #    本工作流带 contents: write，若被指到别人的 fork PR 就等于给 fork 提权 ⇒ 必须校验。
+          AUTHOR=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json author --jq .author.login)
+          if [ "$AUTHOR" != "dependabot[bot]" ]; then
+            echo "PR 作者是 $AUTHOR（不是 dependabot[bot]）⇒ 不处理"
+            exit 0
+          fi
+          DRAFT=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json isDraft --jq .isDraft)
+          if [ "$DRAFT" = "true" ]; then
+            echo "PR 是草稿 ⇒ 不处理"
             exit 0
           fi
 
@@ -91,29 +115,55 @@ jobs:
           PRE_RELEASE_RE='^\+.*"version": "[^"]*-(beta|alpha|rc|pre|next)[.0-9]*"'
           if gh pr diff "$PR_NUMBER" --repo "$REPO" | grep -E "$PRE_RELEASE_RE" >/dev/null; then
             echo "PR 新增了预发布版本依赖（beta/alpha/rc）⇒ 保持人工审"
-            gh pr diff "$PR_NUMBER" --repo "$REPO" | grep -E "$PRE_RELEASE_RE" | head -5
+            # ⚠️ 用 grep -m 5 而不是「| head -5」：管道被 head 提前关闭会让 grep 收到 SIGPIPE，
+            #    set -o pipefail 下整条管道返回非 0 ⇒ 脚本在这里退出（workflow 变红），
+            #    还会跳过后面本该跑的「保持人工审」分支。
+            gh pr diff "$PR_NUMBER" --repo "$REPO" | grep -E -m 5 "$PRE_RELEASE_RE"
             exit 0
           fi
 
           SHA=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefOid --jq .headRefOid)
           echo "PR #$PR_NUMBER  head=$SHA  标题=$TITLE"
 
-          # ③ 等 CI：轮询该 head sha 的 check-runs，最多 20 次 × 45s（约 15 分钟）。
+          # ③ 等 CI：查**该 head sha 上的 workflow run**（不是 check-run），最多 20 次 × 45s。
+          #    ⚠️ 排除本工作流自己（它的 run 永远在跑 ⇒ 否则永远判 wait）。
+          #    ⚠️ CI workflow 还没起 ⇒ 判 wait（**这是 D1 的修复点**：原来这里会误判成绿）。
           green=0
           for i in $(seq 1 20); do
-            pending=$(gh api "repos/$REPO/commits/$SHA/check-runs" --jq '[.check_runs[] | select(.status != "completed")] | length')
-            bad=$(gh api "repos/$REPO/commits/$SHA/check-runs" --jq '[.check_runs[] | select(.status == "completed" and .conclusion != "success")] | length')
-            if [ "$bad" -gt 0 ]; then
-              echo "CI 存在失败项（$bad）⇒ 不合并"
-              exit 0
-            fi
-            if [ "$pending" -eq 0 ]; then
-              green=1
-              echo "CI 全绿"
-              break
-            fi
-            echo "等待 CI：未完成 $pending 项（第 $i 次）"
-            sleep 45
+            RUNS_JSON=$(gh api "repos/$REPO/actions/runs?head_sha=$SHA&per_page=50" --jq '[.workflow_runs[] | select(.path != ".github/workflows/dependabot-auto-merge.yml") | {name: .name, status: .status, conclusion: .conclusion, head_sha: .head_sha}]')
+            # >>> DEP-CI-GREEN-BEGIN
+            # CI 判据（守卫测试会抽出下面这段 JS **直接执行**，见
+            # tests/gates/dependabot-merge-path.test.ts ⇒ 测的就是本文件里这段，不是复刻）：
+            #   a. 该 head 上没有任何 run              ⇒ wait（CI 还没启动 ⇒ **不能判绿**）
+            #   b. 有 run 但没全部 completed            ⇒ wait
+            #   c. 有 run 的 conclusion 不是 success     ⇒ fail（⇒ 不合并）
+            #   d. 全部 success 且其中至少一条属于 CI 工作流 ⇒ green
+            VERDICT=$(node -e '
+              const sha = process.argv[1];
+              const runs = JSON.parse(process.argv[2] || "[]");
+              const mine = runs.filter(r => r.head_sha === sha);
+              if (mine.length === 0) { console.log("wait"); }
+              else if (mine.some(r => r.status !== "completed")) { console.log("wait"); }
+              else if (mine.some(r => r.conclusion !== "success")) { console.log("fail"); }
+              else if (!mine.some(r => r.name === "CI")) { console.log("wait"); }
+              else { console.log("green"); }
+            ' "$SHA" "$RUNS_JSON")
+            # <<< DEP-CI-GREEN-END
+            case "$VERDICT" in
+              green)
+                green=1
+                echo "CI 全绿（第 $i 次判定）"
+                break
+                ;;
+              fail)
+                echo "CI 存在失败项 ⇒ 不合并"
+                exit 0
+                ;;
+              wait)
+                echo "等待 CI：该 head 上还没有 CI 运行 / 未全部完成（第 $i 次）"
+                sleep 45
+                ;;
+            esac
           done
 
           if [ "$green" -ne 1 ]; then
@@ -121,12 +171,14 @@ jobs:
             exit 0
           fi
 
-          # ④ 幂等：已有该评论就不重复。
-          if gh api "repos/$REPO/issues/$PR_NUMBER/comments" --jq '.[].body' | grep -qx '@dependabot merge'; then
-            echo "已有 @dependabot merge 评论 ⇒ 跳过"
+          # ④ 幂等：已经进过自动合并队列就不重复。
+          AUTO=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json autoMergeRequest --jq '.autoMergeRequest != null')
+          if [ "$AUTO" = "true" ]; then
+            echo "auto-merge 已启用 ⇒ 跳过"
             exit 0
           fi
 
-          # ⑤ 下合并指令。
-          gh api "repos/$REPO/issues/$PR_NUMBER/comments" -f body='@dependabot merge' >/dev/null
-          echo "已评论 @dependabot merge（PR #$PR_NUMBER）"
+          # ⑤ 把 PR 放进 GitHub 的自动合并队列（由服务端执行 ⇒ 合并会触发 CI）。
+          PR_URL=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json url --jq .url)
+          gh pr merge --auto --squash "$PR_URL"
+          echo "已为 PR #$PR_NUMBER 启用 auto-merge（squash）"
