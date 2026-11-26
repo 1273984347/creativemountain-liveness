@@ -18,7 +18,7 @@
 | B91 | 开源文档入口补齐：`AGENTS.md` / `CLAUDE.md` / `ROADMAP.md` | 已推送 |
 | B90 | 自动合并的 major 误判修复（判据 + 守卫 + 配置分组） | 已推送 |
 | B89 | 依赖安全告警清收（esbuild + host 三条 overrides） | 已推送（4 条告警全部转 closed） |
-| **B95** | Dependabot 自动合并机制修复（D1/D2/D3：CI 判据改 workflow run 口径 + 走 `gh pr merge --auto` + 防 fork 提权） | 本批待推送 |
+| **B95** | Dependabot 自动合并机制修复（D1/D2/D3 + D4'：CI 判据改 workflow run 口径 + 走 `gh pr merge --auto` + 作者白名单两种形式 / head 仓库同源防 fork） | 待推送（补修后一并推） |
 
 ## 未决遗留（逐条登记在批次记录里）
 

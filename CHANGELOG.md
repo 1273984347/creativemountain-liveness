@@ -88,6 +88,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for manual review; it now uses `grep -m 5`. Because the workflow now holds
   write permission, a manual dispatch must also verify that the pull request was
   opened by `dependabot[bot]` and is not a draft.
+- Fixed the auto-merge workflow's own fork-protection guard, which had
+  become a false negative. It compared the pull request author against the
+  literal `dependabot[bot]`, but `gh pr view --json author` reports Dependabot
+  as `app/dependabot` — so the workflow rejected every Dependabot pull request,
+  including the one it was meant to merge (a dispatched run exited immediately,
+  with the pull request still open and `auto_merge` still `null`). The author
+  check now accepts both spellings, and fork protection is anchored on the
+  pull request's **head repository** matching this repository, which does not
+  depend on a bot's display name. A resident guard executes that judgement
+  block directly, with negative samples for the narrow comparison and for the
+  removed head-repository check.
 
 ### Added
 

@@ -64,11 +64,35 @@ jobs:
             exit 0
           fi
 
-          # ⓪ 只碰 Dependabot 自己的 PR（**手动触发也校验**）。
+          # ⓪ 只碰本仓 Dependabot 自己的 PR（**手动触发也校验**）。
           #    本工作流带 contents: write，若被指到别人的 fork PR 就等于给 fork 提权 ⇒ 必须校验。
+          #    ⚠️ D4'（B95 dispatch 实测踩到）：作者标识有**两种形式** —— 平台事件里的 actor 是
+          #    `dependabot[bot]`，但 `gh pr view --json author` 读出来的是 **`app/dependabot`**
+          #    ⇒ 等值比较会**假阴性**，把 Dependabot 自己的 PR 全挡在门外
+          #    （实测 run 45828664828 秒级 exit 0、PR #9 未合并、auto_merge 仍为 null）。
+          #    ⇒ 作者判据必须**两种形式都放行**；防 fork 则靠 **head 仓库同源**
+          #    （bot 命名会变，仓库归属不会）⇒ 判据抽成可执行块，由守卫直接测。
+          REPO_OWNER=$(gh repo view "$REPO" --json owner --jq .owner.login)
+          HEAD_OWNER=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRepositoryOwner --jq .headRepositoryOwner.login)
           AUTHOR=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json author --jq .author.login)
-          if [ "$AUTHOR" != "dependabot[bot]" ]; then
-            echo "PR 作者是 $AUTHOR（不是 dependabot[bot]）⇒ 不处理"
+          # >>> DEP-AUTHOR-OK-BEGIN
+          # 作者/仓库判据（守卫测试会抽出下面这段 JS **直接执行**，见
+          # tests/gates/dependabot-merge-path.test.ts ⇒ 测的就是本文件里这段，不是复刻）：
+          #   a. head 仓库 ≠ 本仓 owner      ⇒ no（fork ⇒ 拒绝）
+          #   b. 作者 ∈ {dependabot[bot], app/dependabot} ⇒ yes
+          #   c. 其余作者                     ⇒ no
+          ALLOW=$(node -e '
+            const author = process.argv[1];
+            const headOwner = process.argv[2];
+            const repoOwner = process.argv[3];
+            const botNames = ["dependabot[bot]", "app/dependabot"];
+            if (headOwner !== repoOwner) { console.log("no"); }
+            else if (botNames.includes(author)) { console.log("yes"); }
+            else { console.log("no"); }
+          ' "$AUTHOR" "$HEAD_OWNER" "$REPO_OWNER")
+          # <<< DEP-AUTHOR-OK-END
+          if [ "$ALLOW" != "yes" ]; then
+            echo "不是本仓 Dependabot 的 PR（作者=$AUTHOR head 仓库=$HEAD_OWNER 本仓=$REPO_OWNER）⇒ 不处理"
             exit 0
           fi
           DRAFT=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json isDraft --jq .isDraft)

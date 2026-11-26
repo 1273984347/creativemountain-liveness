@@ -114,8 +114,56 @@ test('权限：必须给 contents: write（否则 auto-merge 设不上）', () =
   assert.match(codeLines().join('\n'), /permissions:\s*\n\s*pull-requests: write\s*\n\s*contents: write/);
 });
 
-test('安全：手动触发也必须校验 PR 作者是 dependabot[bot]（contents: write ⇒ 防 fork 提权）', () => {
-  assert.match(codeLines().join('\n'), /if \[ "\$AUTHOR" != "dependabot\[bot\]" \]/);
+/** 从工作流里抽出作者/仓库判据那段 JS（**唯一事实源 = 工作流文件本身**）。 */
+function extractAuthorJudge(): string {
+  const src = wfSrc();
+  const m = src.match(/DEP-AUTHOR-OK-BEGIN[\s\S]*?node -e '\r?\n([\s\S]*?)\r?\n\s*'\s+"\$AUTHOR"\s+"\$HEAD_OWNER"\s+"\$REPO_OWNER"/);
+  if (m === null || m[1] === undefined) {
+    assert.fail('未能从工作流里抽出 DEP-AUTHOR-OK 代码块（标记或结构被改了？）');
+  }
+  return m[1];
+}
+
+const AUTHOR_JUDGE = extractAuthorJudge();
+
+/** 跑工作流里那段作者判据代码，返回 yes / no。 */
+function authorOk(author: string, headOwner: string, repoOwner: string): string {
+  const out = execFileSync(
+    process.execPath,
+    ['-e', AUTHOR_JUDGE, author, headOwner, repoOwner],
+    { encoding: 'utf8' }
+  );
+  return out.trim();
+}
+
+const OWNER = '1273984347';
+
+test('D4 判据：Dependabot 作者的**两种标识形式**都必须放行', () => {
+  // 平台事件里的 actor 是 dependabot[bot]；但 gh pr view --json author 读出的是 app/dependabot
+  // （B95 dispatch 实测：只认前者 ⇒ Dependabot 的 PR 全被误杀 ⇒ PR #9 永远不合并）。
+  assert.equal(authorOk('dependabot[bot]', OWNER, OWNER), 'yes');
+  assert.equal(authorOk('app/dependabot', OWNER, OWNER), 'yes');
+});
+
+test('D4 判据：非 Dependabot 作者 ⇒ 不放行', () => {
+  assert.equal(authorOk('some-human', OWNER, OWNER), 'no');
+  assert.equal(authorOk('app/some-other-bot', OWNER, OWNER), 'no');
+});
+
+test('D4 判据：head 仓库不同源（fork）⇒ 不放行（contents: write 的防提权底线）', () => {
+  assert.equal(authorOk('dependabot[bot]', 'someone-else', OWNER), 'no');
+  assert.equal(authorOk('app/dependabot', 'someone-else', OWNER), 'no');
+});
+
+test('负样本（D4 的鉴别力）：旧的等值比较会把 app/dependabot 误杀', () => {
+  const legacy = 'console.log(process.argv[1] === "dependabot[bot]" ? "yes" : "no");';
+  const out = execFileSync(process.execPath, ['-e', legacy, 'app/dependabot'], { encoding: 'utf8' }).trim();
+  assert.equal(out, 'no', '旧判据的行为变了 ⇒ 负样本失去意义');
+  assert.equal(
+    authorOk('app/dependabot', OWNER, OWNER),
+    'yes',
+    '新判据必须与旧判据在 app/dependabot 上判出不同结果'
+  );
 });
 
 test('CI 判据：必须排除本工作流自己的 run（否则永远判 wait）', () => {

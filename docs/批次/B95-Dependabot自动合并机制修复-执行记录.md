@@ -108,4 +108,13 @@ auto-merge 由 GitHub **服务端**执行 ⇒ 合并后照常触发 CI；
 - **台账回填**：沉淀 **E157**（归「一、机制可达性」⇒ 分类计数 25/26/17/71/18 = **157 ≡ 157**，`b79-t21-verify.mjs` exit 0）；批次导航加 B95 行（87 → **88/88/88/88**，`batch-nav-count.mjs` exit 0）；`AGENTS.md`(2 处) / `CLAUDE.md`(1 处) / `docs/沉淀/README.md`(5 处) / `HANDOVER.md` 的 E 区间与份数同步到 E1–E157 / 88 份；**订正 `TODOS.md` 的 T11 行**（原写「等 weekly 周期」，实为「合并指令不被受理」⇒ 活文档可改写）；`ROADMAP.md` 登记 B95 并把未决遗留的「14 门」订正为 **15 门**（B94 加门 ⑮ 时漏改的活文档读数）。
 - **未验证（如实登记）**：新机制在 GitHub runner 上的真实行为 ⇒ 待 push 后 dispatch 实测；合并后 main 的 15 门与产物是否漂移 ⇒ 待 #9 合并后核验；Dependabot weekly 周期（仓库 11-25 创建，首次最早下周一 11-30）。
 - **待回填（并入下一批，不单独成笔）**：push 后的远端提交哈希、CI run 读数、PR #9 的 auto-merge 实际结果 ⇒ 追加到 `HANDOVER.md`「平台侧处置记录」。
+## 8. dispatch 实测与 D4' 补修（首测即误伤）
+
+- **首测**：push 后 `gh workflow run dependabot-auto-merge.yml -f pr_number=9` ⇒ run `45828664828` **success**，但**秒级 exit 0**（若进 CI 轮询会 sleep 45 s×20 ⇒ 排除）、PR #9 仍 `OPEN`、`auto_merge` 仍 `null`、`merged_at` 为空 ⇒ 命中「PR 作者不是 dependabot[bot] ⇒ 不处理」分支。
+- **根因（D4'，本批自己引入）**：`gh pr view --json author --jq .author.login` 对 Dependabot 开的 PR 返回 **`app/dependabot`**（不是 `dependabot[bot]`）⇒ 等值比较**必然假阴性** ⇒ **防 fork 校验把 Dependabot 自己的 PR 全部挡在门外**（讽刺的是它本意是防提权）。平台事件里的 `github.actor` 仍是 `dependabot[bot]`，所以旧 workflow 不受影响 —— 这是本批新引入的。
+- **补修**：① 作者判据改为**白名单两种形式**（`dependabot[bot]` / `app/dependabot`）；② 真正的防 fork 判据换成 **head 仓库同源**（`headRepositoryOwner.login` == 仓库 owner）—— bot 命名会变，仓库归属不会；③ 判据抽成 **DEP-AUTHOR-OK 可执行块**，由守卫直接执行（不再靠文本正则）。
+- **补修的自证**：守卫 **17 条**全绿；**八路注入 ⇒ 判红 ⇒ 按原字节还原 ⇒ 判绿**（新增 D4a「只认 `dependabot[bot]`」与 D4b「去掉 head 仓库校验」两路），还原后文件 SHA256 与注入前**逐字节一致**（`47f6c39f…` / 11925 bytes）。
+- **教训归位**：这正是 **E150**「判据依赖数据源的命名约定 ⇒ 必须拿真实样本验证」的**第二次现身** ⇒ 并入 **E157**（不新增编号 ⇒ 不与 B96 的 E158 撞号）。
+- **待办**：补修后再次 dispatch 实测；合并后 main 的 15 门与产物不漂移核验。
+
 
