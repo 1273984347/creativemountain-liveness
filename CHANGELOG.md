@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Raised the visibility of exhaustion by strengthening the **poison cards**
+  instead of the healing cards. Four candidate experiments (24,000 games
+  each, two independent seed bases) showed that cutting healing back changes
+  **nothing** — healing refills to full, so while any healing remains the HP
+  never bottoms out — whereas adding a poison layer multiplies the trigger
+  rate. The poison cards in all four theme packs now carry one layer more
+  (1 → 2, 2 → 3) with the card text updated in step, so the printed rule
+  ("poison N layers: lose N HP per turn") is unchanged. Exhaustion triggers
+  rise from 0.68 to **8.78 per hundred games** (12.8×), and the 3–6 player
+  tiers go from 0.10–0.22 to 3.35–5.65 — the tiers where exhaustion was
+  previously almost invisible. Identity deviation (≤ 3.81 pp), position spread
+  (≤ 5.92 pp) and the anomaly count (0) all stay inside their limits, so this
+  is visible tension rather than a balance change. A new resident guard
+  (`tools/poison-card-contract.mjs` +
+  `tests/gates/poison-strength-contract.test.ts`) pins the layer floor and
+  keeps the card text and the effect value in step.
+
 - Re-measured the "exhaustion rarity" balance leftover instead of assuming it
   was still open. Three independent seed bases (24,000 games each) give
   162 / 136 / 137 exhaustion triggers per 240,000 games

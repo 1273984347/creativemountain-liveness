@@ -624,7 +624,7 @@
       "suit": "ember",
       "rank": 10,
       "rankLabel": "宙",
-      "text": "对一名对手造成 1 点伤害并使其中毒 1 层。",
+      "text": "对一名对手造成 1 点伤害并使其中毒 2 层。",
       "effects": [
         {
           "op": "sequence",
@@ -636,7 +636,7 @@
             },
             {
               "op": "poison",
-              "amount": 1,
+              "amount": 2,
               "target": 0
             }
           ]
@@ -670,11 +670,11 @@
       "suit": "void",
       "rank": 8,
       "rankLabel": "荒",
-      "text": "使一名对手中毒 2 层。",
+      "text": "使一名对手中毒 3 层。",
       "effects": [
         {
           "op": "poison",
-          "amount": 2,
+          "amount": 3,
           "target": 0
         }
       ]
