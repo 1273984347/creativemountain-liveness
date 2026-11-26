@@ -23,7 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is visible tension rather than a balance change. A new resident guard
   (`tools/poison-card-contract.mjs` +
   `tests/gates/poison-strength-contract.test.ts`) pins the layer floor and
-  keeps the card text and the effect value in step.
+  keeps the card text and the effect value in step. The single-file build
+  output changes with it: new baseline SHA256 `A0A85EE5…`, 212,032 bytes —
+  the previous `80E5DA2E…` baseline is retired (same size, different hash,
+  because the card text changed; engine logic is untouched).
 
 - Re-measured the "exhaustion rarity" balance leftover instead of assuming it
   was still open. Three independent seed bases (24,000 games each) give
