@@ -46,7 +46,7 @@ npm run doc-sync
 
 ## Checklist
 
-- [ ] `npm run gate` passes locally (14/14) and the output is pasted above
+- [ ] `npm run gate` passes locally (16/16) and the output is pasted above
 - [ ] New guards have a resident negative sample (violate ⇒ red, restore ⇒ green)
 - [ ] Specification and code agree (`npm run doc-sync`, C1–C10)
 - [ ] Gate catalogue (`docs/沉淀/门禁清单.md`) and the root `README.md` gate table updated if gate behaviour changed

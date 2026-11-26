@@ -17,22 +17,29 @@ const here = dirname(fileURLToPath(import.meta.url));
 //    脚本仍在仓库里 ⇒ `import 'esbuild'` 正常解析，无需在副本里准备 node_modules。
 //    默认行为不变（不设该变量时 root 仍是脚本所在目录）。
 //
-// ⚠️ **B98 语义统一**：本变量与 `CM_BUILD_OUT` 的**相对路径一律按 `here`（脚本所在仓根）解析**，
-//    **不按 process.cwd()** ⇒ 与仓内纪律一致（「根按脚本位置解析，不按 cwd」——cwd 定位会让
-//    隔离副本里的自证读到**原仓库** ⇒ 负样本假绿，见 E156 的实测教训）。
-//    ⚠️ **既有用法（B13 负样本 / B78 走查副本 / B98 门 ⑯）一律传绝对路径**
-//    ⇒ 本次统一**不改变任何既有行为**（只消除「两个开关语义不一致」的歧义）。
-const root = process.env.CM_BUILD_ROOT !== undefined
-  ? resolve(here, process.env.CM_BUILD_ROOT)
+// ⚠️ **B98 语义统一 + 空串防护**（两处都是盲审实测出来的）：
+//   ① **相对路径一律按 `here`（脚本所在仓根）解析**，**不按 process.cwd()**
+//      ⇒ 与仓内纪律一致（「根按脚本位置解析，不按 cwd」——cwd 定位会让隔离副本里的自证
+//        读到**原仓库** ⇒ 负样本假绿，见 E156 的实测教训）。
+//      ⚠️ 既有用法（B13 负样本 / B78 走查副本 / B98 门 ⑯）**一律传绝对路径**
+//        ⇒ 本次统一**不改变任何既有行为**（只消除「两个开关语义不一致」的歧义）。
+//   ② **空串按「未设置」处理**：原判定是 `!== undefined` ⇒ `CM_BUILD_OUT=''` 会让
+//      `resolve(root, '')` **等于 root** ⇒ 产物直接落进**仓库根目录**
+//      （实测 git status 冒出游离的 `?? *.html`）。⇒ 现在只有**非空串**才算「已设置」。
+const buildRootEnv = process.env.CM_BUILD_ROOT;
+const root = typeof buildRootEnv === 'string' && buildRootEnv !== ''
+  ? resolve(here, buildRootEnv)
   : here;
 
 // ⚠️ **输出根**（B98 · 门 ⑯ 专用）：不设时写 `root/dist`（默认行为一字未改）。
 //   门 ⑯ 需要「把产物构建到**独立临时目录**」⇒ 才能枚举出「本次构建产出了哪些文件」
 //   （集合层判据：产出集合必须 == 基线登记集合）。
 //   ⇒ 与 `CM_BUILD_ROOT` 配对使用：源根与输出根分离（源在副本、产物在副本的 .tmp/）。
-//   ⚠️ **相对路径按 `root`（= 源根）解析，与 `CM_BUILD_ROOT` 语义一致**（都不是 cwd）。
-const outRoot = process.env.CM_BUILD_OUT !== undefined
-  ? resolve(root, process.env.CM_BUILD_OUT)
+//   ⚠️ **相对路径按 `here`（脚本所在仓根）解析 ⇒ 与 `CM_BUILD_ROOT` 同基准**（都不是 cwd）；
+//      **未设置时**的默认值是 `root/dist`（= **源根**下的 dist ⇒ 副本自证时产物落副本 ✓）。
+const buildOutEnv = process.env.CM_BUILD_OUT;
+const outRoot = typeof buildOutEnv === 'string' && buildOutEnv !== ''
+  ? resolve(here, buildOutEnv)
   : resolve(root, 'dist');
 
 await mkdir(outRoot, { recursive: true });

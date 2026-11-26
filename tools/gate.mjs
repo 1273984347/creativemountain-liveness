@@ -16,7 +16,12 @@ const GATES = [
   { name: '语法与类型（tsc --noEmit）', cmd: process.execPath, args: [resolve('node_modules', 'typescript', 'bin', 'tsc'), '--noEmit'] },
   { name: '单元与门禁自检（node --test）', cmd: process.execPath, args: ['--test', 'tests/**/*.test.ts'] },
   { name: '文档口径（doc-sync）', cmd: process.execPath, args: [resolve('tools', 'doc-sync.mjs')] },
-  { name: '单文件构建（esbuild）', cmd: process.execPath, args: [resolve('esbuild.config.mjs')] },
+  // ⚠️ **剥离两个构建环境变量**（B98 盲审发现）：门 ④ 裸跑构建脚本时会继承全部 process.env
+  //   ⇒ 若本机恰好设过 `CM_BUILD_ROOT` / `CM_BUILD_OUT`（它们是**隔离副本自证**用的开关），
+  //   门 ④ 会把产物建到**别处** ⇒ `dist/` 不重建 ⇒ 门 ⑩ / 门 ⑭ 用的可能是**旧产物** ⇒ 假绿。
+  //   ⇒ 门 ④ 显式把这两个变量置空（`undefined` ⇒ 子进程里**不存在**这两个变量）。
+  { name: '单文件构建（esbuild）', cmd: process.execPath, args: [resolve('esbuild.config.mjs')],
+    env: { ...process.env, CM_BUILD_ROOT: undefined, CM_BUILD_OUT: undefined } },
   { name: '主题包校验（theme-validate）', cmd: process.execPath, args: [resolve('tools', 'theme-validate.mjs')] },
   { name: 'IR 契约校验（ir-validate）', cmd: process.execPath, args: [resolve('tools', 'ir-validate.mjs')] },
   { name: '双轨一致性（parity-check）', cmd: process.execPath, args: [resolve('tools', 'parity-check.mjs')] },
@@ -142,6 +147,8 @@ for (let i = 0; i < GATES.length; i++) {
     shell: false,
     cwd: ROOT,
     maxBuffer: 64 * 1024 * 1024,
+    // ⚠️ 门条目可自带 env（如门 ④ 剥离构建环境变量）；未指定则继承当前环境。
+    env: g.env ?? process.env,
   });
   const dt = ((Date.now() - started) / 1000).toFixed(1);
   const ok = res.status === 0;

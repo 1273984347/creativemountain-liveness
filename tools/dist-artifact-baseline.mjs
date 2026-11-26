@@ -7,7 +7,14 @@
 //   ⇒ 刷新只在本脚本里，且必须由人**显式**执行 ⇒ 刷新动作本身就是一次**评审点**
 //   （基线 diff 会打印出来，供人判断「产物字节变化是否可接受」）。
 //
-// 用法：node tools/dist-artifact-baseline.mjs
+// 用法：
+//   node tools/dist-artifact-baseline.mjs           ⇒ **只预览**（打印与旧基线的差异，不写文件）
+//   node tools/dist-artifact-baseline.mjs --write   ⇒ 真正写入入库基线
+//
+// ⚠️ **默认只预览**（B98 盲审建议）：刷新会**覆盖**入库基线 ⇒ 若默认就写，
+//   则「手滑跑一次」＝ 把未经评审的产物字节登记成期望值 ⇒ 门禁当场失去牙齿。
+//   ⇒ 默认 dry-run，写入必须显式 `--write`。**失败方向是安全的**：忘了加 `--write`
+//   ⇒ 基线没变 ⇒ 门 ⑯ 会红 ⇒ 立刻发现，而不是静默放行。
 //
 // ⚠️ 刷新**不等于**认可：若产物字节的漂移是**非预期**的，先定位行为差异
 //   （**禁止**直接刷新基线掩盖 —— 与门 ⑮ 的处置口径同款）。
@@ -15,17 +22,19 @@
 // ⚠️ **纪律 A4**：不经 shell、不接管道、退出码直取子进程状态。
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { parseBaseline, sha256Hex } from './dist-artifact-lock.mjs';
+import { collectArtifacts, parseBaseline } from './dist-artifact-lock.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const BASELINE = resolve(ROOT, 'docs', 'baselines', 'dist-artifact.sha256.json');
 
-if (process.argv.length > 2) {
-  console.error('✗ 本脚本不接受参数（收到：' + process.argv.slice(2).join(' ') + '）');
+const write = process.argv.includes('--write');
+const unknown = process.argv.slice(2).filter((a) => a !== '--write');
+if (unknown.length > 0) {
+  console.error('✗ 未知参数：' + unknown.join(' ') + '（可用：--write）');
   process.exit(1);
 }
 
@@ -47,13 +56,9 @@ if (build.status !== 0) {
   process.exit(1);
 }
 
-const artifacts = {};
-for (const name of readdirSync(outDir).sort()) {
-  const p = resolve(outDir, name);
-  if (!statSync(p).isFile()) { continue; }
-  const buf = readFileSync(p);
-  artifacts[name] = { sha256: sha256Hex(buf), bytes: buf.length };
-}
+// ⚠️ 摘要算法与门 ⑯ 的执行器**共用同一份实现**（tools/dist-artifact-lock.mjs）⇒ 两边算出的
+//   字节数与哈希不可能漂移（E92：同一口径只能有一处实现）。
+const artifacts = collectArtifacts(outDir);
 rmSync(outDir, { recursive: true, force: true });
 
 if (Object.keys(artifacts).length === 0) {
@@ -88,12 +93,18 @@ for (const n of names) {
   }
 }
 
+console.log('');
+if (!write) {
+  console.log('⚠ **预览模式**（未写入）｜变化条目 ' + String(changed) + ' 个');
+  console.log('  确认无误后显式执行：node tools/dist-artifact-baseline.mjs --write');
+  process.exit(0);
+}
+
 const payload = {
   note: 'dist 产物字节基线（门 ⑯ 的**期望值**）—— 人工维护；产物字节变化须经评审后刷新'
-    + '（node tools/dist-artifact-baseline.mjs）⇒ 门 ⑯ 会据此判红。',
+    + '（node tools/dist-artifact-baseline.mjs --write）⇒ 门 ⑯ 会据此判红。',
   artifacts,
 };
 mkdirSync(dirname(BASELINE), { recursive: true });
 writeFileSync(BASELINE, JSON.stringify(payload, null, 2) + '\n', 'utf8');
-console.log('');
 console.log('✓ 基线已写入：' + BASELINE + '（变化条目 ' + String(changed) + ' 个）');

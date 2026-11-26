@@ -29,6 +29,13 @@ export interface ArtifactComparison {
 }
 
 /**
+ * 枚举目录下的**文件**并算出各自的 SHA256 与字节数（共用实现 ⇒ 门 ⑯ 执行器与基线刷新脚本同源）。
+ *
+ * @param dir 产物目录。
+ */
+export declare function collectArtifacts(dir: string): Readonly<Record<string, BaselineEntry>>;
+
+/**
  * 算内容的 SHA256（十六进制，小写）。
  *
  * @param buf 内容字节。

@@ -179,7 +179,7 @@ test('sha256Hex：同一字节两次调用结果相等（确定性）', () => {
   assert.equal(sha256Hex(buf), sha256Hex(buf), '同一字节两次调用必须相等');
 });
 
-test('sha256Hex：与 node:crypto 独立算出的结果一致（交叉验证，非自证）', () => {
+test('sha256Hex：与 node:crypto 的**独立调用路径**结果一致（同一算法、两条路径；外部锚点见下一条「已知值钉死」）', () => {
   const samples = [
     Buffer.from('', 'utf8'),
     Buffer.from('abc', 'utf8'),
@@ -199,4 +199,21 @@ test('sha256Hex：已知值钉死（空输入 = e3b0c442…，防将来有人换
     '空输入的 SHA256 必须是这个已知值',
   );
   assert.match(sha256Hex(Buffer.from('abc', 'utf8')), /^[0-9a-f]{64}$/, '必须是 64 位小写十六进制');
+});
+
+// ---------- 原型污染与路径安全（B98 盲审实测 ⇒ 补常驻负样本）----------
+
+test('失败关闭：基线条目名是「__proto__」⇒ parseBaseline 抛错（不得被原型 setter **静默丢弃**）', () => {
+  // ⚠️ 若承接对象是**普通对象** ⇒ `out['__proto__'] = …` 走原型 setter ⇒ 该条目**被静默丢弃**
+  //   ⇒ 「基线登记 2 个产物、实到 1 个」本应被集合层判红，却会**恒绿** ⇒ 判据失去牙齿。
+  const raw = '{"artifacts":{"__proto__":{"sha256":"' + SHA_A + '","bytes":1},"b.html":{"sha256":"' + SHA_B + '","bytes":2}}}';
+  assert.throws(() => parseBaseline(raw), /原型/);
+});
+
+test('失败关闭：基线条目名含路径分隔符或「..」⇒ parseBaseline 抛错（条目名必须是**纯文件名**）', () => {
+  // ⚠️ 条目名会进「集合层」报错文本 ⇒ 允许 `../` 之类 ⇒ 报错可能指向基线目录**之外** ⇒ 排查被带偏。
+  for (const bad of ['../evil.html', 'a/b.html', 'a\\b.html', '..', '.']) {
+    const raw = '{"artifacts":' + JSON.stringify({ [bad]: { sha256: SHA_A, bytes: 1 } }) + '}';
+    assert.throws(() => parseBaseline(raw), /文件名/, '条目名必须被拒：' + bad);
+  }
 });

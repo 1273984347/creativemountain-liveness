@@ -27,7 +27,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   has no flag on the gate CLI, so no switch can make the gate vacuously
   green. New coverage boundary `dist-artifact-byte-only` records that the
   gate checks byte drift only — the artifact's functional correctness stays
-  with gates ⑭ / ⑩. Gate count 15 → 16.
+  with gates ⑭ / ⑩. Gate count 15 → 16. The gate was then hardened by an
+  independent blind review, which found two real defects that the author's own
+  self-check had missed: an **empty** `CM_BUILD_OUT` resolved to the repository
+  root (artifacts landed in the working tree), and the two build switches
+  resolved relative paths against **different** bases while the comment
+  claimed they were consistent. Both are fixed, the artifact digest algorithm
+  is now shared between the gate and the baseline refresher, prototype-polluting
+  baseline keys are rejected, and gate ④ now strips the two build environment
+  variables so a stray value in the developer's shell cannot make it build
+  somewhere else and leave a stale `dist/` behind.
 
 ### Changed
 
