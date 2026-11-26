@@ -24,6 +24,8 @@
 - **副作用与消解**：REST 生成的 commit 对象与本地 git 的**不是同一个**（GitHub 规范化日期偏移与 message 尾换行，差异项不可枚举）⇒ 远端 hash 与本地不同 ⇒ 本地 ahead 3、下次 push 会 non-fast-forward。通道恢复后 `git fetch origin && git reset --hard origin/main` ⇒ 本地**对齐到平台那个 commit 对象**（工作树内容 sha 不变）⇒ 两边**同一 hash**、历史完整（`227a88b` / `88de023` / `5eca4dc`）。
 - **沉淀**：**E154**。
 - **遗留**：备用 SSH key 已生成（`~/.ssh/id_ed25519_gh_creativemountain`）但**未加入 GitHub 账号 ⇒ 未生效** ⇒ 若 443 再被阻断，需你点名授权把公钥加到账号（账号权限变更），之后 push/fetch 走 SSH 即免疫该阻断。
+- **✅ 遗留已消解（2026-11-26 18:2x）**：SSH 备用通道**已启用** —— 公钥已加入账号（key id 171192097；初版 171191754 因生成时误带口令已删除），~/.ssh/config 固定「github.com → HostName ssh.github.com / Port 443 + IdentityFile 自定义私钥 + IdentitiesOnly」，remote 已切为 git@github.com:… 。**实测**：ssh -T git@github.com ⇒ 「Hi 1273984347! You have successfully authenticated」；git ls-remote origin ⇒ exit 0（读到 d0035b0）；git push origin main ⇒ exit 0（Everything up-to-date）⇒ **SSH 通道可用且已实测**，此后 push/fetch 不再受 github.com:443 阻断影响。
+- ⚠️ 过程留痕：初版私钥因 PowerShell 把 -N 传成**两个字面引号**（等于设了口令）⇒ BatchMode 认证被拒；已改为**参数数组直传**（-N 的值是真正的空串）重新生成，并以 ssh-keygen -y 可无口令导出、且与 .pub 一致作校验。
 
 ## 已完成（核实确认）
 
