@@ -10,21 +10,27 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
-// esbuild.config.mjs 位于项目根，here 即 root
+// esbuild.config.mjs 位于项目根，here 即**仓根基准**
 //
 // ⚠️ `CM_BUILD_ROOT` 可覆盖 root（B13 负样本自证用）：隔离副本里用**本脚本**构建
 //    **副本的** bundle（读副本的 web/ + engine/ + themes/，输出到副本 dist/）——
 //    脚本仍在仓库里 ⇒ `import 'esbuild'` 正常解析，无需在副本里准备 node_modules。
 //    默认行为不变（不设该变量时 root 仍是脚本所在目录）。
+//
+// ⚠️ **B98 语义统一**：本变量与 `CM_BUILD_OUT` 的**相对路径一律按 `here`（脚本所在仓根）解析**，
+//    **不按 process.cwd()** ⇒ 与仓内纪律一致（「根按脚本位置解析，不按 cwd」——cwd 定位会让
+//    隔离副本里的自证读到**原仓库** ⇒ 负样本假绿，见 E156 的实测教训）。
+//    ⚠️ **既有用法（B13 负样本 / B78 走查副本 / B98 门 ⑯）一律传绝对路径**
+//    ⇒ 本次统一**不改变任何既有行为**（只消除「两个开关语义不一致」的歧义）。
 const root = process.env.CM_BUILD_ROOT !== undefined
-  ? resolve(process.env.CM_BUILD_ROOT)
+  ? resolve(here, process.env.CM_BUILD_ROOT)
   : here;
 
 // ⚠️ **输出根**（B98 · 门 ⑯ 专用）：不设时写 `root/dist`（默认行为一字未改）。
 //   门 ⑯ 需要「把产物构建到**独立临时目录**」⇒ 才能枚举出「本次构建产出了哪些文件」
 //   （集合层判据：产出集合必须 == 基线登记集合）。
 //   ⇒ 与 `CM_BUILD_ROOT` 配对使用：源根与输出根分离（源在副本、产物在副本的 .tmp/）。
-//   ⚠️ 相对路径按 **root** 解析（不是 cwd）⇒ 与 `CM_BUILD_ROOT` 的语义一致。
+//   ⚠️ **相对路径按 `root`（= 源根）解析，与 `CM_BUILD_ROOT` 语义一致**（都不是 cwd）。
 const outRoot = process.env.CM_BUILD_OUT !== undefined
   ? resolve(root, process.env.CM_BUILD_OUT)
   : resolve(root, 'dist');
